@@ -28,6 +28,11 @@ Pod::Spec.new do |s|
 
   s.pod_target_xcconfig = {
     'SWIFT_INCLUDE_PATHS' => '$(PODS_TARGET_SRCROOT)/Argon2/include',
-    'HEADER_SEARCH_PATHS' => '$(PODS_TARGET_SRCROOT)/Argon2/include'
+    'HEADER_SEARCH_PATHS' => '$(inherited) $(PODS_TARGET_SRCROOT)/Argon2/include',
+    'OTHER_CFLAGS' => '-DARGON2_NO_THREADS'
+  }
+
+  s.user_target_xcconfig = {
+    'HEADER_SEARCH_PATHS' => '$(inherited) $(PODS_ROOT)/JarvisCrypto/Argon2/include'
   }
 end

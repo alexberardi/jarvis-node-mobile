@@ -6,6 +6,6 @@
 #ifndef JarvisCrypto_Bridging_Header_h
 #define JarvisCrypto_Bridging_Header_h
 
-#include "Argon2/include/argon2.h"
+#include "argon2.h"
 
 #endif /* JarvisCrypto_Bridging_Header_h */

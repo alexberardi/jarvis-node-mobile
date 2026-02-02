@@ -16,7 +16,8 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.jarvis.nodemobile",
       "infoPlist": {
-        "NSCameraUsageDescription": "Camera access is required to scan QR codes for node pairing"
+        "NSCameraUsageDescription": "Camera access is required to scan QR codes for node pairing",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -27,7 +28,11 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "permissions": ["CAMERA"]
+      "permissions": [
+        "CAMERA",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -40,6 +45,11 @@
         }
       ],
       "expo-secure-store"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "db3e1a49-edf0-463d-bd7d-0b40d13caf83"
+      }
+    }
   }
 }
