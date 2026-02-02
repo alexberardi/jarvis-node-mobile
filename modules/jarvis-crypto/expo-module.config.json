@@ -1,0 +1,9 @@
+{
+  "platforms": ["ios", "android"],
+  "ios": {
+    "modules": ["JarvisCryptoModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.jarviscrypto.JarvisCryptoModule"]
+  }
+}

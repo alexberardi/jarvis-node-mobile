@@ -1,0 +1,10 @@
+{
+  "name": "jarvis-crypto",
+  "version": "1.0.0",
+  "description": "Native cryptographic primitives for Jarvis Node Mobile",
+  "main": "index.ts",
+  "types": "index.ts",
+  "license": "MIT",
+  "author": "Jarvis",
+  "homepage": "https://github.com/jarvis/jarvis-node-mobile"
+}
