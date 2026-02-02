@@ -28,7 +28,7 @@
     "expo-status-bar": "~3.0.9",
     "jarvis-crypto": "file:./modules/jarvis-crypto",
     "react-native-qrcode-svg": "^6.3.14",
-    "react-native-svg": "~16.0.0",
+    "react-native-svg": "~15.15.0",
     "react": "19.1.0",
     "react-native": "0.81.5",
     "react-native-gesture-handler": "~2.28.0",
