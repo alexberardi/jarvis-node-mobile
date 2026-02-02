@@ -1,4 +1,13 @@
-export type HardwareType = 'pi-zero-w' | 'pi-zero-2w' | 'pi-4' | 'pi-5';
+// Known hardware types (extensible - backend may return others like 'macos', 'arm-linux')
+export type HardwareType =
+  | 'pi-zero-w'
+  | 'pi-zero-2w'
+  | 'pi-4'
+  | 'pi-5'
+  | 'raspberry-pi'
+  | 'arm-linux'
+  | 'macos'
+  | string;
 
 export type NodeCapability = 'voice' | 'speaker' | 'display' | 'camera';
 
@@ -105,5 +114,7 @@ export interface K2ProvisioningRequest {
 
 export interface K2ProvisioningResponse {
   success: boolean;
-  message: string;
+  node_id?: string;
+  kid?: string;
+  error?: string;
 }

@@ -8,8 +8,8 @@ import {
   K2ProvisioningResponse,
 } from '../types/Provisioning';
 
-// Easy swap: change USE_MOCK to false when real API ready
-export const USE_MOCK = true;
+// Set to true only for development without a real node
+export const USE_MOCK = false;
 
 export const MOCK_NODE: NodeInfo = {
   node_id: 'jarvis-mock-1234',
@@ -102,6 +102,7 @@ export const mockProvisionK2 = async (
 
   return {
     success: true,
-    message: 'K2 key received and stored successfully',
+    node_id: request.nodeId,
+    kid: request.kid,
   };
 };

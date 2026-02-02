@@ -125,7 +125,7 @@ export const useProvisioning = (): UseProvisioningReturn => {
         });
 
         if (!k2Response.success) {
-          throw new Error('Failed to provision K2 to node');
+          throw new Error(k2Response.error || 'Failed to provision K2 to node');
         }
 
         setProgress(25);
