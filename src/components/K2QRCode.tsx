@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Text, Card, Button, HelperText, TextInput } from 'react-native-paper';
+
+import SafeButton from './SafeButton';
 import QRCode from 'react-native-qrcode-svg';
 
 import { K2KeyPair } from '../services/k2Service';
@@ -228,14 +230,14 @@ export const K2BackupCard: React.FC<K2BackupCardProps> = ({
             >
               Back
             </Button>
-            <Button
+            <SafeButton
               mode="contained"
               onPress={handleGenerateEncrypted}
               style={styles.button}
               disabled={!inputPassword || !confirmPassword}
             >
               Generate QR
-            </Button>
+            </SafeButton>
           </View>
         </Card.Content>
       </Card>
