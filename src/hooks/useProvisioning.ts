@@ -5,7 +5,6 @@ import {
   scanNetworks,
   provision,
   provisionK2,
-  getProvisioningStatus,
   setNodeIp,
 } from '../api/provisioningApi';
 import {
@@ -34,6 +33,7 @@ interface UseProvisioningReturn {
   fetchNetworks: () => Promise<void>;
   selectNetwork: (network: Network) => void;
   startProvisioning: (password: string, roomName: string) => Promise<void>;
+  confirmWifiSwitched: () => void;
   reset: () => void;
   setError: (error: string | null) => void;
 }
@@ -144,39 +144,20 @@ export const useProvisioning = (): UseProvisioningReturn => {
           node_id: nodeInfo.node_id,
         };
 
-        // Step 4: Poll for status updates
-        let attempts = 0;
-        const maxAttempts = 30;
+        setProgress(50);
+        setStatusMessage('Credentials sent to node...');
 
-        while (attempts < maxAttempts) {
-          const status = await getProvisioningStatus();
-          // Adjust progress to account for K2 steps (25-100 range)
-          const adjustedProgress = 25 + Math.floor(status.progress * 0.75);
-          setProgress(adjustedProgress);
-          setStatusMessage(status.message);
+        // Step 4: Store K2 immediately (it was already accepted by the node)
+        // We do this now because the node will disconnect from AP mode
+        await storeK2(keyPair);
+        setProvisioningResult(fullResult);
 
-          if (status.state === 'success') {
-            // Step 5: Store K2 in secure storage after successful provisioning
-            await storeK2(keyPair);
-            setProvisioningResult(fullResult);
-            setState('success');
-            break;
-          }
+        setProgress(75);
+        setStatusMessage('Please reconnect to your home WiFi');
 
-          if (status.state === 'error') {
-            setError(status.error || 'Provisioning failed');
-            setState('error');
-            break;
-          }
-
-          attempts++;
-          await new Promise((resolve) => setTimeout(resolve, 500));
-        }
-
-        if (attempts >= maxAttempts) {
-          setError('Provisioning timeout');
-          setState('error');
-        }
+        // Step 5: Tell user to switch back to home WiFi
+        // The node is now attempting to connect and will drop AP mode
+        setState('awaiting_wifi_switch');
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Provisioning failed';
         setError(message);
@@ -187,6 +168,14 @@ export const useProvisioning = (): UseProvisioningReturn => {
     },
     [selectedNetwork, nodeInfo]
   );
+
+  const confirmWifiSwitched = useCallback(() => {
+    // User confirmed they've reconnected to home WiFi
+    // Mark provisioning as complete
+    setProgress(100);
+    setStatusMessage('Provisioning complete!');
+    setState('success');
+  }, []);
 
   const reset = useCallback(() => {
     setState('idle');
@@ -216,6 +205,7 @@ export const useProvisioning = (): UseProvisioningReturn => {
     fetchNetworks,
     selectNetwork,
     startProvisioning,
+    confirmWifiSwitched,
     reset,
     setError,
   };

@@ -42,6 +42,7 @@ export type ProvisioningState =
   | 'scanning_networks'
   | 'configuring'
   | 'provisioning'
+  | 'awaiting_wifi_switch' // Credentials sent, user needs to reconnect to home WiFi
   | 'verifying'
   | 'success'
   | 'error';

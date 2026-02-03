@@ -9,7 +9,8 @@ import { ProvisioningStackParamList } from '../../navigation/types';
 type Props = NativeStackScreenProps<ProvisioningStackParamList, 'ProvisioningProgress'>;
 
 const ProvisioningProgressScreen = ({ navigation }: Props) => {
-  const { state, progress, statusMessage, error, reset } = useProvisioningContext();
+  const { state, progress, statusMessage, error, reset, confirmWifiSwitched, selectedNetwork } =
+    useProvisioningContext();
 
   useEffect(() => {
     if (state === 'success') {
@@ -23,6 +24,7 @@ const ProvisioningProgressScreen = ({ navigation }: Props) => {
   };
 
   const isError = state === 'error';
+  const isAwaitingWifiSwitch = state === 'awaiting_wifi_switch';
 
   return (
     <>
@@ -46,6 +48,24 @@ const ProvisioningProgressScreen = ({ navigation }: Props) => {
           <Text variant="bodyLarge" style={styles.statusMessage}>
             {statusMessage}
           </Text>
+
+          {isAwaitingWifiSwitch && (
+            <View style={styles.wifiSwitchContainer}>
+              <Text variant="bodyMedium" style={styles.wifiSwitchText}>
+                Credentials sent! The node is now connecting to "{selectedNetwork?.ssid}".
+              </Text>
+              <Text variant="bodyMedium" style={styles.wifiSwitchText}>
+                Please reconnect your phone to your home WiFi network, then tap the button below.
+              </Text>
+              <Button
+                mode="contained"
+                onPress={confirmWifiSwitched}
+                style={styles.wifiSwitchButton}
+              >
+                I've Reconnected to WiFi
+              </Button>
+            </View>
+          )}
 
           {error && (
             <View style={styles.errorContainer}>
@@ -98,6 +118,19 @@ const styles = StyleSheet.create({
   },
   retryButton: {
     marginTop: 8,
+  },
+  wifiSwitchContainer: {
+    marginTop: 32,
+    alignItems: 'center',
+    paddingHorizontal: 16,
+  },
+  wifiSwitchText: {
+    textAlign: 'center',
+    marginBottom: 12,
+    opacity: 0.8,
+  },
+  wifiSwitchButton: {
+    marginTop: 16,
   },
 });
 

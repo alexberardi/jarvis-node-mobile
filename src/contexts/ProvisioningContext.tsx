@@ -27,6 +27,7 @@ interface ProvisioningContextValue {
   fetchNetworks: () => Promise<void>;
   selectNetwork: (network: Network) => void;
   startProvisioning: (password: string, roomName: string) => Promise<void>;
+  confirmWifiSwitched: () => void;
   reset: () => void;
   setError: (error: string | null) => void;
 }
