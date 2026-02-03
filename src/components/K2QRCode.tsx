@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { ActivityIndicator, Text, Card, Button, HelperText } from 'react-native-paper';
+import { ActivityIndicator, Text, Card, Button, HelperText, TextInput } from 'react-native-paper';
 import QRCode from 'react-native-qrcode-svg';
 
 import { K2KeyPair } from '../services/k2Service';
@@ -113,9 +113,32 @@ export const K2BackupCard: React.FC<K2BackupCardProps> = ({
   keyPair,
   onDone,
 }) => {
-  const [mode, setMode] = useState<'choice' | 'plain' | 'encrypted'>('choice');
+  const [mode, setMode] = useState<'choice' | 'plain' | 'encrypted' | 'showQR'>('choice');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
+  const [inputPassword, setInputPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+
+  const handleGenerateEncrypted = () => {
+    if (inputPassword.length < 8) {
+      setPasswordError('Password must be at least 8 characters');
+      return;
+    }
+    if (inputPassword !== confirmPassword) {
+      setPasswordError('Passwords do not match');
+      return;
+    }
+    setPassword(inputPassword);
+    setMode('showQR');
+  };
+
+  const handleReset = () => {
+    setMode('choice');
+    setPassword('');
+    setInputPassword('');
+    setConfirmPassword('');
+    setPasswordError(null);
+  };
 
   if (mode === 'choice') {
     return (
@@ -159,7 +182,7 @@ export const K2BackupCard: React.FC<K2BackupCardProps> = ({
     );
   }
 
-  if (mode === 'encrypted' && !password) {
+  if (mode === 'encrypted') {
     return (
       <Card style={styles.card}>
         <Card.Content>
@@ -171,18 +194,45 @@ export const K2BackupCard: React.FC<K2BackupCardProps> = ({
           </Text>
 
           <View style={styles.passwordContainer}>
-            {/* Password input would go here */}
+            <TextInput
+              mode="outlined"
+              label="Password"
+              value={inputPassword}
+              onChangeText={(text) => {
+                setInputPassword(text);
+                setPasswordError(null);
+              }}
+              secureTextEntry
+              style={styles.input}
+            />
+            <TextInput
+              mode="outlined"
+              label="Confirm Password"
+              value={confirmPassword}
+              onChangeText={(text) => {
+                setConfirmPassword(text);
+                setPasswordError(null);
+              }}
+              secureTextEntry
+              style={styles.input}
+            />
+            {passwordError && (
+              <HelperText type="error" visible>
+                {passwordError}
+              </HelperText>
+            )}
             <Button
               mode="outlined"
-              onPress={() => setMode('choice')}
+              onPress={handleReset}
               style={styles.button}
             >
               Back
             </Button>
             <Button
               mode="contained"
-              onPress={() => setPassword('demo-password')} // TODO: actual password input
+              onPress={handleGenerateEncrypted}
               style={styles.button}
+              disabled={!inputPassword || !confirmPassword}
             >
               Generate QR
             </Button>
@@ -192,6 +242,9 @@ export const K2BackupCard: React.FC<K2BackupCardProps> = ({
     );
   }
 
+  // mode is 'plain' or 'showQR' (encrypted with password set)
+  const isEncrypted = mode === 'showQR';
+
   return (
     <Card style={styles.card}>
       <Card.Content>
@@ -199,24 +252,21 @@ export const K2BackupCard: React.FC<K2BackupCardProps> = ({
           Your Backup QR Code
         </Text>
         <Text variant="bodyMedium" style={styles.description}>
-          {mode === 'plain'
-            ? 'Screenshot or photograph this code and store it safely.'
-            : 'This code is encrypted. You will need your password to use it.'}
+          {isEncrypted
+            ? 'This code is encrypted. You will need your password to use it.'
+            : 'Screenshot or photograph this code and store it safely.'}
         </Text>
 
         <K2QRCode
           keyPair={keyPair}
-          mode={mode === 'encrypted' ? 'encrypted' : 'plain'}
+          mode={isEncrypted ? 'encrypted' : 'plain'}
           password={password}
         />
 
         <View style={styles.buttonContainer}>
           <Button
             mode="outlined"
-            onPress={() => {
-              setMode('choice');
-              setPassword('');
-            }}
+            onPress={handleReset}
             style={styles.button}
           >
             Generate Different QR
@@ -277,6 +327,9 @@ const styles = StyleSheet.create({
   },
   passwordContainer: {
     marginTop: 16,
+  },
+  input: {
+    marginBottom: 12,
   },
 });
 
