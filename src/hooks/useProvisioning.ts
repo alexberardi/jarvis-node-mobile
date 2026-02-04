@@ -61,6 +61,7 @@ export const useProvisioning = (): UseProvisioningReturn => {
       setNodeInfo(info);
       setState('fetching_info');
     } catch (err) {
+      console.debug('[useProvisioning] connect failed:', err instanceof Error ? err.message : err);
       const message = err instanceof Error ? err.message : 'Failed to connect to node';
       setError(message);
       setState('error');
@@ -78,6 +79,7 @@ export const useProvisioning = (): UseProvisioningReturn => {
       setNetworks(networkList);
       setState('scanning_networks');
     } catch (err) {
+      console.debug('[useProvisioning] fetchNetworks failed:', err instanceof Error ? err.message : err);
       const message = err instanceof Error ? err.message : 'Failed to scan networks';
       setError(message);
       setState('error');
@@ -159,6 +161,7 @@ export const useProvisioning = (): UseProvisioningReturn => {
         // The node is now attempting to connect and will drop AP mode
         setState('awaiting_wifi_switch');
       } catch (err) {
+        console.debug('[useProvisioning] startProvisioning failed:', err instanceof Error ? err.message : err);
         const message = err instanceof Error ? err.message : 'Provisioning failed';
         setError(message);
         setState('error');

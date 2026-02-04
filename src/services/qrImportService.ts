@@ -72,6 +72,7 @@ export function parseQRCode(qrData: string): ImportResult {
       payload,
     };
   } catch (err) {
+    console.debug('[qrImportService] parseQRCode failed:', err instanceof Error ? err.message : err);
     return {
       success: false,
       error: err instanceof Error ? err.message : 'Failed to parse QR code',
@@ -108,6 +109,7 @@ export async function importPlainQR(payload: QRPayload): Promise<ImportResult> {
       nodeId: payload.node_id,
     };
   } catch (err) {
+    console.debug('[qrImportService] importPlainQR failed:', err instanceof Error ? err.message : err);
     return {
       success: false,
       error: err instanceof Error ? err.message : 'Failed to import key',
@@ -147,7 +149,8 @@ export async function importEncryptedQR(
         payload.tag,
         aad
       );
-    } catch {
+    } catch (decryptError) {
+      console.debug('[qrImportService] Decryption failed:', decryptError instanceof Error ? decryptError.message : decryptError);
       return {
         success: false,
         error: 'Incorrect password or corrupted QR code',
@@ -169,6 +172,7 @@ export async function importEncryptedQR(
       nodeId: payload.node_id,
     };
   } catch (err) {
+    console.debug('[qrImportService] importEncryptedQR failed:', err instanceof Error ? err.message : err);
     return {
       success: false,
       error: err instanceof Error ? err.message : 'Failed to decrypt key',
