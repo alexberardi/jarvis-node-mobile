@@ -60,7 +60,8 @@ const parseUser = (value: string | null): AuthUser | null => {
   if (!value) return null;
   try {
     return JSON.parse(value) as AuthUser;
-  } catch {
+  } catch (parseError) {
+    console.debug('[AuthContext] Failed to parse stored user JSON:', parseError instanceof Error ? parseError.message : parseError);
     return null;
   }
 };
@@ -144,6 +145,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ]);
       return newAccess;
     } catch (error) {
+      console.debug('[AuthContext] Token refresh failed:', error instanceof Error ? error.message : error);
       return null;
     }
   }, [state.refreshToken]);
@@ -174,6 +176,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
       }
     } catch (error) {
+      console.debug('[AuthContext] Bootstrap auth failed:', error instanceof Error ? error.message : error);
       setState({
         ...initialState,
         isLoading: false,
@@ -188,8 +191,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     if (!state.isAuthenticated) return;
     const timer = setInterval(() => {
-      refreshAccessToken().catch(() => {
+      refreshAccessToken().catch((refreshError) => {
         // best-effort; if refresh fails, next guarded request will trigger logout
+        console.debug('[AuthContext] Background token refresh failed:', refreshError instanceof Error ? refreshError.message : refreshError);
       });
     }, REFRESH_INTERVAL_MS);
     return () => clearInterval(timer);
