@@ -20,10 +20,12 @@ const LoginScreen = ({ navigation }: Props) => {
     setLoading(true);
     try {
       await login(email.trim(), password);
-    } catch (err: any) {
+    } catch (err: unknown) {
+      console.debug('[LoginScreen] Login failed:', err);
+      const axiosError = err as { response?: { data?: { detail?: string } }; message?: string };
       const message =
-        err?.response?.data?.detail ||
-        err?.message ||
+        axiosError?.response?.data?.detail ||
+        axiosError?.message ||
         'Unable to log in. Please try again.';
       setError(message);
     } finally {
