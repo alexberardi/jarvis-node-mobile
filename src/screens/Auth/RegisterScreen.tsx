@@ -45,10 +45,12 @@ const RegisterScreen = ({ navigation }: Props) => {
     setLoading(true);
     try {
       await register(email.trim(), password);
-    } catch (err: any) {
+    } catch (err: unknown) {
+      console.debug('[RegisterScreen] Registration failed:', err);
+      const axiosError = err as { response?: { data?: { detail?: string } }; message?: string };
       const message =
-        err?.response?.data?.detail ||
-        err?.message ||
+        axiosError?.response?.data?.detail ||
+        axiosError?.message ||
         'Unable to create account. Please try again.';
       setError(message);
     } finally {
