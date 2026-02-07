@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { Appbar, Button, HelperText, Text, TextInput, SegmentedButtons } from 'react-native-paper';
 
+import { useAuth } from '../../auth/AuthContext';
 import { useProvisioningContext } from '../../contexts/ProvisioningContext';
 import { ProvisioningStackParamList } from '../../navigation/types';
 import { ROOM_OPTIONS } from '../../types/Provisioning';
@@ -10,17 +11,24 @@ import { ROOM_OPTIONS } from '../../types/Provisioning';
 type Props = NativeStackScreenProps<ProvisioningStackParamList, 'EnterPassword'>;
 
 const EnterPasswordScreen = ({ navigation }: Props) => {
-  const { selectedNetwork, startProvisioning, isLoading, error } = useProvisioningContext();
+  const { state: authState } = useAuth();
+  const { selectedNetwork, startProvisioning, isLoading, error, setError } = useProvisioningContext();
   const [password, setPassword] = useState('');
   const [roomName, setRoomName] = useState('living_room');
   const [showPassword, setShowPassword] = useState(false);
 
+  const householdId = authState.activeHouseholdId;
+
   const handleProvision = async () => {
-    await startProvisioning(password, roomName);
+    if (!householdId) {
+      setError('No household selected. Please select a household in settings.');
+      return;
+    }
+    await startProvisioning(password, roomName, householdId);
     navigation.navigate('ProvisioningProgress');
   };
 
-  const isValid = password.length > 0 && roomName.length > 0;
+  const isValid = password.length > 0 && roomName.length > 0 && !!householdId;
 
   return (
     <>

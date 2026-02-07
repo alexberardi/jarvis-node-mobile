@@ -65,10 +65,12 @@ export const mockProvision = async (
   mockProvisioningState = { state: 'provisioning', progress: 50, message: 'Configuring node...' };
 
   await mockDelay(200);
-  mockProvisioningState = { state: 'provisioning', progress: 75, message: 'Registering with command center...' };
+  mockProvisioningState = { state: 'provisioning', progress: 75, message: `Registering with household ${request.household_id}...` };
 
   await mockDelay(200);
   mockProvisioningState = { state: 'success', progress: 100, message: 'Provisioning complete!' };
+
+  console.log('[Mock] Node provisioned to household:', request.household_id);
 
   return {
     success: true,

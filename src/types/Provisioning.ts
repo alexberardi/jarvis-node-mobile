@@ -69,6 +69,7 @@ export interface ApiProvisioningRequest {
   wifi_password: string;
   room: string;
   command_center_url: string;
+  household_id: string;
 }
 
 // Internal request format (used by UI)
@@ -77,6 +78,7 @@ export interface ProvisioningRequest {
   password: string;
   room_name: string;
   command_center_url?: string;
+  household_id: string;
 }
 
 // API provision response
