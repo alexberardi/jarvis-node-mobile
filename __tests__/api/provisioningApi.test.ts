@@ -21,7 +21,7 @@ describe('Mock Provisioning API', () => {
   describe('Mock Constants', () => {
     it('should export USE_MOCK flag', () => {
       expect(typeof USE_MOCK).toBe('boolean');
-      expect(USE_MOCK).toBe(true);
+      expect(USE_MOCK).toBe(false);
     });
 
     it('should export MOCK_NODE with correct structure', () => {
@@ -64,6 +64,7 @@ describe('Mock Provisioning API', () => {
         ssid: 'TestNetwork',
         password: 'password123',
         room_name: 'kitchen',
+        household_id: 'test-household-123',
       };
 
       const result = await mockProvision(request);
@@ -92,7 +93,11 @@ describe('Mock Provisioning API', () => {
   });
 });
 
-describe('Provisioning API', () => {
+// These tests require a real node or mock mode enabled
+// Skip when USE_MOCK is false (real network calls would timeout)
+const describeWithMock = USE_MOCK ? describe : describe.skip;
+
+describeWithMock('Provisioning API (requires mock or real node)', () => {
   beforeEach(() => {
     setNodeIp('192.168.4.1');
   });
@@ -119,6 +124,7 @@ describe('Provisioning API', () => {
         ssid: 'HomeNetwork',
         password: 'secret',
         room_name: 'office',
+        household_id: 'test-household-456',
       };
 
       const result = await provision(request);

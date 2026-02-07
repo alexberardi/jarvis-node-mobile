@@ -78,6 +78,7 @@ export const provision = async (
     wifi_password: request.password,
     room: request.room_name,
     command_center_url: request.command_center_url || COMMAND_CENTER_URL,
+    household_id: request.household_id,
   };
 
   const response = await api.post<ApiProvisionResponse>('/api/v1/provision', apiRequest);

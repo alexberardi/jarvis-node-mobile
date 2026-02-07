@@ -16,12 +16,23 @@ export interface AuthUser {
   username?: string;
 }
 
+export type HouseholdRole = 'admin' | 'power_user' | 'member';
+
+export interface Household {
+  id: string;
+  name: string;
+  role: HouseholdRole;
+  created_at: string;
+}
+
 export interface AuthState {
   user: AuthUser | null;
   accessToken: string | null;
   refreshToken: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  households: Household[];
+  activeHouseholdId: string | null;
 }
 
 type AuthResponse = {
@@ -34,6 +45,7 @@ type AuthResponse = {
 const ACCESS_TOKEN_KEY = '@jarvis_node_mobile/access_token';
 const REFRESH_TOKEN_KEY = '@jarvis_node_mobile/refresh_token';
 const USER_KEY = '@jarvis_node_mobile/user';
+const ACTIVE_HOUSEHOLD_KEY = '@jarvis_node_mobile/active_household_id';
 
 const initialState: AuthState = {
   user: null,
@@ -41,6 +53,8 @@ const initialState: AuthState = {
   refreshToken: null,
   isAuthenticated: false,
   isLoading: true,
+  households: [],
+  activeHouseholdId: null,
 };
 
 const REFRESH_INTERVAL_MS = 10 * 60 * 1000;
@@ -52,6 +66,8 @@ type AuthContextValue = {
   logout: () => Promise<void>;
   refreshAccessToken: () => Promise<string | null>;
   bootstrapAuth: () => Promise<void>;
+  fetchHouseholds: () => Promise<Household[]>;
+  setActiveHousehold: (householdId: string | null) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -117,7 +133,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   );
 
   const logout = useCallback(async () => {
-    await AsyncStorage.multiRemove([ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, USER_KEY]);
+    await AsyncStorage.multiRemove([ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, USER_KEY, ACTIVE_HOUSEHOLD_KEY]);
     setState({
       ...initialState,
       isLoading: false,
@@ -150,16 +166,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [state.refreshToken]);
 
+  const fetchHouseholds = useCallback(async (): Promise<Household[]> => {
+    if (!state.accessToken) return [];
+    try {
+      const res = await authApi.get<Household[]>('/households', {
+        headers: { Authorization: `Bearer ${state.accessToken}` },
+      });
+      const households = res.data;
+      setState((prev) => ({ ...prev, households }));
+      return households;
+    } catch (error) {
+      console.debug('[AuthContext] Fetch households failed:', error instanceof Error ? error.message : error);
+      return [];
+    }
+  }, [state.accessToken]);
+
+  const setActiveHousehold = useCallback(async (householdId: string | null): Promise<void> => {
+    setState((prev) => ({ ...prev, activeHouseholdId: householdId }));
+    if (householdId) {
+      await AsyncStorage.setItem(ACTIVE_HOUSEHOLD_KEY, householdId);
+    } else {
+      await AsyncStorage.removeItem(ACTIVE_HOUSEHOLD_KEY);
+    }
+  }, []);
+
   const bootstrapAuth = useCallback(async () => {
     try {
-      const [storedAccess, storedRefresh, storedUser] = await AsyncStorage.multiGet([
+      const [storedAccess, storedRefresh, storedUser, storedHouseholdId] = await AsyncStorage.multiGet([
         ACCESS_TOKEN_KEY,
         REFRESH_TOKEN_KEY,
         USER_KEY,
+        ACTIVE_HOUSEHOLD_KEY,
       ]);
       const accessToken = storedAccess[1];
       const refreshToken = storedRefresh[1];
       const user = parseUser(storedUser[1]);
+      const activeHouseholdId = storedHouseholdId[1] || null;
 
       if (accessToken && refreshToken && user) {
         setState({
@@ -168,6 +210,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           refreshToken,
           isAuthenticated: true,
           isLoading: false,
+          households: [],
+          activeHouseholdId,
         });
       } else {
         setState({
@@ -199,6 +243,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => clearInterval(timer);
   }, [state.isAuthenticated, refreshAccessToken]);
 
+  // Fetch households when authenticated
+  useEffect(() => {
+    if (state.isAuthenticated && state.households.length === 0) {
+      fetchHouseholds().then((households) => {
+        // Auto-select first household if none is active
+        if (households.length > 0 && !state.activeHouseholdId) {
+          setActiveHousehold(households[0].id);
+        }
+      });
+    }
+  }, [state.isAuthenticated, state.households.length, state.activeHouseholdId, fetchHouseholds, setActiveHousehold]);
+
   const value = useMemo(
     () => ({
       state,
@@ -207,8 +263,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       logout,
       refreshAccessToken,
       bootstrapAuth,
+      fetchHouseholds,
+      setActiveHousehold,
     }),
-    [bootstrapAuth, login, logout, refreshAccessToken, register, state],
+    [bootstrapAuth, fetchHouseholds, login, logout, refreshAccessToken, register, setActiveHousehold, state],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

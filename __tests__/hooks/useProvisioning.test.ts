@@ -1,11 +1,53 @@
-import { renderHook, act, waitFor } from '@testing-library/react-native';
+import { renderHook, act } from '@testing-library/react-native';
 
 import { useProvisioning } from '../../src/hooks/useProvisioning';
 import { MOCK_NODE, MOCK_NETWORKS, resetMockState } from '../../src/api/mockProvisioningApi';
+import * as provisioningApi from '../../src/api/provisioningApi';
+import * as k2Service from '../../src/services/k2Service';
+
+// Mock the provisioning API
+jest.mock('../../src/api/provisioningApi', () => ({
+  ...jest.requireActual('../../src/api/provisioningApi'),
+  getNodeInfo: jest.fn(),
+  scanNetworks: jest.fn(),
+  provision: jest.fn(),
+  getProvisioningStatus: jest.fn(),
+  provisionK2: jest.fn(),
+  setNodeIp: jest.fn(),
+}));
+
+// Mock the K2 service
+jest.mock('../../src/services/k2Service', () => ({
+  generateK2: jest.fn(),
+  storeK2: jest.fn(),
+}));
 
 describe('useProvisioning', () => {
   beforeEach(() => {
+    jest.clearAllMocks();
     resetMockState();
+
+    // Set up default mocks
+    (provisioningApi.getNodeInfo as jest.Mock).mockResolvedValue(MOCK_NODE);
+    (provisioningApi.scanNetworks as jest.Mock).mockResolvedValue(MOCK_NETWORKS);
+    (provisioningApi.provision as jest.Mock).mockResolvedValue({
+      success: true,
+      node_id: MOCK_NODE.node_id,
+      room_name: 'kitchen',
+      message: 'Provisioned',
+    });
+    (provisioningApi.provisionK2 as jest.Mock).mockResolvedValue({
+      success: true,
+      node_id: MOCK_NODE.node_id,
+      kid: 'mock-kid',
+    });
+    (k2Service.generateK2 as jest.Mock).mockResolvedValue({
+      nodeId: MOCK_NODE.node_id,
+      kid: 'mock-kid',
+      k2: 'mock-k2-base64',
+      createdAt: new Date().toISOString(),
+    });
+    (k2Service.storeK2 as jest.Mock).mockResolvedValue(undefined);
   });
 
   describe('initial state', () => {
@@ -101,12 +143,20 @@ describe('useProvisioning', () => {
       });
 
       await act(async () => {
-        await result.current.startProvisioning('password123', 'kitchen');
+        await result.current.startProvisioning('password123', 'kitchen', 'test-household-123');
+      });
+
+      // After provisioning, state should be awaiting_wifi_switch (user needs to reconnect to home WiFi)
+      expect(result.current.state).toBe('awaiting_wifi_switch');
+      expect(result.current.provisioningResult).not.toBeNull();
+      expect(result.current.provisioningResult?.success).toBe(true);
+
+      // Call confirmWifiSwitched to complete provisioning
+      act(() => {
+        result.current.confirmWifiSwitched();
       });
 
       expect(result.current.state).toBe('success');
-      expect(result.current.provisioningResult).not.toBeNull();
-      expect(result.current.provisioningResult?.success).toBe(true);
     });
   });
 
@@ -145,10 +195,18 @@ describe('useProvisioning', () => {
       });
 
       await act(async () => {
-        await result.current.startProvisioning('password123', 'office');
+        await result.current.startProvisioning('password123', 'office', 'test-household-456');
       });
 
-      // After provisioning completes, progress should be 100
+      // After provisioning, progress should be at 75 (awaiting WiFi switch)
+      expect(result.current.progress).toBe(75);
+
+      // Complete provisioning flow
+      act(() => {
+        result.current.confirmWifiSwitched();
+      });
+
+      // Now progress should be 100
       expect(result.current.progress).toBe(100);
     });
   });

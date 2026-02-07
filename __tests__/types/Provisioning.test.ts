@@ -134,11 +134,13 @@ describe('Provisioning Types', () => {
         ssid: 'HomeNetwork',
         password: 'secret123',
         room_name: 'kitchen',
+        household_id: 'test-household-123',
       };
 
       expect(request.ssid).toBe('HomeNetwork');
       expect(request.password).toBe('secret123');
       expect(request.room_name).toBe('kitchen');
+      expect(request.household_id).toBe('test-household-123');
     });
 
     it('should support optional command_center_url', () => {
@@ -146,10 +148,12 @@ describe('Provisioning Types', () => {
         ssid: 'HomeNetwork',
         password: 'secret123',
         room_name: 'kitchen',
+        household_id: 'test-household-456',
         command_center_url: 'http://192.168.1.10:8002',
       };
 
       expect(request.command_center_url).toBe('http://192.168.1.10:8002');
+      expect(request.household_id).toBe('test-household-456');
     });
   });
 });

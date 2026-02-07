@@ -32,7 +32,7 @@ interface UseProvisioningReturn {
   connect: (ip: string, port?: number) => Promise<void>;
   fetchNetworks: () => Promise<void>;
   selectNetwork: (network: Network) => void;
-  startProvisioning: (password: string, roomName: string) => Promise<void>;
+  startProvisioning: (password: string, roomName: string, householdId: string) => Promise<void>;
   confirmWifiSwitched: () => void;
   reset: () => void;
   setError: (error: string | null) => void;
@@ -94,7 +94,7 @@ export const useProvisioning = (): UseProvisioningReturn => {
   }, []);
 
   const startProvisioning = useCallback(
-    async (password: string, roomName: string) => {
+    async (password: string, roomName: string, householdId: string) => {
       if (!selectedNetwork) {
         setError('No network selected');
         return;
@@ -102,6 +102,11 @@ export const useProvisioning = (): UseProvisioningReturn => {
 
       if (!nodeInfo?.node_id) {
         setError('Node info not available');
+        return;
+      }
+
+      if (!householdId) {
+        setError('No household selected');
         return;
       }
 
@@ -138,6 +143,7 @@ export const useProvisioning = (): UseProvisioningReturn => {
           ssid: selectedNetwork.ssid,
           password,
           room_name: roomName,
+          household_id: householdId,
         });
 
         // Update result with node_id from nodeInfo

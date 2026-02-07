@@ -10,6 +10,7 @@ const mockGoBack = jest.fn();
 const mockNavigation = { navigate: mockNavigate, goBack: mockGoBack } as any;
 
 const mockStartProvisioning = jest.fn().mockResolvedValue(undefined);
+const mockSetError = jest.fn();
 
 jest.mock('../../src/contexts/ProvisioningContext', () => ({
   useProvisioningContext: () => ({
@@ -17,6 +18,17 @@ jest.mock('../../src/contexts/ProvisioningContext', () => ({
     startProvisioning: mockStartProvisioning,
     isLoading: false,
     error: null,
+    setError: mockSetError,
+  }),
+}));
+
+jest.mock('../../src/auth/AuthContext', () => ({
+  useAuth: () => ({
+    state: {
+      isAuthenticated: true,
+      activeHouseholdId: 'test-household-123',
+      households: [{ id: 'test-household-123', name: 'Test Home', role: 'admin' }],
+    },
   }),
 }));
 
@@ -88,7 +100,7 @@ describe('EnterPasswordScreen', () => {
     fireEvent.press(getByTestId('provision-button'));
 
     await waitFor(() => {
-      expect(mockStartProvisioning).toHaveBeenCalledWith('password123', 'living_room');
+      expect(mockStartProvisioning).toHaveBeenCalledWith('password123', 'living_room', 'test-household-123');
       expect(mockNavigate).toHaveBeenCalledWith('ProvisioningProgress');
     });
   });
