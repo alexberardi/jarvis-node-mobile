@@ -6,9 +6,11 @@ import { K2KeyPair } from './k2Service';
 const PAYLOAD_VERSION = 1;
 
 // Argon2id parameters for password-protected QR
+// Using lower memory for mobile compatibility (19456 KiB = ~19 MiB)
+// OWASP recommends minimum 19456 KiB for Argon2id
 const ARGON2_PARAMS = {
-  m: 65536, // 64 MiB
-  t: 3,     // 3 iterations
+  m: 19456, // ~19 MiB (mobile-friendly, OWASP minimum)
+  t: 2,     // 2 iterations
   p: 1,     // 1 lane (single-threaded)
 };
 

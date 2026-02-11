@@ -11,7 +11,7 @@ import {
   generateEncryptedQRPayload,
   encodeQRPayload,
 } from '../services/qrPayloadService';
-import { COMMAND_CENTER_URL } from '../config/env';
+import { getCommandCenterUrl } from '../config/serviceConfig';
 
 interface K2QRCodeProps {
   keyPair: K2KeyPair;
@@ -38,9 +38,14 @@ const K2QRCode: React.FC<K2QRCodeProps> = ({
         setIsLoading(true);
         setError(null);
 
+        // Validate keyPair
+        if (!keyPair?.k2 || !keyPair?.kid || !keyPair?.nodeId) {
+          throw new Error('Invalid key pair data');
+        }
+
         let payload;
         if (mode === 'plain') {
-          payload = generatePlainQRPayload(keyPair, COMMAND_CENTER_URL);
+          payload = generatePlainQRPayload(keyPair, getCommandCenterUrl());
         } else {
           if (!password) {
             throw new Error('Password required for encrypted QR');
@@ -48,13 +53,14 @@ const K2QRCode: React.FC<K2QRCodeProps> = ({
           payload = await generateEncryptedQRPayload(
             keyPair,
             password,
-            COMMAND_CENTER_URL
+            getCommandCenterUrl()
           );
         }
 
         const encoded = encodeQRPayload(payload);
         setQrData(encoded);
       } catch (err) {
+        console.error('[K2QRCode] Error generating QR:', err);
         const message = err instanceof Error ? err.message : 'Failed to generate QR code';
         setError(message);
         onError?.(message);

@@ -21,7 +21,7 @@ import {
   K2ProvisioningRequest,
   K2ProvisioningResponse,
 } from '../types/Provisioning';
-import { COMMAND_CENTER_URL } from '../config/env';
+import { getCommandCenterUrl } from '../config/serviceConfig';
 
 // Default node IP (AP mode address for real Pi, or simulator IP)
 let nodeIp = '192.168.4.1';
@@ -77,8 +77,10 @@ export const provision = async (
     wifi_ssid: request.ssid,
     wifi_password: request.password,
     room: request.room_name,
-    command_center_url: request.command_center_url || COMMAND_CENTER_URL,
+    command_center_url: request.command_center_url || getCommandCenterUrl(),
     household_id: request.household_id,
+    node_id: request.node_id,
+    provisioning_token: request.provisioning_token,
   };
 
   const response = await api.post<ApiProvisionResponse>('/api/v1/provision', apiRequest);
@@ -86,7 +88,7 @@ export const provision = async (
   // Transform response to internal format
   return {
     success: response.data.success,
-    node_id: '', // Will be populated from node info
+    node_id: request.node_id,
     room_name: request.room_name,
     message: response.data.message,
   };

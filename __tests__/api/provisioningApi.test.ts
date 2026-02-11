@@ -65,11 +65,13 @@ describe('Mock Provisioning API', () => {
         password: 'password123',
         room_name: 'kitchen',
         household_id: 'test-household-123',
+        node_id: 'test-node-id',
+        provisioning_token: 'test-token',
       };
 
       const result = await mockProvision(request);
       expect(result.success).toBe(true);
-      expect(result.node_id).toBe(MOCK_NODE.node_id);
+      expect(result.node_id).toBe('test-node-id');
       expect(result.room_name).toBe('kitchen');
     });
   });
@@ -125,6 +127,8 @@ describeWithMock('Provisioning API (requires mock or real node)', () => {
         password: 'secret',
         room_name: 'office',
         household_id: 'test-household-456',
+        node_id: 'test-node-id',
+        provisioning_token: 'test-token',
       };
 
       const result = await provision(request);

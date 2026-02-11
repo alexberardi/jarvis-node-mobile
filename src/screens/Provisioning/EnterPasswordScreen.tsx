@@ -24,6 +24,9 @@ const EnterPasswordScreen = ({ navigation }: Props) => {
       setError('No household selected. Please select a household in settings.');
       return;
     }
+
+    // Node connectivity was already verified during connect() in ScanForNodesScreen
+    // The provisioning calls will fail with clear errors if the node isn't reachable
     await startProvisioning(password, roomName, householdId);
     navigation.navigate('ProvisioningProgress');
   };
@@ -83,6 +86,12 @@ const EnterPasswordScreen = ({ navigation }: Props) => {
         {error && (
           <HelperText type="error" visible>
             {error}
+          </HelperText>
+        )}
+
+        {!householdId && (
+          <HelperText type="error" visible>
+            No household selected. Please log in and ensure you have a household.
           </HelperText>
         )}
 
