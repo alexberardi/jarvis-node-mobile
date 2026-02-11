@@ -21,15 +21,19 @@ interface ProvisioningContextValue {
   statusMessage: string;
   provisioningResult: ProvisioningResult | null;
   k2KeyPair: K2KeyPair | null;
+  provisioningToken: string | null;
+  ccNodeId: string | null;
 
   // Actions
-  connect: (ip: string, port?: number) => Promise<void>;
-  fetchNetworks: () => Promise<void>;
+  connect: (ip: string, port?: number) => Promise<boolean>;
+  fetchNetworks: () => Promise<boolean>;
   selectNetwork: (network: Network) => void;
   startProvisioning: (password: string, roomName: string, householdId: string) => Promise<void>;
   confirmWifiSwitched: () => void;
   reset: () => void;
   setError: (error: string | null) => void;
+  fetchProvisioningToken: (householdId: string, accessToken: string, room?: string) => Promise<boolean>;
+  refreshProvisioningToken: (householdId: string, accessToken: string) => Promise<boolean>;
 }
 
 const ProvisioningContext = createContext<ProvisioningContextValue | undefined>(undefined);

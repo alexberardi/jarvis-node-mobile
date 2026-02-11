@@ -1,9 +1,8 @@
 import axios from 'axios';
 
-import { AUTH_API_BASE_URL } from '../config/env';
-
+// baseURL is set dynamically by ConfigProvider before any consumers mount
 const authApi = axios.create({
-  baseURL: AUTH_API_BASE_URL,
+  baseURL: '',
   headers: {
     'Content-Type': 'application/json',
   },

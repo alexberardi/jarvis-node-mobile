@@ -12,8 +12,10 @@ const NodeInfoScreen = ({ navigation }: Props) => {
   const { nodeInfo, fetchNetworks, isLoading } = useProvisioningContext();
 
   const handleContinue = async () => {
-    await fetchNetworks();
-    navigation.navigate('SelectNetwork');
+    const success = await fetchNetworks();
+    if (success) {
+      navigation.navigate('SelectNetwork');
+    }
   };
 
   if (!nodeInfo) {

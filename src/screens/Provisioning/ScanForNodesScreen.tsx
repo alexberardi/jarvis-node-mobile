@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { StyleSheet, View, Linking } from 'react-native';
 import { Appbar, Button, Card, HelperText, Text, TextInput, Divider } from 'react-native-paper';
 
+import { useAuth } from '../../auth/AuthContext';
 import { useProvisioningContext } from '../../contexts/ProvisioningContext';
 import { ProvisioningStackParamList } from '../../navigation/types';
 import { SIMULATED_NODE_IP, NODE_PORT, DEV_MODE } from '../../config/env';
@@ -15,22 +16,52 @@ const AP_MODE_IP = '192.168.4.1';
 const AP_MODE_PORT = 8080;
 
 const ScanForNodesScreen = ({ navigation }: Props) => {
-  const { connect, isLoading, error } = useProvisioningContext();
+  const { state: authState } = useAuth();
+  const { logout } = useAuth();
+  const { connect, isLoading, error, fetchProvisioningToken, setError } = useProvisioningContext();
   const { isDark, toggleTheme } = useThemePreference();
   const [showDevMode, setShowDevMode] = useState(DEV_MODE);
   const [devIp, setDevIp] = useState(SIMULATED_NODE_IP);
   const [devPort, setDevPort] = useState(String(NODE_PORT));
 
   const handleConnectAPMode = async () => {
-    await connect(AP_MODE_IP, AP_MODE_PORT);
-    if (!error) {
+    // Fetch provisioning token while still on home WiFi
+    if (!authState.accessToken || !authState.activeHouseholdId) {
+      setError('Not authenticated or no household selected');
+      return;
+    }
+
+    const tokenSuccess = await fetchProvisioningToken(
+      authState.activeHouseholdId,
+      authState.accessToken
+    );
+    if (!tokenSuccess) {
+      return; // Error already set by fetchProvisioningToken
+    }
+
+    const success = await connect(AP_MODE_IP, AP_MODE_PORT);
+    if (success) {
       navigation.navigate('NodeInfo');
     }
   };
 
   const handleConnectDevMode = async () => {
-    await connect(devIp, parseInt(devPort, 10) || 8080);
-    if (!error) {
+    // Fetch provisioning token while still on home WiFi
+    if (!authState.accessToken || !authState.activeHouseholdId) {
+      setError('Not authenticated or no household selected');
+      return;
+    }
+
+    const tokenSuccess = await fetchProvisioningToken(
+      authState.activeHouseholdId,
+      authState.accessToken
+    );
+    if (!tokenSuccess) {
+      return; // Error already set by fetchProvisioningToken
+    }
+
+    const success = await connect(devIp, parseInt(devPort, 10) || 8080);
+    if (success) {
       navigation.navigate('NodeInfo');
     }
   };
@@ -47,6 +78,11 @@ const ScanForNodesScreen = ({ navigation }: Props) => {
           icon={isDark ? 'weather-sunny' : 'weather-night'}
           onPress={toggleTheme}
           accessibilityLabel="Toggle dark mode"
+        />
+        <Appbar.Action
+          icon="logout"
+          onPress={logout}
+          accessibilityLabel="Logout"
         />
       </Appbar.Header>
       <View style={styles.container}>

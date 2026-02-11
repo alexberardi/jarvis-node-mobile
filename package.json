@@ -25,6 +25,7 @@
     "expo": "~54.0.33",
     "expo-camera": "~17.0.0",
     "expo-dev-client": "~6.0.20",
+    "expo-network": "~8.0.8",
     "expo-secure-store": "~15.0.0",
     "expo-status-bar": "~3.0.9",
     "jarvis-crypto": "file:./modules/jarvis-crypto",
