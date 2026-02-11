@@ -7,15 +7,14 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { AuthProvider } from './src/auth/AuthContext';
-import { AUTH_API_BASE_URL, COMMAND_CENTER_URL, DEV_MODE } from './src/config/env';
+import { DEV_MODE } from './src/config/env';
+import { ConfigProvider } from './src/contexts/ConfigContext';
 import RootNavigator from './src/navigation/RootNavigator';
 import { ThemeProvider, useThemePreference } from './src/theme/ThemeProvider';
 
 const queryClient = new QueryClient();
 
 if (__DEV__) {
-  console.log('Auth API:', AUTH_API_BASE_URL);
-  console.log('Command Center:', COMMAND_CENTER_URL);
   console.log('Dev Mode:', DEV_MODE);
 }
 
@@ -25,12 +24,14 @@ const AppContent = () => {
   return (
     <PaperProvider theme={paperTheme}>
       <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <NavigationContainer theme={navTheme}>
-            <RootNavigator />
-            <StatusBar style={isDark ? 'light' : 'dark'} />
-          </NavigationContainer>
-        </AuthProvider>
+        <ConfigProvider>
+          <AuthProvider>
+            <NavigationContainer theme={navTheme}>
+              <RootNavigator />
+              <StatusBar style={isDark ? 'light' : 'dark'} />
+            </NavigationContainer>
+          </AuthProvider>
+        </ConfigProvider>
       </QueryClientProvider>
     </PaperProvider>
   );

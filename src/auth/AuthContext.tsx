@@ -42,6 +42,10 @@ type AuthResponse = {
   user: AuthUser;
 };
 
+type RegisterResponse = AuthResponse & {
+  household_id: string;
+};
+
 const ACCESS_TOKEN_KEY = '@jarvis_node_mobile/access_token';
 const REFRESH_TOKEN_KEY = '@jarvis_node_mobile/refresh_token';
 const USER_KEY = '@jarvis_node_mobile/user';
@@ -104,6 +108,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     [],
   );
 
+  const setActiveHousehold = useCallback(async (householdId: string | null): Promise<void> => {
+    setState((prev) => ({ ...prev, activeHouseholdId: householdId }));
+    if (householdId) {
+      await AsyncStorage.setItem(ACTIVE_HOUSEHOLD_KEY, householdId);
+    } else {
+      await AsyncStorage.removeItem(ACTIVE_HOUSEHOLD_KEY);
+    }
+  }, []);
+
   const login = useCallback(
     async (email: string, password: string) => {
       const res = await authApi.post<AuthResponse>('/auth/login', { email, password });
@@ -118,7 +131,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const register = useCallback(
     async (email: string, password: string, username?: string) => {
-      const res = await authApi.post<AuthResponse>('/auth/register', {
+      const res = await authApi.post<RegisterResponse>('/auth/register', {
         email,
         password,
         username,
@@ -128,8 +141,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         refreshToken: res.data.refresh_token,
         user: res.data.user,
       });
+      // Set the household from the registration response
+      await setActiveHousehold(res.data.household_id);
     },
-    [persistAuth],
+    [persistAuth, setActiveHousehold],
   );
 
   const logout = useCallback(async () => {
@@ -180,15 +195,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return [];
     }
   }, [state.accessToken]);
-
-  const setActiveHousehold = useCallback(async (householdId: string | null): Promise<void> => {
-    setState((prev) => ({ ...prev, activeHouseholdId: householdId }));
-    if (householdId) {
-      await AsyncStorage.setItem(ACTIVE_HOUSEHOLD_KEY, householdId);
-    } else {
-      await AsyncStorage.removeItem(ACTIVE_HOUSEHOLD_KEY);
-    }
-  }, []);
 
   const bootstrapAuth = useCallback(async () => {
     try {

@@ -7,6 +7,7 @@ import {
   K2ProvisioningRequest,
   K2ProvisioningResponse,
 } from '../types/Provisioning';
+import { ProvisioningTokenResponse } from './commandCenterApi';
 
 // Set to true only for development without a real node
 export const USE_MOCK = false;
@@ -74,7 +75,7 @@ export const mockProvision = async (
 
   return {
     success: true,
-    node_id: MOCK_NODE.node_id,
+    node_id: request.node_id,
     room_name: request.room_name,
     message: 'Node provisioned successfully',
   };
@@ -90,6 +91,22 @@ export const resetMockState = (): void => {
     state: 'idle',
     progress: 0,
     message: 'Ready to provision',
+  };
+};
+
+export const mockRequestProvisioningToken = async (): Promise<ProvisioningTokenResponse> => {
+  await mockDelay(300);
+
+  const mockNodeId = `node-mock-${Date.now().toString(36)}`;
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+
+  console.log('[Mock] Provisioning token issued for node:', mockNodeId);
+
+  return {
+    token: `mock-prov-token-${Date.now()}`,
+    node_id: mockNodeId,
+    expires_at: expiresAt,
+    expires_in: 600,
   };
 };
 
