@@ -70,6 +70,8 @@ export interface ApiProvisioningRequest {
   room: string;
   command_center_url: string;
   household_id: string;
+  node_id: string;
+  provisioning_token: string;
 }
 
 // Internal request format (used by UI)
@@ -79,6 +81,8 @@ export interface ProvisioningRequest {
   room_name: string;
   command_center_url?: string;
   household_id: string;
+  node_id: string;
+  provisioning_token: string;
 }
 
 // API provision response
