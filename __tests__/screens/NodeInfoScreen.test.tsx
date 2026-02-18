@@ -18,7 +18,7 @@ const mockNodeInfo = {
   state: 'AP_MODE' as const,
 };
 
-const mockFetchNetworks = jest.fn().mockResolvedValue(undefined);
+const mockFetchNetworks = jest.fn().mockResolvedValue(true);
 
 jest.mock('../../src/contexts/ProvisioningContext', () => ({
   useProvisioningContext: () => ({
