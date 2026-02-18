@@ -1,11 +1,46 @@
 import React from 'react';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { PaperProvider } from 'react-native-paper';
 
 import ScanForNodesScreen from '../../src/screens/Provisioning/ScanForNodesScreen';
-import { TestWrapper } from '../testUtils';
+import { lightTheme } from '../../src/theme';
 
 const mockNavigate = jest.fn();
 const mockNavigation = { navigate: mockNavigate } as any;
+
+jest.mock('../../src/auth/AuthContext', () => ({
+  useAuth: () => ({
+    state: {
+      isAuthenticated: true,
+      activeHouseholdId: 'test-household-123',
+      households: [{ id: 'test-household-123', name: 'Test Home', role: 'admin' }],
+      user: { id: 1, email: 'test@example.com' },
+      accessToken: 'mock-access-token',
+    },
+    logout: jest.fn(),
+  }),
+}));
+
+const mockConnect = jest.fn().mockResolvedValue(true);
+const mockFetchProvisioningToken = jest.fn().mockResolvedValue(true);
+
+jest.mock('../../src/contexts/ProvisioningContext', () => ({
+  ...jest.requireActual('../../src/contexts/ProvisioningContext'),
+  useProvisioningContext: () => ({
+    connect: mockConnect,
+    fetchProvisioningToken: mockFetchProvisioningToken,
+    isLoading: false,
+    error: null,
+    setError: jest.fn(),
+  }),
+}));
+
+jest.mock('../../src/theme/ThemeProvider', () => ({
+  useThemePreference: () => ({
+    isDark: false,
+    toggleTheme: jest.fn(),
+  }),
+}));
 
 describe('ScanForNodesScreen', () => {
   beforeEach(() => {
@@ -14,9 +49,9 @@ describe('ScanForNodesScreen', () => {
 
   it('should render connect button for AP mode', () => {
     const { getByTestId } = render(
-      <TestWrapper>
+      <PaperProvider theme={lightTheme}>
         <ScanForNodesScreen navigation={mockNavigation} route={{} as any} />
-      </TestWrapper>
+      </PaperProvider>
     );
 
     expect(getByTestId('connect-button')).toBeTruthy();
@@ -24,9 +59,9 @@ describe('ScanForNodesScreen', () => {
 
   it('should display provisioning instructions', () => {
     const { getByText } = render(
-      <TestWrapper>
+      <PaperProvider theme={lightTheme}>
         <ScanForNodesScreen navigation={mockNavigation} route={{} as any} />
-      </TestWrapper>
+      </PaperProvider>
     );
 
     expect(getByText(/Power on your new Jarvis node/)).toBeTruthy();
@@ -35,9 +70,9 @@ describe('ScanForNodesScreen', () => {
 
   it('should have developer options toggle', () => {
     const { getByText } = render(
-      <TestWrapper>
+      <PaperProvider theme={lightTheme}>
         <ScanForNodesScreen navigation={mockNavigation} route={{} as any} />
-      </TestWrapper>
+      </PaperProvider>
     );
 
     expect(getByText(/Developer Options/)).toBeTruthy();
@@ -45,9 +80,9 @@ describe('ScanForNodesScreen', () => {
 
   it('should show IP input when developer options expanded', () => {
     const { getByText, getByTestId } = render(
-      <TestWrapper>
+      <PaperProvider theme={lightTheme}>
         <ScanForNodesScreen navigation={mockNavigation} route={{} as any} />
-      </TestWrapper>
+      </PaperProvider>
     );
 
     // Expand developer options
@@ -60,9 +95,9 @@ describe('ScanForNodesScreen', () => {
 
   it('should navigate to NodeInfo on successful connection', async () => {
     const { getByTestId } = render(
-      <TestWrapper>
+      <PaperProvider theme={lightTheme}>
         <ScanForNodesScreen navigation={mockNavigation} route={{} as any} />
-      </TestWrapper>
+      </PaperProvider>
     );
 
     const connectButton = getByTestId('connect-button');
