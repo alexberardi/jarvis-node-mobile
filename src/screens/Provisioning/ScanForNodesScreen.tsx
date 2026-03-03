@@ -19,26 +19,35 @@ const ScanForNodesScreen = ({ navigation }: Props) => {
   const { state: authState } = useAuth();
   const { logout } = useAuth();
   const { connect, isLoading, error, fetchProvisioningToken, setError } = useProvisioningContext();
-  const { isDark, toggleTheme } = useThemePreference();
+  const { isDark, toggleTheme, paperTheme } = useThemePreference();
   const [showDevMode, setShowDevMode] = useState(DEV_MODE);
   const [devIp, setDevIp] = useState(SIMULATED_NODE_IP);
   const [devPort, setDevPort] = useState(String(NODE_PORT));
+  // Track whether we've already fetched the provisioning token
+  const [tokenReady, setTokenReady] = useState(false);
+  const [fetchingToken, setFetchingToken] = useState(false);
 
-  const handleConnectAPMode = async () => {
-    // Fetch provisioning token while still on home WiFi
+  // Phase 1: Fetch provisioning token while still on home WiFi
+  const handlePrepare = async () => {
     if (!authState.accessToken || !authState.activeHouseholdId) {
       setError('Not authenticated or no household selected');
       return;
     }
 
+    setFetchingToken(true);
     const tokenSuccess = await fetchProvisioningToken(
       authState.activeHouseholdId,
-      authState.accessToken
+      authState.accessToken,
     );
-    if (!tokenSuccess) {
-      return; // Error already set by fetchProvisioningToken
-    }
+    setFetchingToken(false);
 
+    if (tokenSuccess) {
+      setTokenReady(true);
+    }
+  };
+
+  // Phase 2: Connect to node (token already cached, user is now on node WiFi)
+  const handleConnectAPMode = async () => {
     const success = await connect(AP_MODE_IP, AP_MODE_PORT);
     if (success) {
       navigation.navigate('NodeInfo');
@@ -46,18 +55,18 @@ const ScanForNodesScreen = ({ navigation }: Props) => {
   };
 
   const handleConnectDevMode = async () => {
-    // Fetch provisioning token while still on home WiFi
+    // Dev mode: fetch token + connect in one step (assumes home network can reach both)
     if (!authState.accessToken || !authState.activeHouseholdId) {
       setError('Not authenticated or no household selected');
       return;
     }
 
-    const tokenSuccess = await fetchProvisioningToken(
-      authState.activeHouseholdId,
-      authState.accessToken
-    );
-    if (!tokenSuccess) {
-      return; // Error already set by fetchProvisioningToken
+    if (!tokenReady) {
+      const tokenSuccess = await fetchProvisioningToken(
+        authState.activeHouseholdId,
+        authState.accessToken,
+      );
+      if (!tokenSuccess) return;
     }
 
     const success = await connect(devIp, parseInt(devPort, 10) || 8080);
@@ -92,31 +101,56 @@ const ScanForNodesScreen = ({ navigation }: Props) => {
             <Text variant="titleMedium" style={styles.cardTitle}>
               Provision New Node
             </Text>
-            <Text variant="bodyMedium" style={styles.instructions}>
-              1. Power on your new Jarvis node{'\n'}
-              2. Connect to its WiFi network (Jarvis-XXXX){'\n'}
-              3. Tap "Connect to Node" below
-            </Text>
 
-            <Button
-              mode="outlined"
-              onPress={openWiFiSettings}
-              style={styles.wifiButton}
-              icon="wifi"
-            >
-              Open WiFi Settings
-            </Button>
+            {!tokenReady ? (
+              <>
+                <Text variant="bodyMedium" style={styles.instructions}>
+                  1. Power on your new Jarvis node{'\n'}
+                  2. Make sure you're on your home WiFi{'\n'}
+                  3. Tap "Prepare" to get a provisioning token
+                </Text>
 
-            <Button
-              testID="connect-button"
-              mode="contained"
-              onPress={handleConnectAPMode}
-              loading={isLoading && !showDevMode}
-              disabled={isLoading}
-              style={styles.button}
-            >
-              Connect to Node
-            </Button>
+                <Button
+                  testID="prepare-button"
+                  mode="contained"
+                  onPress={handlePrepare}
+                  loading={fetchingToken}
+                  disabled={fetchingToken || isLoading}
+                  style={styles.button}
+                  icon="key-variant"
+                >
+                  Prepare
+                </Button>
+              </>
+            ) : (
+              <>
+                <Text variant="bodyMedium" style={styles.instructions}>
+                  Token ready! Now:{'\n'}
+                  1. Connect to the node's WiFi (Jarvis-XXXX){'\n'}
+                  2. Tap "Connect to Node" below
+                </Text>
+
+                <Button
+                  mode="outlined"
+                  onPress={openWiFiSettings}
+                  style={styles.wifiButton}
+                  icon="wifi"
+                >
+                  Open WiFi Settings
+                </Button>
+
+                <Button
+                  testID="connect-button"
+                  mode="contained"
+                  onPress={handleConnectAPMode}
+                  loading={isLoading && !showDevMode}
+                  disabled={isLoading}
+                  style={styles.button}
+                >
+                  Connect to Node
+                </Button>
+              </>
+            )}
           </Card.Content>
         </Card>
 
@@ -138,7 +172,7 @@ const ScanForNodesScreen = ({ navigation }: Props) => {
         </Button>
 
         {showDevMode && (
-          <Card style={styles.devCard}>
+          <Card style={[styles.devCard, { backgroundColor: paperTheme.colors.surfaceVariant }]}>
             <Card.Content>
               <Text variant="titleSmall" style={styles.devTitle}>
                 Simulator Mode
@@ -224,7 +258,6 @@ const styles = StyleSheet.create({
   },
   devCard: {
     marginTop: 8,
-    backgroundColor: 'rgba(0,0,0,0.03)',
   },
   devTitle: {
     marginBottom: 4,

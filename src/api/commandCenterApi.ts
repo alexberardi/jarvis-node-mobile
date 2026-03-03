@@ -22,7 +22,7 @@ export const requestProvisioningToken = async (
 ): Promise<ProvisioningTokenResponse> => {
   const baseUrl = getCommandCenterUrl();
   const response = await axios.post<ProvisioningTokenResponse>(
-    `${baseUrl}/api/v1/provisioning/token`,
+    `${baseUrl}/api/v0/provisioning/token`,
     request,
     {
       headers: {

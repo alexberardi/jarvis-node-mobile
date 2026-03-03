@@ -35,26 +35,32 @@ jest.mock('../../src/contexts/ProvisioningContext', () => ({
   }),
 }));
 
-jest.mock('../../src/theme/ThemeProvider', () => ({
-  useThemePreference: () => ({
-    isDark: false,
-    toggleTheme: jest.fn(),
-  }),
-}));
+jest.mock('../../src/theme/ThemeProvider', () => {
+  const { lightTheme: lt } = jest.requireActual('../../src/theme');
+  return {
+    useThemePreference: () => ({
+      isDark: false,
+      toggleTheme: jest.fn(),
+      paperTheme: lt,
+      themePreference: 'light',
+      setThemePreference: jest.fn(),
+    }),
+  };
+});
 
 describe('ScanForNodesScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  it('should render connect button for AP mode', () => {
+  it('should render prepare button initially', () => {
     const { getByTestId } = render(
       <PaperProvider theme={lightTheme}>
         <ScanForNodesScreen navigation={mockNavigation} route={{} as any} />
       </PaperProvider>
     );
 
-    expect(getByTestId('connect-button')).toBeTruthy();
+    expect(getByTestId('prepare-button')).toBeTruthy();
   });
 
   it('should display provisioning instructions', () => {
@@ -65,7 +71,31 @@ describe('ScanForNodesScreen', () => {
     );
 
     expect(getByText(/Power on your new Jarvis node/)).toBeTruthy();
-    expect(getByText(/Connect to its WiFi network/)).toBeTruthy();
+    expect(getByText(/home WiFi/)).toBeTruthy();
+  });
+
+  it('should show connect button after preparing', async () => {
+    const { getByTestId, getByText } = render(
+      <PaperProvider theme={lightTheme}>
+        <ScanForNodesScreen navigation={mockNavigation} route={{} as any} />
+      </PaperProvider>
+    );
+
+    // Phase 1: Prepare (fetch token)
+    fireEvent.press(getByTestId('prepare-button'));
+
+    await waitFor(() => {
+      expect(mockFetchProvisioningToken).toHaveBeenCalledWith(
+        'test-household-123',
+        'mock-access-token',
+      );
+    });
+
+    // Phase 2: Connect button should now be visible
+    await waitFor(() => {
+      expect(getByTestId('connect-button')).toBeTruthy();
+      expect(getByText(/Token ready/)).toBeTruthy();
+    });
   });
 
   it('should have developer options toggle', () => {
@@ -93,18 +123,26 @@ describe('ScanForNodesScreen', () => {
     expect(getByTestId('port-input')).toBeTruthy();
   });
 
-  it('should navigate to NodeInfo on successful connection', async () => {
+  it('should navigate to NodeInfo after prepare then connect', async () => {
     const { getByTestId } = render(
       <PaperProvider theme={lightTheme}>
         <ScanForNodesScreen navigation={mockNavigation} route={{} as any} />
       </PaperProvider>
     );
 
-    const connectButton = getByTestId('connect-button');
-    fireEvent.press(connectButton);
+    // Phase 1: Prepare
+    fireEvent.press(getByTestId('prepare-button'));
+
+    await waitFor(() => {
+      expect(getByTestId('connect-button')).toBeTruthy();
+    });
+
+    // Phase 2: Connect
+    fireEvent.press(getByTestId('connect-button'));
 
     await waitFor(
       () => {
+        expect(mockConnect).toHaveBeenCalledWith('192.168.4.1', 8080);
         expect(mockNavigate).toHaveBeenCalledWith('NodeInfo');
       },
       { timeout: 2000 }
