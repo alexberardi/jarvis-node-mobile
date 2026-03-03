@@ -6,42 +6,65 @@ import { MD3Theme } from 'react-native-paper';
 
 import { darkTheme, lightTheme } from '.';
 
-type ThemeName = 'light' | 'dark';
+export type ThemePreference = 'light' | 'dark' | 'system';
 
 type ThemeContextValue = {
-  themeName: ThemeName;
+  themePreference: ThemePreference;
   isDark: boolean;
   paperTheme: MD3Theme;
   navTheme: typeof NavLightTheme;
-  setThemeName: (name: ThemeName) => void;
+  setThemePreference: (pref: ThemePreference) => void;
   toggleTheme: () => void;
+  // Keep old name as alias for backward compat
+  themeName: 'light' | 'dark';
+  setThemeName: (name: 'light' | 'dark') => void;
 };
 
 const STORAGE_KEY = '@jarvis_node_mobile/theme';
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
-const getInitialTheme = async (): Promise<ThemeName> => {
-  const stored = await AsyncStorage.getItem(STORAGE_KEY);
-  if (stored === 'light' || stored === 'dark') return stored;
+const resolveSystemScheme = (): 'light' | 'dark' => {
   const sys = Appearance.getColorScheme();
   return sys === 'dark' ? 'dark' : 'light';
 };
 
 export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
-  const [themeName, setThemeNameState] = useState<ThemeName>('light');
-  const isDark = themeName === 'dark';
+  const [themePreference, setThemePrefState] = useState<ThemePreference>('system');
+  const [systemScheme, setSystemScheme] = useState<'light' | 'dark'>(resolveSystemScheme);
 
+  // Load persisted preference
   useEffect(() => {
-    getInitialTheme().then(setThemeNameState).catch(() => setThemeNameState('light'));
+    AsyncStorage.getItem(STORAGE_KEY)
+      .then((stored) => {
+        if (stored === 'light' || stored === 'dark' || stored === 'system') {
+          setThemePrefState(stored);
+        }
+      })
+      .catch(() => {});
   }, []);
 
-  const persist = (name: ThemeName) => {
-    setThemeNameState(name);
-    AsyncStorage.setItem(STORAGE_KEY, name).catch(() => {});
+  // Listen for system appearance changes
+  useEffect(() => {
+    const sub = Appearance.addChangeListener(({ colorScheme }) => {
+      setSystemScheme(colorScheme === 'dark' ? 'dark' : 'light');
+    });
+    return () => sub.remove();
+  }, []);
+
+  const isDark = themePreference === 'system' ? systemScheme === 'dark' : themePreference === 'dark';
+  const themeName: 'light' | 'dark' = isDark ? 'dark' : 'light';
+
+  const persist = (pref: ThemePreference) => {
+    setThemePrefState(pref);
+    AsyncStorage.setItem(STORAGE_KEY, pref).catch(() => {});
   };
 
-  const setThemeName = (name: ThemeName) => {
+  const setThemePreference = (pref: ThemePreference) => {
+    persist(pref);
+  };
+
+  const setThemeName = (name: 'light' | 'dark') => {
     persist(name);
   };
 
@@ -65,14 +88,16 @@ export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
 
   const value = useMemo(
     () => ({
+      themePreference,
       themeName,
       isDark,
       paperTheme,
       navTheme,
+      setThemePreference,
       setThemeName,
       toggleTheme,
     }),
-    [isDark, navTheme, paperTheme, themeName],
+    [isDark, navTheme, paperTheme, themePreference, themeName],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

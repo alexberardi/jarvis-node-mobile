@@ -5,6 +5,12 @@ import { PaperProvider } from 'react-native-paper';
 import SuccessScreen from '../../src/screens/Provisioning/SuccessScreen';
 import { lightTheme } from '../../src/theme';
 
+const mockNavigate = jest.fn();
+jest.mock('@react-navigation/native', () => ({
+  ...jest.requireActual('@react-navigation/native'),
+  useNavigation: () => ({ navigate: mockNavigate }),
+}));
+
 const mockReset = jest.fn();
 const mockNavigation = { reset: mockReset } as any;
 
