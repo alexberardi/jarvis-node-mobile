@@ -48,7 +48,7 @@ describe('commandCenterApi', () => {
       const result = await requestProvisioningToken(mockRequest, mockAccessToken);
 
       expect(axios.post).toHaveBeenCalledWith(
-        'http://192.168.1.10:8002/api/v1/provisioning/token',
+        'http://192.168.1.10:8002/api/v0/provisioning/token',
         mockRequest,
         expect.objectContaining({
           headers: {
@@ -111,7 +111,7 @@ describe('commandCenterApi', () => {
       await requestProvisioningToken(mockRequest, mockAccessToken);
 
       expect(axios.post).toHaveBeenCalledWith(
-        'http://custom-host:9002/api/v1/provisioning/token',
+        'http://custom-host:9002/api/v0/provisioning/token',
         expect.anything(),
         expect.anything()
       );

@@ -1,16 +1,19 @@
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
 import React, { useState } from 'react';
 import { StyleSheet, View, ScrollView } from 'react-native';
-import { Button, Text } from 'react-native-paper';
+import { Button, Text, useTheme } from 'react-native-paper';
 
 import { K2BackupCard } from '../../components/K2QRCode';
 import { useProvisioningContext } from '../../contexts/ProvisioningContext';
-import { ProvisioningStackParamList } from '../../navigation/types';
+import { ProvisioningStackParamList, RootStackParamList } from '../../navigation/types';
 
 type Props = NativeStackScreenProps<ProvisioningStackParamList, 'Success'>;
 
 const SuccessScreen = ({ navigation }: Props) => {
+  const rootNav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { provisioningResult, k2KeyPair, reset } = useProvisioningContext();
+  const theme = useTheme();
   const [showBackup, setShowBackup] = useState(false);
 
   const handleDone = () => {
@@ -19,6 +22,11 @@ const SuccessScreen = ({ navigation }: Props) => {
       index: 0,
       routes: [{ name: 'ScanForNodes' }],
     });
+  };
+
+  const handleSetupSmartHome = () => {
+    reset();
+    rootNav.navigate('SmartHomeSetup', { screen: 'SmartHomeSetup' });
   };
 
   const roomLabel = provisioningResult?.room_name
@@ -37,7 +45,7 @@ const SuccessScreen = ({ navigation }: Props) => {
   return (
     <View style={styles.container}>
       <View style={styles.content}>
-        <Text variant="displaySmall" style={styles.checkmark}>
+        <Text variant="displaySmall" style={[styles.checkmark, { color: theme.colors.secondary }]}>
           ✓
         </Text>
 
@@ -49,7 +57,7 @@ const SuccessScreen = ({ navigation }: Props) => {
           Your Jarvis node has been provisioned and is ready to use.
         </Text>
 
-        <View style={styles.details}>
+        <View style={[styles.details, { backgroundColor: theme.colors.surfaceVariant }]}>
           <Text variant="titleMedium" style={styles.nodeId}>
             {provisioningResult?.node_id}
           </Text>
@@ -60,6 +68,13 @@ const SuccessScreen = ({ navigation }: Props) => {
       </View>
 
       <View style={styles.buttonContainer}>
+        <Button
+          mode="contained"
+          onPress={handleSetupSmartHome}
+          style={styles.button}
+        >
+          Set Up Smart Home
+        </Button>
         {k2KeyPair && (
           <Button
             mode="outlined"
@@ -72,7 +87,7 @@ const SuccessScreen = ({ navigation }: Props) => {
         )}
         <Button
           testID="done-button"
-          mode="contained"
+          mode="text"
           onPress={handleDone}
           style={styles.button}
         >
@@ -98,7 +113,6 @@ const styles = StyleSheet.create({
   },
   checkmark: {
     fontSize: 80,
-    color: '#22c55e',
     marginBottom: 24,
   },
   title: {
@@ -114,7 +128,6 @@ const styles = StyleSheet.create({
   details: {
     alignItems: 'center',
     padding: 24,
-    backgroundColor: 'rgba(0,0,0,0.05)',
     borderRadius: 12,
   },
   nodeId: {

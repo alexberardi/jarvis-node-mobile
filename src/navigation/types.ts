@@ -15,7 +15,39 @@ export type AuthStackParamList = {
   Register: undefined;
 };
 
+export type RoomsStackParamList = {
+  RoomList: undefined;
+  RoomDetail: { roomId: string; roomName: string };
+  DeviceDetail: { deviceId: string };
+};
+
+export type SmartHomeSetupParamList = {
+  SmartHomeSetup: undefined;
+  HADiscovery: undefined;
+  HAAuth: { haUrl: string };
+  HADeviceImport: { haUrl: string; haToken: string };
+  DeviceRoomAssignment: {
+    haUrl: string;
+    haToken: string;
+    selectedDevices: string; // JSON-serialized (nav params must be serializable)
+    areas: string;          // JSON-serialized
+  };
+  IntegrationAuth: {
+    authConfig: string;     // JSON-serialized AuthenticationConfig
+    nodeId: string;
+    accessToken: string;
+  };
+};
+
+export type MainTabParamList = {
+  HomeTab: undefined;
+  RoomsTab: NavigatorScreenParams<RoomsStackParamList> | undefined;
+  NodesTab: NavigatorScreenParams<ProvisioningStackParamList> | undefined;
+  SettingsTab: undefined;
+};
+
 export type RootStackParamList = {
   Auth: NavigatorScreenParams<AuthStackParamList>;
-  Provisioning: NavigatorScreenParams<ProvisioningStackParamList>;
+  Main: NavigatorScreenParams<MainTabParamList>;
+  SmartHomeSetup: NavigatorScreenParams<SmartHomeSetupParamList>;
 };

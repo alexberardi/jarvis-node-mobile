@@ -66,20 +66,38 @@ export const useProvisioning = (): UseProvisioningReturn => {
   const [tokenExpiresAt, setTokenExpiresAt] = useState<string | null>(null);
 
   const connect = useCallback(async (ip: string, port: number = 8080): Promise<boolean> => {
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY_MS = 2000;
+
     try {
       setIsLoading(true);
       setError(null);
       setState('connecting');
       setNodeIp(ip, port);
 
-      const info = await getNodeInfo();
-      setNodeInfo(info);
-      setState('fetching_info');
-      return true;
-    } catch (err) {
-      console.debug('[useProvisioning] connect failed:', err instanceof Error ? err.message : err);
-      const message = err instanceof Error ? err.message : 'Failed to connect to node';
-      setError(message);
+      let lastError: unknown;
+      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        try {
+          const info = await getNodeInfo();
+          setNodeInfo(info);
+          setState('fetching_info');
+          return true;
+        } catch (err) {
+          lastError = err;
+          console.debug(
+            `[useProvisioning] connect attempt ${attempt}/${MAX_RETRIES} failed:`,
+            err instanceof Error ? err.message : err,
+          );
+          if (attempt < MAX_RETRIES) {
+            // Wait before retrying — gives iOS time to route through WiFi
+            await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+          }
+        }
+      }
+
+      const message = lastError instanceof Error ? lastError.message : 'Failed to connect to node';
+      setError(`Could not reach node at ${ip}:${port}. Make sure you're on the node's WiFi (Jarvis-XXXX).`);
+      console.debug('[useProvisioning] all retries exhausted:', message);
       setState('error');
       return false;
     } finally {
