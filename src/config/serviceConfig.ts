@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 export const CLOUD_CONFIG_URL = 'https://config.jarvisautomation.io';
 
 const CACHE_KEY = '@jarvis_node_mobile/service_config';
+const MANUAL_URL_KEY = '@jarvis_node_mobile/manual_config_url';
 
 export interface ServiceConfig {
   authBaseUrl: string;
@@ -42,4 +43,16 @@ export const loadCachedConfig = async (): Promise<ServiceConfig | null> => {
 
 export const clearCachedConfig = async (): Promise<void> => {
   await AsyncStorage.removeItem(CACHE_KEY);
+};
+
+export const saveManualConfigUrl = async (url: string | null): Promise<void> => {
+  if (url) {
+    await AsyncStorage.setItem(MANUAL_URL_KEY, url);
+  } else {
+    await AsyncStorage.removeItem(MANUAL_URL_KEY);
+  }
+};
+
+export const loadManualConfigUrl = async (): Promise<string | null> => {
+  return AsyncStorage.getItem(MANUAL_URL_KEY);
 };

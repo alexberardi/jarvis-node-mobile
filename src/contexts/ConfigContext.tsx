@@ -10,8 +10,12 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { Text } from 'react-native-paper';
 
 import authApi from '../api/authApi';
-import { ServiceConfig } from '../config/serviceConfig';
-import { clearCachedConfig } from '../config/serviceConfig';
+import {
+  ServiceConfig,
+  clearCachedConfig,
+  saveManualConfigUrl,
+  loadManualConfigUrl,
+} from '../config/serviceConfig';
 import {
   DiscoveryResult,
   discoverConfigService,
@@ -21,7 +25,9 @@ interface ConfigContextValue {
   config: ServiceConfig;
   isUsingCloud: boolean;
   fallbackMessage: string | null;
+  manualUrl: string | null;
   rediscover: () => Promise<void>;
+  setManualUrl: (url: string | null) => Promise<void>;
 }
 
 const ConfigContext = createContext<ConfigContextValue | undefined>(undefined);
@@ -30,6 +36,7 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const [result, setResult] = useState<DiscoveryResult | null>(null);
+  const [manualUrl, setManualUrlState] = useState<string | null>(null);
 
   const runDiscovery = useCallback(async () => {
     const discovered = await discoverConfigService();
@@ -46,7 +53,17 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({
     await runDiscovery();
   }, [runDiscovery]);
 
+  const setManualUrl = useCallback(async (url: string | null) => {
+    await saveManualConfigUrl(url);
+    setManualUrlState(url);
+    // Re-run discovery with new manual URL (or auto-discover if cleared)
+    setResult(null);
+    await clearCachedConfig();
+    await runDiscovery();
+  }, [runDiscovery]);
+
   useEffect(() => {
+    loadManualConfigUrl().then(setManualUrlState);
     runDiscovery();
   }, [runDiscovery]);
 
@@ -56,9 +73,11 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({
       config: result.config,
       isUsingCloud: result.isCloud,
       fallbackMessage: result.fallbackMessage,
+      manualUrl,
       rediscover,
+      setManualUrl,
     };
-  }, [result, rediscover]);
+  }, [result, manualUrl, rediscover, setManualUrl]);
 
   if (!value) {
     return (

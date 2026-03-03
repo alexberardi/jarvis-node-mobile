@@ -28,6 +28,12 @@ jest.mock('../../src/api/commandCenterApi', () => ({
   requestProvisioningToken: jest.fn(),
 }));
 
+// Mock serviceConfig so getCommandCenterUrl returns a valid URL
+jest.mock('../../src/config/serviceConfig', () => ({
+  ...jest.requireActual('../../src/config/serviceConfig'),
+  getCommandCenterUrl: jest.fn().mockReturnValue('http://192.168.1.50:7703'),
+}));
+
 describe('useProvisioning', () => {
   beforeEach(() => {
     jest.clearAllMocks();
