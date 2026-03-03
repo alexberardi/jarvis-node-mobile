@@ -1,7 +1,7 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useState, useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { Appbar, Button, HelperText, TextInput } from 'react-native-paper';
+import { Appbar, Button, HelperText, TextInput, useTheme } from 'react-native-paper';
 
 import { useAuth } from '../../auth/AuthContext';
 import { AuthStackParamList } from '../../navigation/types';
@@ -10,6 +10,7 @@ type Props = NativeStackScreenProps<AuthStackParamList, 'Register'>;
 
 const RegisterScreen = ({ navigation }: Props) => {
   const { register } = useAuth();
+  const theme = useTheme();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -63,7 +64,7 @@ const RegisterScreen = ({ navigation }: Props) => {
   return (
     <>
       <Appbar.Header>
-        <Appbar.BackAction onPress={() => navigation.goBack()} />
+        <Appbar.BackAction onPress={() => navigation.goBack()} color={theme.colors.onSurface} />
         <Appbar.Content title="Create Account" />
       </Appbar.Header>
       <View style={styles.container}>

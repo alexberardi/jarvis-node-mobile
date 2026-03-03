@@ -1,8 +1,14 @@
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { ActivityIndicator, View, StyleSheet } from 'react-native';
+import React from 'react';
 
 import { useAuth } from '../auth/AuthContext';
 import AuthNavigator from './AuthNavigator';
-import ProvisioningNavigator from './ProvisioningNavigator';
+import MainTabNavigator from './MainTabNavigator';
+import SmartHomeSetupNavigator from './SmartHomeSetupNavigator';
+import { RootStackParamList } from './types';
+
+const Stack = createNativeStackNavigator<RootStackParamList>();
 
 const RootNavigator = () => {
   const {
@@ -17,7 +23,20 @@ const RootNavigator = () => {
     );
   }
 
-  return isAuthenticated ? <ProvisioningNavigator /> : <AuthNavigator />;
+  if (!isAuthenticated) {
+    return <AuthNavigator />;
+  }
+
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="Main" component={MainTabNavigator} />
+      <Stack.Screen
+        name="SmartHomeSetup"
+        component={SmartHomeSetupNavigator}
+        options={{ presentation: 'modal' }}
+      />
+    </Stack.Navigator>
+  );
 };
 
 const styles = StyleSheet.create({

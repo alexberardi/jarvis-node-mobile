@@ -4,13 +4,14 @@ import {
   ServiceConfig,
   CLOUD_CONFIG_URL,
   loadCachedConfig,
+  loadManualConfigUrl,
   cacheConfig,
   setServiceConfig,
 } from '../config/serviceConfig';
 
 const PROBE_TIMEOUT_MS = 1500;
 const DISCOVERY_TIMEOUT_MS = 10000;
-const CONFIG_SERVICE_PORTS = [8013, 8014, 8015, 8016, 8017, 8018, 8019, 8020];
+const CONFIG_SERVICE_PORTS = [7700];
 const BATCH_SIZE = 20;
 
 const PRIORITY_HOSTS = [1, 2, 10, 50, 100, 103, 150, 200];
@@ -166,6 +167,16 @@ const scanLocalNetwork = async (): Promise<string | null> => {
  * 3. Fall back to cloud config
  */
 export const discoverConfigService = async (): Promise<DiscoveryResult> => {
+  // Tier 0: Try manual URL override
+  const manualUrl = await loadManualConfigUrl();
+  if (manualUrl) {
+    const config = await fetchServiceUrls(manualUrl);
+    if (config) {
+      setServiceConfig(config);
+      return { config, isCloud: false, fallbackMessage: null };
+    }
+  }
+
   // Tier 1: Try cached config
   const cached = await loadCachedConfig();
   if (cached?.configServiceUrl) {
@@ -173,6 +184,16 @@ export const discoverConfigService = async (): Promise<DiscoveryResult> => {
     if (validated) {
       setServiceConfig(validated);
       return { config: validated, isCloud: false, fallbackMessage: null };
+    }
+    // Config service unreachable (e.g., on node WiFi) but we have cached URLs —
+    // use them so provisioning flow can access the command center URL later
+    if (cached.authBaseUrl && cached.commandCenterUrl) {
+      setServiceConfig(cached);
+      return {
+        config: cached,
+        isCloud: false,
+        fallbackMessage: 'Using cached service URLs (config service unreachable).',
+      };
     }
   }
 

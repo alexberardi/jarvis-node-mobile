@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-navigation/bottom-tabs": "^7.13.0",
     "@react-navigation/native": "^7.1.28",
     "@react-navigation/native-stack": "^7.11.0",
     "@tanstack/react-query": "^5.90.20",
@@ -28,6 +29,7 @@
     "expo-network": "~8.0.8",
     "expo-secure-store": "~15.0.0",
     "expo-status-bar": "~3.0.9",
+    "expo-web-browser": "~15.0.10",
     "jarvis-crypto": "file:./modules/jarvis-crypto",
     "react": "19.1.0",
     "react-native": "0.81.5",

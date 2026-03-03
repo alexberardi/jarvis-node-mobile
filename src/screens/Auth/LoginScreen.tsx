@@ -1,7 +1,7 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { Appbar, Button, HelperText, TextInput } from 'react-native-paper';
+import { Appbar, Button, HelperText, TextInput, useTheme } from 'react-native-paper';
 
 import { useAuth } from '../../auth/AuthContext';
 import { AuthStackParamList } from '../../navigation/types';
@@ -10,6 +10,7 @@ type Props = NativeStackScreenProps<AuthStackParamList, 'Login'>;
 
 const LoginScreen = ({ navigation }: Props) => {
   const { login } = useAuth();
+  const theme = useTheme();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -36,7 +37,7 @@ const LoginScreen = ({ navigation }: Props) => {
   return (
     <>
       <Appbar.Header>
-        <Appbar.BackAction onPress={() => navigation.goBack()} />
+        <Appbar.BackAction onPress={() => navigation.goBack()} color={theme.colors.onSurface} />
         <Appbar.Content title="Log In" />
       </Appbar.Header>
       <View style={styles.container}>

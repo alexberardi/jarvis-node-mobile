@@ -15,6 +15,7 @@ import {
   provisionK2,
   setNodeIp,
 } from '../api/provisioningApi';
+import { getCommandCenterUrl } from '../config/serviceConfig';
 import {
   NodeInfo,
   Network,
@@ -64,6 +65,9 @@ export const useProvisioning = (): UseProvisioningReturn => {
   const [provisioningToken, setProvisioningToken] = useState<string | null>(null);
   const [ccNodeId, setCcNodeId] = useState<string | null>(null);
   const [tokenExpiresAt, setTokenExpiresAt] = useState<string | null>(null);
+  // Capture command center URL at token fetch time (when on home WiFi)
+  // so it's still available after switching to node WiFi
+  const [cachedCommandCenterUrl, setCachedCommandCenterUrl] = useState<string | null>(null);
 
   const connect = useCallback(async (ip: string, port: number = 8080): Promise<boolean> => {
     const MAX_RETRIES = 3;
@@ -150,6 +154,11 @@ export const useProvisioning = (): UseProvisioningReturn => {
         setProvisioningToken(response.token);
         setCcNodeId(response.node_id);
         setTokenExpiresAt(response.expires_at);
+        // Capture the command center URL now (while on home WiFi)
+        // so it's available later when we're on node WiFi
+        const ccUrl = getCommandCenterUrl();
+        setCachedCommandCenterUrl(ccUrl);
+        console.debug('[useProvisioning] cached command center URL:', ccUrl);
         return true;
       } catch (err) {
         console.debug('[useProvisioning] fetchProvisioningToken failed:', err instanceof Error ? err.message : err);
@@ -259,12 +268,21 @@ export const useProvisioning = (): UseProvisioningReturn => {
         // Note: The node may drop AP immediately after receiving this, causing the
         // request to timeout. This is expected - we consider it successful if we
         // got this far since the node will have received the credentials.
+        // Use the command center URL we cached during Phase 1 (home WiFi),
+        // since getCommandCenterUrl() may be empty now (we're on node WiFi)
+        const commandCenterUrl = cachedCommandCenterUrl || getCommandCenterUrl();
+        console.debug('[useProvisioning] command_center_url for node:', commandCenterUrl);
+        if (!commandCenterUrl) {
+          throw new Error('Command center URL not available. Go back to home WiFi and tap Prepare again.');
+        }
+
         let provisionSuccess = false;
         try {
           const result = await provision({
             ssid: selectedNetwork.ssid,
             password,
             room_name: roomName,
+            command_center_url: commandCenterUrl,
             household_id: householdId,
             node_id: ccNodeId,
             provisioning_token: provisioningToken,
@@ -307,7 +325,7 @@ export const useProvisioning = (): UseProvisioningReturn => {
         setIsLoading(false);
       }
     },
-    [selectedNetwork, nodeInfo, provisioningToken, ccNodeId, tokenExpiresAt]
+    [selectedNetwork, nodeInfo, provisioningToken, ccNodeId, tokenExpiresAt, cachedCommandCenterUrl]
   );
 
   const confirmWifiSwitched = useCallback(() => {
@@ -332,6 +350,7 @@ export const useProvisioning = (): UseProvisioningReturn => {
     setProvisioningToken(null);
     setCcNodeId(null);
     setTokenExpiresAt(null);
+    setCachedCommandCenterUrl(null);
   }, []);
 
   return {
