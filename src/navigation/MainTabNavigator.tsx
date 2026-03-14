@@ -2,8 +2,9 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import React from 'react';
 
-import RoomsStackNavigator from './RoomsStackNavigator';
-import ProvisioningNavigator from './ProvisioningNavigator';
+import InboxStackNavigator from './InboxStackNavigator';
+import NodesStackNavigator from './NodesStackNavigator';
+import RoutinesStackNavigator from './RoutinesStackNavigator';
 import HomeScreen from '../screens/Home/HomeScreen';
 import SettingsScreen from '../screens/Settings/SettingsScreen';
 import { MainTabParamList } from './types';
@@ -37,22 +38,32 @@ const MainTabNavigator = () => {
         }}
       />
       <Tab.Screen
-        name="RoomsTab"
-        component={RoomsStackNavigator}
-        options={{
-          tabBarLabel: 'Rooms',
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="floor-plan" color={color} size={size} />
-          ),
-        }}
-      />
-      <Tab.Screen
         name="NodesTab"
-        component={ProvisioningNavigator}
+        component={NodesStackNavigator}
         options={{
           tabBarLabel: 'Nodes',
           tabBarIcon: ({ color, size }) => (
             <MaterialCommunityIcons name="raspberry-pi" color={color} size={size} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="InboxTab"
+        component={InboxStackNavigator}
+        options={{
+          tabBarLabel: 'Inbox',
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="inbox" color={color} size={size} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="RoutinesTab"
+        component={RoutinesStackNavigator}
+        options={{
+          tabBarLabel: 'Routines',
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="robot" color={color} size={size} />
           ),
         }}
       />

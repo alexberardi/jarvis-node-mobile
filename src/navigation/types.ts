@@ -15,10 +15,17 @@ export type AuthStackParamList = {
   Register: undefined;
 };
 
-export type RoomsStackParamList = {
-  RoomList: undefined;
-  RoomDetail: { roomId: string; roomName: string };
-  DeviceDetail: { deviceId: string };
+export type NodesStackParamList = {
+  NodeList: undefined;
+  AddNode: undefined;
+  NodeSettings: { nodeId: string; room: string | null };
+  ImportKey: undefined;
+  IntegrationAuth: {
+    authConfig: string;          // JSON-serialized AuthenticationConfig
+    nodeId: string;
+    accessToken: string;
+    providerBaseUrl?: string;    // Skip discovery if known
+  };
 };
 
 export type SmartHomeSetupParamList = {
@@ -36,13 +43,26 @@ export type SmartHomeSetupParamList = {
     authConfig: string;     // JSON-serialized AuthenticationConfig
     nodeId: string;
     accessToken: string;
+    providerBaseUrl?: string;
   };
+};
+
+export type RoutinesStackParamList = {
+  RoutineList: undefined;
+  RoutineEdit: { routineId?: string };
+  RoutineNodePicker: { routineId: string };
+};
+
+export type InboxStackParamList = {
+  InboxList: undefined;
+  InboxDetail: { itemId: string };
 };
 
 export type MainTabParamList = {
   HomeTab: undefined;
-  RoomsTab: NavigatorScreenParams<RoomsStackParamList> | undefined;
-  NodesTab: NavigatorScreenParams<ProvisioningStackParamList> | undefined;
+  NodesTab: NavigatorScreenParams<NodesStackParamList> | undefined;
+  InboxTab: NavigatorScreenParams<InboxStackParamList> | undefined;
+  RoutinesTab: NavigatorScreenParams<RoutinesStackParamList> | undefined;
   SettingsTab: undefined;
 };
 
