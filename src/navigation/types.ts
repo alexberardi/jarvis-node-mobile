@@ -39,6 +39,7 @@ export type SmartHomeSetupParamList = {
     selectedDevices: string; // JSON-serialized (nav params must be serializable)
     areas: string;          // JSON-serialized
   };
+  DeviceList: { householdId: string };
   IntegrationAuth: {
     authConfig: string;     // JSON-serialized AuthenticationConfig
     nodeId: string;
@@ -61,7 +62,6 @@ export type InboxStackParamList = {
 export type MainTabParamList = {
   HomeTab: undefined;
   NodesTab: NavigatorScreenParams<NodesStackParamList> | undefined;
-  InboxTab: NavigatorScreenParams<InboxStackParamList> | undefined;
   RoutinesTab: NavigatorScreenParams<RoutinesStackParamList> | undefined;
   SettingsTab: undefined;
 };
@@ -69,5 +69,6 @@ export type MainTabParamList = {
 export type RootStackParamList = {
   Auth: NavigatorScreenParams<AuthStackParamList>;
   Main: NavigatorScreenParams<MainTabParamList>;
+  Inbox: NavigatorScreenParams<InboxStackParamList>;
   SmartHomeSetup: NavigatorScreenParams<SmartHomeSetupParamList>;
 };
