@@ -12,25 +12,6 @@ export interface Room {
   updated_at: string;
 }
 
-export interface Device {
-  id: string;
-  household_id: string;
-  room_id: string | null;
-  entity_id: string;
-  name: string;
-  domain: string;
-  device_class: string | null;
-  manufacturer: string | null;
-  model: string | null;
-  source: 'home_assistant' | 'manual';
-  ha_device_id: string | null;
-  is_controllable: boolean;
-  is_active: boolean;
-  room_name: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
 // HA data types from REST API
 export interface HAArea {
   area_id: string;
@@ -74,7 +55,33 @@ export interface DeviceImportItem {
   manufacturer?: string;
   model?: string;
   ha_device_id?: string;
-  source: 'home_assistant';
+  source: 'home_assistant' | 'direct';
+  protocol?: string;       // e.g., "lifx", "kasa", "tuya"
+  local_ip?: string;       // LAN address
+  mac_address?: string;    // MAC for stable identity
+}
+
+/** A device as returned by the CC device list API. */
+export interface DeviceListItem {
+  id: string;
+  household_id: string;
+  room_id: string | null;
+  entity_id: string;
+  name: string;
+  domain: string;
+  device_class: string | null;
+  manufacturer: string | null;
+  model: string | null;
+  source: string;
+  protocol: string | null;
+  local_ip: string | null;
+  mac_address: string | null;
+  ha_device_id: string | null;
+  is_controllable: boolean;
+  is_active: boolean;
+  room_name: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface RoomCreateRequest {
@@ -98,6 +105,7 @@ export interface ConfigPushRequest {
 export interface AuthenticationConfig {
   type: string;                         // "oauth"
   provider: string;                     // "home_assistant", "spotify"
+  friendly_name: string;                // "Home Assistant", "Spotify"
   client_id: string;                    // OAuth client ID
   keys: string[];                       // Keys to extract from token response
 
@@ -117,6 +125,9 @@ export interface AuthenticationConfig {
   extra_exchange_params?: Record<string, string>;
   send_redirect_uri_in_exchange?: boolean;
   supports_pkce?: boolean;
+
+  // Native app redirect: provider redirects to the app via custom URL scheme
+  native_redirect_uri?: string;
 }
 
 /**
@@ -129,6 +140,16 @@ export interface IntegrationStatus {
   auth_error: string | null;
   last_authed_at: string | null;
   authentication: AuthenticationConfig;
+}
+
+/**
+ * Interactive action button returned in a command response.
+ * Rendered as tappable buttons below the response text.
+ */
+export interface ResponseAction {
+  name: string;       // Action identifier (e.g. "send_click", "cancel_click")
+  label: string;      // Button label (e.g. "Send", "Cancel")
+  style: 'primary' | 'secondary' | 'destructive';
 }
 
 // Enriched entity for display in import screen
