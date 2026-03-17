@@ -1,6 +1,5 @@
-import axios from 'axios';
-
 import { getCommandCenterUrl } from '../config/serviceConfig';
+import apiClient from './apiClient';
 
 export interface ProvisioningTokenRequest {
   household_id: string;
@@ -16,21 +15,37 @@ export interface ProvisioningTokenResponse {
   expires_in: number;
 }
 
+export interface SendActionRequest {
+  command_name: string;
+  action_name: string;
+  context?: Record<string, any>;
+}
+
+export interface SendActionResponse {
+  status: string;
+  request_id: string;
+}
+
+/**
+ * Send an interactive action (e.g. Send/Cancel button tap) to a node via CC.
+ */
+export const sendNodeAction = async (
+  nodeId: string,
+  action: SendActionRequest,
+): Promise<SendActionResponse> => {
+  const response = await apiClient.post<SendActionResponse>(
+    `${getCommandCenterUrl()}/api/v0/nodes/${nodeId}/actions`,
+    action,
+  );
+  return response.data;
+};
+
 export const requestProvisioningToken = async (
   request: ProvisioningTokenRequest,
-  accessToken: string
 ): Promise<ProvisioningTokenResponse> => {
-  const baseUrl = getCommandCenterUrl();
-  const response = await axios.post<ProvisioningTokenResponse>(
-    `${baseUrl}/api/v0/provisioning/token`,
+  const response = await apiClient.post<ProvisioningTokenResponse>(
+    `${getCommandCenterUrl()}/api/v0/provisioning/token`,
     request,
-    {
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${accessToken}`,
-      },
-      timeout: 10000,
-    }
   );
   return response.data;
 };

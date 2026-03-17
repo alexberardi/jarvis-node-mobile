@@ -4,7 +4,9 @@ import {
   RoomCreateRequest,
   DeviceImportItem,
   DeviceListItem,
+  DeviceScanPollResponse,
   ConfigPushRequest,
+  RoomUpdateRequest,
 } from '../types/SmartHome';
 import apiClient from './apiClient';
 
@@ -18,7 +20,7 @@ export const listRooms = async (
   householdId: string,
 ): Promise<Room[]> => {
   const res = await apiClient.get<Room[]>(
-    `${getBaseUrl()}/api/v1/households/${householdId}/rooms`,
+    `${getBaseUrl()}/api/v0/households/${householdId}/rooms`,
   );
   return res.data;
 };
@@ -28,10 +30,31 @@ export const createRoom = async (
   room: RoomCreateRequest,
 ): Promise<Room> => {
   const res = await apiClient.post<Room>(
-    `${getBaseUrl()}/api/v1/households/${householdId}/rooms`,
+    `${getBaseUrl()}/api/v0/households/${householdId}/rooms`,
     room,
   );
   return res.data;
+};
+
+export const updateRoom = async (
+  householdId: string,
+  roomId: string,
+  data: RoomUpdateRequest,
+): Promise<Room> => {
+  const res = await apiClient.patch<Room>(
+    `${getBaseUrl()}/api/v0/households/${householdId}/rooms/${roomId}`,
+    data,
+  );
+  return res.data;
+};
+
+export const deleteRoom = async (
+  householdId: string,
+  roomId: string,
+): Promise<void> => {
+  await apiClient.delete(
+    `${getBaseUrl()}/api/v0/households/${householdId}/rooms/${roomId}`,
+  );
 };
 
 // =============================================================================
@@ -43,10 +66,31 @@ export const listDevices = async (
   filters?: { room_id?: string; domain?: string; source?: string },
 ): Promise<DeviceListItem[]> => {
   const res = await apiClient.get<DeviceListItem[]>(
-    `${getBaseUrl()}/api/v1/households/${householdId}/devices`,
+    `${getBaseUrl()}/api/v0/households/${householdId}/devices`,
     { params: filters },
   );
   return res.data;
+};
+
+export const updateDevice = async (
+  householdId: string,
+  deviceId: string,
+  data: { name?: string; room_id?: string | null },
+): Promise<DeviceListItem> => {
+  const res = await apiClient.patch<DeviceListItem>(
+    `${getBaseUrl()}/api/v0/households/${householdId}/devices/${deviceId}`,
+    data,
+  );
+  return res.data;
+};
+
+export const deleteDevice = async (
+  householdId: string,
+  deviceId: string,
+): Promise<void> => {
+  await apiClient.delete(
+    `${getBaseUrl()}/api/v0/households/${householdId}/devices/${deviceId}`,
+  );
 };
 
 export const importDevices = async (
@@ -54,9 +98,57 @@ export const importDevices = async (
   devices: DeviceImportItem[],
 ): Promise<{ created: number; updated: number }> => {
   const res = await apiClient.post<{ created: number; updated: number }>(
-    `${getBaseUrl()}/api/v1/households/${householdId}/devices/import`,
+    `${getBaseUrl()}/api/v0/households/${householdId}/devices/import`,
     { devices },
     { timeout: 30000 },
+  );
+  return res.data;
+};
+
+// =============================================================================
+// Device Control (synchronous: mobile -> CC -> MQTT -> node -> result -> mobile)
+// =============================================================================
+
+export interface DeviceControlResponse {
+  success: boolean;
+  entity_id: string;
+  action: string;
+  error: string | null;
+}
+
+export const controlDevice = async (
+  householdId: string,
+  deviceId: string,
+  action: string,
+  data?: Record<string, unknown>,
+): Promise<DeviceControlResponse> => {
+  const res = await apiClient.post<DeviceControlResponse>(
+    `${getBaseUrl()}/api/v0/households/${householdId}/devices/${deviceId}/control`,
+    { action, data },
+    { timeout: 15000 }, // 15s to accommodate the 10s MQTT wait
+  );
+  return res.data;
+};
+
+// =============================================================================
+// Device Scan (user-driven: mobile -> CC -> MQTT -> node -> CC -> mobile)
+// =============================================================================
+
+export const requestDeviceScan = async (
+  nodeId: string,
+): Promise<{ id: string; status: string }> => {
+  const res = await apiClient.post<{ id: string; status: string }>(
+    `${getBaseUrl()}/api/v0/nodes/${nodeId}/device-scan/request`,
+  );
+  return res.data;
+};
+
+export const pollDeviceScan = async (
+  nodeId: string,
+  requestId: string,
+): Promise<DeviceScanPollResponse> => {
+  const res = await apiClient.get<DeviceScanPollResponse>(
+    `${getBaseUrl()}/api/v0/nodes/${nodeId}/device-scan/${requestId}`,
   );
   return res.data;
 };

@@ -59,6 +59,7 @@ export interface DeviceImportItem {
   protocol?: string;       // e.g., "lifx", "kasa", "tuya"
   local_ip?: string;       // LAN address
   mac_address?: string;    // MAC for stable identity
+  cloud_id?: string;       // Cloud-only device ID (Govee, Nest, Schlage)
 }
 
 /** A device as returned by the CC device list API. */
@@ -76,10 +77,12 @@ export interface DeviceListItem {
   protocol: string | null;
   local_ip: string | null;
   mac_address: string | null;
+  cloud_id: string | null;
   ha_device_id: string | null;
   is_controllable: boolean;
   is_active: boolean;
   room_name: string | null;
+  supported_actions: JarvisButton[] | null;
   created_at: string;
   updated_at: string;
 }
@@ -89,6 +92,11 @@ export interface RoomCreateRequest {
   icon?: string;
   ha_area_id?: string;
   parent_room_id?: string;
+}
+
+export interface RoomUpdateRequest {
+  name?: string;
+  icon?: string;
 }
 
 export interface ConfigPushRequest {
@@ -143,13 +151,62 @@ export interface IntegrationStatus {
 }
 
 /**
- * Interactive action button returned in a command response.
- * Rendered as tappable buttons below the response text.
+ * Unified action button matching the IJarvisButton dataclass on the node.
+ * Flows from node → CC → notifications → mobile.
+ */
+export interface JarvisButton {
+  button_text: string;
+  button_action: string;
+  button_type: 'primary' | 'secondary' | 'destructive';
+  button_icon?: string;
+}
+
+/**
+ * Normalize a legacy {name, label, style} action or a new IJarvisButton
+ * into the canonical JarvisButton shape. Provides backward compatibility
+ * for cached inbox items that use the old format.
+ */
+export function normalizeButton(raw: any): JarvisButton {
+  return {
+    button_text: raw.button_text ?? raw.label ?? '',
+    button_action: raw.button_action ?? raw.name ?? '',
+    button_type: raw.button_type ?? raw.style ?? 'primary',
+    button_icon: raw.button_icon,
+  };
+}
+
+/**
+ * @deprecated Use JarvisButton instead. Kept as an alias for backward compat.
  */
 export interface ResponseAction {
-  name: string;       // Action identifier (e.g. "send_click", "cancel_click")
-  label: string;      // Button label (e.g. "Send", "Cancel")
+  name: string;
+  label: string;
   style: 'primary' | 'secondary' | 'destructive';
+}
+
+/** A device discovered by a node's protocol adapters during a user-driven scan. */
+export interface DiscoveredDeviceResult {
+  name: string;
+  domain: string;
+  manufacturer: string | null;
+  model: string | null;
+  protocol: string | null;
+  entity_id: string;
+  local_ip: string | null;
+  mac_address: string | null;
+  cloud_id: string | null;
+  device_class: string | null;
+  is_controllable: boolean;
+  already_registered: boolean;
+  existing_device_id: string | null;
+}
+
+export interface DeviceScanPollResponse {
+  status: 'pending' | 'completed' | 'failed';
+  request_id: string;
+  devices?: DiscoveredDeviceResult[];
+  device_count?: number;
+  error_message?: string;
 }
 
 // Enriched entity for display in import screen
