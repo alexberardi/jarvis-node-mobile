@@ -1,0 +1,23 @@
+appId: com.jarvis.nodemobile
+---
+# Test: Devices tab loads
+- launchApp
+- waitForAnimationToEnd
+- tapOn:
+    text: ".*localhost.*"
+    index: 0
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    text: "Continue"
+    optional: true
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Jarvis"
+    timeout: 15000
+# Tap Devices tab (2nd of 4)
+- tapOn:
+    point: "37%,97%"
+- waitForAnimationToEnd
+- waitForAnimationToEnd
+- takeScreenshot: devices

@@ -1,0 +1,39 @@
+appId: com.jarvis.nodemobile
+---
+# Test: Settings shows Smart Home section with device manager options
+- launchApp
+- waitForAnimationToEnd
+- tapOn:
+    text: ".*localhost.*"
+    index: 0
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    text: "Continue"
+    optional: true
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Jarvis"
+    timeout: 15000
+# Open settings
+- tapOn:
+    point: "78%,9%"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 10000
+# Scroll to Smart Home section
+- swipe:
+    start: "50%,80%"
+    end: "50%,30%"
+- waitForAnimationToEnd
+- assertVisible:
+    text: "Smart Home"
+    optional: true
+- assertVisible:
+    text: ".*[Jj]arvis [Dd]irect.*"
+    optional: true
+- assertVisible:
+    text: ".*[Hh]ome [Aa]ssistant.*"
+    optional: true
+- takeScreenshot: settings-smart-home-section

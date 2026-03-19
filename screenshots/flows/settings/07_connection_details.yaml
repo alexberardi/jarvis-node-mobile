@@ -1,0 +1,31 @@
+appId: com.jarvis.nodemobile
+---
+# Test: Connection section shows status chip and service URLs
+- launchApp
+- waitForAnimationToEnd
+- tapOn:
+    text: ".*localhost.*"
+    index: 0
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    text: "Continue"
+    optional: true
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Jarvis"
+    timeout: 15000
+# Open settings
+- tapOn:
+    point: "78%,9%"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 10000
+- assertVisible: "Connection"
+- assertVisible: "Status:"
+- assertVisible: { text: ".*Re-discover Services.*" }
+# Should show at least one URL
+- assertVisible:
+    text: ".*localhost.*"
+- takeScreenshot: settings-connection

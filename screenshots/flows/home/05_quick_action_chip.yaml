@@ -1,0 +1,29 @@
+appId: com.jarvis.nodemobile
+---
+# Test: Tapping a quick action chip sends the corresponding message
+- launchApp
+- waitForAnimationToEnd
+- tapOn:
+    text: ".*localhost.*"
+    index: 0
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    text: "Continue"
+    optional: true
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Jarvis"
+    timeout: 15000
+# Wait for warmup
+- extendedWaitUntil:
+    visible: "Ask Jarvis anything"
+    timeout: 10000
+# Tap the Calculate chip
+- tapOn: "Calculate"
+- waitForAnimationToEnd
+# Should see the message appear in the chat
+- extendedWaitUntil:
+    visible: ".*[Cc]alculate.*"
+    timeout: 5000
+- takeScreenshot: home-quick-action-calculate

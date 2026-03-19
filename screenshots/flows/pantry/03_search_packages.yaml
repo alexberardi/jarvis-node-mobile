@@ -1,0 +1,37 @@
+appId: com.jarvis.nodemobile
+---
+# Test: Pantry search filters packages
+- launchApp
+- waitForAnimationToEnd
+- tapOn:
+    text: ".*localhost.*"
+    index: 0
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    text: "Continue"
+    optional: true
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Jarvis"
+    timeout: 15000
+- tapOn:
+    text: "Pantry"
+    optional: true
+- tapOn:
+    text: "Store"
+    optional: true
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Pantry"
+    timeout: 10000
+# Tap search field and type
+- tapOn:
+    text: ".*[Ss]earch.*"
+- inputText: "joke"
+- waitForAnimationToEnd
+# Should filter to dad jokes
+- extendedWaitUntil:
+    visible: ".*[Dd]ad.*[Jj]oke.*"
+    timeout: 5000
+- takeScreenshot: pantry-search

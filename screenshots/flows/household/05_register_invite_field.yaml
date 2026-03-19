@@ -1,0 +1,24 @@
+appId: com.jarvis.nodemobile
+---
+# Test: Register screen shows invite code field
+- launchApp
+- waitForAnimationToEnd
+- tapOn:
+    text: ".*localhost.*"
+    index: 0
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    text: "Continue"
+    optional: true
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Create Account"
+    timeout: 10000
+- tapOn: "Create Account"
+- waitForAnimationToEnd
+- assertVisible: { text: ".*Invite Code \\(optional\\).*" }
+- assertVisible: "Email"
+- assertVisible: "Password"
+- assertVisible: { text: ".*Confirm Password.*" }
+- takeScreenshot: register-invite-code

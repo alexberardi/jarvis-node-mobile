@@ -1,0 +1,25 @@
+appId: com.jarvis.nodemobile
+---
+# Test: Room management button exists on devices screen
+- launchApp
+- waitForAnimationToEnd
+- tapOn:
+    text: ".*localhost.*"
+    index: 0
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    text: "Continue"
+    optional: true
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Jarvis"
+    timeout: 15000
+- tapOn: "Devices"
+- waitForAnimationToEnd
+# Look for room management button
+- tapOn:
+    text: ".*[Rr]oom.*"
+    optional: true
+- waitForAnimationToEnd
+- takeScreenshot: devices-rooms

@@ -1,0 +1,32 @@
+appId: com.jarvis.nodemobile
+---
+# Test: Settings shows Household section with current household and role
+- launchApp
+- waitForAnimationToEnd
+- tapOn:
+    text: ".*localhost.*"
+    index: 0
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    text: "Continue"
+    optional: true
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Jarvis"
+    timeout: 15000
+# Tap cog icon
+- tapOn:
+    point: "78%,9%"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 10000
+- assertVisible: "Household"
+# Wait for async household fetch
+- extendedWaitUntil:
+    visible: ".*My Home.*"
+    timeout: 10000
+- assertVisible:
+    text: ".*admin.*"
+- takeScreenshot: settings-household

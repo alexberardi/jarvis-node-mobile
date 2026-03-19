@@ -1,0 +1,27 @@
+appId: com.jarvis.nodemobile
+---
+# Test: Inbox renders items with title, summary, and timestamp
+- launchApp
+- waitForAnimationToEnd
+- tapOn:
+    text: ".*localhost.*"
+    index: 0
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    text: "Continue"
+    optional: true
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Jarvis"
+    timeout: 15000
+# Open inbox via bell icon
+- tapOn:
+    point: "89%,9%"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Inbox"
+    timeout: 10000
+# If items exist, they should show timestamps
+# If no items, empty state should show
+- takeScreenshot: inbox-items

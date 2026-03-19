@@ -1,0 +1,38 @@
+appId: com.jarvis.nodemobile
+---
+# Test: Tapping a package opens detail view with description and install button
+- launchApp
+- waitForAnimationToEnd
+- tapOn:
+    text: ".*localhost.*"
+    index: 0
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    text: "Continue"
+    optional: true
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Jarvis"
+    timeout: 15000
+- tapOn:
+    text: "Pantry"
+    optional: true
+- tapOn:
+    text: "Store"
+    optional: true
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Pantry"
+    timeout: 10000
+# Tap a package card
+- tapOn:
+    text: ".*[Dd]ad.*[Jj]oke.*"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Install"
+    timeout: 10000
+- assertVisible:
+    text: ".*[Dd]escription.*"
+    optional: true
+- takeScreenshot: pantry-detail

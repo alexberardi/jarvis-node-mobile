@@ -1,0 +1,29 @@
+appId: com.jarvis.nodemobile
+---
+# Test: Pantry browse screen shows package cards with install counts
+- launchApp
+- waitForAnimationToEnd
+- tapOn:
+    text: ".*localhost.*"
+    index: 0
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    text: "Continue"
+    optional: true
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Jarvis"
+    timeout: 15000
+- tapOn:
+    text: "Pantry"
+    optional: true
+- tapOn:
+    text: "Store"
+    optional: true
+- waitForAnimationToEnd
+# Wait for packages to load
+- extendedWaitUntil:
+    visible: ".*[Dd]ad.*[Jj]oke.*"
+    timeout: 10000
+- takeScreenshot: pantry-browse

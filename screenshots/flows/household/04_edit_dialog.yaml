@@ -1,0 +1,43 @@
+appId: com.jarvis.nodemobile
+---
+# Test: Admin can open edit dialog for household (rename + members)
+- launchApp
+- waitForAnimationToEnd
+- tapOn:
+    text: ".*localhost.*"
+    index: 0
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    text: "Continue"
+    optional: true
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Jarvis"
+    timeout: 15000
+# Tap cog icon
+- tapOn:
+    point: "78%,9%"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 10000
+# Tap pencil edit button next to household
+- tapOn:
+    id: "icon-button-pencil"
+    optional: true
+- tapOn:
+    text: "pencil"
+    optional: true
+# Fallback: tap the icon area to the right of "My Home"
+- tapOn:
+    point: "90%,22%"
+    optional: true
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Edit Household"
+    timeout: 5000
+- assertVisible: { text: ".*Household Name.*" }
+- assertVisible: "Cancel"
+- assertVisible: "Save"
+- takeScreenshot: settings-household-edit
