@@ -2,11 +2,11 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import React from 'react';
 
-import InboxStackNavigator from './InboxStackNavigator';
+import DevicesStackNavigator from './DevicesStackNavigator';
 import NodesStackNavigator from './NodesStackNavigator';
 import RoutinesStackNavigator from './RoutinesStackNavigator';
+import StoreStackNavigator from './StoreStackNavigator';
 import HomeScreen from '../screens/Home/HomeScreen';
-import SettingsScreen from '../screens/Settings/SettingsScreen';
 import { MainTabParamList } from './types';
 import { useThemePreference } from '../theme/ThemeProvider';
 
@@ -38,22 +38,22 @@ const MainTabNavigator = () => {
         }}
       />
       <Tab.Screen
-        name="NodesTab"
-        component={NodesStackNavigator}
+        name="DevicesTab"
+        component={DevicesStackNavigator}
         options={{
-          tabBarLabel: 'Nodes',
+          tabBarLabel: 'Devices',
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="raspberry-pi" color={color} size={size} />
+            <MaterialCommunityIcons name="devices" color={color} size={size} />
           ),
         }}
       />
       <Tab.Screen
-        name="InboxTab"
-        component={InboxStackNavigator}
+        name="StoreTab"
+        component={StoreStackNavigator}
         options={{
-          tabBarLabel: 'Inbox',
+          tabBarLabel: 'Pantry',
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="inbox" color={color} size={size} />
+            <MaterialCommunityIcons name="package-variant-closed" color={color} size={size} />
           ),
         }}
       />
@@ -68,12 +68,12 @@ const MainTabNavigator = () => {
         }}
       />
       <Tab.Screen
-        name="SettingsTab"
-        component={SettingsScreen}
+        name="NodesTab"
+        component={NodesStackNavigator}
         options={{
-          tabBarLabel: 'Settings',
+          tabBarLabel: 'Nodes',
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="cog" color={color} size={size} />
+            <MaterialCommunityIcons name="raspberry-pi" color={color} size={size} />
           ),
         }}
       />

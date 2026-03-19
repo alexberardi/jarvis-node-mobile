@@ -1,9 +1,10 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Appbar, Button, HelperText, TextInput, useTheme } from 'react-native-paper';
 
 import { useAuth } from '../../auth/AuthContext';
+import authApi from '../../api/authApi';
 import { AuthStackParamList } from '../../navigation/types';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Register'>;
@@ -11,11 +12,24 @@ type Props = NativeStackScreenProps<AuthStackParamList, 'Register'>;
 const RegisterScreen = ({ navigation }: Props) => {
   const { register } = useAuth();
   const theme = useTheme();
+  const [inviteCode, setInviteCode] = useState('');
+  const [inviteStatus, setInviteStatus] = useState<{ valid: boolean; household_name: string | null } | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const handleInviteBlur = useCallback(async () => {
+    const code = inviteCode.trim();
+    if (!code) { setInviteStatus(null); return; }
+    try {
+      const res = await authApi.get<{ valid: boolean; household_name: string | null }>(`/invites/${code}/validate`);
+      setInviteStatus(res.data);
+    } catch {
+      setInviteStatus({ valid: false, household_name: null });
+    }
+  }, [inviteCode]);
 
   const isValidEmail = useMemo(() => /\S+@\S+\.\S+/.test(email.trim()), [email]);
   const passwordError = useMemo(() => {
@@ -45,7 +59,7 @@ const RegisterScreen = ({ navigation }: Props) => {
 
     setLoading(true);
     try {
-      await register(email.trim(), password);
+      await register(email.trim(), password, undefined, inviteCode.trim() || undefined);
     } catch (err: unknown) {
       console.debug('[RegisterScreen] Registration failed:', err);
       const axiosError = err as { response?: { data?: { detail?: string } }; message?: string };
@@ -68,6 +82,26 @@ const RegisterScreen = ({ navigation }: Props) => {
         <Appbar.Content title="Create Account" />
       </Appbar.Header>
       <View style={styles.container}>
+        <TextInput
+          label="Invite Code (optional)"
+          autoCapitalize="characters"
+          value={inviteCode}
+          onChangeText={(t) => { setInviteCode(t.toUpperCase()); setInviteStatus(null); }}
+          onBlur={handleInviteBlur}
+          maxLength={8}
+          autoCorrect={false}
+          style={{ fontFamily: 'monospace', letterSpacing: 4 }}
+        />
+        {inviteStatus?.valid && (
+          <HelperText type="info" visible style={{ color: theme.colors.primary }}>
+            You'll join: {inviteStatus.household_name}
+          </HelperText>
+        )}
+        {inviteStatus && !inviteStatus.valid && (
+          <HelperText type="error" visible>
+            Invalid or expired invite code
+          </HelperText>
+        )}
         <TextInput
           label="Email"
           autoCapitalize="none"

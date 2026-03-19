@@ -8,6 +8,7 @@ import React, {
   useState,
 } from 'react';
 
+import { configureApiClient } from '../api/apiClient';
 import authApi from '../api/authApi';
 
 export interface AuthUser {
@@ -66,12 +67,13 @@ const REFRESH_INTERVAL_MS = 10 * 60 * 1000;
 type AuthContextValue = {
   state: AuthState;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, username?: string) => Promise<void>;
+  register: (email: string, password: string, username?: string, inviteCode?: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshAccessToken: () => Promise<string | null>;
   bootstrapAuth: () => Promise<void>;
   fetchHouseholds: () => Promise<Household[]>;
   setActiveHousehold: (householdId: string | null) => Promise<void>;
+  switchHousehold: (householdId: string) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -88,6 +90,10 @@ const parseUser = (value: string | null): AuthUser | null => {
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, setState] = useState<AuthState>(initialState);
+
+  // Ref to always have current tokens for the API client interceptor
+  const stateRef = React.useRef(state);
+  stateRef.current = state;
 
   const persistAuth = useCallback(
     async (payload: { accessToken: string; refreshToken: string; user: AuthUser }) => {
@@ -130,11 +136,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   );
 
   const register = useCallback(
-    async (email: string, password: string, username?: string) => {
+    async (email: string, password: string, username?: string, inviteCode?: string) => {
       const res = await authApi.post<RegisterResponse>('/auth/register', {
         email,
         password,
         username,
+        ...(inviteCode ? { invite_code: inviteCode } : {}),
       });
       await persistAuth({
         accessToken: res.data.access_token,
@@ -154,6 +161,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       isLoading: false,
     });
   }, []);
+
+  // Wire up the API client interceptor so all apiClient requests
+  // automatically attach the current token and retry on 401.
+  useEffect(() => {
+    configureApiClient({
+      getAccessToken: () => stateRef.current.accessToken,
+      getRefreshToken: () => stateRef.current.refreshToken,
+      updateTokens: (access: string, refresh: string) => {
+        setState((prev) => ({ ...prev, accessToken: access, refreshToken: refresh, isAuthenticated: true }));
+        AsyncStorage.multiSet([
+          [ACCESS_TOKEN_KEY, access],
+          [REFRESH_TOKEN_KEY, refresh],
+        ]);
+      },
+      onForceLogout: () => {
+        logout();
+      },
+    });
+  }, [logout]);
 
   const refreshAccessToken = useCallback(async () => {
     const refreshToken = state.refreshToken;
@@ -195,6 +221,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return [];
     }
   }, [state.accessToken]);
+
+  const switchHousehold = useCallback(
+    async (householdId: string) => {
+      const res = await authApi.post<{ access_token: string; household_id: string }>(
+        '/auth/switch-household',
+        { household_id: householdId },
+        { headers: { Authorization: `Bearer ${stateRef.current.accessToken}` } },
+      );
+      setState((prev) => ({ ...prev, accessToken: res.data.access_token }));
+      await AsyncStorage.setItem(ACCESS_TOKEN_KEY, res.data.access_token);
+      await setActiveHousehold(res.data.household_id);
+    },
+    [setActiveHousehold],
+  );
 
   const bootstrapAuth = useCallback(async () => {
     try {
@@ -271,8 +311,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       bootstrapAuth,
       fetchHouseholds,
       setActiveHousehold,
+      switchHousehold,
     }),
-    [bootstrapAuth, fetchHouseholds, login, logout, refreshAccessToken, register, setActiveHousehold, state],
+    [bootstrapAuth, fetchHouseholds, login, logout, refreshAccessToken, register, setActiveHousehold, switchHousehold, state],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
