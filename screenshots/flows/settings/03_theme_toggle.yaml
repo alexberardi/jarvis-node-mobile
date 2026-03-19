@@ -1,0 +1,35 @@
+appId: com.jarvis.nodemobile
+---
+# Test: Theme can be toggled between Light/Dark/System
+- launchApp
+- waitForAnimationToEnd
+- tapOn:
+    text: ".*localhost.*"
+    index: 0
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    text: "Continue"
+    optional: true
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Jarvis"
+    timeout: 15000
+# Tap cog icon
+- tapOn:
+    point: "78%,9%"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 10000
+# Verify theme buttons exist
+- assertVisible: "Light"
+- assertVisible: "Dark"
+- assertVisible: "System"
+# Tap Dark mode
+- tapOn: "Dark"
+- waitForAnimationToEnd
+- takeScreenshot: settings-dark-theme
+# Switch back to Light
+- tapOn: "Light"
+- waitForAnimationToEnd

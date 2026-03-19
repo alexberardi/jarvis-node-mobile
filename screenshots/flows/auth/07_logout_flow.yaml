@@ -1,0 +1,48 @@
+appId: com.jarvis.nodemobile
+env:
+  LOGIN_EMAIL: ${LOGIN_EMAIL}
+  LOGIN_PASSWORD: ${LOGIN_PASSWORD}
+---
+# Test: Logging out returns to landing screen, then re-login to restore state
+- launchApp
+- waitForAnimationToEnd
+- tapOn:
+    text: ".*localhost.*"
+    index: 0
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    text: "Continue"
+    optional: true
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Jarvis"
+    timeout: 15000
+# Open settings
+- tapOn:
+    point: "78%,9%"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 10000
+- tapOn: "Log Out"
+- waitForAnimationToEnd
+# Should be back at landing
+- extendedWaitUntil:
+    visible: "Log In"
+    timeout: 10000
+- assertVisible: { text: ".*Create Account.*" }
+- takeScreenshot: auth-logged-out
+# Re-login so subsequent tests work
+- tapOn: "Log In"
+- waitForAnimationToEnd
+- tapOn: "Email"
+- inputText: ${LOGIN_EMAIL}
+- tapOn: "Password"
+- inputText: ${LOGIN_PASSWORD}
+- tapOn:
+    text: "Log In"
+    index: 1
+- extendedWaitUntil:
+    visible: "Jarvis"
+    timeout: 15000

@@ -1,0 +1,26 @@
+appId: com.jarvis.nodemobile
+---
+# Test: Nodes tab loads and shows Import Key button
+- launchApp
+- waitForAnimationToEnd
+- tapOn:
+    text: ".*localhost.*"
+    index: 0
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    text: "Continue"
+    optional: true
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Jarvis"
+    timeout: 15000
+# Tap Nodes tab (4th of 4)
+- tapOn:
+    point: "84%,96%"
+- waitForAnimationToEnd
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Import Key"
+    timeout: 10000
+- takeScreenshot: nodes

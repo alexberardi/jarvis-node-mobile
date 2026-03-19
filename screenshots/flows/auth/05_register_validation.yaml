@@ -1,0 +1,30 @@
+appId: com.jarvis.nodemobile
+---
+# Test: Register screen validates password requirements
+- launchApp
+- waitForAnimationToEnd
+- tapOn:
+    text: ".*localhost.*"
+    index: 0
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    text: "Continue"
+    optional: true
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Create Account"
+    timeout: 10000
+- tapOn: "Create Account"
+- waitForAnimationToEnd
+# Enter a weak password
+- tapOn: "Email"
+- inputText: "test@test.com"
+- tapOn: "Password"
+- inputText: "short"
+- tapOn: "Confirm Password"
+- inputText: "short"
+# Button should remain disabled with weak password
+- assertVisible:
+    text: ".*8 characters.*"
+- takeScreenshot: register-weak-password

@@ -1,0 +1,33 @@
+appId: com.jarvis.nodemobile
+---
+# Test: Settings shows "Join Another Household" with invite code input
+- launchApp
+- waitForAnimationToEnd
+- tapOn:
+    text: ".*localhost.*"
+    index: 0
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    text: "Continue"
+    optional: true
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Jarvis"
+    timeout: 15000
+# Tap cog icon
+- tapOn:
+    point: "78%,9%"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 10000
+# Scroll to reveal join section
+- swipe:
+    start: "50%,80%"
+    end: "50%,50%"
+- waitForAnimationToEnd
+- assertVisible: { text: ".*Join Another Household.*" }
+- assertVisible: { text: ".*Invite Code.*" }
+- assertVisible: "Join"
+- takeScreenshot: settings-household-join

@@ -1,0 +1,24 @@
+appId: com.jarvis.nodemobile
+---
+# Test: Register screen shows validation fields
+- launchApp
+- waitForAnimationToEnd
+- tapOn:
+    text: ".*localhost.*"
+    index: 0
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    text: "Continue"
+    optional: true
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Create Account"
+    timeout: 10000
+- tapOn: "Create Account"
+- waitForAnimationToEnd
+- assertVisible: "Email"
+- assertVisible: "Password"
+- assertVisible: { text: ".*Confirm Password.*" }
+- assertVisible: { text: ".*Back to Log In.*" }
+- takeScreenshot: auth-register

@@ -1,0 +1,47 @@
+appId: com.jarvis.nodemobile
+---
+# Test: Send a message and verify Jarvis responds without raw tags/syntax
+- launchApp
+- waitForAnimationToEnd
+- tapOn:
+    text: ".*localhost.*"
+    index: 0
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    text: "Continue"
+    optional: true
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Jarvis"
+    timeout: 15000
+
+# Wait for the input to be ready (node selected + warmup progressing)
+- extendedWaitUntil:
+    visible: "Message Jarvis..."
+    timeout: 20000
+
+# Type and send a message
+- tapOn: "Message Jarvis..."
+- inputText: "What time is it?"
+- takeScreenshot: home-chat-input
+
+# Tap send button (right side of input bar)
+- tapOn:
+    point: "93%,88%"
+
+# Wait for assistant response bubble to appear with content
+- extendedWaitUntil:
+    visible:
+      text: ".*time.*|.*\\d+:\\d+.*|.*PM.*|.*AM.*"
+    timeout: 30000
+
+# Let streaming finish
+- waitForAnimationToEnd
+
+# Verify no raw think tags leaked through
+- assertNotVisible: "<think>"
+- assertNotVisible: "</think>"
+
+# Take final screenshot showing the response
+- takeScreenshot: home-chat-response

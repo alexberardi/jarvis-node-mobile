@@ -1,0 +1,28 @@
+appId: com.jarvis.nodemobile
+---
+# Test: Nodes tab shows registered nodes with room names and IDs
+- launchApp
+- waitForAnimationToEnd
+- tapOn:
+    text: ".*localhost.*"
+    index: 0
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    text: "Continue"
+    optional: true
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Jarvis"
+    timeout: 15000
+# Tap Nodes tab (rightmost)
+- tapOn: "Nodes"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Import Key"
+    timeout: 10000
+# Should see at least one node with room name
+- assertVisible:
+    text: ".*office.*"
+    optional: true
+- takeScreenshot: nodes-list

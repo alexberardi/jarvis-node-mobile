@@ -1,0 +1,32 @@
+appId: com.jarvis.nodemobile
+env:
+  LOGIN_EMAIL: ${LOGIN_EMAIL}
+  LOGIN_PASSWORD: ${LOGIN_PASSWORD}
+---
+# Helper flow — logs in via the UI. Skipped in normal runs.
+- launchApp
+- waitForAnimationToEnd
+- tapOn:
+    text: ".*localhost.*"
+    index: 0
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    text: "Continue"
+    optional: true
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Log In"
+    timeout: 10000
+- tapOn: "Log In"
+- waitForAnimationToEnd
+- tapOn: "Email"
+- inputText: ${LOGIN_EMAIL}
+- tapOn: "Password"
+- inputText: ${LOGIN_PASSWORD}
+- tapOn:
+    text: "Log In"
+    index: 1
+- extendedWaitUntil:
+    visible: "Jarvis"
+    timeout: 15000

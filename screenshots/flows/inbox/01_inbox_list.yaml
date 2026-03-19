@@ -1,0 +1,25 @@
+appId: com.jarvis.nodemobile
+---
+# Test: Inbox modal opens and shows inbox header
+- launchApp
+- waitForAnimationToEnd
+- tapOn:
+    text: ".*localhost.*"
+    index: 0
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    text: "Continue"
+    optional: true
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Jarvis"
+    timeout: 15000
+# Tap bell icon (top-right)
+- tapOn:
+    point: "89%,9%"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Inbox"
+    timeout: 10000
+- takeScreenshot: inbox

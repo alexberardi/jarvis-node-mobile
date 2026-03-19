@@ -1,0 +1,21 @@
+appId: com.jarvis.nodemobile
+---
+# Test: Landing screen renders correctly when logged out
+- launchApp
+- waitForAnimationToEnd
+- tapOn:
+    text: ".*localhost.*"
+    index: 0
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    text: "Continue"
+    optional: true
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Jarvis Node"
+    timeout: 10000
+- assertVisible: { text: ".*Provision and manage your Jarvis voice nodes.*" }
+- assertVisible: "Log In"
+- assertVisible: { text: ".*Create Account.*" }
+- takeScreenshot: auth-landing

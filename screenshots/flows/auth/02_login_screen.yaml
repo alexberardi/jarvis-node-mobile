@@ -1,0 +1,23 @@
+appId: com.jarvis.nodemobile
+---
+# Test: Login screen shows email/password fields
+- launchApp
+- waitForAnimationToEnd
+- tapOn:
+    text: ".*localhost.*"
+    index: 0
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    text: "Continue"
+    optional: true
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Log In"
+    timeout: 10000
+- tapOn: "Log In"
+- waitForAnimationToEnd
+- assertVisible: "Email"
+- assertVisible: "Password"
+- assertVisible: { text: ".*Need an account\\? Create one.*" }
+- takeScreenshot: auth-login
