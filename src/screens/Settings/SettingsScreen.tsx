@@ -1,18 +1,37 @@
-import React, { useState } from 'react';
-import { Alert, ScrollView, StyleSheet, View } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useNavigation } from '@react-navigation/native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import {
+  ActivityIndicator,
   Button,
   Card,
   Chip,
+  Dialog,
   Divider,
+  HelperText,
+  Icon,
+  IconButton,
+  Portal,
   SegmentedButtons,
+  Switch,
   Text,
   TextInput,
+  TouchableRipple,
+  useTheme,
 } from 'react-native-paper';
 
 import { useAuth } from '../../auth/AuthContext';
+import authApi from '../../api/authApi';
 import { useConfig } from '../../contexts/ConfigContext';
 import { useThemePreference, ThemePreference } from '../../theme/ThemeProvider';
+import {
+  getSmartHomeConfig,
+  updateSmartHomeConfig,
+  type SmartHomeConfig,
+} from '../../api/smartHomeApi';
+
+export const AUTO_PLAY_TTS_KEY = '@jarvis/auto_play_tts';
 
 const THEME_BUTTONS = [
   { value: 'light', label: 'Light', icon: 'white-balance-sunny' },
@@ -21,13 +40,172 @@ const THEME_BUTTONS = [
 ] as const;
 
 const SettingsScreen = () => {
-  const { state: authState, logout } = useAuth();
+  const navigation = useNavigation();
+  const theme = useTheme();
+  const { state: authState, logout, switchHousehold, fetchHouseholds } = useAuth();
   const { config, isUsingCloud, manualUrl, rediscover, setManualUrl } =
     useConfig();
   const { paperTheme, themePreference, setThemePreference } = useThemePreference();
 
   const [urlInput, setUrlInput] = useState(manualUrl ?? '');
   const [saving, setSaving] = useState(false);
+  const [autoPlayTTS, setAutoPlayTTS] = useState(false);
+
+  // Household join flow
+  const [joinCode, setJoinCode] = useState('');
+  const [joinStatus, setJoinStatus] = useState<{ valid: boolean; household_name: string | null } | null>(null);
+  const [joinError, setJoinError] = useState('');
+
+  const handleValidateJoin = useCallback(async () => {
+    const code = joinCode.trim();
+    if (!code) { setJoinStatus(null); return; }
+    try {
+      const res = await authApi.get<{ valid: boolean; household_name: string | null }>(`/invites/${code}/validate`, {
+        headers: { Authorization: `Bearer ${authState.accessToken}` },
+      });
+      setJoinStatus(res.data);
+    } catch {
+      setJoinStatus({ valid: false, household_name: null });
+    }
+  }, [joinCode, authState.accessToken]);
+
+  const handleJoinHousehold = useCallback(async () => {
+    const code = joinCode.trim();
+    if (!code) return;
+    setJoinError('');
+    try {
+      await authApi.post('/households/join', { invite_code: code }, {
+        headers: { Authorization: `Bearer ${authState.accessToken}` },
+      });
+      setJoinCode('');
+      setJoinStatus(null);
+      fetchHouseholds();
+      Alert.alert('Joined!', 'You have joined the household.');
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to join';
+      setJoinError(msg);
+    }
+  }, [joinCode, authState.accessToken, fetchHouseholds]);
+
+  // Household edit dialog
+  const [editHouseholdId, setEditHouseholdId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editMembers, setEditMembers] = useState<{ user_id: number; username: string; email: string; role: string }[]>([]);
+  const [editLoading, setEditLoading] = useState(false);
+
+  const openEditDialog = useCallback(async (hId: string, name: string) => {
+    setEditHouseholdId(hId);
+    setEditName(name);
+    setEditMembers([]);
+    try {
+      const res = await authApi.get<{ user_id: number; username: string; email: string; role: string }[]>(
+        `/households/${hId}/members`,
+        { headers: { Authorization: `Bearer ${authState.accessToken}` } },
+      );
+      setEditMembers(res.data);
+    } catch {
+      // Members may fail to load — still show name editing
+    }
+  }, [authState.accessToken]);
+
+  const handleSaveHouseholdName = useCallback(async () => {
+    if (!editHouseholdId || !editName.trim()) return;
+    setEditLoading(true);
+    try {
+      await authApi.patch(
+        `/households/${editHouseholdId}`,
+        { name: editName.trim() },
+        { headers: { Authorization: `Bearer ${authState.accessToken}` } },
+      );
+      fetchHouseholds();
+      setEditHouseholdId(null);
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to update';
+      Alert.alert('Error', msg);
+    } finally {
+      setEditLoading(false);
+    }
+  }, [editHouseholdId, editName, authState.accessToken, fetchHouseholds]);
+
+  const handleRemoveMember = useCallback(async (userId: number, email: string) => {
+    if (!editHouseholdId) return;
+    Alert.alert('Remove Member', `Remove ${email} from this household?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await authApi.delete(
+              `/households/${editHouseholdId}/members/${userId}`,
+              { headers: { Authorization: `Bearer ${authState.accessToken}` } },
+            );
+            setEditMembers((prev) => prev.filter((m) => m.user_id !== userId));
+          } catch (err: unknown) {
+            const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to remove';
+            Alert.alert('Error', msg);
+          }
+        },
+      },
+    ]);
+  }, [editHouseholdId, authState.accessToken]);
+
+  // Smart Home config (device manager + primary node)
+  const [smartHomeConfig, setSmartHomeConfig] = useState<SmartHomeConfig | null>(null);
+  const [smartHomeLoading, setSmartHomeLoading] = useState(false);
+
+  const householdId = authState.activeHouseholdId;
+
+  // Load auto-play setting
+  useEffect(() => {
+    AsyncStorage.getItem(AUTO_PLAY_TTS_KEY).then((val) => {
+      setAutoPlayTTS(val === 'true');
+    });
+  }, []);
+
+  const handleAutoPlayToggle = useCallback(async (value: boolean) => {
+    setAutoPlayTTS(value);
+    await AsyncStorage.setItem(AUTO_PLAY_TTS_KEY, value ? 'true' : 'false');
+  }, []);
+
+  useEffect(() => {
+    if (!householdId) return;
+    setSmartHomeLoading(true);
+    getSmartHomeConfig(householdId)
+      .then(setSmartHomeConfig)
+      .catch((err) => console.warn('Failed to load smart home config:', err))
+      .finally(() => setSmartHomeLoading(false));
+  }, [householdId]);
+
+  const handleDeviceManagerChange = useCallback(
+    async (managerName: string) => {
+      if (!householdId || !smartHomeConfig) return;
+      const prev = smartHomeConfig.device_manager;
+      setSmartHomeConfig((c) => c ? { ...c, device_manager: managerName } : c);
+      try {
+        const updated = await updateSmartHomeConfig(householdId, { device_manager: managerName });
+        setSmartHomeConfig((c) => c ? { ...c, ...updated } : c);
+      } catch {
+        setSmartHomeConfig((c) => c ? { ...c, device_manager: prev } : c);
+      }
+    },
+    [householdId, smartHomeConfig],
+  );
+
+  const handlePrimaryNodeChange = useCallback(
+    async (newNodeId: string) => {
+      if (!householdId || !smartHomeConfig) return;
+      const prev = smartHomeConfig.primary_node_id;
+      setSmartHomeConfig((c) => c ? { ...c, primary_node_id: newNodeId } : c);
+      try {
+        const updated = await updateSmartHomeConfig(householdId, { primary_node_id: newNodeId });
+        setSmartHomeConfig((c) => c ? { ...c, ...updated } : c);
+      } catch {
+        setSmartHomeConfig((c) => c ? { ...c, primary_node_id: prev } : c);
+      }
+    },
+    [householdId, smartHomeConfig],
+  );
 
   const handleSaveUrl = async () => {
     const trimmed = urlInput.trim();
@@ -56,10 +234,16 @@ const SettingsScreen = () => {
   };
 
   return (
+    <>
     <ScrollView style={[styles.container, { backgroundColor: paperTheme.colors.background }]} contentContainerStyle={styles.content}>
-      <Text variant="headlineMedium" style={styles.title}>
-        Settings
-      </Text>
+      <View style={styles.header}>
+        <Text variant="headlineMedium" style={styles.title}>
+          Settings
+        </Text>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.closeButton}>
+          <Icon source="close" size={24} color={theme.colors.onSurface} />
+        </TouchableOpacity>
+      </View>
 
       {/* Account */}
       <Card style={styles.card}>
@@ -80,6 +264,91 @@ const SettingsScreen = () => {
         </Card.Content>
       </Card>
 
+      {/* Household */}
+      <Card style={styles.card}>
+        <Card.Content>
+          <Text variant="titleMedium" style={styles.sectionTitle}>
+            Household
+          </Text>
+
+          {/* Household switcher */}
+          {authState.households.length > 0 && (
+            <>
+              {authState.households.map((h) => {
+                const isActive = h.id === authState.activeHouseholdId;
+                return (
+                  <View key={h.id} style={styles.radioRow}>
+                    <TouchableRipple
+                      onPress={() => !isActive && switchHousehold(h.id)}
+                      style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                        <Icon
+                          source={isActive ? 'radiobox-marked' : 'radiobox-blank'}
+                          size={22}
+                          color={isActive ? theme.colors.primary : theme.colors.onSurfaceVariant}
+                        />
+                        <View style={{ flex: 1, marginLeft: 12 }}>
+                          <Text variant="bodyMedium" style={{ fontWeight: '500' }}>
+                            {h.name}
+                          </Text>
+                          <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                            {h.role.replace('_', ' ')}
+                          </Text>
+                        </View>
+                      </View>
+                    </TouchableRipple>
+                    {h.role === 'admin' && (
+                      <IconButton
+                        icon="pencil"
+                        size={18}
+                        onPress={() => openEditDialog(h.id, h.name)}
+                      />
+                    )}
+                  </View>
+                );
+              })}
+              <Divider style={{ marginVertical: 12 }} />
+            </>
+          )}
+
+          {/* Join another household */}
+          <Text variant="titleSmall" style={{ fontWeight: '600', marginBottom: 4 }}>
+            Join Another Household
+          </Text>
+          <TextInput
+            mode="outlined"
+            label="Invite Code"
+            value={joinCode}
+            onChangeText={(t) => { setJoinCode(t.toUpperCase()); setJoinStatus(null); setJoinError(''); }}
+            onBlur={handleValidateJoin}
+            maxLength={8}
+            autoCapitalize="characters"
+            autoCorrect={false}
+            style={{ fontFamily: 'monospace', letterSpacing: 4, marginBottom: 4 }}
+          />
+          {joinStatus?.valid && (
+            <HelperText type="info" visible style={{ color: theme.colors.primary }}>
+              You'll join: {joinStatus.household_name}
+            </HelperText>
+          )}
+          {joinStatus && !joinStatus.valid && (
+            <HelperText type="error" visible>
+              Invalid or expired invite code
+            </HelperText>
+          )}
+          {joinError ? <HelperText type="error" visible>{joinError}</HelperText> : null}
+          <Button
+            mode="contained"
+            onPress={handleJoinHousehold}
+            disabled={!joinStatus?.valid}
+            style={{ alignSelf: 'flex-start', marginTop: 4 }}
+          >
+            Join
+          </Button>
+        </Card.Content>
+      </Card>
+
       {/* Appearance */}
       <Card style={styles.card}>
         <Card.Content>
@@ -91,6 +360,24 @@ const SettingsScreen = () => {
             onValueChange={(v) => setThemePreference(v as ThemePreference)}
             buttons={THEME_BUTTONS as unknown as Parameters<typeof SegmentedButtons>[0]['buttons']}
           />
+        </Card.Content>
+      </Card>
+
+      {/* Chat */}
+      <Card style={styles.card}>
+        <Card.Content>
+          <Text variant="titleMedium" style={styles.sectionTitle}>
+            Chat
+          </Text>
+          <View style={styles.switchRow}>
+            <View style={{ flex: 1 }}>
+              <Text variant="bodyMedium">Auto-play responses</Text>
+              <Text variant="bodySmall" style={styles.hint}>
+                Automatically speak Jarvis responses aloud
+              </Text>
+            </View>
+            <Switch value={autoPlayTTS} onValueChange={handleAutoPlayToggle} />
+          </View>
         </Card.Content>
       </Card>
 
@@ -135,6 +422,96 @@ const SettingsScreen = () => {
           </Button>
         </Card.Content>
       </Card>
+
+      {/* Smart Home */}
+      {householdId && (
+        <Card style={styles.card}>
+          <Card.Content>
+            <Text variant="titleMedium" style={styles.sectionTitle}>
+              Smart Home
+            </Text>
+
+            {smartHomeLoading ? (
+              <ActivityIndicator size="small" style={{ marginVertical: 12 }} />
+            ) : smartHomeConfig ? (
+              <>
+                {/* Device Manager */}
+                <Text variant="bodySmall" style={[styles.hint, { marginBottom: 8 }]}>
+                  Choose how devices are discovered and listed
+                </Text>
+                {[
+                  { name: 'jarvis_direct', label: 'Jarvis Direct', desc: 'WiFi devices controlled directly (LIFX, Kasa, etc.)' },
+                  { name: 'home_assistant', label: 'Home Assistant', desc: 'Devices managed by your Home Assistant instance' },
+                ].map((mgr, i, arr) => {
+                  const isSelected = mgr.name === smartHomeConfig.device_manager;
+                  return (
+                    <View key={mgr.name}>
+                      <TouchableRipple onPress={() => handleDeviceManagerChange(mgr.name)}>
+                        <View style={styles.radioRow}>
+                          <Icon
+                            source={isSelected ? 'radiobox-marked' : 'radiobox-blank'}
+                            size={22}
+                            color={isSelected ? theme.colors.primary : theme.colors.onSurfaceVariant}
+                          />
+                          <View style={{ flex: 1, marginLeft: 12 }}>
+                            <Text variant="bodyMedium" style={{ fontWeight: '500' }}>
+                              {mgr.label}
+                            </Text>
+                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                              {mgr.desc}
+                            </Text>
+                          </View>
+                        </View>
+                      </TouchableRipple>
+                      {i < arr.length - 1 && <Divider style={{ marginVertical: 2 }} />}
+                    </View>
+                  );
+                })}
+
+                {/* Primary Node */}
+                {smartHomeConfig.nodes.length > 0 && (
+                  <>
+                    <Divider style={{ marginVertical: 12 }} />
+                    <Text variant="titleSmall" style={{ fontWeight: '600', marginBottom: 4 }}>
+                      Primary Node
+                    </Text>
+                    <Text variant="bodySmall" style={[styles.hint, { marginBottom: 8 }]}>
+                      The node that handles device discovery for your household
+                    </Text>
+                    {smartHomeConfig.nodes.map((node, i, arr) => {
+                      const isSelected = node.node_id === smartHomeConfig.primary_node_id;
+                      const label = node.room
+                        ? `${node.room} (${node.node_id.slice(0, 8)}…)`
+                        : node.node_id.slice(0, 16) + '…';
+                      return (
+                        <View key={node.node_id}>
+                          <TouchableRipple onPress={() => handlePrimaryNodeChange(node.node_id)}>
+                            <View style={styles.radioRow}>
+                              <Icon
+                                source={isSelected ? 'radiobox-marked' : 'radiobox-blank'}
+                                size={22}
+                                color={isSelected ? theme.colors.primary : theme.colors.onSurfaceVariant}
+                              />
+                              <Text variant="bodyMedium" style={{ flex: 1, marginLeft: 12, fontWeight: '500' }}>
+                                {label}
+                              </Text>
+                            </View>
+                          </TouchableRipple>
+                          {i < arr.length - 1 && <Divider style={{ marginVertical: 2 }} />}
+                        </View>
+                      );
+                    })}
+                  </>
+                )}
+              </>
+            ) : (
+              <Text variant="bodySmall" style={styles.hint}>
+                Could not load smart home settings
+              </Text>
+            )}
+          </Card.Content>
+        </Card>
+      )}
 
       {/* Manual Config URL */}
       <Card style={styles.card}>
@@ -184,14 +561,75 @@ const SettingsScreen = () => {
       <Text variant="bodySmall" style={styles.version}>
         Jarvis Mobile v0.1.0
       </Text>
+
     </ScrollView>
+
+    {/* Household Edit Dialog */}
+    <Portal>
+      <Dialog visible={!!editHouseholdId} onDismiss={() => setEditHouseholdId(null)}>
+        <Dialog.Title>Edit Household</Dialog.Title>
+        <Dialog.Content>
+          <TextInput
+            mode="outlined"
+            label="Household Name"
+            value={editName}
+            onChangeText={setEditName}
+            style={{ marginBottom: 16 }}
+          />
+
+          {editMembers.length > 0 && (
+            <>
+              <Text variant="titleSmall" style={{ fontWeight: '600', marginBottom: 8 }}>
+                Members
+              </Text>
+              {editMembers.map((m) => (
+                <View key={m.user_id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 6 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text variant="bodyMedium">{m.username || m.email}</Text>
+                    <Text variant="bodySmall" style={{ opacity: 0.5 }}>
+                      {m.role.replace('_', ' ')}
+                    </Text>
+                  </View>
+                  {m.user_id !== authState.user?.id && (
+                    <IconButton
+                      icon="close"
+                      size={18}
+                      onPress={() => handleRemoveMember(m.user_id, m.email)}
+                    />
+                  )}
+                </View>
+              ))}
+            </>
+          )}
+        </Dialog.Content>
+        <Dialog.Actions>
+          <Button onPress={() => setEditHouseholdId(null)}>Cancel</Button>
+          <Button
+            onPress={handleSaveHouseholdName}
+            loading={editLoading}
+            disabled={editLoading || !editName.trim()}
+          >
+            Save
+          </Button>
+        </Dialog.Actions>
+      </Dialog>
+    </Portal>
+    </>
   );
 };
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { padding: 16, paddingBottom: 32 },
-  title: { fontWeight: 'bold', marginTop: 48, marginBottom: 16 },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 48,
+    marginBottom: 16,
+  },
+  closeButton: { padding: 4 },
+  title: { fontWeight: 'bold' },
   card: { marginBottom: 16 },
   sectionTitle: { fontWeight: '600', marginBottom: 8 },
   label: { opacity: 0.7, marginBottom: 8 },
@@ -205,10 +643,23 @@ const styles = StyleSheet.create({
   statusChip: {},
   urlText: { opacity: 0.5, marginBottom: 2, fontFamily: 'monospace' },
   rediscoverButton: { marginTop: 12, alignSelf: 'flex-start' },
+  switchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
   hint: { opacity: 0.5, marginBottom: 12 },
   input: { marginBottom: 12 },
   urlActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   saveButton: { flex: 0 },
+  radioRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 56,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+  },
   divider: { marginVertical: 16 },
   version: { textAlign: 'center', opacity: 0.4 },
 });
