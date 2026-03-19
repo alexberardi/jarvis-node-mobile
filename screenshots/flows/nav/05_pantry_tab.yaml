@@ -1,0 +1,27 @@
+appId: com.jarvis.nodemobile
+---
+# Test: Pantry tab loads and shows browse screen
+- launchApp
+- waitForAnimationToEnd
+- tapOn:
+    text: ".*localhost.*"
+    index: 0
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    text: "Continue"
+    optional: true
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Jarvis"
+    timeout: 15000
+# Tap Pantry tab
+# Tap Pantry tab (may still show as "Store" before rebuild)
+- tapOn:
+    text: "Pantry"
+    optional: true
+- tapOn:
+    text: "Store"
+    optional: true
+- waitForAnimationToEnd
+- takeScreenshot: nav-pantry

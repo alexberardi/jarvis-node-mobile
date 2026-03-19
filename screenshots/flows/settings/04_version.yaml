@@ -1,0 +1,35 @@
+appId: com.jarvis.nodemobile
+---
+# Test: Settings shows version number at the bottom
+- launchApp
+- waitForAnimationToEnd
+- tapOn:
+    text: ".*localhost.*"
+    index: 0
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    text: "Continue"
+    optional: true
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Jarvis"
+    timeout: 15000
+# Tap cog icon
+- tapOn:
+    point: "78%,9%"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 10000
+# Scroll to bottom
+- swipe:
+    start: "50%,80%"
+    end: "50%,20%"
+- waitForAnimationToEnd
+- swipe:
+    start: "50%,80%"
+    end: "50%,20%"
+- waitForAnimationToEnd
+- assertVisible:
+    text: "Jarvis Mobile v.*"

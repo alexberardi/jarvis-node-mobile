@@ -1,0 +1,46 @@
+appId: com.jarvis.nodemobile
+---
+# Test: Tool call works — send weather query, verify formatted response
+- launchApp
+- waitForAnimationToEnd
+- tapOn:
+    text: ".*localhost.*"
+    index: 0
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    text: "Continue"
+    optional: true
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Jarvis"
+    timeout: 15000
+
+# Wait for input to be ready
+- extendedWaitUntil:
+    visible: "Message Jarvis..."
+    timeout: 20000
+
+# Send weather query
+- tapOn: "Message Jarvis..."
+- inputText: "What's the weather?"
+
+# Tap send button
+- tapOn:
+    point: "93%,88%"
+
+# Wait for weather response (tool call + LLM formatting)
+- extendedWaitUntil:
+    visible:
+      text: ".*degree.*|.*temperature.*|.*humid.*|.*wind.*|.*sunny.*|.*cloudy.*|.*rain.*|.*clear.*"
+    timeout: 45000
+
+# Let streaming finish
+- waitForAnimationToEnd
+
+# Verify no raw tags
+- assertNotVisible: "<think>"
+- assertNotVisible: "</think>"
+
+# Take screenshot of weather response
+- takeScreenshot: home-chat-weather

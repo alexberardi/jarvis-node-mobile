@@ -1,0 +1,39 @@
+appId: com.jarvis.nodemobile
+---
+# Test: Entering an invalid invite code shows error message
+- launchApp
+- waitForAnimationToEnd
+- tapOn:
+    text: ".*localhost.*"
+    index: 0
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    text: "Continue"
+    optional: true
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Jarvis"
+    timeout: 15000
+# Tap cog icon
+- tapOn:
+    point: "78%,9%"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 10000
+# Scroll to join section
+- swipe:
+    start: "50%,80%"
+    end: "50%,50%"
+- waitForAnimationToEnd
+# Enter a bad invite code
+- tapOn: "Invite Code"
+- inputText: "ZZZZZZZZ"
+# Tap away to trigger onBlur validation
+- tapOn: "Join Another Household"
+- extendedWaitUntil:
+    visible: "Invalid or expired invite code"
+    timeout: 5000
+- assertVisible: { text: ".*Invalid or expired invite code.*" }
+- takeScreenshot: settings-household-invalid-code

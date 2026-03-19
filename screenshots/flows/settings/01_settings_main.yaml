@@ -1,0 +1,29 @@
+appId: com.jarvis.nodemobile
+---
+# Test: Settings modal opens and shows account, appearance, connection
+- launchApp
+- waitForAnimationToEnd
+- tapOn:
+    text: ".*localhost.*"
+    index: 0
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    text: "Continue"
+    optional: true
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Jarvis"
+    timeout: 15000
+# Tap cog icon
+- tapOn:
+    point: "78%,9%"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 10000
+- assertVisible: "Account"
+- assertVisible: { text: ".*Log Out.*" }
+- assertVisible: "Appearance"
+- assertVisible: "Connection"
+- takeScreenshot: settings

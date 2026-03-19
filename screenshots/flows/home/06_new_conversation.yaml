@@ -1,0 +1,37 @@
+appId: com.jarvis.nodemobile
+---
+# Test: New conversation button clears chat history
+- launchApp
+- waitForAnimationToEnd
+- tapOn:
+    text: ".*localhost.*"
+    index: 0
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    text: "Continue"
+    optional: true
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Jarvis"
+    timeout: 15000
+- extendedWaitUntil:
+    visible: "Ask Jarvis anything"
+    timeout: 10000
+# Send a message first
+- tapOn: "Ask Jarvis anything"
+- inputText: "hello"
+- tapOn:
+    point: "93%,94%"
+- extendedWaitUntil:
+    notVisible: "Processing..."
+    timeout: 30000
+# Now tap the new conversation button (top-right refresh icon)
+- tapOn:
+    point: "93%,9%"
+- waitForAnimationToEnd
+# Chat should be cleared, showing empty state again
+- extendedWaitUntil:
+    visible: "Ask Jarvis anything"
+    timeout: 10000
+- takeScreenshot: home-new-conversation

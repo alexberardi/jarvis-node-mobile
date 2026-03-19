@@ -1,0 +1,41 @@
+appId: com.jarvis.nodemobile
+---
+# Test: Multiple messages in a conversation maintain history
+- launchApp
+- waitForAnimationToEnd
+- tapOn:
+    text: ".*localhost.*"
+    index: 0
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    text: "Continue"
+    optional: true
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Jarvis"
+    timeout: 15000
+- extendedWaitUntil:
+    visible: "Ask Jarvis anything"
+    timeout: 10000
+# First message
+- tapOn: "Ask Jarvis anything"
+- inputText: "what is 2 + 2?"
+- tapOn:
+    point: "93%,94%"
+- extendedWaitUntil:
+    notVisible: "Processing..."
+    timeout: 30000
+- waitForAnimationToEnd
+# Second message
+- tapOn: "Ask Jarvis anything"
+- inputText: "now multiply that by 3"
+- tapOn:
+    point: "93%,94%"
+- extendedWaitUntil:
+    notVisible: "Processing..."
+    timeout: 30000
+# Both messages should be visible in the chat
+- assertVisible: { text: ".*what is 2 \\+ 2\\?.*" }
+- assertVisible: { text: ".*now multiply that by 3.*" }
+- takeScreenshot: home-multi-turn
