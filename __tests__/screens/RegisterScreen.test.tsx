@@ -73,7 +73,7 @@ describe('RegisterScreen', () => {
     fireEvent.press(createButtons[createButtons.length - 1]);
 
     await waitFor(() => {
-      expect(mockRegister).toHaveBeenCalledWith('new@example.com', 'Password1');
+      expect(mockRegister).toHaveBeenCalledWith('new@example.com', 'Password1', undefined, undefined);
     });
   });
 
