@@ -32,8 +32,8 @@ interface ProvisioningContextValue {
   confirmWifiSwitched: () => void;
   reset: () => void;
   setError: (error: string | null) => void;
-  fetchProvisioningToken: (householdId: string, accessToken: string, room?: string) => Promise<boolean>;
-  refreshProvisioningToken: (householdId: string, accessToken: string) => Promise<boolean>;
+  fetchProvisioningToken: (householdId: string, room?: string) => Promise<boolean>;
+  refreshProvisioningToken: (householdId: string) => Promise<boolean>;
 }
 
 const ProvisioningContext = createContext<ProvisioningContextValue | undefined>(undefined);

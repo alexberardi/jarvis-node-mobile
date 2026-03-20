@@ -1,16 +1,20 @@
-import axios from 'axios';
-
 import { requestProvisioningToken, ProvisioningTokenRequest } from '../../src/api/commandCenterApi';
+import apiClient from '../../src/api/apiClient';
 import * as serviceConfig from '../../src/config/serviceConfig';
 
-// Mock axios
-jest.mock('axios', () => ({
-  post: jest.fn(),
-  create: jest.fn(() => ({
+// Mock apiClient
+jest.mock('../../src/api/apiClient', () => ({
+  __esModule: true,
+  default: {
     post: jest.fn(),
     get: jest.fn(),
-    defaults: { baseURL: '' },
-  })),
+    interceptors: {
+      request: { use: jest.fn() },
+      response: { use: jest.fn() },
+    },
+    defaults: { headers: {} },
+  },
+  configureApiClient: jest.fn(),
 }));
 
 // Mock serviceConfig
@@ -31,8 +35,6 @@ describe('commandCenterApi', () => {
       name: 'Kitchen Node',
     };
 
-    const mockAccessToken = 'test-access-token';
-
     it('should request a provisioning token with correct parameters', async () => {
       const mockResponse = {
         data: {
@@ -43,30 +45,23 @@ describe('commandCenterApi', () => {
         },
       };
 
-      (axios.post as jest.Mock).mockResolvedValue(mockResponse);
+      (apiClient.post as jest.Mock).mockResolvedValue(mockResponse);
 
-      const result = await requestProvisioningToken(mockRequest, mockAccessToken);
+      const result = await requestProvisioningToken(mockRequest);
 
-      expect(axios.post).toHaveBeenCalledWith(
+      expect(apiClient.post).toHaveBeenCalledWith(
         'http://192.168.1.10:8002/api/v0/provisioning/token',
         mockRequest,
-        expect.objectContaining({
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: 'Bearer test-access-token',
-          },
-          timeout: 10000,
-        })
       );
 
       expect(result).toEqual(mockResponse.data);
     });
 
     it('should propagate errors from the API', async () => {
-      (axios.post as jest.Mock).mockRejectedValue(new Error('Network error'));
+      (apiClient.post as jest.Mock).mockRejectedValue(new Error('Network error'));
 
       await expect(
-        requestProvisioningToken(mockRequest, mockAccessToken)
+        requestProvisioningToken(mockRequest)
       ).rejects.toThrow('Network error');
     });
 
@@ -85,9 +80,9 @@ describe('commandCenterApi', () => {
         },
       };
 
-      (axios.post as jest.Mock).mockResolvedValue(mockResponse);
+      (apiClient.post as jest.Mock).mockResolvedValue(mockResponse);
 
-      const result = await requestProvisioningToken(refreshRequest, mockAccessToken);
+      const result = await requestProvisioningToken(refreshRequest);
 
       expect(result.node_id).toBe('existing-node-uuid');
     });
@@ -106,14 +101,13 @@ describe('commandCenterApi', () => {
         },
       };
 
-      (axios.post as jest.Mock).mockResolvedValue(mockResponse);
+      (apiClient.post as jest.Mock).mockResolvedValue(mockResponse);
 
-      await requestProvisioningToken(mockRequest, mockAccessToken);
+      await requestProvisioningToken(mockRequest);
 
-      expect(axios.post).toHaveBeenCalledWith(
+      expect(apiClient.post).toHaveBeenCalledWith(
         'http://custom-host:9002/api/v0/provisioning/token',
         expect.anything(),
-        expect.anything()
       );
     });
   });

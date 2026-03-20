@@ -79,6 +79,8 @@ const InstallProgressScreen = () => {
     if (allTerminal && intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
+
+      // No cache to clear — tools are fetched fresh on every warmup.
     }
   }, [statuses, installs]);
 

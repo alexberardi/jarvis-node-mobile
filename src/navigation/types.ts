@@ -28,17 +28,26 @@ export type NodesStackParamList = {
   };
 };
 
+export type DevicesStackParamList = {
+  DevicesList: undefined;
+  DeviceEdit: { deviceId: string; householdId: string };
+  RoomManagement: undefined;
+  DeviceDiscovery: { nodeId: string };
+};
+
 export type SmartHomeSetupParamList = {
   SmartHomeSetup: undefined;
   HADiscovery: undefined;
   HAAuth: { haUrl: string };
   HADeviceImport: { haUrl: string; haToken: string };
   DeviceRoomAssignment: {
-    haUrl: string;
-    haToken: string;
     selectedDevices: string; // JSON-serialized (nav params must be serializable)
     areas: string;          // JSON-serialized
+    source?: 'home_assistant' | 'direct';
+    haUrl?: string;
+    haToken?: string;
   };
+  DeviceDiscovery: { nodeId: string };
   DeviceList: { householdId: string };
   IntegrationAuth: {
     authConfig: string;     // JSON-serialized AuthenticationConfig
@@ -59,16 +68,35 @@ export type InboxStackParamList = {
   InboxDetail: { itemId: string };
 };
 
+export type StoreStackParamList = {
+  StoreBrowse: undefined;
+  StoreDetail: { commandName: string };
+  NodePickerSheet: {
+    nodes: string;           // JSON-serialized NodeInfo[]
+    commandName: string;
+    githubRepoUrl: string;
+    gitTag: string;
+    packageName: string;
+    installedNodeIds: string; // JSON-serialized string[] of node IDs that already have this command
+  };
+  InstallProgress: {
+    installs: string;        // JSON-serialized InstallEntry[]
+    packageName: string;
+  };
+};
+
 export type MainTabParamList = {
   HomeTab: undefined;
-  NodesTab: NavigatorScreenParams<NodesStackParamList> | undefined;
+  DevicesTab: NavigatorScreenParams<DevicesStackParamList> | undefined;
+  StoreTab: NavigatorScreenParams<StoreStackParamList> | undefined;
   RoutinesTab: NavigatorScreenParams<RoutinesStackParamList> | undefined;
-  SettingsTab: undefined;
+  NodesTab: NavigatorScreenParams<NodesStackParamList> | undefined;
 };
 
 export type RootStackParamList = {
   Auth: NavigatorScreenParams<AuthStackParamList>;
   Main: NavigatorScreenParams<MainTabParamList>;
   Inbox: NavigatorScreenParams<InboxStackParamList>;
+  Settings: undefined;
   SmartHomeSetup: NavigatorScreenParams<SmartHomeSetupParamList>;
 };

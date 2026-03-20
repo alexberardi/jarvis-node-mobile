@@ -37,7 +37,6 @@ const ScanForNodesScreen = ({ navigation }: Props) => {
     setFetchingToken(true);
     const tokenSuccess = await fetchProvisioningToken(
       authState.activeHouseholdId,
-      authState.accessToken,
     );
     setFetchingToken(false);
 
@@ -64,7 +63,6 @@ const ScanForNodesScreen = ({ navigation }: Props) => {
     if (!tokenReady) {
       const tokenSuccess = await fetchProvisioningToken(
         authState.activeHouseholdId,
-        authState.accessToken,
       );
       if (!tokenSuccess) return;
     }

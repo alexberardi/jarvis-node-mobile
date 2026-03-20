@@ -17,7 +17,11 @@ import {
   useTheme,
 } from 'react-native-paper';
 
+import apiClient from '../../api/apiClient';
+import { fetchNodeTools } from '../../api/chatApi';
 import { browsePackages, getCategories } from '../../api/pantryApi';
+import { useAuth } from '../../auth/AuthContext';
+import { getServiceConfig } from '../../config/serviceConfig';
 import type { PackageCategory, PackageSummary } from '../../types/Package';
 import { StoreStackParamList } from '../../navigation/types';
 
@@ -39,9 +43,15 @@ const DANGER_COLORS: Record<number, string> = {
   5: '#ef4444',
 };
 
+interface NodeToolInfo {
+  node_id: string;
+  toolNames: string[];
+}
+
 const StoreBrowseScreen = () => {
   const navigation = useNavigation<Nav>();
   const theme = useTheme();
+  const { state: authState } = useAuth();
 
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<SortOption>('popular');
@@ -53,6 +63,8 @@ const StoreBrowseScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [nodeTools, setNodeTools] = useState<NodeToolInfo[]>([]);
+  const [nodeCount, setNodeCount] = useState(0);
 
   const loadPackages = useCallback(
     async (pageNum: number = 1, append: boolean = false) => {
@@ -87,10 +99,48 @@ const StoreBrowseScreen = () => {
     }
   }, []);
 
+  const loadNodeTools = useCallback(async () => {
+    const householdId = authState.activeHouseholdId;
+    if (!householdId) return;
+    try {
+      const { commandCenterUrl } = getServiceConfig();
+      const res = await apiClient.get<{ node_id: string; room: string | null }[]>(
+        `${commandCenterUrl}/api/v0/admin/nodes?household_id=${householdId}`,
+      );
+      const nodes = res.data || [];
+      setNodeCount(nodes.length);
+
+      const toolResults = await Promise.all(
+        nodes.map(async (node) => {
+          try {
+            const tools = await fetchNodeTools(node.node_id);
+            const names = tools.client_tools
+              .map((t: any) => t.function?.name)
+              .filter(Boolean);
+            return { node_id: node.node_id, toolNames: names as string[] };
+          } catch {
+            return { node_id: node.node_id, toolNames: [] as string[] };
+          }
+        }),
+      );
+      setNodeTools(toolResults);
+    } catch {
+      // Non-critical
+    }
+  }, [authState.activeHouseholdId]);
+
+  const getInstalledCount = useCallback(
+    (commandName: string): number => {
+      return nodeTools.filter((n) => n.toolNames.includes(commandName)).length;
+    },
+    [nodeTools],
+  );
+
   useFocusEffect(
     useCallback(() => {
       loadCategories();
-    }, [loadCategories]),
+      loadNodeTools();
+    }, [loadCategories, loadNodeTools]),
   );
 
   // Reload when search/filter/sort changes
@@ -109,7 +159,9 @@ const StoreBrowseScreen = () => {
     loadPackages(page + 1, true);
   }, [loading, packages.length, total, page, loadPackages]);
 
-  const renderItem = ({ item }: { item: PackageSummary }) => (
+  const renderItem = ({ item }: { item: PackageSummary }) => {
+    const installed = getInstalledCount(item.command_name);
+    return (
     <Card
       style={styles.card}
       onPress={() => navigation.navigate('StoreDetail', { commandName: item.command_name })}
@@ -130,6 +182,16 @@ const StoreBrowseScreen = () => {
             )}
           </View>
           <View style={styles.badges}>
+            {installed > 0 && nodeCount > 0 && (
+              <Chip
+                compact
+                icon="check-circle"
+                textStyle={{ fontSize: 10, color: '#4CAF50' }}
+                style={{ backgroundColor: 'transparent' }}
+              >
+                {installed}/{nodeCount}
+              </Chip>
+            )}
             {item.verified && (
               <Icon source="check-decagram" size={18} color={theme.colors.primary} />
             )}
@@ -173,7 +235,8 @@ const StoreBrowseScreen = () => {
         </View>
       </Card.Content>
     </Card>
-  );
+    );
+  };
 
   const emptyComponent = (
     <View style={styles.emptyContent}>
