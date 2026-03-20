@@ -87,7 +87,6 @@ describe('ScanForNodesScreen', () => {
     await waitFor(() => {
       expect(mockFetchProvisioningToken).toHaveBeenCalledWith(
         'test-household-123',
-        'mock-access-token',
       );
     });
 

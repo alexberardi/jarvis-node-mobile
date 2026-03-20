@@ -74,6 +74,8 @@ const fetchServiceUrls = async (
 
     let authBaseUrl = '';
     let commandCenterUrl = '';
+    let notificationsUrl = '';
+    let pantryUrl = '';
 
     for (const svc of data.services) {
       // Replace localhost/127.0.0.1 in service URLs with the config host IP
@@ -84,6 +86,10 @@ const fetchServiceUrls = async (
         authBaseUrl = svcUrl;
       } else if (svc.name === 'jarvis-command-center') {
         commandCenterUrl = svcUrl;
+      } else if (svc.name === 'jarvis-notifications') {
+        notificationsUrl = svcUrl;
+      } else if (svc.name === 'jarvis-pantry') {
+        pantryUrl = svcUrl;
       }
     }
 
@@ -93,6 +99,8 @@ const fetchServiceUrls = async (
       authBaseUrl,
       commandCenterUrl,
       configServiceUrl: configBaseUrl,
+      notificationsUrl,
+      pantryUrl,
     };
   } catch {
     return null;
@@ -229,6 +237,8 @@ export const discoverConfigService = async (): Promise<DiscoveryResult> => {
     authBaseUrl: '',
     commandCenterUrl: '',
     configServiceUrl: null,
+    notificationsUrl: '',
+    pantryUrl: '',
   };
   setServiceConfig(emptyConfig);
   return {

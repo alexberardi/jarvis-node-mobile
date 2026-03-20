@@ -8,6 +8,8 @@ import React, {
   useState,
 } from 'react';
 
+import { setK2UserId } from '../services/k2Service';
+
 import { configureApiClient } from '../api/apiClient';
 import authApi from '../api/authApi';
 
@@ -105,6 +107,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         refreshToken,
         isAuthenticated: true,
       }));
+      // Scope K2 storage to current user so different users on the
+      // same device cannot read each other's node encryption keys.
+      setK2UserId(String(user.id));
       await AsyncStorage.multiSet([
         [ACCESS_TOKEN_KEY, accessToken],
         [REFRESH_TOKEN_KEY, refreshToken],
@@ -155,6 +160,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   );
 
   const logout = useCallback(async () => {
+    // Don't clear K2 userId — keys persist in SecureStore and the next
+    // login sets the correct userId. Clearing would make the scoped keys
+    // unreachable if the same user logs back in before the app restarts.
     await AsyncStorage.multiRemove([ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, USER_KEY, ACTIVE_HOUSEHOLD_KEY]);
     setState({
       ...initialState,
@@ -250,6 +258,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const activeHouseholdId = storedHouseholdId[1] || null;
 
       if (accessToken && refreshToken && user) {
+        setK2UserId(String(user.id));
         setState({
           user,
           accessToken,

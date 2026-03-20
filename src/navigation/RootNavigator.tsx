@@ -4,8 +4,10 @@ import React from 'react';
 
 import { useAuth } from '../auth/AuthContext';
 import AuthNavigator from './AuthNavigator';
+import InboxStackNavigator from './InboxStackNavigator';
 import MainTabNavigator from './MainTabNavigator';
 import SmartHomeSetupNavigator from './SmartHomeSetupNavigator';
+import SettingsScreen from '../screens/Settings/SettingsScreen';
 import { RootStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -30,6 +32,16 @@ const RootNavigator = () => {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="Main" component={MainTabNavigator} />
+      <Stack.Screen
+        name="Inbox"
+        component={InboxStackNavigator}
+        options={{ presentation: 'modal' }}
+      />
+      <Stack.Screen
+        name="Settings"
+        component={SettingsScreen}
+        options={{ presentation: 'modal' }}
+      />
       <Stack.Screen
         name="SmartHomeSetup"
         component={SmartHomeSetupNavigator}

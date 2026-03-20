@@ -24,6 +24,8 @@ export interface SendActionRequest {
 export interface SendActionResponse {
   status: string;
   request_id: string;
+  success?: boolean;
+  error?: string | null;
 }
 
 /**
@@ -36,6 +38,7 @@ export const sendNodeAction = async (
   const response = await apiClient.post<SendActionResponse>(
     `${getCommandCenterUrl()}/api/v0/nodes/${nodeId}/actions`,
     action,
+    { timeout: 15000 }, // CC waits up to 10s for node response
   );
   return response.data;
 };

@@ -5,7 +5,7 @@ export const lightTheme: MD3Theme = {
   roundness: 8,
   colors: {
     ...MD3LightTheme.colors,
-    primary: '#8A00C4',
+    primary: '#7E57C2',
     secondary: '#22c55e',
     tertiary: '#0891b2',
     background: '#f8fafc',
@@ -18,7 +18,7 @@ export const darkTheme: MD3Theme = {
   roundness: 8,
   colors: {
     ...MD3DarkTheme.colors,
-    primary: '#c084fc',
+    primary: '#B39DDB',
     secondary: '#4ade80',
     tertiary: '#38bdf8',
     background: '#0f172a',

@@ -6,6 +6,7 @@ import HADiscoveryScreen from '../screens/SmartHome/HADiscoveryScreen';
 import HAAuthScreen from '../screens/SmartHome/HAAuthScreen';
 import HADeviceImportScreen from '../screens/SmartHome/HADeviceImportScreen';
 import DeviceRoomAssignmentScreen from '../screens/SmartHome/DeviceRoomAssignmentScreen';
+import DeviceDiscoveryScreen from '../screens/SmartHome/DeviceDiscoveryScreen';
 import DeviceListScreen from '../screens/SmartHome/DeviceListScreen';
 import IntegrationAuthScreen from '../screens/Settings/IntegrationAuthScreen';
 import { SmartHomeSetupParamList } from './types';
@@ -20,6 +21,7 @@ const SmartHomeSetupNavigator = () => {
       <Stack.Screen name="HAAuth" component={HAAuthScreen} />
       <Stack.Screen name="HADeviceImport" component={HADeviceImportScreen} />
       <Stack.Screen name="DeviceRoomAssignment" component={DeviceRoomAssignmentScreen} />
+      <Stack.Screen name="DeviceDiscovery" component={DeviceDiscoveryScreen} />
       <Stack.Screen name="DeviceList" component={DeviceListScreen} />
       <Stack.Screen name="IntegrationAuth" component={IntegrationAuthScreen} />
     </Stack.Navigator>

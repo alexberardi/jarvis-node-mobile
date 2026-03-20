@@ -1,6 +1,5 @@
-import axios from 'axios';
-
 import { getServiceConfig } from '../config/serviceConfig';
+import apiClient from './apiClient';
 
 export interface InboxItem {
   id: string;
@@ -12,6 +11,7 @@ export interface InboxItem {
   category: string;
   source_service: string;
   metadata: Record<string, any> | null;
+  content_format: 'markdown' | 'html' | 'plain' | null;
   is_read: boolean;
   created_at: string;
 }
@@ -29,61 +29,39 @@ const getBaseUrl = () => {
 };
 
 export const listInboxItems = async (
-  accessToken: string,
   params?: { category?: string; is_read?: boolean; limit?: number; offset?: number },
 ): Promise<InboxItem[]> => {
-  const res = await axios.get<InboxItem[]>(`${getBaseUrl()}/api/v0/inbox`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
+  const res = await apiClient.get<InboxItem[]>(`${getBaseUrl()}/api/v0/inbox`, {
     params,
-    timeout: 10000,
   });
   return res.data;
 };
 
 export const getInboxItem = async (
-  accessToken: string,
   itemId: string,
 ): Promise<InboxItem> => {
-  const res = await axios.get<InboxItem>(`${getBaseUrl()}/api/v0/inbox/${itemId}`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-    timeout: 10000,
-  });
+  const res = await apiClient.get<InboxItem>(`${getBaseUrl()}/api/v0/inbox/${itemId}`);
   return res.data;
 };
 
-export const getUnreadCount = async (
-  accessToken: string,
-): Promise<number> => {
-  const res = await axios.get<UnreadCountResponse>(
+export const getUnreadCount = async (): Promise<number> => {
+  const res = await apiClient.get<UnreadCountResponse>(
     `${getBaseUrl()}/api/v0/inbox/unread-count`,
-    {
-      headers: { Authorization: `Bearer ${accessToken}` },
-      timeout: 10000,
-    },
   );
   return res.data.count;
 };
 
 export const markItemRead = async (
-  accessToken: string,
   itemId: string,
 ): Promise<void> => {
-  await axios.patch(
+  await apiClient.patch(
     `${getBaseUrl()}/api/v0/inbox/${itemId}/read`,
     {},
-    {
-      headers: { Authorization: `Bearer ${accessToken}` },
-      timeout: 10000,
-    },
   );
 };
 
 export const deleteInboxItem = async (
-  accessToken: string,
   itemId: string,
 ): Promise<void> => {
-  await axios.delete(`${getBaseUrl()}/api/v0/inbox/${itemId}`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-    timeout: 10000,
-  });
+  await apiClient.delete(`${getBaseUrl()}/api/v0/inbox/${itemId}`);
 };
