@@ -1,3 +1,4 @@
+import * as Clipboard from 'expo-clipboard';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import React, { useState, useCallback } from 'react';
 import { StyleSheet, View } from 'react-native';
@@ -15,6 +16,7 @@ import {
   parseQRCode,
   importPlainQR,
   importEncryptedQR,
+  importFromQR,
   ImportResult,
 } from '../../services/qrImportService';
 import { QRPayload, EncryptedQRPayload } from '../../services/qrPayloadService';
@@ -37,6 +39,28 @@ const ImportKeyScreen: React.FC<ImportKeyScreenProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [importedNodeId, setImportedNodeId] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [pasteText, setPasteText] = useState('');
+
+  const handlePasteImport = useCallback(async () => {
+    if (!pasteText.trim() || isProcessing) return;
+
+    setIsProcessing(true);
+    setError(null);
+    setScanState('importing');
+
+    const result = await importFromQR(pasteText.trim());
+
+    if (result.requiresPassword && !result.success) {
+      // Encrypted payload — not supported via paste (use QR)
+      setError('Encrypted keys must be scanned via QR code');
+      setScanState('scanning');
+      setIsProcessing(false);
+      return;
+    }
+
+    handleImportResult(result);
+    setIsProcessing(false);
+  }, [pasteText, isProcessing]);
 
   const handleBarCodeScanned = useCallback(
     async ({ data }: { data: string }) => {
@@ -136,6 +160,42 @@ const ImportKeyScreen: React.FC<ImportKeyScreenProps> = ({
             Grant Permission
           </Button>
         </View>
+        {__DEV__ && (
+          <View style={styles.devPasteContainer}>
+            <Text variant="labelSmall" style={styles.devLabel}>
+              DEV: Paste key data
+            </Text>
+            <TextInput
+              mode="outlined"
+              placeholder="Paste base64url payload"
+              value={pasteText}
+              onChangeText={setPasteText}
+              style={styles.devInput}
+              dense
+            />
+            <View style={styles.devButtonRow}>
+              <Button
+                mode="outlined"
+                onPress={async () => {
+                  const text = await Clipboard.getStringAsync();
+                  if (text) setPasteText(text);
+                }}
+                compact
+                icon="clipboard-text"
+              >
+                Paste from Clipboard
+              </Button>
+              <Button
+                mode="contained-tonal"
+                onPress={handlePasteImport}
+                disabled={!pasteText.trim() || isProcessing}
+                compact
+              >
+                Import
+              </Button>
+            </View>
+          </View>
+        )}
       </View>
     );
   }
@@ -287,6 +347,43 @@ const ImportKeyScreen: React.FC<ImportKeyScreenProps> = ({
           )}
         </View>
       </View>
+
+      {__DEV__ && (
+        <View style={styles.devPasteContainer}>
+          <Text variant="labelSmall" style={styles.devLabel}>
+            DEV: Paste key data
+          </Text>
+          <TextInput
+            mode="outlined"
+            placeholder="Paste base64url payload"
+            value={pasteText}
+            onChangeText={setPasteText}
+            style={styles.devInput}
+            dense
+          />
+          <View style={styles.devButtonRow}>
+            <Button
+              mode="outlined"
+              onPress={async () => {
+                const text = await Clipboard.getStringAsync();
+                if (text) setPasteText(text);
+              }}
+              compact
+              icon="clipboard-text"
+            >
+              Paste from Clipboard
+            </Button>
+            <Button
+              mode="contained-tonal"
+              onPress={handlePasteImport}
+              disabled={!pasteText.trim() || isProcessing}
+              compact
+            >
+              Import
+            </Button>
+          </View>
+        </View>
+      )}
     </View>
   );
 };
@@ -407,6 +504,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,
+  },
+  devPasteContainer: {
+    padding: 12,
+    gap: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.1)',
+  },
+  devLabel: {
+    opacity: 0.6,
+  },
+  devInput: {
+    fontSize: 12,
+  },
+  devButtonRow: {
+    flexDirection: 'row',
+    gap: 8,
   },
 });
 

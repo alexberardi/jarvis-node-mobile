@@ -9,12 +9,16 @@ export interface ServiceConfig {
   authBaseUrl: string;
   commandCenterUrl: string;
   configServiceUrl: string | null;
+  notificationsUrl: string;
+  pantryUrl: string;
 }
 
 let currentConfig: ServiceConfig = {
   authBaseUrl: '',
   commandCenterUrl: '',
   configServiceUrl: null,
+  notificationsUrl: '',
+  pantryUrl: '',
 };
 
 export const getServiceConfig = (): ServiceConfig => currentConfig;

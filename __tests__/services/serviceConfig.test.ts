@@ -20,6 +20,8 @@ describe('serviceConfig', () => {
       authBaseUrl: '',
       commandCenterUrl: '',
       configServiceUrl: null,
+      notificationsUrl: '',
+      pantryUrl: '',
     });
   });
 
@@ -43,6 +45,8 @@ describe('serviceConfig', () => {
         authBaseUrl: 'http://192.168.1.10:8001',
         commandCenterUrl: 'http://192.168.1.10:8002',
         configServiceUrl: 'http://192.168.1.10:8013',
+        notificationsUrl: '',
+        pantryUrl: '',
       };
 
       setServiceConfig(newConfig);
@@ -58,6 +62,8 @@ describe('serviceConfig', () => {
         authBaseUrl: 'http://localhost:8001',
         commandCenterUrl: '',
         configServiceUrl: null,
+        notificationsUrl: '',
+        pantryUrl: '',
       });
 
       expect(getAuthApiBaseUrl()).toBe('http://localhost:8001');
@@ -70,6 +76,8 @@ describe('serviceConfig', () => {
         authBaseUrl: '',
         commandCenterUrl: 'http://localhost:8002',
         configServiceUrl: null,
+        notificationsUrl: '',
+        pantryUrl: '',
       });
 
       expect(getCommandCenterUrl()).toBe('http://localhost:8002');
@@ -82,6 +90,8 @@ describe('serviceConfig', () => {
         authBaseUrl: 'http://192.168.1.10:8001',
         commandCenterUrl: 'http://192.168.1.10:8002',
         configServiceUrl: 'http://192.168.1.10:8013',
+        notificationsUrl: '',
+        pantryUrl: '',
       };
 
       await cacheConfig(config);
@@ -107,6 +117,8 @@ describe('serviceConfig', () => {
         authBaseUrl: 'http://192.168.1.10:8001',
         commandCenterUrl: 'http://192.168.1.10:8002',
         configServiceUrl: 'http://192.168.1.10:8013',
+        notificationsUrl: '',
+        pantryUrl: '',
       };
 
       (AsyncStorage.getItem as jest.Mock).mockResolvedValue(JSON.stringify(config));

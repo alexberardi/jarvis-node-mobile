@@ -97,6 +97,7 @@ export interface RoomCreateRequest {
 export interface RoomUpdateRequest {
   name?: string;
   icon?: string;
+  parent_room_id?: string | null;
 }
 
 export interface ConfigPushRequest {
@@ -199,6 +200,22 @@ export interface DiscoveredDeviceResult {
   is_controllable: boolean;
   already_registered: boolean;
   existing_device_id: string | null;
+}
+
+/** Normalized device state from CC, includes domain-specific UI hints. */
+export interface DeviceState {
+  entity_id: string;
+  domain: string;
+  state: Record<string, unknown> | null;
+  ui_hints: {
+    control_type: string;
+    features: string[];
+    min_value?: number;
+    max_value?: number;
+    step?: number;
+    unit?: string;
+  } | null;
+  error: string | null;
 }
 
 export interface DeviceScanPollResponse {

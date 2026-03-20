@@ -5,6 +5,23 @@ import { randomBytes } from 'jarvis-crypto';
 const K2_STORAGE_PREFIX = 'jarvis_k2_';
 const KID_STORAGE_PREFIX = 'jarvis_kid_';
 
+// User-scoped storage: userId is set on login, cleared on logout.
+// All K2 storage keys include the userId so different users on the
+// same device cannot read each other's node encryption keys.
+let _currentUserId: string | null = null;
+
+export function setK2UserId(userId: string | null): void {
+  _currentUserId = userId;
+}
+
+function scopedKey(prefix: string, nodeId: string): string {
+  if (_currentUserId) {
+    return `${prefix}u${_currentUserId}_${nodeId}`;
+  }
+  // Fallback for pre-scoped keys (backward compat)
+  return `${prefix}${nodeId}`;
+}
+
 export interface K2KeyPair {
   k2: string; // base64url encoded 32 bytes
   kid: string; // key identifier
@@ -33,8 +50,8 @@ export async function generateK2(nodeId: string): Promise<K2KeyPair> {
  * Store K2 securely on the device
  */
 export async function storeK2(keyPair: K2KeyPair): Promise<void> {
-  const storageKey = `${K2_STORAGE_PREFIX}${keyPair.nodeId}`;
-  const kidKey = `${KID_STORAGE_PREFIX}${keyPair.nodeId}`;
+  const storageKey = scopedKey(K2_STORAGE_PREFIX, keyPair.nodeId);
+  const kidKey = scopedKey(KID_STORAGE_PREFIX, keyPair.nodeId);
 
   await SecureStore.setItemAsync(storageKey, keyPair.k2);
   await SecureStore.setItemAsync(
@@ -50,8 +67,8 @@ export async function storeK2(keyPair: K2KeyPair): Promise<void> {
  * Retrieve K2 for a specific node
  */
 export async function getK2(nodeId: string): Promise<K2KeyPair | null> {
-  const storageKey = `${K2_STORAGE_PREFIX}${nodeId}`;
-  const kidKey = `${KID_STORAGE_PREFIX}${nodeId}`;
+  const storageKey = scopedKey(K2_STORAGE_PREFIX, nodeId);
+  const kidKey = scopedKey(KID_STORAGE_PREFIX, nodeId);
 
   const k2 = await SecureStore.getItemAsync(storageKey);
   const kidData = await SecureStore.getItemAsync(kidKey);
@@ -68,7 +85,7 @@ export async function getK2(nodeId: string): Promise<K2KeyPair | null> {
  * Check if we have K2 stored for a node
  */
 export async function hasK2(nodeId: string): Promise<boolean> {
-  const storageKey = `${K2_STORAGE_PREFIX}${nodeId}`;
+  const storageKey = scopedKey(K2_STORAGE_PREFIX, nodeId);
   const k2 = await SecureStore.getItemAsync(storageKey);
   return k2 !== null;
 }
@@ -77,8 +94,8 @@ export async function hasK2(nodeId: string): Promise<boolean> {
  * Delete K2 for a node (used when rotating keys)
  */
 export async function deleteK2(nodeId: string): Promise<void> {
-  const storageKey = `${K2_STORAGE_PREFIX}${nodeId}`;
-  const kidKey = `${KID_STORAGE_PREFIX}${nodeId}`;
+  const storageKey = scopedKey(K2_STORAGE_PREFIX, nodeId);
+  const kidKey = scopedKey(KID_STORAGE_PREFIX, nodeId);
 
   await SecureStore.deleteItemAsync(storageKey);
   await SecureStore.deleteItemAsync(kidKey);

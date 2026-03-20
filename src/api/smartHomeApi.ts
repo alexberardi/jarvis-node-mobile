@@ -5,6 +5,7 @@ import {
   DeviceImportItem,
   DeviceListItem,
   DeviceScanPollResponse,
+  DeviceState,
   ConfigPushRequest,
   RoomUpdateRequest,
 } from '../types/SmartHome';
@@ -131,6 +132,21 @@ export const controlDevice = async (
 };
 
 // =============================================================================
+// Device State (mobile -> CC -> MQTT -> node -> CC -> mobile)
+// =============================================================================
+
+export const getDeviceState = async (
+  householdId: string,
+  deviceId: string,
+): Promise<DeviceState> => {
+  const res = await apiClient.get<DeviceState>(
+    `${getBaseUrl()}/api/v0/households/${householdId}/devices/${deviceId}/state`,
+    { timeout: 15000 }, // 15s for 10s MQTT wait + overhead
+  );
+  return res.data;
+};
+
+// =============================================================================
 // Device Scan (user-driven: mobile -> CC -> MQTT -> node -> CC -> mobile)
 // =============================================================================
 
@@ -149,6 +165,43 @@ export const pollDeviceScan = async (
 ): Promise<DeviceScanPollResponse> => {
   const res = await apiClient.get<DeviceScanPollResponse>(
     `${getBaseUrl()}/api/v0/nodes/${nodeId}/device-scan/${requestId}`,
+  );
+  return res.data;
+};
+
+// =============================================================================
+// Smart Home Config (device manager + primary node)
+// =============================================================================
+
+export interface NodeOption {
+  node_id: string;
+  room: string | null;
+  online: boolean;
+  last_seen: string | null;
+}
+
+export interface SmartHomeConfig {
+  device_manager: string;
+  primary_node_id: string;
+  nodes: NodeOption[];
+}
+
+export const getSmartHomeConfig = async (
+  householdId: string,
+): Promise<SmartHomeConfig> => {
+  const res = await apiClient.get<SmartHomeConfig>(
+    `${getBaseUrl()}/api/v0/households/${householdId}/smart-home/config`,
+  );
+  return res.data;
+};
+
+export const updateSmartHomeConfig = async (
+  householdId: string,
+  updates: { device_manager?: string; primary_node_id?: string },
+): Promise<{ device_manager: string; primary_node_id: string }> => {
+  const res = await apiClient.put(
+    `${getBaseUrl()}/api/v0/households/${householdId}/smart-home/config`,
+    updates,
   );
   return res.data;
 };

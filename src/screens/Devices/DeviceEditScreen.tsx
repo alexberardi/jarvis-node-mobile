@@ -22,7 +22,7 @@ import {
   deleteDevice,
   controlDevice,
 } from '../../api/smartHomeApi';
-import ActionButtons from '../../components/ActionButtons';
+import DeviceControlPanel from '../../components/device-controls/DeviceControlPanel';
 import type { DeviceListItem, JarvisButton, Room } from '../../types/SmartHome';
 import type { DevicesStackParamList } from '../../navigation/types';
 
@@ -198,6 +198,35 @@ const DeviceEditScreen = ({ navigation, route }: Props) => {
           ))}
         </Menu>
 
+        {device.is_controllable && (
+          <>
+            <Divider style={styles.divider} />
+            <Text variant="labelLarge" style={styles.label}>
+              Controls
+            </Text>
+            <DeviceControlPanel
+              householdId={householdId}
+              deviceId={deviceId}
+              device={device}
+              fallbackActions={device.supported_actions}
+              onAction={handleAction}
+              actionLoading={actionLoading}
+            />
+            {lastAction && (
+              <View style={styles.actionFeedback}>
+                <Chip
+                  icon="check-circle"
+                  style={styles.successChip}
+                  textStyle={styles.successText}
+                  selectedColor="#16a34a"
+                >
+                  {lastAction} sent
+                </Chip>
+              </View>
+            )}
+          </>
+        )}
+
         <Divider style={styles.divider} />
 
         <Text variant="labelLarge" style={styles.label}>
@@ -223,27 +252,6 @@ const DeviceEditScreen = ({ navigation, route }: Props) => {
           <List.Item title="Model" description={device.model} />
         )}
         <List.Item title="Source" description={device.source} />
-
-        {device.supported_actions && device.supported_actions.length > 0 && (
-          <>
-            <Divider style={styles.divider} />
-            <Text variant="labelLarge" style={styles.label}>
-              Controls
-            </Text>
-            <ActionButtons
-              actions={device.supported_actions}
-              onPress={handleAction}
-              loadingAction={actionLoading}
-            />
-            {lastAction && (
-              <View style={styles.actionFeedback}>
-                <Chip icon="check" style={styles.successChip} textStyle={styles.successText}>
-                  {lastAction} sent
-                </Chip>
-              </View>
-            )}
-          </>
-        )}
 
         <Divider style={styles.divider} />
 
@@ -286,8 +294,8 @@ const styles = StyleSheet.create({
   saveButton: { marginTop: 8 },
   deleteButton: { marginTop: 12 },
   actionFeedback: { alignItems: 'center', marginTop: 12 },
-  successChip: { backgroundColor: '#dbeafe' },
-  successText: { color: '#1e40af' },
+  successChip: { backgroundColor: '#dcfce7' },
+  successText: { color: '#16a34a' },
 });
 
 export default DeviceEditScreen;

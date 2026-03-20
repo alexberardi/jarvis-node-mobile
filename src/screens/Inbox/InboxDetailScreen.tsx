@@ -12,7 +12,7 @@ import {
   useTheme,
 } from 'react-native-paper';
 
-import { getInboxItem, InboxItem } from '../../api/inboxApi';
+import { deleteInboxItem, getInboxItem, InboxItem } from '../../api/inboxApi';
 import { sendNodeAction } from '../../api/commandCenterApi';
 import { useAuth } from '../../auth/AuthContext';
 import ActionButtons from '../../components/ActionButtons';
@@ -175,6 +175,28 @@ const InboxDetailScreen = () => {
             Inbox
           </Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => {
+            Alert.alert('Delete', `Remove "${item.title}"?`, [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Delete',
+                style: 'destructive',
+                onPress: async () => {
+                  try {
+                    await deleteInboxItem(item.id);
+                    navigation.goBack();
+                  } catch {
+                    Alert.alert('Error', 'Failed to delete');
+                  }
+                },
+              },
+            ]);
+          }}
+          style={styles.trashButton}
+        >
+          <Icon source="delete-outline" size={22} color={theme.colors.onSurfaceVariant} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
@@ -285,6 +307,7 @@ const InboxDetailScreen = () => {
           Researched in {item.metadata.elapsed_seconds}s | {item.metadata.pages_scraped}/{item.metadata.pages_attempted} pages
         </Text>
       )}
+
       </ScrollView>
     </View>
   );
@@ -296,10 +319,16 @@ const styles = StyleSheet.create({
     paddingTop: 56,
     paddingHorizontal: 16,
     paddingBottom: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   backButton: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  trashButton: {
+    padding: 4,
   },
   content: { padding: 16, paddingBottom: 48 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },

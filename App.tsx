@@ -1,4 +1,5 @@
 import 'react-native-gesture-handler';
+import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StatusBar } from 'expo-status-bar';
@@ -9,6 +10,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AuthProvider } from './src/auth/AuthContext';
 import { DEV_MODE } from './src/config/env';
 import { ConfigProvider } from './src/contexts/ConfigContext';
+import { usePushNotifications } from './src/hooks/usePushNotifications';
 import RootNavigator from './src/navigation/RootNavigator';
 import { ThemeProvider, useThemePreference } from './src/theme/ThemeProvider';
 
@@ -18,6 +20,11 @@ if (__DEV__) {
   console.log('Dev Mode:', DEV_MODE);
 }
 
+const PushNotificationManager: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  usePushNotifications();
+  return <>{children}</>;
+};
+
 const AppContent = () => {
   const { paperTheme, navTheme, isDark } = useThemePreference();
 
@@ -26,10 +33,12 @@ const AppContent = () => {
       <QueryClientProvider client={queryClient}>
         <ConfigProvider>
           <AuthProvider>
-            <NavigationContainer theme={navTheme}>
-              <RootNavigator />
-              <StatusBar style={isDark ? 'light' : 'dark'} />
-            </NavigationContainer>
+            <PushNotificationManager>
+              <NavigationContainer theme={navTheme}>
+                <RootNavigator />
+                <StatusBar style={isDark ? 'light' : 'dark'} />
+              </NavigationContainer>
+            </PushNotificationManager>
           </AuthProvider>
         </ConfigProvider>
       </QueryClientProvider>

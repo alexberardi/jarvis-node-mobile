@@ -47,8 +47,8 @@ interface UseProvisioningReturn {
   confirmWifiSwitched: () => void;
   reset: () => void;
   setError: (error: string | null) => void;
-  fetchProvisioningToken: (householdId: string, accessToken: string, room?: string) => Promise<boolean>;
-  refreshProvisioningToken: (householdId: string, accessToken: string) => Promise<boolean>;
+  fetchProvisioningToken: (householdId: string, room?: string) => Promise<boolean>;
+  refreshProvisioningToken: (householdId: string) => Promise<boolean>;
 }
 
 export const useProvisioning = (): UseProvisioningReturn => {
@@ -136,7 +136,7 @@ export const useProvisioning = (): UseProvisioningReturn => {
   }, []);
 
   const fetchProvisioningToken = useCallback(
-    async (householdId: string, accessToken: string, room?: string): Promise<boolean> => {
+    async (householdId: string, room?: string): Promise<boolean> => {
       try {
         setError(null);
 
@@ -148,7 +148,7 @@ export const useProvisioning = (): UseProvisioningReturn => {
             household_id: householdId,
             ...(room && { room }),
           };
-          response = await requestProvisioningToken(request, accessToken);
+          response = await requestProvisioningToken(request);
         }
 
         setProvisioningToken(response.token);
@@ -171,7 +171,7 @@ export const useProvisioning = (): UseProvisioningReturn => {
   );
 
   const refreshProvisioningToken = useCallback(
-    async (householdId: string, accessToken: string): Promise<boolean> => {
+    async (householdId: string): Promise<boolean> => {
       try {
         setError(null);
 
@@ -188,7 +188,7 @@ export const useProvisioning = (): UseProvisioningReturn => {
             household_id: householdId,
             node_id: ccNodeId,
           };
-          response = await requestProvisioningToken(request, accessToken);
+          response = await requestProvisioningToken(request);
         }
 
         setProvisioningToken(response.token);

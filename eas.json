@@ -6,25 +6,34 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_PANTRY_URL": "http://localhost:7721"
+      },
       "ios": {
         "simulator": true,
-        "resourceClass": "m-small"
+        "resourceClass": "default"
       }
     },
     "development-device": {
       "developmentClient": true,
       "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_PANTRY_URL": "http://localhost:7721"
+      },
       "ios": {
-        "resourceClass": "m-small"
+        "resourceClass": "default"
       }
     },
     "preview": {
       "distribution": "internal",
       "ios": {
-        "resourceClass": "m-small"
+        "resourceClass": "default"
       }
     },
     "production": {
+      "env": {
+        "EXPO_PUBLIC_PANTRY_URL": "https://pantry.jarvisautomation.io"
+      },
       "ios": {
         "resourceClass": "m-medium"
       }

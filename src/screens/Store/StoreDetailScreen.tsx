@@ -15,9 +15,10 @@ import {
 } from 'react-native-paper';
 
 import apiClient from '../../api/apiClient';
+import { fetchNodeTools } from '../../api/chatApi';
 import { useAuth } from '../../auth/AuthContext';
 import { getDownloadInfo, getPackageDetail } from '../../api/pantryApi';
-import { requestInstall } from '../../api/packageInstallApi';
+import { requestCCInstall, requestInstall } from '../../api/packageInstallApi';
 import { getServiceConfig } from '../../config/serviceConfig';
 import { StoreStackParamList } from '../../navigation/types';
 import type { PackageDetail } from '../../types/Package';
@@ -52,6 +53,7 @@ const COMPONENT_ICONS: Record<string, string> = {
   agent: 'robot',
   device_protocol: 'access-point',
   device_manager: 'devices',
+  prompt_provider: 'brain',
 };
 
 const StoreDetailScreen = () => {
@@ -90,14 +92,15 @@ const StoreDetailScreen = () => {
 
   const fetchHouseholdNodes = async (): Promise<NodeInfo[]> => {
     const { commandCenterUrl } = getServiceConfig();
-    const res = await apiClient.get<NodeInfo[]>(
-      `${commandCenterUrl}/api/v0/admin/nodes`,
-    );
     const householdId = authState.activeHouseholdId;
-    return (res.data || []).filter(
-      (n: NodeInfo) => n.node_id && n.household_id === householdId,
+    const params = householdId ? `?household_id=${householdId}` : '';
+    const res = await apiClient.get<NodeInfo[]>(
+      `${commandCenterUrl}/api/v0/admin/nodes${params}`,
     );
+    return (res.data || []).filter((n: NodeInfo) => !!n.node_id);
   };
+
+  const hasPromptProvider = detail?.components.some((c) => c.type === 'prompt_provider');
 
   const handleInstall = async () => {
     if (!detail) return;
@@ -108,6 +111,37 @@ const StoreDetailScreen = () => {
       // Get download info (repo URL + exact git tag)
       const downloadInfo = await getDownloadInfo(commandName);
 
+      // Prompt providers install to CC directly (no node picker)
+      if (hasPromptProvider) {
+        Alert.alert(
+          'Install to Command Center',
+          'Prompt providers install to the command center, not to individual nodes. Continue?',
+          [
+            { text: 'Cancel', style: 'cancel', onPress: () => setInstalling(false) },
+            {
+              text: 'Install',
+              onPress: async () => {
+                try {
+                  const result = await requestCCInstall(
+                    downloadInfo.github_repo_url,
+                    downloadInfo.git_tag,
+                  );
+                  Alert.alert(
+                    'Installed',
+                    `Provider "${result.provider_name}" installed successfully.`,
+                  );
+                } catch (err: any) {
+                  Alert.alert('Install Error', err?.message || 'Failed to install provider');
+                } finally {
+                  setInstalling(false);
+                }
+              },
+            },
+          ],
+        );
+        return;
+      }
+
       // Get household nodes
       const nodes = await fetchHouseholdNodes();
 
@@ -116,7 +150,29 @@ const StoreDetailScreen = () => {
         return;
       }
 
+      // Check which nodes already have this command installed
+      const installedNodeIds: string[] = [];
+      await Promise.all(
+        nodes.map(async (node) => {
+          try {
+            const tools = await fetchNodeTools(node.node_id);
+            const toolNames = tools.client_tools.map((t: any) => t.function?.name).filter(Boolean);
+            if (toolNames.includes(downloadInfo.command_name)) {
+              installedNodeIds.push(node.node_id);
+            }
+          } catch {
+            // Node offline or unreachable — don't mark as installed
+          }
+        }),
+      );
+
+      const availableNodes = nodes.filter((n) => !installedNodeIds.includes(n.node_id));
+
       if (nodes.length === 1) {
+        if (installedNodeIds.includes(nodes[0].node_id)) {
+          Alert.alert('Already Installed', 'This command is already installed on your node.');
+          return;
+        }
         // Single node — install directly
         const node = nodes[0];
         const result = await requestInstall(
@@ -136,6 +192,8 @@ const StoreDetailScreen = () => {
           ]),
           packageName: detail.display_name || detail.command_name,
         });
+      } else if (availableNodes.length === 0) {
+        Alert.alert('Already Installed', 'This command is already installed on all your nodes.');
       } else {
         // Multiple nodes — show picker
         navigation.navigate('NodePickerSheet', {
@@ -144,6 +202,7 @@ const StoreDetailScreen = () => {
           githubRepoUrl: downloadInfo.github_repo_url,
           gitTag: downloadInfo.git_tag,
           packageName: detail.display_name || detail.command_name,
+          installedNodeIds: JSON.stringify(installedNodeIds),
         });
       }
     } catch (e: any) {
@@ -344,10 +403,10 @@ const StoreDetailScreen = () => {
             onPress={handleInstall}
             loading={installing}
             disabled={installing}
-            icon="download"
+            icon={hasPromptProvider ? 'brain' : 'download'}
             style={{ flex: 1 }}
           >
-            Install
+            {hasPromptProvider ? 'Install to Command Center' : 'Install'}
           </Button>
         </View>
       )}
