@@ -2,7 +2,6 @@ import * as Network from 'expo-network';
 
 import {
   ServiceConfig,
-  CLOUD_CONFIG_URL,
   loadCachedConfig,
   loadManualConfigUrl,
   cacheConfig,
@@ -224,19 +223,8 @@ export const discoverConfigService = async (
     }
   }
 
-  // Tier 3: Fall back to cloud
-  const cloudConfig = await fetchServiceUrls(CLOUD_CONFIG_URL);
-  if (cloudConfig) {
-    setServiceConfig(cloudConfig);
-    return {
-      config: cloudConfig,
-      isCloud: true,
-      fallbackMessage:
-        'No local Jarvis server found. Using cloud services.',
-    };
-  }
-
-  // Complete failure -- return empty config with message
+  // No cloud fallback — Jarvis is a privacy-first, self-hosted product.
+  // Users must explicitly configure a server URL or discover one locally.
   const emptyConfig: ServiceConfig = {
     authBaseUrl: '',
     commandCenterUrl: '',
@@ -247,8 +235,8 @@ export const discoverConfigService = async (
   setServiceConfig(emptyConfig);
   return {
     config: emptyConfig,
-    isCloud: true,
+    isCloud: false,
     fallbackMessage:
-      'Could not connect to any Jarvis services. Check that your server is running.',
+      'No Jarvis server found. Tap "Find Local Server" to scan your network, or enter your server URL manually.',
   };
 };
