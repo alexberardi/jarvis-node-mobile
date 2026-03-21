@@ -36,10 +36,13 @@
       },
       "ios": {
         "resourceClass": "m-medium"
-      }
+      },
+      "autoIncrement": true
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {}
+    }
   }
 }
