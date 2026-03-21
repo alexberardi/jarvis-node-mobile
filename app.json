@@ -18,6 +18,7 @@
         "buildNumber": "5",
       "infoPlist": {
         "NSCameraUsageDescription": "Camera access is required to scan QR codes for node pairing",
+        "NSLocalNetworkUsageDescription": "Jarvis needs local network access to discover your self-hosted server.",
         "ITSAppUsesNonExemptEncryption": false,
         "CFBundleURLTypes": [
           {
