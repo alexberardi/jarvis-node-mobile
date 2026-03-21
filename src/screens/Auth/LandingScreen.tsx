@@ -21,12 +21,13 @@ type Props = NativeStackScreenProps<AuthStackParamList, 'Landing'>;
 
 const LandingScreen = ({ navigation }: Props) => {
   const { isDark, toggleTheme } = useThemePreference();
-  const { fallbackMessage, config, manualUrl, setManualUrl } = useConfig();
+  const { fallbackMessage, config, manualUrl, setManualUrl, isUsingCloud, rediscover } = useConfig();
   const insets = useSafeAreaInsets();
   const theme = useTheme();
 
   const [dialogVisible, setDialogVisible] = useState(false);
   const [urlInput, setUrlInput] = useState('');
+  const [scanning, setScanning] = useState(false);
 
   const displayUrl = manualUrl || config.configServiceUrl || null;
 
@@ -49,6 +50,12 @@ const LandingScreen = ({ navigation }: Props) => {
   const openDialog = () => {
     setUrlInput(manualUrl || '');
     setDialogVisible(true);
+  };
+
+  const handleScanNetwork = async () => {
+    setScanning(true);
+    await rediscover();
+    setScanning(false);
   };
 
   return (
@@ -79,9 +86,9 @@ const LandingScreen = ({ navigation }: Props) => {
           Jarvis
         </Text>
         <Text variant="bodyLarge" style={styles.subtitle}>
-          Provision and manage your Jarvis voice nodes
+          Your home, your voice, fully private.
         </Text>
-        {displayUrl && (
+        {displayUrl ? (
           <Button
             mode="text"
             compact
@@ -91,6 +98,18 @@ const LandingScreen = ({ navigation }: Props) => {
             style={styles.serverUrl}
           >
             {displayUrl}
+          </Button>
+        ) : isUsingCloud && (
+          <Button
+            mode="outlined"
+            compact
+            onPress={handleScanNetwork}
+            icon="lan"
+            loading={scanning}
+            disabled={scanning}
+            style={styles.serverUrl}
+          >
+            {scanning ? 'Scanning...' : 'Find Local Server'}
           </Button>
         )}
       </View>

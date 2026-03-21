@@ -53,7 +53,7 @@ describe('LandingScreen', () => {
       { wrapper }
     );
 
-    expect(getByText('Provision and manage your Jarvis voice nodes')).toBeTruthy();
+    expect(getByText('Your home, your voice, fully private.')).toBeTruthy();
   });
 
   it('should render login and create account buttons', () => {
