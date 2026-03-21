@@ -252,7 +252,7 @@ const SettingsScreen = () => {
   };
 
   return (
-    <>
+    <Portal.Host>
     <ScrollView style={[styles.container, { backgroundColor: paperTheme.colors.background }]} contentContainerStyle={styles.content}>
       <View style={styles.header}>
         <Text variant="headlineMedium" style={styles.title}>
@@ -316,7 +316,7 @@ const SettingsScreen = () => {
                         </View>
                       </View>
                     </TouchableRipple>
-                    {h.role === 'admin' && (
+                    {(h.role === 'admin' || h.role === 'power_user') && (
                       <IconButton
                         icon="pencil"
                         size={18}
@@ -647,7 +647,7 @@ const SettingsScreen = () => {
         </Dialog.Actions>
       </Dialog>
     </Portal>
-    </>
+    </Portal.Host>
   );
 };
 
