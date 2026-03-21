@@ -50,3 +50,38 @@ jobs:
           name: coverage-report
           path: coverage/
           retention-days: 14
+
+  build-and-submit:
+    name: Build iOS & Submit to TestFlight
+    needs: [lint-and-typecheck, test]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Write Apple API key
+        run: echo "$APPLE_API_KEY_P8" > ${{ github.workspace }}/apple-api-key.p8
+        env:
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+
+      - name: Build & submit to TestFlight
+        run: eas build --platform ios --profile production --non-interactive --auto-submit
+        env:
+          EXPO_APPLE_APP_STORE_CONNECT_API_KEY_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          EXPO_APPLE_APP_STORE_CONNECT_API_KEY_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+          EXPO_APPLE_APP_STORE_CONNECT_API_KEY_PATH: ${{ github.workspace }}/apple-api-key.p8
