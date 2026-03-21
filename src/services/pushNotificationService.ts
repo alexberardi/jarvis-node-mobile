@@ -5,12 +5,31 @@
  * and registering/unregistering it with jarvis-notifications.
  */
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
 import { getServiceConfig } from '../config/serviceConfig';
+
+export const PUSH_NOTIFICATIONS_KEY = '@jarvis/push_notifications_enabled';
+
+/**
+ * Check if push notifications are enabled by the user.
+ * Defaults to true for existing users who haven't set a preference.
+ */
+export async function arePushNotificationsEnabled(): Promise<boolean> {
+  const val = await AsyncStorage.getItem(PUSH_NOTIFICATIONS_KEY);
+  return val !== 'false';
+}
+
+/**
+ * Set the push notifications preference.
+ */
+export async function setPushNotificationsEnabled(enabled: boolean): Promise<void> {
+  await AsyncStorage.setItem(PUSH_NOTIFICATIONS_KEY, enabled ? 'true' : 'false');
+}
 
 // Configure default notification behavior
 Notifications.setNotificationHandler({
