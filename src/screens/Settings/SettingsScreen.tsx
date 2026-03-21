@@ -177,21 +177,6 @@ const SettingsScreen = () => {
       .finally(() => setSmartHomeLoading(false));
   }, [householdId]);
 
-  const handleDeviceManagerChange = useCallback(
-    async (managerName: string) => {
-      if (!householdId || !smartHomeConfig) return;
-      const prev = smartHomeConfig.device_manager;
-      setSmartHomeConfig((c) => c ? { ...c, device_manager: managerName } : c);
-      try {
-        const updated = await updateSmartHomeConfig(householdId, { device_manager: managerName });
-        setSmartHomeConfig((c) => c ? { ...c, ...updated } : c);
-      } catch {
-        setSmartHomeConfig((c) => c ? { ...c, device_manager: prev } : c);
-      }
-    },
-    [householdId, smartHomeConfig],
-  );
-
   const handlePrimaryNodeChange = useCallback(
     async (newNodeId: string) => {
       if (!householdId || !smartHomeConfig) return;
@@ -202,6 +187,21 @@ const SettingsScreen = () => {
         setSmartHomeConfig((c) => c ? { ...c, ...updated } : c);
       } catch {
         setSmartHomeConfig((c) => c ? { ...c, primary_node_id: prev } : c);
+      }
+    },
+    [householdId, smartHomeConfig],
+  );
+
+  const handleExternalDevicesToggle = useCallback(
+    async (value: boolean) => {
+      if (!householdId || !smartHomeConfig) return;
+      const prev = smartHomeConfig.use_external_devices;
+      setSmartHomeConfig((c) => c ? { ...c, use_external_devices: value } : c);
+      try {
+        const updated = await updateSmartHomeConfig(householdId, { use_external_devices: value });
+        setSmartHomeConfig((c) => c ? { ...c, ...updated } : c);
+      } catch {
+        setSmartHomeConfig((c) => c ? { ...c, use_external_devices: prev } : c);
       }
     },
     [householdId, smartHomeConfig],
@@ -240,7 +240,7 @@ const SettingsScreen = () => {
         <Text variant="headlineMedium" style={styles.title}>
           Settings
         </Text>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.closeButton}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.closeButton} testID="settings-close">
           <Icon source="close" size={24} color={theme.colors.onSurface} />
         </TouchableOpacity>
       </View>
@@ -277,7 +277,7 @@ const SettingsScreen = () => {
               {authState.households.map((h) => {
                 const isActive = h.id === authState.activeHouseholdId;
                 return (
-                  <View key={h.id} style={styles.radioRow}>
+                  <View key={h.id} style={styles.radioRow} testID={`household-row-${h.id}`}>
                     <TouchableRipple
                       onPress={() => !isActive && switchHousehold(h.id)}
                       style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}
@@ -289,10 +289,10 @@ const SettingsScreen = () => {
                           color={isActive ? theme.colors.primary : theme.colors.onSurfaceVariant}
                         />
                         <View style={{ flex: 1, marginLeft: 12 }}>
-                          <Text variant="bodyMedium" style={{ fontWeight: '500' }}>
+                          <Text variant="bodyMedium" style={{ fontWeight: '500' }} testID={`household-name-${h.id}`}>
                             {h.name}
                           </Text>
-                          <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                          <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }} testID={`household-role-${h.id}`}>
                             {h.role.replace('_', ' ')}
                           </Text>
                         </View>
@@ -303,6 +303,8 @@ const SettingsScreen = () => {
                         icon="pencil"
                         size={18}
                         onPress={() => openEditDialog(h.id, h.name)}
+                        testID={`household-edit-${h.id}`}
+                        accessibilityLabel="Edit household"
                       />
                     )}
                   </View>
@@ -326,6 +328,7 @@ const SettingsScreen = () => {
             autoCapitalize="characters"
             autoCorrect={false}
             style={{ fontFamily: 'monospace', letterSpacing: 4, marginBottom: 4 }}
+            testID="join-invite-code"
           />
           {joinStatus?.valid && (
             <HelperText type="info" visible style={{ color: theme.colors.primary }}>
@@ -343,6 +346,7 @@ const SettingsScreen = () => {
             onPress={handleJoinHousehold}
             disabled={!joinStatus?.valid}
             style={{ alignSelf: 'flex-start', marginTop: 4 }}
+            testID="join-household-button"
           >
             Join
           </Button>
@@ -376,7 +380,11 @@ const SettingsScreen = () => {
                 Automatically speak Jarvis responses aloud
               </Text>
             </View>
-            <Switch value={autoPlayTTS} onValueChange={handleAutoPlayToggle} />
+            <Switch
+              value={autoPlayTTS}
+              onValueChange={handleAutoPlayToggle}
+              testID={autoPlayTTS ? 'auto-play-on' : 'auto-play-off'}
+            />
           </View>
         </Card.Content>
       </Card>
@@ -435,39 +443,6 @@ const SettingsScreen = () => {
               <ActivityIndicator size="small" style={{ marginVertical: 12 }} />
             ) : smartHomeConfig ? (
               <>
-                {/* Device Manager */}
-                <Text variant="bodySmall" style={[styles.hint, { marginBottom: 8 }]}>
-                  Choose how devices are discovered and listed
-                </Text>
-                {[
-                  { name: 'jarvis_direct', label: 'Jarvis Direct', desc: 'WiFi devices controlled directly (LIFX, Kasa, etc.)' },
-                  { name: 'home_assistant', label: 'Home Assistant', desc: 'Devices managed by your Home Assistant instance' },
-                ].map((mgr, i, arr) => {
-                  const isSelected = mgr.name === smartHomeConfig.device_manager;
-                  return (
-                    <View key={mgr.name}>
-                      <TouchableRipple onPress={() => handleDeviceManagerChange(mgr.name)}>
-                        <View style={styles.radioRow}>
-                          <Icon
-                            source={isSelected ? 'radiobox-marked' : 'radiobox-blank'}
-                            size={22}
-                            color={isSelected ? theme.colors.primary : theme.colors.onSurfaceVariant}
-                          />
-                          <View style={{ flex: 1, marginLeft: 12 }}>
-                            <Text variant="bodyMedium" style={{ fontWeight: '500' }}>
-                              {mgr.label}
-                            </Text>
-                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                              {mgr.desc}
-                            </Text>
-                          </View>
-                        </View>
-                      </TouchableRipple>
-                      {i < arr.length - 1 && <Divider style={{ marginVertical: 2 }} />}
-                    </View>
-                  );
-                })}
-
                 {/* Primary Node */}
                 {smartHomeConfig.nodes.length > 0 && (
                   <>
@@ -503,6 +478,22 @@ const SettingsScreen = () => {
                     })}
                   </>
                 )}
+
+                {/* Use External Devices toggle */}
+                <Divider style={{ marginVertical: 12 }} />
+                <View style={styles.switchRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text variant="bodyMedium">Use External Devices</Text>
+                    <Text variant="bodySmall" style={styles.hint}>
+                      Show devices from your device manager (read-only)
+                    </Text>
+                  </View>
+                  <Switch
+                    value={smartHomeConfig.use_external_devices}
+                    onValueChange={handleExternalDevicesToggle}
+                    testID="use-external-devices-toggle"
+                  />
+                </View>
               </>
             ) : (
               <Text variant="bodySmall" style={styles.hint}>
@@ -566,7 +557,7 @@ const SettingsScreen = () => {
 
     {/* Household Edit Dialog */}
     <Portal>
-      <Dialog visible={!!editHouseholdId} onDismiss={() => setEditHouseholdId(null)}>
+      <Dialog visible={!!editHouseholdId} onDismiss={() => setEditHouseholdId(null)} testID="edit-household-dialog">
         <Dialog.Title>Edit Household</Dialog.Title>
         <Dialog.Content>
           <TextInput
@@ -575,6 +566,7 @@ const SettingsScreen = () => {
             value={editName}
             onChangeText={setEditName}
             style={{ marginBottom: 16 }}
+            testID="edit-household-name"
           />
 
           {editMembers.length > 0 && (
@@ -583,7 +575,7 @@ const SettingsScreen = () => {
                 Members
               </Text>
               {editMembers.map((m) => (
-                <View key={m.user_id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 6 }}>
+                <View key={m.user_id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 6 }} testID={`member-row-${m.user_id}`}>
                   <View style={{ flex: 1 }}>
                     <Text variant="bodyMedium">{m.username || m.email}</Text>
                     <Text variant="bodySmall" style={{ opacity: 0.5 }}>
@@ -595,6 +587,7 @@ const SettingsScreen = () => {
                       icon="close"
                       size={18}
                       onPress={() => handleRemoveMember(m.user_id, m.email)}
+                      testID={`member-remove-${m.user_id}`}
                     />
                   )}
                 </View>
@@ -603,11 +596,12 @@ const SettingsScreen = () => {
           )}
         </Dialog.Content>
         <Dialog.Actions>
-          <Button onPress={() => setEditHouseholdId(null)}>Cancel</Button>
+          <Button onPress={() => setEditHouseholdId(null)} testID="edit-household-cancel">Cancel</Button>
           <Button
             onPress={handleSaveHouseholdName}
             loading={editLoading}
             disabled={editLoading || !editName.trim()}
+            testID="edit-household-save"
           >
             Save
           </Button>

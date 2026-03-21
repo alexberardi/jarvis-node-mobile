@@ -226,6 +226,40 @@ export interface DeviceScanPollResponse {
   error_message?: string;
 }
 
+/** A device returned by the device-list MQTT flow (external/node-managed). */
+export interface ExternalDeviceItem {
+  name: string;
+  domain: string;
+  entity_id: string;
+  is_controllable: boolean;
+  manufacturer: string | null;
+  model: string | null;
+  protocol: string | null;
+  local_ip: string | null;
+  mac_address: string | null;
+  cloud_id: string | null;
+  device_class: string | null;
+  source: string;
+  area: string | null;
+  state: string | null;
+  already_registered: boolean;
+  existing_device_id: string | null;
+  room_id: string | null;
+  room_name: string | null;
+  supported_actions: JarvisButton[] | null;
+}
+
+/** Poll response for device-list requests (external devices via MQTT). */
+export interface DeviceListPollResponse {
+  status: 'pending' | 'completed' | 'failed';
+  request_id: string;
+  manager_name: string | null;
+  can_edit_devices: boolean | null;
+  devices: ExternalDeviceItem[] | null;
+  device_count: number | null;
+  error_message: string | null;
+}
+
 // Enriched entity for display in import screen
 export interface EnrichedEntity {
   entity_id: string;

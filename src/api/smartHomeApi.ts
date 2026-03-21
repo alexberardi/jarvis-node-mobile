@@ -4,6 +4,7 @@ import {
   RoomCreateRequest,
   DeviceImportItem,
   DeviceListItem,
+  DeviceListPollResponse,
   DeviceScanPollResponse,
   DeviceState,
   ConfigPushRequest,
@@ -183,6 +184,7 @@ export interface NodeOption {
 export interface SmartHomeConfig {
   device_manager: string;
   primary_node_id: string;
+  use_external_devices: boolean;
   nodes: NodeOption[];
 }
 
@@ -197,11 +199,60 @@ export const getSmartHomeConfig = async (
 
 export const updateSmartHomeConfig = async (
   householdId: string,
-  updates: { device_manager?: string; primary_node_id?: string },
-): Promise<{ device_manager: string; primary_node_id: string }> => {
+  updates: { device_manager?: string; primary_node_id?: string; use_external_devices?: boolean },
+): Promise<{ device_manager: string; primary_node_id: string; use_external_devices: boolean }> => {
   const res = await apiClient.put(
     `${getBaseUrl()}/api/v0/households/${householdId}/smart-home/config`,
     updates,
+  );
+  return res.data;
+};
+
+// =============================================================================
+// Device List (external devices via MQTT: mobile → CC → MQTT → node → CC → mobile)
+// =============================================================================
+
+export const requestDeviceList = async (
+  nodeId: string,
+): Promise<{ id: string; status: string }> => {
+  const res = await apiClient.post<{ id: string; status: string }>(
+    `${getBaseUrl()}/api/v0/nodes/${nodeId}/device-list/request`,
+  );
+  return res.data;
+};
+
+export const pollDeviceList = async (
+  nodeId: string,
+  requestId: string,
+): Promise<DeviceListPollResponse> => {
+  const res = await apiClient.get<DeviceListPollResponse>(
+    `${getBaseUrl()}/api/v0/nodes/${nodeId}/device-list/${requestId}`,
+  );
+  return res.data;
+};
+
+// =============================================================================
+// External Device Control (non-persisted devices via MQTT)
+// =============================================================================
+
+export const controlExternalDevice = async (
+  householdId: string,
+  entityId: string,
+  action: string,
+  source: string,
+  data?: {
+    protocol?: string;
+    cloud_id?: string;
+    model?: string;
+    local_ip?: string;
+    mac_address?: string;
+    [key: string]: unknown;
+  },
+): Promise<DeviceControlResponse> => {
+  const res = await apiClient.post<DeviceControlResponse>(
+    `${getBaseUrl()}/api/v0/households/${householdId}/devices/control-external`,
+    { entity_id: entityId, action, source, ...data },
+    { timeout: 15000 },
   );
   return res.data;
 };
