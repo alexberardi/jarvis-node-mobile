@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export const CLOUD_CONFIG_URL = 'https://config.jarvisautomation.io';
+export const DEMO_CONFIG_URL = 'https://demo-config.jarvisautomation.io';
 
 const CACHE_KEY = '@jarvis_node_mobile/service_config';
 const MANUAL_URL_KEY = '@jarvis_node_mobile/manual_config_url';

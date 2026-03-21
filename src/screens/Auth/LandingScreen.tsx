@@ -13,6 +13,7 @@ import {
 } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { DEMO_CONFIG_URL } from '../../config/serviceConfig';
 import { useConfig } from '../../contexts/ConfigContext';
 import { AuthStackParamList } from '../../navigation/types';
 import { useThemePreference } from '../../theme/ThemeProvider';
@@ -56,6 +57,10 @@ const LandingScreen = ({ navigation }: Props) => {
     setScanning(true);
     await rediscover();
     setScanning(false);
+  };
+
+  const handleTryDemo = async () => {
+    await setManualUrl(DEMO_CONFIG_URL);
   };
 
   return (
@@ -129,6 +134,16 @@ const LandingScreen = ({ navigation }: Props) => {
         >
           Create Account
         </Button>
+        {!displayUrl && (
+          <Button
+            mode="text"
+            compact
+            onPress={handleTryDemo}
+            labelStyle={{ fontSize: 12, color: theme.colors.onSurfaceVariant }}
+          >
+            Try Demo
+          </Button>
+        )}
       </View>
 
       <Portal>
