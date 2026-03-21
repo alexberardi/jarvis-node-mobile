@@ -16,6 +16,9 @@ const mockToggleTheme = jest.fn();
 jest.mock('../../src/contexts/ConfigContext', () => ({
   useConfig: () => ({
     fallbackMessage: null,
+    config: { configServiceUrl: null },
+    manualUrl: null,
+    setManualUrl: jest.fn(),
   }),
 }));
 
@@ -41,7 +44,7 @@ describe('LandingScreen', () => {
       { wrapper }
     );
 
-    expect(getByText('Jarvis Node')).toBeTruthy();
+    expect(getByText('Jarvis')).toBeTruthy();
   });
 
   it('should render subtitle', () => {
