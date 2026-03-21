@@ -21,7 +21,7 @@ type Props = NativeStackScreenProps<AuthStackParamList, 'Landing'>;
 
 const LandingScreen = ({ navigation }: Props) => {
   const { isDark, toggleTheme } = useThemePreference();
-  const { fallbackMessage, config, manualUrl, setManualUrl, isUsingCloud, rediscover } = useConfig();
+  const { fallbackMessage, config, manualUrl, setManualUrl, rediscover } = useConfig();
   const insets = useSafeAreaInsets();
   const theme = useTheme();
 
@@ -99,7 +99,7 @@ const LandingScreen = ({ navigation }: Props) => {
           >
             {displayUrl}
           </Button>
-        ) : isUsingCloud && (
+        ) : !config.configServiceUrl && (
           <Button
             mode="outlined"
             compact
