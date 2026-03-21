@@ -1,6 +1,16 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { StyleSheet, View } from 'react-native';
-import { Banner, Button, IconButton, Text } from 'react-native-paper';
+import React, { useState } from 'react';
+import { Alert, StyleSheet, View } from 'react-native';
+import {
+  Banner,
+  Button,
+  Dialog,
+  IconButton,
+  Portal,
+  Text,
+  TextInput,
+  useTheme,
+} from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useConfig } from '../../contexts/ConfigContext';
@@ -11,8 +21,35 @@ type Props = NativeStackScreenProps<AuthStackParamList, 'Landing'>;
 
 const LandingScreen = ({ navigation }: Props) => {
   const { isDark, toggleTheme } = useThemePreference();
-  const { fallbackMessage } = useConfig();
+  const { fallbackMessage, config, manualUrl, setManualUrl } = useConfig();
   const insets = useSafeAreaInsets();
+  const theme = useTheme();
+
+  const [dialogVisible, setDialogVisible] = useState(false);
+  const [urlInput, setUrlInput] = useState('');
+
+  const displayUrl = manualUrl || config.configServiceUrl || null;
+
+  const handleSaveUrl = async () => {
+    const trimmed = urlInput.trim().replace(/\/+$/, '');
+    if (!trimmed) {
+      Alert.alert('Error', 'Please enter a URL.');
+      return;
+    }
+    setDialogVisible(false);
+    await setManualUrl(trimmed);
+  };
+
+  const handleClearUrl = async () => {
+    setDialogVisible(false);
+    setUrlInput('');
+    await setManualUrl(null);
+  };
+
+  const openDialog = () => {
+    setUrlInput(manualUrl || '');
+    setDialogVisible(true);
+  };
 
   return (
     <View style={styles.container}>
@@ -25,19 +62,37 @@ const LandingScreen = ({ navigation }: Props) => {
           {fallbackMessage}
         </Banner>
       )}
-      <IconButton
-        icon={isDark ? 'weather-sunny' : 'weather-night'}
-        onPress={toggleTheme}
-        style={[styles.themeToggle, { top: insets.top + 8 }]}
-        accessibilityLabel="Toggle dark mode"
-      />
+      <View style={[styles.topBar, { top: insets.top + 8 }]}>
+        <IconButton
+          icon="server-network"
+          onPress={openDialog}
+          accessibilityLabel="Set server URL"
+        />
+        <IconButton
+          icon={isDark ? 'weather-sunny' : 'weather-night'}
+          onPress={toggleTheme}
+          accessibilityLabel="Toggle dark mode"
+        />
+      </View>
       <View style={styles.content}>
         <Text variant="displaySmall" style={styles.title}>
-          Jarvis Node
+          Jarvis
         </Text>
         <Text variant="bodyLarge" style={styles.subtitle}>
           Provision and manage your Jarvis voice nodes
         </Text>
+        {displayUrl && (
+          <Button
+            mode="text"
+            compact
+            onPress={openDialog}
+            icon="pencil-outline"
+            labelStyle={{ fontSize: 12, color: theme.colors.onSurfaceVariant }}
+            style={styles.serverUrl}
+          >
+            {displayUrl}
+          </Button>
+        )}
       </View>
 
       <View style={styles.buttons}>
@@ -56,6 +111,36 @@ const LandingScreen = ({ navigation }: Props) => {
           Create Account
         </Button>
       </View>
+
+      <Portal>
+        <Dialog visible={dialogVisible} onDismiss={() => setDialogVisible(false)}>
+          <Dialog.Title>Server URL</Dialog.Title>
+          <Dialog.Content>
+            <Text variant="bodySmall" style={{ marginBottom: 12, color: theme.colors.onSurfaceVariant }}>
+              Enter the URL of your Jarvis config service. Leave blank to auto-discover on your local network.
+            </Text>
+            <TextInput
+              mode="outlined"
+              label="Config Service URL"
+              value={urlInput}
+              onChangeText={setUrlInput}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+              placeholder="http://192.168.1.100:7700"
+            />
+          </Dialog.Content>
+          <Dialog.Actions>
+            {manualUrl && (
+              <Button onPress={handleClearUrl} textColor={theme.colors.error}>
+                Clear
+              </Button>
+            )}
+            <Button onPress={() => setDialogVisible(false)}>Cancel</Button>
+            <Button onPress={handleSaveUrl}>Save</Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
     </View>
   );
 };
@@ -66,9 +151,10 @@ const styles = StyleSheet.create({
     padding: 24,
     justifyContent: 'space-between',
   },
-  themeToggle: {
+  topBar: {
     position: 'absolute',
     right: 8,
+    flexDirection: 'row',
     zIndex: 1,
   },
   content: {
@@ -84,6 +170,9 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     opacity: 0.7,
     paddingHorizontal: 32,
+  },
+  serverUrl: {
+    marginTop: 12,
   },
   buttons: {
     gap: 12,
