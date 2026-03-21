@@ -7,6 +7,7 @@ import AuthNavigator from './AuthNavigator';
 import InboxStackNavigator from './InboxStackNavigator';
 import MainTabNavigator from './MainTabNavigator';
 import SmartHomeSetupNavigator from './SmartHomeSetupNavigator';
+import HouseholdEditScreen from '../screens/Settings/HouseholdEditScreen';
 import SettingsScreen from '../screens/Settings/SettingsScreen';
 import { RootStackParamList } from './types';
 
@@ -42,6 +43,7 @@ const RootNavigator = () => {
         component={SettingsScreen}
         options={{ presentation: 'modal' }}
       />
+      <Stack.Screen name="HouseholdEdit" component={HouseholdEditScreen} />
       <Stack.Screen
         name="SmartHomeSetup"
         component={SmartHomeSetupNavigator}
