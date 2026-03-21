@@ -174,7 +174,9 @@ const scanLocalNetwork = async (): Promise<string | null> => {
  * 2. Scan local network for config service
  * 3. Fall back to cloud config
  */
-export const discoverConfigService = async (): Promise<DiscoveryResult> => {
+export const discoverConfigService = async (
+  skipNetworkScan = false,
+): Promise<DiscoveryResult> => {
   // Tier 0: Try manual URL override
   const manualUrl = await loadManualConfigUrl();
   if (manualUrl) {
@@ -206,17 +208,19 @@ export const discoverConfigService = async (): Promise<DiscoveryResult> => {
   }
 
   // Tier 2: Scan local network (with timeout)
-  const scanResult = await Promise.race([
-    scanLocalNetwork(),
-    new Promise<null>((resolve) => setTimeout(() => resolve(null), DISCOVERY_TIMEOUT_MS)),
-  ]);
+  if (!skipNetworkScan) {
+    const scanResult = await Promise.race([
+      scanLocalNetwork(),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), DISCOVERY_TIMEOUT_MS)),
+    ]);
 
-  if (scanResult) {
-    const config = await fetchServiceUrls(scanResult);
-    if (config) {
-      setServiceConfig(config);
-      await cacheConfig(config);
-      return { config, isCloud: false, fallbackMessage: null };
+    if (scanResult) {
+      const config = await fetchServiceUrls(scanResult);
+      if (config) {
+        setServiceConfig(config);
+        await cacheConfig(config);
+        return { config, isCloud: false, fallbackMessage: null };
+      }
     }
   }
 
