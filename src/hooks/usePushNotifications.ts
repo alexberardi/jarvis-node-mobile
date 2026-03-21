@@ -11,6 +11,7 @@ import * as Notifications from 'expo-notifications';
 
 import { useAuth } from '../auth/AuthContext';
 import {
+  arePushNotificationsEnabled,
   getExpoPushToken,
   registerPushToken,
   unregisterPushToken,
@@ -28,11 +29,14 @@ export function usePushNotifications(onNotificationTap?: (data: Record<string, a
     if (state.isAuthenticated && state.accessToken && !prevAuthRef.current) {
       prevAuthRef.current = true;
 
-      getExpoPushToken().then((token) => {
-        if (token && state.accessToken) {
-          setExpoPushToken(token);
-          registerPushToken(state.accessToken, token);
-        }
+      arePushNotificationsEnabled().then((enabled) => {
+        if (!enabled) return;
+        getExpoPushToken().then((token) => {
+          if (token && state.accessToken) {
+            setExpoPushToken(token);
+            registerPushToken(state.accessToken, token);
+          }
+        });
       });
     }
 

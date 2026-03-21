@@ -1,11 +1,12 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useState, useMemo, useCallback } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { Appbar, Button, HelperText, TextInput, useTheme } from 'react-native-paper';
+import { Appbar, Button, Checkbox, HelperText, Text, TextInput, useTheme } from 'react-native-paper';
 
 import { useAuth } from '../../auth/AuthContext';
 import authApi from '../../api/authApi';
 import { AuthStackParamList } from '../../navigation/types';
+import { setPushNotificationsEnabled } from '../../services/pushNotificationService';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Register'>;
 
@@ -19,6 +20,7 @@ const RegisterScreen = ({ navigation }: Props) => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [enablePush, setEnablePush] = useState(true);
 
   const handleInviteBlur = useCallback(async () => {
     const code = inviteCode.trim();
@@ -59,6 +61,7 @@ const RegisterScreen = ({ navigation }: Props) => {
 
     setLoading(true);
     try {
+      await setPushNotificationsEnabled(enablePush);
       await register(email.trim(), password, undefined, inviteCode.trim() || undefined);
     } catch (err: unknown) {
       console.debug('[RegisterScreen] Registration failed:', err);
@@ -126,6 +129,21 @@ const RegisterScreen = ({ navigation }: Props) => {
           error={!!confirmPassword && password !== confirmPassword}
         />
 
+        <View style={styles.checkboxRow}>
+          <Checkbox
+            status={enablePush ? 'checked' : 'unchecked'}
+            onPress={() => setEnablePush(!enablePush)}
+          />
+          <View style={{ flex: 1 }}>
+            <Text variant="bodyMedium" onPress={() => setEnablePush(!enablePush)}>
+              Enable push notifications
+            </Text>
+            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+              Disable for a fully private, local-only experience. You can change this later in Settings.
+            </Text>
+          </View>
+        </View>
+
         {showInlineError ? (
           <HelperText type="error" visible>
             {showInlineError}
@@ -161,6 +179,11 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 16,
     gap: 12,
+  },
+  checkboxRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 4,
   },
 });
 
