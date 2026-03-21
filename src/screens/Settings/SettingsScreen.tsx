@@ -31,6 +31,11 @@ import {
   type SmartHomeConfig,
 } from '../../api/smartHomeApi';
 
+import {
+  arePushNotificationsEnabled,
+  setPushNotificationsEnabled,
+} from '../../services/pushNotificationService';
+
 export const AUTO_PLAY_TTS_KEY = '@jarvis/auto_play_tts';
 
 const THEME_BUTTONS = [
@@ -50,6 +55,7 @@ const SettingsScreen = () => {
   const [urlInput, setUrlInput] = useState(manualUrl ?? '');
   const [saving, setSaving] = useState(false);
   const [autoPlayTTS, setAutoPlayTTS] = useState(false);
+  const [pushEnabled, setPushEnabled] = useState(true);
 
   // Household join flow
   const [joinCode, setJoinCode] = useState('');
@@ -156,16 +162,28 @@ const SettingsScreen = () => {
 
   const householdId = authState.activeHouseholdId;
 
-  // Load auto-play setting
+  // Load settings
   useEffect(() => {
     AsyncStorage.getItem(AUTO_PLAY_TTS_KEY).then((val) => {
       setAutoPlayTTS(val === 'true');
     });
+    arePushNotificationsEnabled().then(setPushEnabled);
   }, []);
 
   const handleAutoPlayToggle = useCallback(async (value: boolean) => {
     setAutoPlayTTS(value);
     await AsyncStorage.setItem(AUTO_PLAY_TTS_KEY, value ? 'true' : 'false');
+  }, []);
+
+  const handlePushToggle = useCallback(async (value: boolean) => {
+    setPushEnabled(value);
+    await setPushNotificationsEnabled(value);
+    if (!value) {
+      Alert.alert(
+        'Notifications Disabled',
+        'Push notifications have been turned off. Restart the app for this to take full effect.',
+      );
+    }
   }, []);
 
   useEffect(() => {
@@ -384,6 +402,27 @@ const SettingsScreen = () => {
               value={autoPlayTTS}
               onValueChange={handleAutoPlayToggle}
               testID={autoPlayTTS ? 'auto-play-on' : 'auto-play-off'}
+            />
+          </View>
+        </Card.Content>
+      </Card>
+
+      {/* Privacy */}
+      <Card style={styles.card}>
+        <Card.Content>
+          <Text variant="titleMedium" style={styles.sectionTitle}>
+            Privacy
+          </Text>
+          <View style={styles.switchRow}>
+            <View style={{ flex: 1 }}>
+              <Text variant="bodyMedium">Push notifications</Text>
+              <Text variant="bodySmall" style={styles.hint}>
+                When enabled, alerts are delivered through Expo's push service. Disable for a fully local experience.
+              </Text>
+            </View>
+            <Switch
+              value={pushEnabled}
+              onValueChange={handlePushToggle}
             />
           </View>
         </Card.Content>
