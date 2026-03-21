@@ -31,6 +31,7 @@ export type NodesStackParamList = {
 export type DevicesStackParamList = {
   DevicesList: undefined;
   DeviceEdit: { deviceId: string; householdId: string };
+  ExternalDeviceDetail: { device: string; householdId: string };
   RoomManagement: undefined;
   DeviceDiscovery: { nodeId: string };
 };
@@ -59,7 +60,9 @@ export type SmartHomeSetupParamList = {
 
 export type RoutinesStackParamList = {
   RoutineList: undefined;
-  RoutineEdit: { routineId?: string };
+  RoutineSuggest: undefined;
+  RoutineBuilder: undefined;
+  RoutineEdit: { routineId?: string; routineData?: string };
   RoutineNodePicker: { routineId: string };
 };
 
