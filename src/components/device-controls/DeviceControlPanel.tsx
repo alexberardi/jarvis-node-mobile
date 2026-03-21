@@ -21,6 +21,8 @@ interface Props {
   fallbackActions: JarvisButton[] | null;
   onAction: (action: JarvisButton) => void;
   actionLoading: string | null;
+  /** When true, skip the device state query and render action buttons directly. */
+  skipStateQuery?: boolean;
 }
 
 /** Map device domain to the control_type used by domain components. */
@@ -81,6 +83,7 @@ const DeviceControlPanel: React.FC<Props> = ({
   fallbackActions,
   onAction,
   actionLoading,
+  skipStateQuery = false,
 }) => {
   const theme = useTheme();
   const queryClient = useQueryClient();
@@ -94,6 +97,7 @@ const DeviceControlPanel: React.FC<Props> = ({
     queryFn: () => getDeviceState(householdId, deviceId),
     staleTime: 10_000,
     retry: 1,
+    enabled: !skipStateQuery,
   });
 
   const invalidateState = useCallback(() => {
@@ -101,6 +105,20 @@ const DeviceControlPanel: React.FC<Props> = ({
       queryKey: ['deviceState', householdId, deviceId],
     });
   }, [queryClient, householdId, deviceId]);
+
+  // When skipping state query, render action buttons directly
+  if (skipStateQuery) {
+    if (fallbackActions && fallbackActions.length > 0) {
+      return (
+        <ActionButtons
+          actions={fallbackActions}
+          onPress={onAction}
+          loadingAction={actionLoading}
+        />
+      );
+    }
+    return null;
+  }
 
   // Loading state
   if (isLoading) {
