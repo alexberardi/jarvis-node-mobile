@@ -15,6 +15,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.jarvis.nodemobile",
+        "buildNumber": "5",
       "infoPlist": {
         "NSCameraUsageDescription": "Camera access is required to scan QR codes for node pairing",
         "ITSAppUsesNonExemptEncryption": false,
