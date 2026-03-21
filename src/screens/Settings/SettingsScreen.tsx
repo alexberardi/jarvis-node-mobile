@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import {
@@ -7,7 +8,6 @@ import {
   Button,
   Card,
   Chip,
-  Dialog,
   Divider,
   HelperText,
   Icon,
@@ -31,6 +31,7 @@ import {
   type SmartHomeConfig,
 } from '../../api/smartHomeApi';
 
+import type { RootStackParamList } from '../../navigation/types';
 import {
   arePushNotificationsEnabled,
   setPushNotificationsEnabled,
@@ -45,7 +46,7 @@ const THEME_BUTTONS = [
 ] as const;
 
 const SettingsScreen = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const theme = useTheme();
   const { state: authState, logout, switchHousehold, fetchHouseholds } = useAuth();
   const { config, isUsingCloud, manualUrl, rediscover, setManualUrl } =
@@ -92,69 +93,6 @@ const SettingsScreen = () => {
       setJoinError(msg);
     }
   }, [joinCode, authState.accessToken, fetchHouseholds]);
-
-  // Household edit dialog
-  const [editHouseholdId, setEditHouseholdId] = useState<string | null>(null);
-  const [editName, setEditName] = useState('');
-  const [editMembers, setEditMembers] = useState<{ user_id: number; username: string; email: string; role: string }[]>([]);
-  const [editLoading, setEditLoading] = useState(false);
-
-  const openEditDialog = useCallback(async (hId: string, name: string) => {
-    setEditHouseholdId(hId);
-    setEditName(name);
-    setEditMembers([]);
-    try {
-      const res = await authApi.get<{ user_id: number; username: string; email: string; role: string }[]>(
-        `/households/${hId}/members`,
-        { headers: { Authorization: `Bearer ${authState.accessToken}` } },
-      );
-      setEditMembers(res.data);
-    } catch {
-      // Members may fail to load — still show name editing
-    }
-  }, [authState.accessToken]);
-
-  const handleSaveHouseholdName = useCallback(async () => {
-    if (!editHouseholdId || !editName.trim()) return;
-    setEditLoading(true);
-    try {
-      await authApi.patch(
-        `/households/${editHouseholdId}`,
-        { name: editName.trim() },
-        { headers: { Authorization: `Bearer ${authState.accessToken}` } },
-      );
-      fetchHouseholds();
-      setEditHouseholdId(null);
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to update';
-      Alert.alert('Error', msg);
-    } finally {
-      setEditLoading(false);
-    }
-  }, [editHouseholdId, editName, authState.accessToken, fetchHouseholds]);
-
-  const handleRemoveMember = useCallback(async (userId: number, email: string) => {
-    if (!editHouseholdId) return;
-    Alert.alert('Remove Member', `Remove ${email} from this household?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Remove',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await authApi.delete(
-              `/households/${editHouseholdId}/members/${userId}`,
-              { headers: { Authorization: `Bearer ${authState.accessToken}` } },
-            );
-            setEditMembers((prev) => prev.filter((m) => m.user_id !== userId));
-          } catch (err: unknown) {
-            const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to remove';
-            Alert.alert('Error', msg);
-          }
-        },
-      },
-    ]);
-  }, [editHouseholdId, authState.accessToken]);
 
   // Smart Home config (device manager + primary node)
   const [smartHomeConfig, setSmartHomeConfig] = useState<SmartHomeConfig | null>(null);
@@ -320,7 +258,7 @@ const SettingsScreen = () => {
                       <IconButton
                         icon="pencil"
                         size={18}
-                        onPress={() => openEditDialog(h.id, h.name)}
+                        onPress={() => navigation.navigate('HouseholdEdit', { householdId: h.id, householdName: h.name })}
                         testID={`household-edit-${h.id}`}
                         accessibilityLabel="Edit household"
                       />
@@ -594,59 +532,6 @@ const SettingsScreen = () => {
 
     </ScrollView>
 
-    {/* Household Edit Dialog */}
-    <Portal>
-      <Dialog visible={!!editHouseholdId} onDismiss={() => setEditHouseholdId(null)} testID="edit-household-dialog">
-        <Dialog.Title>Edit Household</Dialog.Title>
-        <Dialog.Content>
-          <TextInput
-            mode="outlined"
-            label="Household Name"
-            value={editName}
-            onChangeText={setEditName}
-            style={{ marginBottom: 16 }}
-            testID="edit-household-name"
-          />
-
-          {editMembers.length > 0 && (
-            <>
-              <Text variant="titleSmall" style={{ fontWeight: '600', marginBottom: 8 }}>
-                Members
-              </Text>
-              {editMembers.map((m) => (
-                <View key={m.user_id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 6 }} testID={`member-row-${m.user_id}`}>
-                  <View style={{ flex: 1 }}>
-                    <Text variant="bodyMedium">{m.username || m.email}</Text>
-                    <Text variant="bodySmall" style={{ opacity: 0.5 }}>
-                      {m.role.replace('_', ' ')}
-                    </Text>
-                  </View>
-                  {m.user_id !== authState.user?.id && (
-                    <IconButton
-                      icon="close"
-                      size={18}
-                      onPress={() => handleRemoveMember(m.user_id, m.email)}
-                      testID={`member-remove-${m.user_id}`}
-                    />
-                  )}
-                </View>
-              ))}
-            </>
-          )}
-        </Dialog.Content>
-        <Dialog.Actions>
-          <Button onPress={() => setEditHouseholdId(null)} testID="edit-household-cancel">Cancel</Button>
-          <Button
-            onPress={handleSaveHouseholdName}
-            loading={editLoading}
-            disabled={editLoading || !editName.trim()}
-            testID="edit-household-save"
-          >
-            Save
-          </Button>
-        </Dialog.Actions>
-      </Dialog>
-    </Portal>
     </Portal.Host>
   );
 };

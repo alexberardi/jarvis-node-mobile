@@ -101,5 +101,6 @@ export type RootStackParamList = {
   Main: NavigatorScreenParams<MainTabParamList>;
   Inbox: NavigatorScreenParams<InboxStackParamList>;
   Settings: undefined;
+  HouseholdEdit: { householdId: string; householdName: string };
   SmartHomeSetup: NavigatorScreenParams<SmartHomeSetupParamList>;
 };
