@@ -32,7 +32,7 @@
     },
     "production": {
       "env": {
-        "EXPO_PUBLIC_PANTRY_URL": "https://pantry.jarvisautomation.io"
+        "EXPO_PUBLIC_PANTRY_URL": "https://pantry-api.jarvisautomation.io"
       },
       "ios": {
         "resourceClass": "m-medium"
