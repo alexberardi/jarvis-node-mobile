@@ -36,7 +36,7 @@ type Nav = NativeStackNavigationProp<RoutinesStackParamList>;
 type ScreenState = 'config' | 'loading' | 'results';
 type ProviderFilter = 'anthropic' | 'openai';
 
-const SECURE_STORE_KEY = 'jarvis_routine_api_key';
+import { ROUTINE_API_KEY as SECURE_STORE_KEY } from '../../config/storageKeys';
 
 const RoutineSuggestScreen = () => {
   const navigation = useNavigation<Nav>();

@@ -35,7 +35,7 @@ import { RoutinesStackParamList } from '../../navigation/types';
 type Nav = NativeStackNavigationProp<RoutinesStackParamList>;
 type Provider = 'jarvis' | 'claude' | 'openai';
 
-const SECURE_STORE_KEY = 'jarvis_routine_api_key';
+import { ROUTINE_API_KEY as SECURE_STORE_KEY } from '../../config/storageKeys';
 
 interface ChatMessage {
   id: string;

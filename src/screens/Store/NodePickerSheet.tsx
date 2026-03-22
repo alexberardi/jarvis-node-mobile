@@ -67,8 +67,8 @@ const NodePickerSheet = () => {
         installs: JSON.stringify(installs),
         packageName,
       });
-    } catch (e: any) {
-      Alert.alert('Install Error', e?.message || 'Failed to start install');
+    } catch (e: unknown) {
+      Alert.alert('Install Error', e instanceof Error ? e.message : 'Failed to start install');
     } finally {
       setInstalling(false);
     }
