@@ -8,12 +8,14 @@ interface NodeSelectorProps {
   householdId: string;
   selectedNodeId: string | null;
   onSelectNode: (nodeId: string) => void;
+  onNodesLoaded?: (count: number) => void;
 }
 
 const NodeSelector: React.FC<NodeSelectorProps> = ({
   householdId,
   selectedNodeId,
   onSelectNode,
+  onNodesLoaded,
 }) => {
   const theme = useTheme();
   const [nodes, setNodes] = useState<NodeOption[]>([]);
@@ -24,7 +26,9 @@ const NodeSelector: React.FC<NodeSelectorProps> = ({
 
     getSmartHomeConfig(householdId)
       .then((config) => {
-        setNodes(config.nodes || []);
+        const nodeList = config.nodes || [];
+        setNodes(nodeList);
+        onNodesLoaded?.(nodeList.length);
         if (!selectedNodeId) {
           // Prefer primary node if online, otherwise first online node
           const primary = config.nodes.find(
@@ -40,13 +44,16 @@ const NodeSelector: React.FC<NodeSelectorProps> = ({
           }
         }
       })
-      .catch(() => {
-        // Silently handle — no nodes to show
+      .catch((err) => {
+        console.error('[NodeSelector] Failed to load nodes', err);
       });
   }, [householdId, selectedNodeId, onSelectNode]);
 
   const selectedNode = nodes.find((n) => n.node_id === selectedNodeId);
-  const label = selectedNode?.room ?? selectedNodeId?.slice(0, 8) ?? 'Select node';
+  const selectedOffline = selectedNode && !selectedNode.online;
+  const label = selectedNode
+    ? `${selectedNode.room ?? selectedNodeId?.slice(0, 8)}${selectedOffline ? ' (offline)' : ''}`
+    : selectedNodeId?.slice(0, 8) ?? 'Select node';
 
   if (nodes.length === 0) {
     return null;
@@ -63,10 +70,11 @@ const NodeSelector: React.FC<NodeSelectorProps> = ({
           <Button
             mode="outlined"
             compact
-            icon="access-point"
+            icon={selectedOffline ? 'access-point-off' : 'access-point'}
             onPress={() => setMenuVisible(true)}
             style={styles.button}
             labelStyle={{ fontSize: 13 }}
+            textColor={selectedOffline ? theme.colors.error : undefined}
           >
             {label}
           </Button>
