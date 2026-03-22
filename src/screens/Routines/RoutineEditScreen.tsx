@@ -1,6 +1,6 @@
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -25,13 +25,9 @@ import {
   useTheme,
 } from 'react-native-paper';
 
-import { listNodes, NodeInfo } from '../../api/nodeApi';
-import {
-  pollSettingsResult,
-  requestSettingsSnapshot,
-} from '../../api/nodeSettingsApi';
 import { useAuth } from '../../auth/AuthContext';
 import ParameterArgRow from '../../components/ParameterArgRow';
+import { useSettingsSnapshot } from '../../hooks/useSettingsSnapshot';
 import { RoutinesStackParamList } from '../../navigation/types';
 import {
   deleteRoutine,
@@ -40,9 +36,6 @@ import {
   saveRoutine,
   slugify,
 } from '../../services/routineStorageService';
-import {
-  decryptSettingsSnapshot,
-} from '../../services/settingsDecryptService';
 import type { CommandParameterEntry } from '../../services/settingsDecryptService';
 import type {
   DayOfWeek,
@@ -65,9 +58,6 @@ import {
 
 type Nav = NativeStackNavigationProp<RoutinesStackParamList>;
 type Route = RouteProp<RoutinesStackParamList, 'RoutineEdit'>;
-
-const POLL_INTERVAL_MS = 1500;
-const POLL_MAX_ATTEMPTS = 20;
 
 const DAY_LABELS: Record<DayOfWeek, string> = {
   mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun',
@@ -110,13 +100,23 @@ const RoutineEditScreen = () => {
     description: string;
     parameters?: CommandParameterEntry[];
   }
-  const [commandMap, setCommandMap] = useState<Record<string, CommandMeta>>({});
+  const { snapshot: cmdSnapshot, state: cmdState, error: commandsError } = useSettingsSnapshot({
+    enabled: !!authState.accessToken,
+  });
+  const commandsLoading = cmdState === 'loading';
+  const commandMap: Record<string, CommandMeta> = {};
+  if (cmdSnapshot) {
+    for (const c of cmdSnapshot.commands.filter((cmd) => cmd.enabled !== false)) {
+      commandMap[c.command_name] = {
+        command_name: c.command_name,
+        description: c.description,
+        parameters: c.parameters,
+      };
+    }
+  }
   const availableCommands = Object.keys(commandMap);
-  const [commandsLoading, setCommandsLoading] = useState(false);
-  const [commandsError, setCommandsError] = useState<string | null>(null);
   const [commandMenuStep, setCommandMenuStep] = useState<number | null>(null);
   const [paramMenuStep, setParamMenuStep] = useState<number | null>(null);
-  const commandsLoaded = useRef(false);
 
   // Load existing routine if editing, or pre-populate from AI suggestion
   useEffect(() => {
@@ -149,62 +149,6 @@ const RoutineEditScreen = () => {
     }
   }, [route.params?.routineId, route.params?.routineData]);
 
-  // Load available commands from a node's settings snapshot
-  useEffect(() => {
-    if (commandsLoaded.current || !authState.accessToken) return;
-    commandsLoaded.current = true;
-
-    const fetchCommands = async () => {
-      setCommandsLoading(true);
-      setCommandsError(null);
-      try {
-        const nodes = await listNodes();
-        if (nodes.length === 0) { setCommandsLoading(false); return; }
-        const node: NodeInfo = nodes[0];
-        const { request_id } = await requestSettingsSnapshot(node.node_id);
-        let attempts = 0;
-        const poll = async () => {
-          if (attempts >= POLL_MAX_ATTEMPTS) {
-            setCommandsLoading(false);
-            setCommandsError('Timed out loading commands.');
-            console.error('[RoutineEditScreen] Command poll timed out');
-            return;
-          }
-          attempts++;
-          try {
-            const result = await pollSettingsResult(node.node_id, request_id);
-            if (result.status === 'fulfilled' && result.snapshot) {
-              const snapshot = await decryptSettingsSnapshot(
-                node.node_id, result.snapshot.ciphertext, result.snapshot.nonce, result.snapshot.tag,
-              );
-              const map: Record<string, CommandMeta> = {};
-              for (const c of snapshot.commands.filter((cmd) => cmd.enabled !== false)) {
-                map[c.command_name] = {
-                  command_name: c.command_name,
-                  description: c.description,
-                  parameters: c.parameters,
-                };
-              }
-              setCommandMap(map);
-              setCommandsLoading(false);
-            } else {
-              setTimeout(poll, POLL_INTERVAL_MS);
-            }
-          } catch (error) {
-            console.error('[RoutineEditScreen] Command poll failed', error);
-            setCommandsLoading(false);
-            setCommandsError('Could not load commands.');
-          }
-        };
-        poll();
-      } catch (error) {
-        console.error('[RoutineEditScreen] Failed to fetch commands', error);
-        setCommandsLoading(false);
-        setCommandsError('Could not load commands.');
-      }
-    };
-    fetchCommands();
-  }, [authState.accessToken]);
 
   const slug = slugify(name);
 
