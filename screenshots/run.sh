@@ -11,6 +11,9 @@
 #   ./run.sh --login user:pass nav    # Run only navigation tests
 #   ./run.sh auth                     # Run auth tests (must be logged out)
 #   ./run.sh nav home settings        # Run multiple categories
+#   ./run.sh --setup multiuser        # Setup test data + run multiuser tests
+#   ./run.sh --setup --teardown multiuser  # Setup + run + cleanup
+#   ./run.sh multiuser                # Run multiuser (assumes setup already done)
 #   ./run.sh --update-docs            # Copy screenshots to jarvis-docs
 #   ./run.sh --list                   # List available test categories
 #
@@ -24,6 +27,7 @@
 #   pantry     - Package store: browse, detail, search
 #   nodes      - Node list, settings
 #   devices    - Device list, room management
+#   multiuser  - Multi-user/household flows (requires --setup or .e2e-env)
 #
 # Prerequisites:
 #   - iOS Simulator running with the app installed
@@ -35,6 +39,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 FLOWS_DIR="$SCRIPT_DIR/flows"
 OUTPUT_DIR="$SCRIPT_DIR/output"
 DOCS_DIR="$(cd "$SCRIPT_DIR/../../jarvis-docs/docs/assets/images/screenshots" 2>/dev/null && pwd || echo "")"
+E2E_ENV_FILE="$SCRIPT_DIR/.e2e-env"
 
 # Colors
 RED='\033[0;31m'
@@ -120,11 +125,13 @@ list_categories() {
             pantry)    desc="Browse packages, detail view, search" ;;
             nodes)     desc="Node list, node settings" ;;
             devices)   desc="Device list, room management" ;;
+            routines)  desc="Routines list, empty state" ;;
+            multiuser) desc="Multi-user/household (needs --setup or .e2e-env)" ;;
         esac
         printf "  ${CYAN}%-12s${NC} %s (%s flows)\n" "$cat_name" "$desc" "$count"
     done
     echo ""
-    echo "Usage: ./run.sh [--login user:pass] [category ...]"
+    echo "Usage: ./run.sh [--login user:pass] [--setup] [--teardown] [category ...]"
 }
 
 # ── Run a single flow ──────────────────────────────────────────────
@@ -140,7 +147,18 @@ run_flow() {
     local log_file="$OUTPUT_DIR/${cat_name}_${flow_name}.log"
     mkdir -p "$OUTPUT_DIR"
 
-    if maestro test --env LOGIN_EMAIL="$LOGIN_EMAIL" --env LOGIN_PASSWORD="$LOGIN_PASSWORD" \
+    # Build env args inline
+    local env_args=(--env "LOGIN_EMAIL=$LOGIN_EMAIL" --env "LOGIN_PASSWORD=$LOGIN_PASSWORD")
+    local var
+    for var in E2E_USER_A_EMAIL E2E_USER_A_PASSWORD E2E_USER_B_EMAIL E2E_USER_B_PASSWORD \
+               E2E_HOUSEHOLD_A_ID E2E_HOUSEHOLD_A_NAME E2E_HOUSEHOLD_B_ID \
+               E2E_INVITE_CODE E2E_NODE_KITCHEN_ID E2E_NODE_BEDROOM_ID; do
+        if [[ -n "${!var:-}" ]]; then
+            env_args+=(--env "$var=${!var}")
+        fi
+    done
+
+    if maestro test "${env_args[@]}" \
         "$flow_file" --output "$OUTPUT_DIR/$cat_name/$flow_name" > "$log_file" 2>&1; then
         echo -e "  ${GREEN}✓${NC} $label"
         return 0
@@ -198,6 +216,8 @@ update_docs() {
 
 main() {
     local do_update_docs=false
+    local do_setup=false
+    local do_teardown=false
     local categories=()
     export LOGIN_EMAIL=""
     export LOGIN_PASSWORD=""
@@ -211,6 +231,12 @@ main() {
             --update-docs)
                 do_update_docs=true
                 ;;
+            --setup)
+                do_setup=true
+                ;;
+            --teardown)
+                do_teardown=true
+                ;;
             --login)
                 shift
                 if [[ -z "${1:-}" || "$1" != *:* ]]; then
@@ -221,7 +247,7 @@ main() {
                 LOGIN_PASSWORD="${1#*:}"
                 ;;
             --help|-h)
-                echo "Usage: ./run.sh [--login email:pass] [--update-docs] [--list] [category ...]"
+                echo "Usage: ./run.sh [--login email:pass] [--setup] [--teardown] [--update-docs] [--list] [category ...]"
                 exit 0
                 ;;
             *)
@@ -236,6 +262,35 @@ main() {
     check_simulator
 
     mkdir -p "$OUTPUT_DIR"
+
+    # ── Multiuser setup ───────────────────────────────────────────
+    local has_multiuser=false
+    for cat in "${categories[@]}"; do
+        [[ "$cat" == "multiuser" ]] && has_multiuser=true
+    done
+
+    if $do_setup && $has_multiuser; then
+        info "Running multiuser setup..."
+        if bash "$SCRIPT_DIR/setup-multiuser.sh"; then
+            log "Multiuser setup complete"
+        else
+            err "Multiuser setup failed"
+            exit 1
+        fi
+        echo ""
+    fi
+
+    # Source .e2e-env if running multiuser flows
+    if $has_multiuser && [[ -f "$E2E_ENV_FILE" ]]; then
+        info "Loading multiuser env from $E2E_ENV_FILE"
+        set -a
+        # shellcheck disable=SC1090
+        source "$E2E_ENV_FILE"
+        set +a
+    elif $has_multiuser; then
+        err "No .e2e-env file found. Run with --setup or run setup-multiuser.sh first."
+        exit 1
+    fi
 
     # Login if credentials provided
     if [[ -n "$LOGIN_EMAIL" ]]; then
@@ -252,8 +307,8 @@ main() {
     fi
 
     # Determine which flows to run
-    # Auth tests require logged-out state and are skipped in "run all" mode.
-    # Run them explicitly: ./run.sh auth
+    # Auth and multiuser tests are excluded from "run all" mode.
+    # Run them explicitly: ./run.sh auth  or  ./run.sh --setup multiuser
     local flows=()
     if [[ ${#categories[@]} -gt 0 ]]; then
         for cat in "${categories[@]}"; do
@@ -268,13 +323,14 @@ main() {
             done
         done
     else
-        # Run all categories except auth (requires logged-out state)
+        # Run all categories except auth and multiuser (require special state)
         for dir in "$FLOWS_DIR"/*/; do
             [[ -d "$dir" ]] || continue
             local dir_name
             dir_name=$(basename "$dir")
             [[ "$dir_name" == "helpers" ]] && continue
             [[ "$dir_name" == "auth" ]] && continue
+            [[ "$dir_name" == "multiuser" ]] && continue
             for flow in "$dir"/*.yaml; do
                 [[ "$(basename "$flow")" == "00_"* ]] && continue
                 flows+=("$flow")
@@ -313,6 +369,17 @@ main() {
 
     if $do_update_docs; then
         update_docs
+    fi
+
+    # ── Multiuser teardown ────────────────────────────────────────
+    if $do_teardown && $has_multiuser; then
+        echo ""
+        info "Running multiuser teardown..."
+        if bash "$SCRIPT_DIR/teardown-multiuser.sh"; then
+            log "Multiuser teardown complete"
+        else
+            warn "Multiuser teardown had errors (see above)"
+        fi
     fi
 
     echo ""

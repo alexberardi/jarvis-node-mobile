@@ -118,6 +118,8 @@ const SecretEditDialog: React.FC<SecretEditDialogProps> = ({
               onChangeText={setValue}
               mode="outlined"
               secureTextEntry={isSecureField}
+              autoCapitalize="none"
+              autoCorrect={false}
               keyboardType={valueType === 'int' ? 'numeric' : 'default'}
               style={styles.input}
               autoFocus

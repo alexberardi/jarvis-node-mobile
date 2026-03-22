@@ -1,0 +1,41 @@
+appId: com.jarvis.nodemobile
+---
+# Test: Session persists across app kill and relaunch
+# Requires: user already logged in (run after login or with --login flag)
+- launchApp
+- waitForAnimationToEnd
+- tapOn:
+    text: ".*localhost.*"
+    index: 0
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    text: "Continue"
+    optional: true
+- waitForAnimationToEnd
+
+# Confirm we're logged in
+- extendedWaitUntil:
+    visible: "Jarvis"
+    timeout: 15000
+
+# Kill and relaunch the app
+- stopApp
+- launchApp
+- waitForAnimationToEnd
+- tapOn:
+    text: ".*localhost.*"
+    index: 0
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    text: "Continue"
+    optional: true
+- waitForAnimationToEnd
+
+# Should still be logged in — Home screen visible, not landing
+- extendedWaitUntil:
+    visible: "Jarvis"
+    timeout: 15000
+- assertNotVisible: "Log In"
+- takeScreenshot: auth-session-persisted

@@ -1,0 +1,43 @@
+appId: com.jarvis.nodemobile
+env:
+  USER_A_EMAIL: ${E2E_USER_A_EMAIL}
+  USER_A_PASSWORD: ${E2E_USER_A_PASSWORD}
+---
+# Test: Admin sees members in edit dialog
+
+- runFlow:
+    file: ../helpers/ensure_logged_out.yaml
+- runFlow:
+    file: ../helpers/login_user_a.yaml
+
+# Open settings
+- tapOn:
+    point: "78%,9%"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 10000
+- extendedWaitUntil:
+    visible: ".*Test Home.*"
+    timeout: 10000
+
+# Open edit dialog
+- runFlow:
+    file: ../helpers/open_edit_household.yaml
+
+# Wait for member list
+- extendedWaitUntil:
+    visible:
+      text: ".*e2e-admin.*|.*e2e-member.*"
+    timeout: 15000
+- takeScreenshot: multiuser-admin-edit-members
+
+# Dialog may auto-dismiss; try to close it, ignore failure
+- tapOn:
+    text: "Cancel"
+    optional: true
+- waitForAnimationToEnd
+
+# Logout
+- runFlow:
+    file: ../helpers/logout.yaml

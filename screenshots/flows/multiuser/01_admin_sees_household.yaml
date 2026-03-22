@@ -1,0 +1,36 @@
+appId: com.jarvis.nodemobile
+env:
+  USER_A_EMAIL: ${E2E_USER_A_EMAIL}
+  USER_A_PASSWORD: ${E2E_USER_A_PASSWORD}
+  HOUSEHOLD_NAME: ${E2E_HOUSEHOLD_A_NAME}
+---
+# Test: User A (admin) sees "Test Home" with admin role badge
+
+# Ensure clean state
+- runFlow:
+    file: ../helpers/ensure_logged_out.yaml
+
+# Login as User A
+- runFlow:
+    file: ../helpers/login_user_a.yaml
+
+# Open settings
+- tapOn:
+    point: "78%,9%"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 10000
+
+# Verify household section
+- assertVisible: "Household"
+- extendedWaitUntil:
+    visible: ".*Test Home.*"
+    timeout: 10000
+- assertVisible:
+    text: ".*admin.*"
+- takeScreenshot: multiuser-admin-household
+
+# Logout for next test
+- runFlow:
+    file: ../helpers/logout.yaml

@@ -1,0 +1,57 @@
+# KNOWN ISSUE: Nodes tab tap via coordinate is unreliable after Settings dismiss.
+# Works when run individually but timing-sensitive in suite runs.
+appId: com.jarvis.nodemobile
+env:
+  USER_A_EMAIL: ${E2E_USER_A_EMAIL}
+  USER_A_PASSWORD: ${E2E_USER_A_PASSWORD}
+---
+# Test: Nodes tab shows nodes scoped to active household
+
+- runFlow:
+    file: ../helpers/ensure_logged_out.yaml
+- runFlow:
+    file: ../helpers/login_user_a.yaml
+
+# Ensure "Test Home" is active
+- tapOn:
+    point: "78%,9%"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 10000
+- extendedWaitUntil:
+    visible: ".*Test Home.*"
+    timeout: 10000
+- tapOn:
+    text: "Test Home"
+    optional: true
+- waitForAnimationToEnd
+
+# Close settings via testID
+- tapOn:
+    id: "settings-close"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Jarvis"
+    timeout: 10000
+
+# Navigate to Nodes tab (rightmost tab in bottom bar)
+- tapOn:
+    point: "90%,97%"
+- waitForAnimationToEnd
+
+# Nodes screen should load
+- extendedWaitUntil:
+    visible:
+      text: ".*Import Key.*|.*No nodes.*|.*kitchen.*|.*bedroom.*"
+    timeout: 10000
+- takeScreenshot: multiuser-nodes-filtered
+
+# Go back to Home tab (leftmost tab)
+- tapOn:
+    point: "10%,97%"
+- waitForAnimationToEnd
+
+# Logout
+- runFlow:
+    file: ../helpers/logout.yaml

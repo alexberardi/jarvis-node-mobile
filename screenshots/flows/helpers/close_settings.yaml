@@ -1,0 +1,10 @@
+appId: com.jarvis.nodemobile
+---
+# Helper: Close Settings modal and return to Home screen.
+# Assumes Settings screen is visible.
+- tapOn:
+    id: "settings-close"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Jarvis"
+    timeout: 10000

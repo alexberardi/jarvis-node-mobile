@@ -1,0 +1,69 @@
+# NOTE: Requires AutoFill disabled in Simulator (setup-multiuser.sh handles this).
+# If passwords still autofill, restart the Simulator after running setup.
+appId: com.jarvis.nodemobile
+env:
+  INVITE_CODE: ${E2E_INVITE_CODE}
+---
+# Test: Register a new User C via the UI using an invite code
+
+- runFlow:
+    file: ../helpers/ensure_logged_out.yaml
+
+# Go to register
+- tapOn: "Create Account"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: ".*Invite Code.*"
+    timeout: 10000
+
+# Fill invite code (top field)
+- tapOn:
+    text: ".*Invite Code.*"
+- inputText: ${INVITE_CODE}
+
+# Fill email
+- tapOn: "Email"
+- inputText: "e2e-user-c@test.jarvis"
+
+# Fill password
+- tapOn:
+    text: "Password"
+    index: 0
+- inputText: "TestPass1C!"
+
+# Fill confirm password
+- tapOn: "Confirm Password"
+- inputText: "TestPass1C!"
+
+# Dismiss keyboard and scroll to submit button
+- pressKey: Enter
+- waitForAnimationToEnd
+- swipe:
+    start: "50%,80%"
+    end: "50%,40%"
+    optional: true
+- waitForAnimationToEnd
+
+# Submit
+- tapOn:
+    text: "Create Account"
+    index: 1
+- extendedWaitUntil:
+    visible: "Jarvis"
+    timeout: 30000
+
+# Verify User C has "Test Home"
+- tapOn:
+    point: "78%,9%"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 10000
+- extendedWaitUntil:
+    visible: ".*Test Home.*"
+    timeout: 10000
+- takeScreenshot: multiuser-registered-with-invite
+
+# Logout
+- runFlow:
+    file: ../helpers/logout.yaml

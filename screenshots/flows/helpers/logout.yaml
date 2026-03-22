@@ -1,0 +1,20 @@
+appId: com.jarvis.nodemobile
+---
+# Helper: Logout the current user
+# Opens settings via testID, taps Log Out, waits for landing screen.
+- tapOn:
+    id: "settings-button"
+    optional: true
+# Fallback: coordinate for older builds without testID
+- tapOn:
+    point: "78%,9%"
+    optional: true
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 10000
+- tapOn: "Log Out"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Log In"
+    timeout: 10000

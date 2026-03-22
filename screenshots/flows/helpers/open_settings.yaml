@@ -1,0 +1,10 @@
+appId: com.jarvis.nodemobile
+---
+# Helper: Open Settings from the Home screen.
+# Assumes Home screen is visible ("Jarvis" header).
+- tapOn:
+    point: "78%,9%"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 10000

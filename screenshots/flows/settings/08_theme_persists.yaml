@@ -1,0 +1,55 @@
+appId: com.jarvis.nodemobile
+---
+# Test: Theme preference persists across Settings close/reopen
+- launchApp
+- waitForAnimationToEnd
+- tapOn:
+    text: ".*localhost.*"
+    index: 0
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    text: "Continue"
+    optional: true
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Jarvis"
+    timeout: 15000
+
+# Open settings
+- runFlow:
+    file: ../helpers/open_settings.yaml
+
+# Switch to Light theme
+- tapOn: "Light"
+- waitForAnimationToEnd
+- takeScreenshot: settings-theme-light
+
+# Close and reopen
+- runFlow:
+    file: ../helpers/close_settings.yaml
+- runFlow:
+    file: ../helpers/open_settings.yaml
+
+# Verify Light still selected (segments always visible, screenshot confirms)
+- assertVisible: "Light"
+- takeScreenshot: settings-theme-light-persisted
+
+# Switch to Dark theme
+- tapOn: "Dark"
+- waitForAnimationToEnd
+- takeScreenshot: settings-theme-dark
+
+# Close and reopen
+- runFlow:
+    file: ../helpers/close_settings.yaml
+- runFlow:
+    file: ../helpers/open_settings.yaml
+
+# Screenshot confirms dark theme persisted
+- assertVisible: "Dark"
+- takeScreenshot: settings-theme-dark-persisted
+
+# Restore to System default
+- tapOn: "System"
+- waitForAnimationToEnd

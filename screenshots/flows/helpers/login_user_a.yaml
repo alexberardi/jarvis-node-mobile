@@ -1,0 +1,18 @@
+appId: com.jarvis.nodemobile
+env:
+  USER_A_EMAIL: ${E2E_USER_A_EMAIL}
+  USER_A_PASSWORD: ${E2E_USER_A_PASSWORD}
+---
+# Helper: Login as User A (admin)
+- tapOn: "Log In"
+- waitForAnimationToEnd
+- tapOn: "Email"
+- inputText: ${USER_A_EMAIL}
+- tapOn: "Password"
+- inputText: ${USER_A_PASSWORD}
+- tapOn:
+    text: "Log In"
+    index: 1
+- extendedWaitUntil:
+    visible: "Jarvis"
+    timeout: 15000

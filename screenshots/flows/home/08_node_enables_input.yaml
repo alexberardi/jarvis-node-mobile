@@ -1,0 +1,30 @@
+appId: com.jarvis.nodemobile
+---
+# Test: When a node is selected, the chat input becomes active
+- launchApp
+- waitForAnimationToEnd
+- tapOn:
+    text: ".*localhost.*"
+    index: 0
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    text: "Continue"
+    optional: true
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Jarvis"
+    timeout: 15000
+
+# Wait for node auto-selection (first node in household)
+- extendedWaitUntil:
+    visible:
+      text: ".*office.*|.*kitchen.*|.*bedroom.*"
+    timeout: 15000
+
+# Input should now show "Message Jarvis..." instead of "Select a node first"
+- extendedWaitUntil:
+    visible: "Message Jarvis..."
+    timeout: 10000
+- assertNotVisible: "Select a node first"
+- takeScreenshot: home-node-input-enabled
