@@ -5,6 +5,7 @@ import { FlatList, StyleSheet, View } from 'react-native';
 import {
   ActivityIndicator,
   Appbar,
+  Button,
   Divider,
   FAB,
   List,
@@ -146,6 +147,8 @@ const DevicesScreen = () => {
   const {
     data: devices,
     isLoading: devicesLoading,
+    isError: devicesError,
+    error: devicesQueryError,
     refetch: refetchDevices,
   } = useQuery({
     queryKey: ['devices', householdId],
@@ -288,6 +291,18 @@ const DevicesScreen = () => {
           <Text variant="bodyLarge" style={{ opacity: 0.6, textAlign: 'center' }}>
             {externalError}
           </Text>
+          <Button mode="outlined" onPress={refetchExternal} style={{ marginTop: 16 }}>
+            Retry
+          </Button>
+        </View>
+      ) : devicesError && !useExternal ? (
+        <View style={styles.centered}>
+          <Text variant="bodyLarge" style={{ opacity: 0.6, textAlign: 'center', marginBottom: 12 }}>
+            {devicesQueryError instanceof Error ? devicesQueryError.message : 'Failed to load devices.'}
+          </Text>
+          <Button mode="outlined" onPress={() => refetchDevices()}>
+            Retry
+          </Button>
         </View>
       ) : isEmpty ? (
         <View style={styles.centered}>

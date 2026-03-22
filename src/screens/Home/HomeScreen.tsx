@@ -10,7 +10,7 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
-import { Badge, IconButton, Text, TextInput, useTheme } from 'react-native-paper';
+import { Badge, IconButton, Snackbar, Text, TextInput, useTheme } from 'react-native-paper';
 
 import { Audio } from 'expo-av';
 
@@ -59,6 +59,7 @@ const HomeScreen = () => {
   const flatListRef = useRef<FlatList<ChatMessage>>(null);
   const soundRef = useRef<Audio.Sound | null>(null);
 
+  const [snackbar, setSnackbar] = useState('');
   const householdId = authState.activeHouseholdId;
   const { isRecording, startRecording, stopRecording } = useVoiceRecording();
 
@@ -97,7 +98,9 @@ const HomeScreen = () => {
   useFocusEffect(
     useCallback(() => {
       if (!authState.accessToken) return;
-      getUnreadCount().then(setUnreadCount).catch(() => {});
+      getUnreadCount().then(setUnreadCount).catch((err) => {
+        console.error('[HomeScreen] Failed to fetch unread count', err);
+      });
 
       // Re-warmup when returning from another tab (e.g., after Pantry install)
       // to pick up newly installed/removed commands.
@@ -126,8 +129,9 @@ const HomeScreen = () => {
           if (result.text.trim()) {
             sendMessage(result.text.trim());
           }
-        } catch {
-          // Transcription failed — silently handle
+        } catch (error) {
+          console.error('[HomeScreen] Transcription failed', error);
+          setSnackbar('Could not transcribe audio. Please try again.');
         }
       }
     } else {
@@ -188,8 +192,10 @@ const HomeScreen = () => {
             soundRef.current = null;
           }
         });
-      } catch {
+      } catch (error) {
+        console.error('[HomeScreen] TTS playback failed', error);
         setSpeakingMsgId(null);
+        setSnackbar('Could not play audio.');
       }
     },
     [householdId, authState.accessToken, speakingMsgId],
@@ -255,6 +261,7 @@ const HomeScreen = () => {
             size={22}
             onPress={() => navigation.navigate('Settings')}
             iconColor={theme.colors.onSurface}
+            testID="settings-button"
           />
           <View>
             <IconButton
@@ -262,6 +269,7 @@ const HomeScreen = () => {
               size={22}
               onPress={() => navigation.navigate('Inbox', { screen: 'InboxList' })}
               iconColor={theme.colors.onSurface}
+              testID="inbox-button"
             />
             {unreadCount > 0 && (
               <Badge size={16} style={styles.badge}>
@@ -357,6 +365,14 @@ const HomeScreen = () => {
           iconColor={theme.colors.primary}
         />
       </View>
+
+      <Snackbar
+        visible={!!snackbar}
+        onDismiss={() => setSnackbar('')}
+        duration={3000}
+      >
+        {snackbar}
+      </Snackbar>
     </KeyboardAvoidingView>
   );
 };

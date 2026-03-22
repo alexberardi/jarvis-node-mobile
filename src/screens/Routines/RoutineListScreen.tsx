@@ -2,14 +2,16 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useCallback, useMemo, useState } from 'react';
-import { FlatList, StyleSheet, View } from 'react-native';
+import { Alert, FlatList, StyleSheet, TouchableOpacity, View } from 'react-native';
+import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
+import type { SharedValue } from 'react-native-reanimated';
 import {
+  ActivityIndicator,
   Button,
   Card,
   Chip,
-  Dialog,
   FAB,
-  Portal,
+  IconButton,
   SegmentedButtons,
   Text,
   useTheme,
@@ -66,12 +68,22 @@ const RoutineListScreen = () => {
   const theme = useTheme();
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [refreshing, setRefreshing] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<Routine | null>(null);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
+  const [fabOpen, setFabOpen] = useState(false);
 
   const load = useCallback(async () => {
-    const data = await loadRoutines();
-    setRoutines(data);
+    try {
+      setLoadError(null);
+      const data = await loadRoutines();
+      setRoutines(data);
+    } catch (error) {
+      console.error('[RoutineListScreen] Failed to load routines', error);
+      setLoadError('Could not load routines.');
+    } finally {
+      setInitialLoading(false);
+    }
   }, []);
 
   useFocusEffect(
@@ -86,12 +98,27 @@ const RoutineListScreen = () => {
     setRefreshing(false);
   }, [load]);
 
-  const handleDeleteConfirm = async () => {
-    if (!deleteTarget) return;
-    await deleteRoutine(deleteTarget.id);
-    setDeleteTarget(null);
-    load();
-  };
+  const handleDelete = useCallback(
+    (routine: Routine) => {
+      Alert.alert('Delete', `Remove "${routine.name}"?`, [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteRoutine(routine.id);
+              load();
+            } catch (error) {
+              console.error('[RoutineListScreen] Failed to delete routine', error);
+              Alert.alert('Error', 'Could not delete routine. Please try again.');
+            }
+          },
+        },
+      ]);
+    },
+    [load],
+  );
 
   const filtered = useMemo(() => {
     if (filter === 'on_demand') return routines.filter((r) => !r.background);
@@ -99,56 +126,77 @@ const RoutineListScreen = () => {
     return routines;
   }, [routines, filter]);
 
+  const renderRightActions = (routine: Routine) => () => (
+    <TouchableOpacity style={styles.deleteAction} onPress={() => handleDelete(routine)} activeOpacity={0.7}>
+      <IconButton icon="delete-outline" iconColor="#fff" size={24} />
+    </TouchableOpacity>
+  );
+
+  const makeRightActions = (routine: Routine) =>
+    (_progress: SharedValue<number>, _drag: SharedValue<number>) =>
+      renderRightActions(routine)();
+
   const renderRoutine = ({ item }: { item: Routine }) => {
     const schedule = formatSchedule(item);
     const icon = getRoutineIcon(item);
     const bgEnabled = item.background?.enabled ?? true;
 
     return (
-      <Card
-        style={styles.card}
-        onPress={() => navigation.navigate('RoutineEdit', { routineId: item.id })}
-        onLongPress={() => setDeleteTarget(item)}
+      <ReanimatedSwipeable
+        renderRightActions={makeRightActions(item)}
+        overshootRight={false}
       >
-        <Card.Content>
-          <View style={styles.cardHeader}>
-            <MaterialCommunityIcons
-              name={icon.name}
-              size={20}
-              color={bgEnabled ? theme.colors.primary : theme.colors.onSurfaceVariant}
-              style={{ marginRight: 8 }}
-            />
-            <Text variant="titleMedium" style={[{ flex: 1 }, !bgEnabled && { opacity: 0.5 }]}>
-              {item.name}
-            </Text>
-          </View>
-          <View style={styles.chips}>
-            {item.trigger_phrases.slice(0, 3).map((phrase) => (
-              <Chip key={phrase} compact style={styles.chip} textStyle={styles.chipText}>
-                {phrase}
-              </Chip>
-            ))}
-          </View>
-          <View style={styles.metaRow}>
-            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-              {item.steps.length} step{item.steps.length !== 1 ? 's' : ''}
-            </Text>
-            {schedule && (
-              <Chip
-                compact
-                style={[styles.scheduleBadge, !bgEnabled && { opacity: 0.5 }]}
-                textStyle={[styles.chipText, { color: theme.colors.primary }]}
-              >
-                {schedule}
-              </Chip>
-            )}
-          </View>
-        </Card.Content>
-      </Card>
+        <Card
+          style={styles.card}
+          onPress={() => navigation.navigate('RoutineEdit', { routineId: item.id })}
+        >
+          <Card.Content>
+            <View style={styles.cardHeader}>
+              <MaterialCommunityIcons
+                name={icon.name}
+                size={20}
+                color={bgEnabled ? theme.colors.primary : theme.colors.onSurfaceVariant}
+                style={{ marginRight: 8 }}
+              />
+              <Text variant="titleMedium" style={[{ flex: 1 }, !bgEnabled && { opacity: 0.5 }]}>
+                {item.name}
+              </Text>
+            </View>
+            <View style={styles.chips}>
+              {item.trigger_phrases.slice(0, 3).map((phrase) => (
+                <Chip key={phrase} compact style={styles.chip} textStyle={styles.chipText}>
+                  {phrase}
+                </Chip>
+              ))}
+            </View>
+            <View style={styles.metaRow}>
+              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                {item.steps.length} step{item.steps.length !== 1 ? 's' : ''}
+              </Text>
+              {schedule && (
+                <Chip
+                  compact
+                  style={[styles.scheduleBadge, !bgEnabled && { opacity: 0.5 }]}
+                  textStyle={[styles.chipText, { color: theme.colors.primary }]}
+                >
+                  {schedule}
+                </Chip>
+              )}
+            </View>
+          </Card.Content>
+        </Card>
+      </ReanimatedSwipeable>
     );
   };
 
-  const emptyComponent = (
+  const emptyComponent = loadError ? (
+    <View style={styles.center}>
+      <Text variant="bodyLarge" style={{ color: theme.colors.error, marginBottom: 12 }}>
+        {loadError}
+      </Text>
+      <Button mode="outlined" onPress={load}>Retry</Button>
+    </View>
+  ) : (
     <View style={styles.center}>
       <Text variant="bodyLarge" style={{ color: theme.colors.onSurfaceVariant }}>
         {filter !== 'all'
@@ -157,6 +205,19 @@ const RoutineListScreen = () => {
       </Text>
     </View>
   );
+
+  if (initialLoading) {
+    return (
+      <View style={styles.container}>
+        <Text variant="headlineMedium" style={[styles.title, { color: theme.colors.onBackground }]}>
+          Routines
+        </Text>
+        <View style={styles.center}>
+          <ActivityIndicator size="large" />
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -187,32 +248,27 @@ const RoutineListScreen = () => {
         ListEmptyComponent={emptyComponent}
       />
 
-      <FAB
-        icon="plus"
-        style={[styles.fab, { backgroundColor: theme.colors.primary }]}
+      <FAB.Group
+        open={fabOpen}
+        visible
+        icon={fabOpen ? 'close' : 'plus'}
+        actions={[
+          {
+            icon: 'pencil-plus-outline',
+            label: 'New Routine',
+            onPress: () => navigation.navigate('RoutineEdit', {}),
+          },
+          {
+            icon: 'auto-fix',
+            label: 'AI Builder',
+            onPress: () => navigation.navigate('RoutineBuilder'),
+          },
+        ]}
+        onStateChange={({ open }) => setFabOpen(open)}
+        fabStyle={{ backgroundColor: theme.colors.primary }}
         color={theme.colors.onPrimary}
-        onPress={() => navigation.navigate('RoutineEdit', {})}
-        label="New Routine"
       />
 
-      <Portal>
-        <Dialog visible={deleteTarget !== null} onDismiss={() => setDeleteTarget(null)}>
-          <Dialog.Title>Delete Routine</Dialog.Title>
-          <Dialog.Content>
-            <Text variant="bodyMedium" style={{ fontWeight: '600', marginBottom: 8 }}>
-              {deleteTarget?.name}
-            </Text>
-            <Text variant="bodySmall" style={{ opacity: 0.6 }}>
-              This will remove the routine from the app. Nodes that already
-              received it will keep their copy until overwritten.
-            </Text>
-          </Dialog.Content>
-          <Dialog.Actions>
-            <Button onPress={() => setDeleteTarget(null)}>Cancel</Button>
-            <Button onPress={handleDeleteConfirm} textColor={theme.colors.error}>Delete</Button>
-          </Dialog.Actions>
-        </Dialog>
-      </Portal>
     </View>
   );
 };
@@ -231,7 +287,14 @@ const styles = StyleSheet.create({
   chipText: { fontSize: 11 },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
   scheduleBadge: { height: 26 },
-  fab: { position: 'absolute', right: 16, bottom: 24 },
+  deleteAction: {
+    backgroundColor: '#ef4444',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 72,
+    borderRadius: 12,
+    marginLeft: 8,
+  },
 });
 
 export default RoutineListScreen;

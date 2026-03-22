@@ -2,6 +2,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import {
+  ActivityIndicator,
   Appbar,
   Button,
   Card,
@@ -67,30 +68,38 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
   const [inviteMaxUses, setInviteMaxUses] = useState('');
   const [creatingInvite, setCreatingInvite] = useState(false);
 
+  // Loading / error state for members + invites
+  const [membersLoading, setMembersLoading] = useState(true);
+  const [membersError, setMembersError] = useState<string | null>(null);
+
   const headers = { Authorization: `Bearer ${authState.accessToken}` };
   const currentUser = authState.user;
   const currentMember = members.find((m) => m.user_id === currentUser?.id);
   const isAdmin = currentMember?.role === 'admin';
   const canInvite = isAdmin || currentMember?.role === 'power_user';
 
-  // Load members and invites
+  // Load members and invites — always fetch both, filter invite display via canInvite
+  const loadMembersAndInvites = useCallback(async () => {
+    setMembersLoading(true);
+    setMembersError(null);
+    try {
+      const [membersRes, invitesRes] = await Promise.all([
+        authApi.get<Member[]>(`/households/${householdId}/members`, { headers }),
+        authApi.get<InviteCode[]>(`/households/${householdId}/invites`, { headers }).catch(() => ({ data: [] as InviteCode[] })),
+      ]);
+      setMembers(membersRes.data);
+      setInvites(invitesRes.data);
+    } catch (error) {
+      console.error('[HouseholdEditScreen] Failed to load members/invites', error);
+      setMembersError('Could not load household data.');
+    } finally {
+      setMembersLoading(false);
+    }
+  }, [householdId, authState.accessToken]);
+
   useEffect(() => {
-    const load = async () => {
-      try {
-        const [membersRes, invitesRes] = await Promise.all([
-          authApi.get<Member[]>(`/households/${householdId}/members`, { headers }),
-          canInvite
-            ? authApi.get<InviteCode[]>(`/households/${householdId}/invites`, { headers })
-            : Promise.resolve({ data: [] as InviteCode[] }),
-        ]);
-        setMembers(membersRes.data);
-        setInvites(invitesRes.data);
-      } catch {
-        // ignore
-      }
-    };
-    load();
-  }, [householdId]);
+    loadMembersAndInvites();
+  }, [loadMembersAndInvites]);
 
   // Save name
   const handleSaveName = useCallback(async () => {
@@ -233,7 +242,19 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
         <Card style={styles.card}>
           <Card.Content>
             <Text variant="titleMedium" style={styles.sectionTitle}>Members</Text>
-            {members.map((m) => (
+            {membersLoading && (
+              <View style={styles.loadingRow}>
+                <ActivityIndicator size="small" />
+                <Text variant="bodySmall" style={{ marginLeft: 8, opacity: 0.6 }}>Loading members...</Text>
+              </View>
+            )}
+            {membersError && !membersLoading && (
+              <View style={{ marginBottom: 12 }}>
+                <Text variant="bodySmall" style={{ color: theme.colors.error, marginBottom: 8 }}>{membersError}</Text>
+                <Button mode="outlined" compact onPress={loadMembersAndInvites}>Retry</Button>
+              </View>
+            )}
+            {!membersLoading && !membersError && members.map((m) => (
               <View key={m.user_id} style={styles.memberRow}>
                 <View style={{ flex: 1 }}>
                   <Text variant="bodyMedium">{m.username || m.email}</Text>
@@ -405,6 +426,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#e0e0e0',
   },
   inviteMeta: { flexDirection: 'row', gap: 12, marginTop: 2 },
+  loadingRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12 },
   dialogLabel: { marginBottom: 6, fontWeight: '500' },
 });
 

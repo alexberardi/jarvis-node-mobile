@@ -34,6 +34,7 @@ import { useAuth } from '../../auth/AuthContext';
 import ParameterArgRow from '../../components/ParameterArgRow';
 import { RoutinesStackParamList } from '../../navigation/types';
 import {
+  deleteRoutine,
   getRoutine,
   loadRoutines,
   saveRoutine,
@@ -112,13 +113,26 @@ const RoutineEditScreen = () => {
   const [commandMap, setCommandMap] = useState<Record<string, CommandMeta>>({});
   const availableCommands = Object.keys(commandMap);
   const [commandsLoading, setCommandsLoading] = useState(false);
+  const [commandsError, setCommandsError] = useState<string | null>(null);
   const [commandMenuStep, setCommandMenuStep] = useState<number | null>(null);
   const [paramMenuStep, setParamMenuStep] = useState<number | null>(null);
   const commandsLoaded = useRef(false);
 
-  // Load existing routine if editing
+  // Load existing routine if editing, or pre-populate from AI suggestion
   useEffect(() => {
-    if (route.params?.routineId) {
+    if (route.params?.routineData) {
+      try {
+        const r: Routine = JSON.parse(route.params.routineData);
+        setName(r.name);
+        setTriggerPhrases(r.trigger_phrases);
+        setSteps(r.steps);
+        setResponseInstruction(r.response_instruction);
+        setResponseLength(r.response_length);
+        setBackground(r.background);
+      } catch {
+        // Invalid routineData — ignore, start blank
+      }
+    } else if (route.params?.routineId) {
       getRoutine(route.params.routineId).then((r) => {
         if (r) {
           setName(r.name);
@@ -128,9 +142,12 @@ const RoutineEditScreen = () => {
           setResponseLength(r.response_length);
           setBackground(r.background);
         }
+      }).catch((error) => {
+        console.error('[RoutineEditScreen] Failed to load routine', error);
+        Alert.alert('Error', 'Could not load routine.');
       });
     }
-  }, [route.params?.routineId]);
+  }, [route.params?.routineId, route.params?.routineData]);
 
   // Load available commands from a node's settings snapshot
   useEffect(() => {
@@ -139,6 +156,7 @@ const RoutineEditScreen = () => {
 
     const fetchCommands = async () => {
       setCommandsLoading(true);
+      setCommandsError(null);
       try {
         const nodes = await listNodes();
         if (nodes.length === 0) { setCommandsLoading(false); return; }
@@ -146,7 +164,12 @@ const RoutineEditScreen = () => {
         const { request_id } = await requestSettingsSnapshot(node.node_id);
         let attempts = 0;
         const poll = async () => {
-          if (attempts >= POLL_MAX_ATTEMPTS) { setCommandsLoading(false); return; }
+          if (attempts >= POLL_MAX_ATTEMPTS) {
+            setCommandsLoading(false);
+            setCommandsError('Timed out loading commands.');
+            console.error('[RoutineEditScreen] Command poll timed out');
+            return;
+          }
           attempts++;
           try {
             const result = await pollSettingsResult(node.node_id, request_id);
@@ -167,10 +190,18 @@ const RoutineEditScreen = () => {
             } else {
               setTimeout(poll, POLL_INTERVAL_MS);
             }
-          } catch { setCommandsLoading(false); }
+          } catch (error) {
+            console.error('[RoutineEditScreen] Command poll failed', error);
+            setCommandsLoading(false);
+            setCommandsError('Could not load commands.');
+          }
         };
         poll();
-      } catch { setCommandsLoading(false); }
+      } catch (error) {
+        console.error('[RoutineEditScreen] Failed to fetch commands', error);
+        setCommandsLoading(false);
+        setCommandsError('Could not load commands.');
+      }
     };
     fetchCommands();
   }, [authState.accessToken]);
@@ -288,9 +319,14 @@ const RoutineEditScreen = () => {
     if (!slug) return 'Name must contain at least one alphanumeric character.';
 
     if (!isEditing || route.params?.routineId !== slug) {
-      const existing = await loadRoutines();
-      if (existing.some((r) => r.id === slug && r.id !== route.params?.routineId)) {
-        return `A routine with the ID "${slug}" already exists.`;
+      try {
+        const existing = await loadRoutines();
+        if (existing.some((r) => r.id === slug && r.id !== route.params?.routineId)) {
+          return `A routine with the ID "${slug}" already exists.`;
+        }
+      } catch (error) {
+        console.error('[RoutineEditScreen] Failed to check existing routines', error);
+        return 'Could not verify routine name. Please try again.';
       }
     }
 
@@ -311,9 +347,29 @@ const RoutineEditScreen = () => {
     return null;
   };
 
+  const handleDelete = useCallback(() => {
+    if (!isEditing || !route.params?.routineId) return;
+    Alert.alert('Delete', `Remove "${name || route.params.routineId}"?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await deleteRoutine(route.params!.routineId!);
+            navigation.goBack();
+          } catch (error) {
+            console.error('[RoutineEditScreen] Failed to delete routine', error);
+            Alert.alert('Error', 'Could not delete routine. Please try again.');
+          }
+        },
+      },
+    ]);
+  }, [isEditing, route.params, name, navigation]);
+
   const handleSave = async () => {
-    const error = await validate();
-    if (error) { Alert.alert('Validation Error', error); return; }
+    const validationError = await validate();
+    if (validationError) { Alert.alert('Validation Error', validationError); return; }
 
     const routine: Routine = {
       id: isEditing ? route.params!.routineId! : slug,
@@ -325,8 +381,13 @@ const RoutineEditScreen = () => {
       background,
     };
 
-    await saveRoutine(routine);
-    navigation.navigate('RoutineNodePicker', { routineId: routine.id });
+    try {
+      await saveRoutine(routine);
+      navigation.navigate('RoutineNodePicker', { routineId: routine.id });
+    } catch (error) {
+      console.error('[RoutineEditScreen] Failed to save routine', error);
+      Alert.alert('Error', 'Could not save routine. Please try again.');
+    }
   };
 
   // --- Step card styling ---
@@ -443,6 +504,9 @@ const RoutineEditScreen = () => {
         <Text variant="headlineSmall" style={{ fontWeight: 'bold', flex: 1 }}>
           {isEditing ? 'Edit Routine' : 'New Routine'}
         </Text>
+        {isEditing && (
+          <IconButton icon="delete-outline" onPress={handleDelete} iconColor={theme.colors.onSurfaceVariant} />
+        )}
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll}>
@@ -476,6 +540,11 @@ const RoutineEditScreen = () => {
         {/* Steps */}
         <View style={styles.section}>
           <Text variant="titleSmall" style={[styles.sectionTitle, { color: theme.colors.primary }]}>Steps</Text>
+          {commandsError && (
+            <Text variant="bodySmall" style={{ color: theme.colors.error, marginBottom: 8 }}>
+              {commandsError}
+            </Text>
+          )}
           <DraggableFlatList data={steps} keyExtractor={(_, i) => `step-${i}`} renderItem={renderStep}
             onDragEnd={({ data }) => setSteps(data)} scrollEnabled={false} />
           <Button mode="outlined" icon="plus" onPress={addStep} compact style={{ alignSelf: 'flex-start' }}>Add Step</Button>
