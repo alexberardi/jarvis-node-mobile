@@ -55,14 +55,14 @@ export function usePushNotifications(onNotificationTap?: (data: Record<string, a
   useEffect(() => {
     notificationListener.current = Notifications.addNotificationReceivedListener(
       (notification) => {
-        console.log('[Push] Notification received:', notification.request.content.title);
+        console.debug('[Push] Notification received:', notification.request.content.title);
       },
     );
 
     responseListener.current = Notifications.addNotificationResponseReceivedListener(
       (response) => {
         const data = response.notification.request.content.data;
-        console.log('[Push] Notification tapped:', data);
+        console.debug('[Push] Notification tapped:', data);
         if (onNotificationTap && data) {
           onNotificationTap(data as Record<string, any>);
         }

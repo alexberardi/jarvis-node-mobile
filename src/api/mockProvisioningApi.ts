@@ -71,7 +71,7 @@ export const mockProvision = async (
   await mockDelay(200);
   mockProvisioningState = { state: 'success', progress: 100, message: 'Provisioning complete!' };
 
-  console.log('[Mock] Node provisioned to household:', request.household_id);
+  console.debug('[Mock] Node provisioned to household:', request.household_id);
 
   return {
     success: true,
@@ -100,7 +100,7 @@ export const mockRequestProvisioningToken = async (): Promise<ProvisioningTokenR
   const mockNodeId = `node-mock-${Date.now().toString(36)}`;
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
 
-  console.log('[Mock] Provisioning token issued for node:', mockNodeId);
+  console.debug('[Mock] Provisioning token issued for node:', mockNodeId);
 
   return {
     token: `mock-prov-token-${Date.now()}`,
@@ -116,8 +116,8 @@ export const mockProvisionK2 = async (
   await mockDelay(300);
 
   // Simulate successful K2 provisioning
-  console.log('[Mock] K2 provisioned for node:', request.nodeId);
-  console.log('[Mock] Key ID:', request.kid);
+  console.debug('[Mock] K2 provisioned for node:', request.nodeId);
+  console.debug('[Mock] Key ID:', request.kid);
 
   return {
     success: true,

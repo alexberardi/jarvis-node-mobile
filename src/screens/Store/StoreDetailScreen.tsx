@@ -130,8 +130,8 @@ const StoreDetailScreen = () => {
                     'Installed',
                     `Provider "${result.provider_name}" installed successfully.`,
                   );
-                } catch (err: any) {
-                  Alert.alert('Install Error', err?.message || 'Failed to install provider');
+                } catch (err: unknown) {
+                  Alert.alert('Install Error', err instanceof Error ? err.message : 'Failed to install provider');
                 } finally {
                   setInstalling(false);
                 }
@@ -156,7 +156,7 @@ const StoreDetailScreen = () => {
         nodes.map(async (node) => {
           try {
             const tools = await fetchNodeTools(node.node_id);
-            const toolNames = tools.client_tools.map((t: any) => t.function?.name).filter(Boolean);
+            const toolNames = tools.client_tools.map((t: Record<string, unknown>) => (t.function as Record<string, unknown>)?.name as string).filter(Boolean);
             if (toolNames.includes(downloadInfo.command_name)) {
               installedNodeIds.push(node.node_id);
             }
@@ -205,8 +205,8 @@ const StoreDetailScreen = () => {
           installedNodeIds: JSON.stringify(installedNodeIds),
         });
       }
-    } catch (e: any) {
-      Alert.alert('Install Error', e?.message || 'Failed to start install');
+    } catch (e: unknown) {
+      Alert.alert('Install Error', e instanceof Error ? e.message : 'Failed to start install');
     } finally {
       setInstalling(false);
     }
