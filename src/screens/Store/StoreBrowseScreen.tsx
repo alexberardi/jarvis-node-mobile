@@ -94,8 +94,8 @@ const StoreBrowseScreen = () => {
     try {
       const cats = await getCategories();
       setCategories(cats);
-    } catch {
-      // Non-critical
+    } catch (err) {
+      console.error('[StoreBrowseScreen] Failed to load categories', err);
     }
   }, []);
 
@@ -124,8 +124,8 @@ const StoreBrowseScreen = () => {
         }),
       );
       setNodeTools(toolResults);
-    } catch {
-      // Non-critical
+    } catch (err) {
+      console.error('[StoreBrowseScreen] Failed to load node tools', err);
     }
   }, [authState.activeHouseholdId]);
 
