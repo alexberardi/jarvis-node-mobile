@@ -47,6 +47,8 @@ interface UseChatReturn {
   warmupState: WarmupState;
   toolCount: number;
   toolNames: string[];
+  /** Non-null when the command center is unreachable. */
+  connectionError: string | null;
   sendMessage: (text: string) => void;
   clearConversation: () => void;
   /** Force re-warmup (e.g., after installing a new command). */
@@ -66,6 +68,7 @@ export function useChat({
   const [warmupState, setWarmupState] = useState<WarmupState>('idle');
   const [toolCount, setToolCount] = useState(0);
   const [toolNames, setToolNames] = useState<string[]>([]);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const assistantIdRef = useRef<string | null>(null);
   const toolsRef = useRef<NodeToolsResponse | null>(null);
@@ -91,6 +94,7 @@ export function useChat({
           toolsRef.current = fresh;
           setToolCount(fresh.client_tools.length);
           setToolNames(extractToolNames(fresh.client_tools));
+          setConnectionError(null);
         }
       } catch {
         // Network error — proceed with warmup anyway
@@ -113,11 +117,13 @@ export function useChat({
           setConversationId(result.conversation_id);
           setToolCount(result.tools_loaded);
           setWarmupState('ready');
+          setConnectionError(null);
         }
       } catch {
         // Warmup failed — will do inline warmup on first message
         if (!cancelled) {
           setWarmupState('ready');
+          setConnectionError('Could not reach Jarvis server.');
         }
       }
     };
@@ -206,6 +212,7 @@ export function useChat({
               }),
             );
             setIsLoading(false);
+            setConnectionError(null);
             if (event.full_text && onAssistantDone) {
               onAssistantDone(event.full_text);
             }
@@ -255,19 +262,21 @@ export function useChat({
         controller.signal,
       ).catch((err) => {
         if (err instanceof Error && err.name === 'AbortError') return;
+        const errorMsg = err instanceof Error ? err.message : 'Connection failed.';
         setMessages((prev) =>
           prev.map((msg) => {
             if (msg.id === assistantIdRef.current) {
               return {
                 ...msg,
                 role: 'assistant' as const,
-                content: err instanceof Error ? err.message : 'Connection failed.',
+                content: errorMsg,
               };
             }
             return msg;
           }),
         );
         setIsLoading(false);
+        setConnectionError('Could not reach Jarvis server.');
       });
     },
     [nodeId, householdId, accessToken, conversationId, isLoading, timezone],
@@ -313,6 +322,7 @@ export function useChat({
     warmupState,
     toolCount,
     toolNames,
+    connectionError,
     sendMessage,
     clearConversation,
     refreshTools,
