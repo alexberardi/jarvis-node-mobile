@@ -77,3 +77,59 @@ export const getDownloadInfo = async (
   );
   return res.data;
 };
+
+// ─── AI Routine Generation ──────────────────────────────────────────────────
+
+export interface RoutineModelInfo {
+  id: string;
+  display_name: string;
+  provider: string;
+  estimated_cost: string;
+  estimated_cost_usd: number;
+}
+
+export interface GenerateRoutinesRequest {
+  available_commands: Record<string, unknown>[];
+  model: string;
+  llm_api_key: string;
+  user_prompt?: string;
+}
+
+export interface GeneratedRoutine {
+  id: string;
+  name: string;
+  trigger_phrases: string[];
+  steps: Array<{
+    command: string;
+    args: Array<{ key: string; value: string }>;
+    label: string;
+  }>;
+  response_instruction: string;
+  response_length: 'short' | 'medium' | 'long';
+  background: null;  // AI-generated routines are always on-demand
+}
+
+export interface GenerateRoutinesResponse {
+  routines: GeneratedRoutine[];
+  explanation: string;
+  validation_warnings: string[];
+}
+
+export const getRoutineModels = async (): Promise<RoutineModelInfo[]> => {
+  const res = await axios.get<{ models: RoutineModelInfo[] }>(
+    `${getBaseUrl()}/v1/routines/models`,
+    { timeout: 10000 },
+  );
+  return res.data.models;
+};
+
+export const generateRoutines = async (
+  request: GenerateRoutinesRequest,
+): Promise<GenerateRoutinesResponse> => {
+  const res = await axios.post<GenerateRoutinesResponse>(
+    `${getBaseUrl()}/v1/routines/generate`,
+    request,
+    { timeout: 120000 },  // 120s — LLM generation can take time
+  );
+  return res.data;
+};
