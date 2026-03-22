@@ -97,7 +97,7 @@ describe('serviceConfig', () => {
       await cacheConfig(config);
 
       expect(AsyncStorage.setItem).toHaveBeenCalledWith(
-        '@jarvis_node_mobile/service_config',
+        '@jarvis/service_config',
         JSON.stringify(config)
       );
     });
@@ -142,7 +142,7 @@ describe('serviceConfig', () => {
       await clearCachedConfig();
 
       expect(AsyncStorage.removeItem).toHaveBeenCalledWith(
-        '@jarvis_node_mobile/service_config'
+        '@jarvis/service_config'
       );
     });
   });

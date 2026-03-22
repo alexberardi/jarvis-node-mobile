@@ -23,10 +23,10 @@ describe('AuthContext', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     (AsyncStorage.multiGet as jest.Mock).mockResolvedValue([
-      ['@jarvis_node_mobile/access_token', null],
-      ['@jarvis_node_mobile/refresh_token', null],
-      ['@jarvis_node_mobile/user', null],
-      ['@jarvis_node_mobile/active_household_id', null],
+      ['@jarvis/access_token', null],
+      ['@jarvis/refresh_token', null],
+      ['@jarvis/user', null],
+      ['@jarvis/active_household_id', null],
     ]);
   });
 
@@ -66,10 +66,10 @@ describe('AuthContext', () => {
       const storedUser = { id: 1, email: 'test@example.com', username: 'testuser' };
 
       (AsyncStorage.multiGet as jest.Mock).mockResolvedValue([
-        ['@jarvis_node_mobile/access_token', 'stored-access-token'],
-        ['@jarvis_node_mobile/refresh_token', 'stored-refresh-token'],
-        ['@jarvis_node_mobile/user', JSON.stringify(storedUser)],
-        ['@jarvis_node_mobile/active_household_id', 'household-1'],
+        ['@jarvis/access_token', 'stored-access-token'],
+        ['@jarvis/refresh_token', 'stored-refresh-token'],
+        ['@jarvis/user', JSON.stringify(storedUser)],
+        ['@jarvis/active_household_id', 'household-1'],
       ]);
 
       // Mock fetchHouseholds
@@ -183,10 +183,10 @@ describe('AuthContext', () => {
       // First, set up authenticated state
       const storedUser = { id: 1, email: 'test@example.com' };
       (AsyncStorage.multiGet as jest.Mock).mockResolvedValue([
-        ['@jarvis_node_mobile/access_token', 'access-token'],
-        ['@jarvis_node_mobile/refresh_token', 'refresh-token'],
-        ['@jarvis_node_mobile/user', JSON.stringify(storedUser)],
-        ['@jarvis_node_mobile/active_household_id', null],
+        ['@jarvis/access_token', 'access-token'],
+        ['@jarvis/refresh_token', 'refresh-token'],
+        ['@jarvis/user', JSON.stringify(storedUser)],
+        ['@jarvis/active_household_id', null],
       ]);
       (authApi.get as jest.Mock).mockResolvedValue({ data: [] });
 
@@ -221,7 +221,7 @@ describe('AuthContext', () => {
 
       expect(result.current.state.activeHouseholdId).toBe('household-123');
       expect(AsyncStorage.setItem).toHaveBeenCalledWith(
-        '@jarvis_node_mobile/active_household_id',
+        '@jarvis/active_household_id',
         'household-123'
       );
     });
@@ -239,7 +239,7 @@ describe('AuthContext', () => {
 
       expect(result.current.state.activeHouseholdId).toBeNull();
       expect(AsyncStorage.removeItem).toHaveBeenCalledWith(
-        '@jarvis_node_mobile/active_household_id'
+        '@jarvis/active_household_id'
       );
     });
   });

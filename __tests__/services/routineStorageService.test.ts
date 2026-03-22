@@ -9,8 +9,7 @@ import {
   slugify,
 } from '../../src/services/routineStorageService';
 
-const STORAGE_KEY = 'jarvis_routines';
-const SEEDED_KEY = 'jarvis_routines_seeded_v2';
+import { ROUTINES_KEY as STORAGE_KEY, ROUTINES_SEEDED_KEY as SEEDED_KEY } from '../../src/config/storageKeys';
 
 describe('routineStorageService', () => {
   beforeEach(() => {

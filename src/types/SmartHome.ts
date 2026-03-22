@@ -167,12 +167,17 @@ export interface JarvisButton {
  * into the canonical JarvisButton shape. Provides backward compatibility
  * for cached inbox items that use the old format.
  */
-export function normalizeButton(raw: any): JarvisButton {
+export function normalizeButton(raw: unknown): JarvisButton {
+  const r = raw as Record<string, unknown>;
+  const rawType = (r.button_type ?? r.style ?? 'primary') as string;
+  const validTypes: JarvisButton['button_type'][] = ['primary', 'secondary', 'destructive'];
   return {
-    button_text: raw.button_text ?? raw.label ?? '',
-    button_action: raw.button_action ?? raw.name ?? '',
-    button_type: raw.button_type ?? raw.style ?? 'primary',
-    button_icon: raw.button_icon,
+    button_text: (r.button_text ?? r.label ?? '') as string,
+    button_action: (r.button_action ?? r.name ?? '') as string,
+    button_type: validTypes.includes(rawType as JarvisButton['button_type'])
+      ? (rawType as JarvisButton['button_type'])
+      : 'primary',
+    button_icon: r.button_icon as string | undefined,
   };
 }
 

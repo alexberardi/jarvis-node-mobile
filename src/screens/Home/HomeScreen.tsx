@@ -43,7 +43,7 @@ import QuickActions from '../../components/QuickActions';
 import { useChat } from '../../hooks/useChat';
 import { useVoiceRecording } from '../../hooks/useVoiceRecording';
 import { RootStackParamList } from '../../navigation/types';
-import { AUTO_PLAY_TTS_KEY } from '../Settings/SettingsScreen';
+import { AUTO_PLAY_TTS_KEY } from '../../config/storageKeys';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 

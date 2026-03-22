@@ -2,8 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import type { Routine } from '../types/Routine';
 
-const STORAGE_KEY = 'jarvis_routines';
-const SEEDED_KEY = 'jarvis_routines_seeded_v2';
+import { ROUTINES_KEY as STORAGE_KEY, ROUTINES_SEEDED_KEY as SEEDED_KEY } from '../config/storageKeys';
 
 const DEFAULT_ROUTINES: Routine[] = [
   // On-demand defaults

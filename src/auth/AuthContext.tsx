@@ -49,10 +49,12 @@ type RegisterResponse = AuthResponse & {
   household_id: string;
 };
 
-const ACCESS_TOKEN_KEY = '@jarvis_node_mobile/access_token';
-const REFRESH_TOKEN_KEY = '@jarvis_node_mobile/refresh_token';
-const USER_KEY = '@jarvis_node_mobile/user';
-const ACTIVE_HOUSEHOLD_KEY = '@jarvis_node_mobile/active_household_id';
+import {
+  ACCESS_TOKEN_KEY,
+  REFRESH_TOKEN_KEY,
+  USER_KEY,
+  ACTIVE_HOUSEHOLD_KEY,
+} from '../config/storageKeys';
 
 const initialState: AuthState = {
   user: null,

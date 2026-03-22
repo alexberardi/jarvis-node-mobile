@@ -20,7 +20,7 @@ type ThemeContextValue = {
   setThemeName: (name: 'light' | 'dark') => void;
 };
 
-const STORAGE_KEY = '@jarvis_node_mobile/theme';
+import { THEME_KEY as STORAGE_KEY } from '../config/storageKeys';
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 

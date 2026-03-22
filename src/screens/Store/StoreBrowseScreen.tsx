@@ -115,7 +115,7 @@ const StoreBrowseScreen = () => {
           try {
             const tools = await fetchNodeTools(node.node_id);
             const names = tools.client_tools
-              .map((t: any) => t.function?.name)
+              .map((t: Record<string, unknown>) => (t.function as Record<string, unknown>)?.name as string)
               .filter(Boolean);
             return { node_id: node.node_id, toolNames: names as string[] };
           } catch {

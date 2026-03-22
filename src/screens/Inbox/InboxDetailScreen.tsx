@@ -87,8 +87,8 @@ const InboxDetailScreen = () => {
         isCancel ? 'Cancelled' : 'Sent',
         isCancel ? 'Action cancelled.' : 'Action completed successfully.',
       );
-    } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Failed to perform action');
+    } catch (err: unknown) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to perform action');
     } finally {
       setActionLoading(null);
     }
@@ -152,7 +152,7 @@ const InboxDetailScreen = () => {
     | Array<{ title: string; url: string }>
     | undefined;
 
-  const actions: JarvisButton[] = ((item.metadata?.actions ?? []) as any[]).map(normalizeButton);
+  const actions: JarvisButton[] = ((item.metadata?.actions ?? []) as unknown[]).map(normalizeButton);
   const isConfirmation = item.category === 'confirmation' && actions.length > 0;
 
   const formatDate = (iso: string) => {

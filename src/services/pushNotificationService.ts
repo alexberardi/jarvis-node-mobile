@@ -12,8 +12,9 @@ import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
 import { getServiceConfig } from '../config/serviceConfig';
+import { PUSH_NOTIFICATIONS_KEY } from '../config/storageKeys';
 
-export const PUSH_NOTIFICATIONS_KEY = '@jarvis/push_notifications_enabled';
+export { PUSH_NOTIFICATIONS_KEY };
 
 /**
  * Check if push notifications are enabled by the user.
@@ -119,7 +120,7 @@ export async function registerPushToken(
       return false;
     }
 
-    console.log('[Push] Token registered successfully');
+    console.debug('[Push] Token registered successfully');
     return true;
   } catch (error) {
     console.error('[Push] Registration error:', error);
@@ -152,7 +153,7 @@ export async function unregisterPushToken(
       return false;
     }
 
-    console.log('[Push] Token unregistered');
+    console.debug('[Push] Token unregistered');
     return true;
   } catch (error) {
     console.error('[Push] Unregister error:', error);

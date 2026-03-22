@@ -32,12 +32,11 @@ import {
 } from '../../api/smartHomeApi';
 
 import type { RootStackParamList } from '../../navigation/types';
+import { AUTO_PLAY_TTS_KEY } from '../../config/storageKeys';
 import {
   arePushNotificationsEnabled,
   setPushNotificationsEnabled,
 } from '../../services/pushNotificationService';
-
-export const AUTO_PLAY_TTS_KEY = '@jarvis/auto_play_tts';
 
 const THEME_BUTTONS = [
   { value: 'light', label: 'Light', icon: 'white-balance-sunny' },
