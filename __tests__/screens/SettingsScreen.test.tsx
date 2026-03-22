@@ -123,7 +123,7 @@ describe('SettingsScreen', () => {
   it('should render user email when no username', () => {
     mockAuthState = {
       ...mockAuthState,
-      user: { id: 1, email: 'alex@example.com' },
+      user: { id: 1, email: 'alex@example.com', username: '' },
     };
 
     const { getByText } = render(<SettingsScreen />, { wrapper });
