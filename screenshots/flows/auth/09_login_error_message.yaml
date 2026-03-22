@@ -1,0 +1,30 @@
+appId: com.jarvis.nodemobile
+---
+# Test: Invalid login shows error message
+- runFlow:
+    file: ../helpers/ensure_logged_out.yaml
+
+# Tap Log In
+- tapOn: "Log In"
+- waitForAnimationToEnd
+
+# Enter bad credentials
+- tapOn: "Email"
+- inputText: "bad@example.com"
+- tapOn: "Password"
+- inputText: "wrongpassword"
+- tapOn:
+    text: "Log In"
+    index: 1
+- waitForAnimationToEnd
+
+# Should show error message
+- extendedWaitUntil:
+    visible:
+      text: ".*[Uu]nable.*|.*[Ii]nvalid.*|.*[Ii]ncorrect.*|.*[Ff]ailed.*"
+    timeout: 10000
+- takeScreenshot: auth-login-error-message
+
+# Should still be on login screen
+- assertVisible: "Email"
+- assertVisible: "Password"

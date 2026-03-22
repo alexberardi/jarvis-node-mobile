@@ -1,0 +1,32 @@
+appId: com.jarvis.nodemobile
+---
+# Test: Routines tab shows content or empty state with filter segments
+- launchApp
+- waitForAnimationToEnd
+- tapOn:
+    text: ".*localhost.*"
+    index: 0
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    text: "Continue"
+    optional: true
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Jarvis"
+    timeout: 15000
+
+# Tap Routines tab
+- tapOn: "Routines"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Routines"
+    timeout: 10000
+
+# Should see filter segments and either content or empty state
+- assertVisible: "All"
+- extendedWaitUntil:
+    visible:
+      text: ".*No routines.*|.*routine.*|.*automation.*"
+    timeout: 10000
+- takeScreenshot: routines-list

@@ -108,4 +108,10 @@ apiClient.interceptors.response.use(
   },
 );
 
+/**
+ * Returns the current access token (if any). Useful for non-axios requests
+ * (e.g. XMLHttpRequest/SSE) that need JWT auth outside the interceptor.
+ */
+export const getCurrentAccessToken = (): string | null => getAccessToken();
+
 export default apiClient;

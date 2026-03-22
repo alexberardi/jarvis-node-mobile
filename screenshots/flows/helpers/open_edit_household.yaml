@@ -1,0 +1,10 @@
+appId: com.jarvis.nodemobile
+---
+# Helper: Open the edit household dialog from the Settings screen.
+# Assumes Settings is already open and a household with admin role is visible.
+- tapOn:
+    text: "Edit household"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Edit Household"
+    timeout: 10000

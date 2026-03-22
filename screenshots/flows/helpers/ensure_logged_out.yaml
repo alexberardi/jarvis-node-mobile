@@ -1,0 +1,30 @@
+appId: com.jarvis.nodemobile
+---
+# Helper: Ensure the app is at the landing screen (logged out).
+# Works whether currently logged in or logged out.
+- launchApp
+- waitForAnimationToEnd
+- tapOn:
+    text: ".*localhost.*"
+    index: 0
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    text: "Continue"
+    optional: true
+- waitForAnimationToEnd
+
+# If logged in: settings cog is visible — tap it and logout
+- tapOn:
+    point: "78%,9%"
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    text: "Log Out"
+    optional: true
+- waitForAnimationToEnd
+
+# Now we should be at the landing screen
+- extendedWaitUntil:
+    visible: "Log In"
+    timeout: 15000
