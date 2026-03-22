@@ -10,7 +10,7 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#0d0d2b"
     },
     "ios": {
       "supportsTablet": true,
@@ -33,7 +33,7 @@
       "package": "com.jarvis.nodemobile",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#0d0d2b"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
