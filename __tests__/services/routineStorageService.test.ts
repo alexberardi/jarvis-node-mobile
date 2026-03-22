@@ -201,7 +201,7 @@ describe('routineStorageService', () => {
         trigger_phrases: ['one'],
         steps: [],
         response_instruction: 'first',
-        response_length: 'short',
+        response_length: 'short' as const,
         background: null,
       },
     ];
