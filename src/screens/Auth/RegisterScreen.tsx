@@ -61,7 +61,12 @@ const RegisterScreen = ({ navigation }: Props) => {
 
     setLoading(true);
     try {
-      await setPushNotificationsEnabled(enablePush);
+      try {
+        await setPushNotificationsEnabled(enablePush);
+      } catch (pushErr) {
+        console.error('[RegisterScreen] Failed to set push notification preference', pushErr);
+        // Non-blocking — continue with registration
+      }
       await register(email.trim(), password, undefined, inviteCode.trim() || undefined);
     } catch (err: unknown) {
       console.debug('[RegisterScreen] Registration failed:', err);
