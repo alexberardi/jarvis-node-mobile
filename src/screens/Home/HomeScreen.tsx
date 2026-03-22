@@ -10,7 +10,7 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
-import { Badge, IconButton, Snackbar, Text, TextInput, useTheme } from 'react-native-paper';
+import { Badge, Button, IconButton, Snackbar, Text, TextInput, useTheme } from 'react-native-paper';
 
 import { Audio } from 'expo-av';
 
@@ -60,6 +60,7 @@ const HomeScreen = () => {
   const soundRef = useRef<Audio.Sound | null>(null);
 
   const [snackbar, setSnackbar] = useState('');
+  const [nodeCount, setNodeCount] = useState<number | null>(null);
   const householdId = authState.activeHouseholdId;
   const { isRecording, startRecording, stopRecording } = useVoiceRecording();
 
@@ -287,6 +288,7 @@ const HomeScreen = () => {
             householdId={householdId}
             selectedNodeId={selectedNodeId}
             onSelectNode={setSelectedNodeId}
+            onNodesLoaded={setNodeCount}
           />
           {selectedNodeId && warmupState !== 'idle' && (
             <View style={styles.warmupIndicator}>
@@ -320,10 +322,28 @@ const HomeScreen = () => {
           flatListRef.current?.scrollToEnd({ animated: true });
         }}
         ListEmptyComponent={
-          <QuickActions
-            availableTools={toolNames}
-            onSelect={sendMessage}
-          />
+          nodeCount === 0 ? (
+            <View style={styles.onboarding}>
+              <Text variant="headlineSmall" style={{ fontWeight: 'bold', marginBottom: 8 }}>
+                Welcome to Jarvis
+              </Text>
+              <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant, textAlign: 'center', marginBottom: 20 }}>
+                Pair a voice node to get started. You can use a Pi Zero or this device as a node.
+              </Text>
+              <Button
+                mode="contained"
+                icon="plus"
+                onPress={() => navigation.getParent()?.navigate('NodesTab')}
+              >
+                Add Your First Node
+              </Button>
+            </View>
+          ) : (
+            <QuickActions
+              availableTools={toolNames}
+              onSelect={sendMessage}
+            />
+          )
         }
       />
 
@@ -442,6 +462,12 @@ const styles = StyleSheet.create({
   },
   inputOutline: {
     borderRadius: 24,
+  },
+  onboarding: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
   },
 });
 

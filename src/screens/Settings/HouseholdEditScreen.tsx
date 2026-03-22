@@ -1,6 +1,6 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import {
   ActivityIndicator,
   Appbar,
@@ -208,7 +208,10 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
       </Appbar.Header>
 
       <Portal.Host>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        refreshControl={<RefreshControl refreshing={membersLoading} onRefresh={loadMembersAndInvites} />}
+      >
         {/* Name */}
         <Card style={styles.card}>
           <Card.Content>
