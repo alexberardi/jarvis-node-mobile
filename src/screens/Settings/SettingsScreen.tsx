@@ -71,8 +71,14 @@ const SettingsScreen = () => {
         headers: { Authorization: `Bearer ${authState.accessToken}` },
       });
       setJoinStatus(res.data);
-    } catch {
-      setJoinStatus({ valid: false, household_name: null });
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (status === 404 || status === 422) {
+        setJoinStatus({ valid: false, household_name: null });
+      } else {
+        console.error('[SettingsScreen] Failed to validate invite code', err);
+        setJoinError('Could not validate code. Check your connection.');
+      }
     }
   }, [joinCode, authState.accessToken]);
 
@@ -102,15 +108,21 @@ const SettingsScreen = () => {
 
   // Load settings
   useEffect(() => {
-    AsyncStorage.getItem(AUTO_PLAY_TTS_KEY).then((val) => {
-      setAutoPlayTTS(val === 'true');
-    });
-    arePushNotificationsEnabled().then(setPushEnabled);
+    AsyncStorage.getItem(AUTO_PLAY_TTS_KEY)
+      .then((val) => setAutoPlayTTS(val === 'true'))
+      .catch((err) => console.error('[SettingsScreen] Failed to load auto-play setting', err));
+    arePushNotificationsEnabled()
+      .then(setPushEnabled)
+      .catch((err) => console.error('[SettingsScreen] Failed to load push setting', err));
   }, []);
 
   const handleAutoPlayToggle = useCallback(async (value: boolean) => {
     setAutoPlayTTS(value);
-    await AsyncStorage.setItem(AUTO_PLAY_TTS_KEY, value ? 'true' : 'false');
+    try {
+      await AsyncStorage.setItem(AUTO_PLAY_TTS_KEY, value ? 'true' : 'false');
+    } catch (err) {
+      console.error('[SettingsScreen] Failed to save auto-play setting', err);
+    }
   }, []);
 
   const handlePushToggle = useCallback(async (value: boolean) => {
@@ -129,7 +141,7 @@ const SettingsScreen = () => {
     setSmartHomeLoading(true);
     getSmartHomeConfig(householdId)
       .then(setSmartHomeConfig)
-      .catch((err) => console.warn('Failed to load smart home config:', err))
+      .catch((err) => console.error('[SettingsScreen] Failed to load smart home config', err))
       .finally(() => setSmartHomeLoading(false));
   }, [householdId]);
 
@@ -141,8 +153,10 @@ const SettingsScreen = () => {
       try {
         const updated = await updateSmartHomeConfig(householdId, { primary_node_id: newNodeId });
         setSmartHomeConfig((c) => c ? { ...c, ...updated } : c);
-      } catch {
+      } catch (err) {
+        console.error('[SettingsScreen] Failed to update primary node', err);
         setSmartHomeConfig((c) => c ? { ...c, primary_node_id: prev } : c);
+        Alert.alert('Error', 'Could not update primary node.');
       }
     },
     [householdId, smartHomeConfig],
@@ -156,8 +170,10 @@ const SettingsScreen = () => {
       try {
         const updated = await updateSmartHomeConfig(householdId, { use_external_devices: value });
         setSmartHomeConfig((c) => c ? { ...c, ...updated } : c);
-      } catch {
+      } catch (err) {
+        console.error('[SettingsScreen] Failed to toggle external devices', err);
         setSmartHomeConfig((c) => c ? { ...c, use_external_devices: prev } : c);
+        Alert.alert('Error', 'Could not update device management setting.');
       }
     },
     [householdId, smartHomeConfig],
@@ -184,6 +200,9 @@ const SettingsScreen = () => {
     setSaving(true);
     try {
       await setManualUrl(null);
+    } catch (err) {
+      console.error('[SettingsScreen] Failed to clear config URL', err);
+      Alert.alert('Error', 'Could not clear the config URL.');
     } finally {
       setSaving(false);
     }
