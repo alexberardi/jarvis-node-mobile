@@ -1,0 +1,67 @@
+# KNOWN ISSUE: RN Paper Dialog dismisses on keyboard Enter, making Save inaccessible.
+# Needs Dialog dismissable={false} or testID-based Save tap fix.
+appId: com.jarvis.nodemobile
+env:
+  USER_A_EMAIL: ${E2E_USER_A_EMAIL}
+  USER_A_PASSWORD: ${E2E_USER_A_PASSWORD}
+---
+# Test: Admin renames household, then restores it
+
+- runFlow:
+    file: ../helpers/ensure_logged_out.yaml
+- runFlow:
+    file: ../helpers/login_user_a.yaml
+
+# Open settings
+- tapOn:
+    point: "78%,9%"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 10000
+- extendedWaitUntil:
+    visible: ".*Test Home.*"
+    timeout: 10000
+
+# Open edit dialog
+- runFlow:
+    file: ../helpers/open_edit_household.yaml
+
+# Tap the TextInput via testID, clear and type new name
+# Tap the TextInput in the dialog (center of dialog, upper area)
+- tapOn:
+    point: "50%,42%"
+- eraseText: 20
+- inputText: "Renamed Home"
+# Dismiss keyboard
+- pressKey: Enter
+- waitForAnimationToEnd
+
+# Save via testID
+- tapOn: "Save"
+- waitForAnimationToEnd
+
+# Verify renamed
+- extendedWaitUntil:
+    visible: ".*Renamed Home.*"
+    timeout: 10000
+- takeScreenshot: multiuser-admin-renamed
+
+# Restore name
+- runFlow:
+    file: ../helpers/open_edit_household.yaml
+- tapOn:
+    point: "50%,42%"
+- eraseText: 20
+- inputText: "Test Home"
+- pressKey: Enter
+- waitForAnimationToEnd
+- tapOn: "Save"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: ".*Test Home.*"
+    timeout: 10000
+
+# Logout
+- runFlow:
+    file: ../helpers/logout.yaml

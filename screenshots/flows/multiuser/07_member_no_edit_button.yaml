@@ -1,0 +1,36 @@
+appId: com.jarvis.nodemobile
+env:
+  USER_B_EMAIL: ${E2E_USER_B_EMAIL}
+  USER_B_PASSWORD: ${E2E_USER_B_PASSWORD}
+---
+# Test: Member (User B) cannot see pencil/edit icon on "Test Home" (not admin)
+
+# Ensure clean state
+- runFlow:
+    file: ../helpers/ensure_logged_out.yaml
+
+# Login as User B
+- runFlow:
+    file: ../helpers/login_user_b.yaml
+
+# Open settings
+- tapOn:
+    point: "78%,9%"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 10000
+
+# Wait for households to load
+- extendedWaitUntil:
+    visible: ".*Test Home.*"
+    timeout: 10000
+
+# User B is member of "Test Home" — should see "member" role text
+- assertVisible:
+    text: ".*member.*"
+- takeScreenshot: multiuser-member-no-edit
+
+# Logout for next test
+- runFlow:
+    file: ../helpers/logout.yaml

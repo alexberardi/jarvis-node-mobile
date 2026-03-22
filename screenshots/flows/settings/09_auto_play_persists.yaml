@@ -1,0 +1,60 @@
+appId: com.jarvis.nodemobile
+---
+# Test: Auto-play TTS toggle persists across Settings close/reopen
+- launchApp
+- waitForAnimationToEnd
+- tapOn:
+    text: ".*localhost.*"
+    index: 0
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    text: "Continue"
+    optional: true
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Jarvis"
+    timeout: 15000
+
+# Open settings
+- runFlow:
+    file: ../helpers/open_settings.yaml
+
+# Verify auto-play switch starts OFF
+- assertVisible:
+    id: "auto-play-off"
+
+# Scroll to Chat section if needed
+- swipe:
+    start: "50%,80%"
+    end: "50%,60%"
+    optional: true
+- waitForAnimationToEnd
+
+# Toggle auto-play ON (tap the switch area)
+- tapOn:
+    id: "auto-play-off"
+- waitForAnimationToEnd
+
+# Verify switch is now ON
+- assertVisible:
+    id: "auto-play-on"
+- takeScreenshot: settings-auto-play-on
+
+# Close and reopen
+- runFlow:
+    file: ../helpers/close_settings.yaml
+- runFlow:
+    file: ../helpers/open_settings.yaml
+
+# Verify auto-play persisted as ON
+- assertVisible:
+    id: "auto-play-on"
+- takeScreenshot: settings-auto-play-persisted
+
+# Restore: toggle OFF
+- tapOn:
+    id: "auto-play-on"
+- waitForAnimationToEnd
+- assertVisible:
+    id: "auto-play-off"

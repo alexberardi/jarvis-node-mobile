@@ -1,0 +1,38 @@
+appId: com.jarvis.nodemobile
+env:
+  USER_B_EMAIL: ${E2E_USER_B_EMAIL}
+  USER_B_PASSWORD: ${E2E_USER_B_PASSWORD}
+---
+# Test: User B (member) sees both "My Home" and "Test Home" households
+
+# Ensure clean state
+- runFlow:
+    file: ../helpers/ensure_logged_out.yaml
+
+# Login as User B
+- runFlow:
+    file: ../helpers/login_user_b.yaml
+
+# Open settings
+- tapOn:
+    point: "78%,9%"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 10000
+
+# Wait for households to load
+- extendedWaitUntil:
+    visible: ".*My Home.*"
+    timeout: 10000
+
+# Should see both households
+- assertVisible:
+    text: ".*My Home.*"
+- assertVisible:
+    text: ".*Test Home.*"
+- takeScreenshot: multiuser-member-two-households
+
+# Logout for next test
+- runFlow:
+    file: ../helpers/logout.yaml

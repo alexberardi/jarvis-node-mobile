@@ -1,0 +1,39 @@
+appId: com.jarvis.nodemobile
+env:
+  USER_B_EMAIL: ${E2E_USER_B_EMAIL}
+  USER_B_PASSWORD: ${E2E_USER_B_PASSWORD}
+---
+# Test: User B switches active household from "My Home" to "Test Home"
+
+# Ensure clean state
+- runFlow:
+    file: ../helpers/ensure_logged_out.yaml
+
+# Login as User B
+- runFlow:
+    file: ../helpers/login_user_b.yaml
+
+# Open settings
+- tapOn:
+    point: "78%,9%"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 10000
+
+# Wait for households to load
+- extendedWaitUntil:
+    visible: ".*My Home.*"
+    timeout: 10000
+
+# Tap "Test Home" to switch
+- tapOn:
+    text: "Test Home"
+- waitForAnimationToEnd
+
+# Radio button should now show "Test Home" as selected
+- takeScreenshot: multiuser-member-switched
+
+# Logout for next test
+- runFlow:
+    file: ../helpers/logout.yaml

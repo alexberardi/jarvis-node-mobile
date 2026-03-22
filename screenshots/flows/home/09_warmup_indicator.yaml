@@ -1,0 +1,30 @@
+appId: com.jarvis.nodemobile
+---
+# Test: After node selection, warmup completes and shows tool count
+- launchApp
+- waitForAnimationToEnd
+- tapOn:
+    text: ".*localhost.*"
+    index: 0
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    text: "Continue"
+    optional: true
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Jarvis"
+    timeout: 15000
+
+# Wait for node auto-selection
+- extendedWaitUntil:
+    visible:
+      text: ".*office.*|.*kitchen.*|.*bedroom.*"
+    timeout: 15000
+
+# Wait for warmup to complete — "N tools loaded" appears after warming up
+- extendedWaitUntil:
+    visible:
+      text: ".*tools loaded.*"
+    timeout: 30000
+- takeScreenshot: home-warmup-complete
