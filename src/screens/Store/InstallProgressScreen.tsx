@@ -7,6 +7,7 @@ import {
   Button,
   Card,
   Icon,
+  IconButton,
   Text,
   useTheme,
 } from 'react-native-paper';
@@ -25,6 +26,7 @@ interface InstallEntry {
 }
 
 const POLL_INTERVAL_MS = 2000;
+const MAX_CONSECUTIVE_FAILURES = 5;
 
 const TERMINAL_STATES: Set<InstallStatusValue> = new Set(['completed', 'failed', 'expired']);
 
@@ -37,26 +39,58 @@ const InstallProgressScreen = () => {
   const { packageName } = route.params;
 
   const [statuses, setStatuses] = useState<Map<string, InstallStatus>>(new Map());
+  const [pollError, setPollError] = useState<string | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const consecutiveFailuresRef = useRef(0);
+
+  const stopPolling = useCallback(() => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+  }, []);
 
   const pollAll = useCallback(async () => {
-    const updates = await Promise.allSettled(
-      installs.map(async (entry) => {
-        const status = await pollInstallStatus(entry.nodeId, entry.requestId);
-        return { key: entry.requestId, status };
-      }),
-    );
+    try {
+      const updates = await Promise.allSettled(
+        installs.map(async (entry) => {
+          const status = await pollInstallStatus(entry.nodeId, entry.requestId);
+          return { key: entry.requestId, status };
+        }),
+      );
 
-    setStatuses((prev) => {
-      const next = new Map(prev);
-      for (const result of updates) {
-        if (result.status === 'fulfilled') {
-          next.set(result.value.key, result.value.status);
+      const allRejected = updates.every((r) => r.status === 'rejected');
+      if (allRejected) {
+        consecutiveFailuresRef.current += 1;
+        if (consecutiveFailuresRef.current >= MAX_CONSECUTIVE_FAILURES) {
+          console.error('[InstallProgressScreen] Polling stopped after 5 consecutive failures');
+          setPollError('Unable to reach the server. Check your connection and try again.');
+          stopPolling();
+          return;
         }
+      } else {
+        consecutiveFailuresRef.current = 0;
+        setPollError(null);
       }
-      return next;
-    });
-  }, [installs]);
+
+      setStatuses((prev) => {
+        const next = new Map(prev);
+        for (const result of updates) {
+          if (result.status === 'fulfilled') {
+            next.set(result.value.key, result.value.status);
+          }
+        }
+        return next;
+      });
+    } catch (error) {
+      consecutiveFailuresRef.current += 1;
+      console.error('[InstallProgressScreen] Poll error', error);
+      if (consecutiveFailuresRef.current >= MAX_CONSECUTIVE_FAILURES) {
+        setPollError('Unable to reach the server. Check your connection and try again.');
+        stopPolling();
+      }
+    }
+  }, [installs, stopPolling]);
 
   useEffect(() => {
     // Initial poll
@@ -65,9 +99,9 @@ const InstallProgressScreen = () => {
     intervalRef.current = setInterval(pollAll, POLL_INTERVAL_MS);
 
     return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      stopPolling();
     };
-  }, [pollAll]);
+  }, [pollAll, stopPolling]);
 
   // Stop polling when all are terminal
   useEffect(() => {
@@ -76,16 +110,15 @@ const InstallProgressScreen = () => {
       const s = statuses.get(entry.requestId);
       return s && TERMINAL_STATES.has(s.status);
     });
-    if (allTerminal && intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-
+    if (allTerminal) {
+      stopPolling();
       // No cache to clear — tools are fetched fresh on every warmup.
     }
-  }, [statuses, installs]);
+  }, [statuses, installs, stopPolling]);
 
-  const handleRetry = async (entry: InstallEntry) => {
-    // Re-poll to refresh — actual retry would need re-requesting install
+  const handleCheckStatus = async () => {
+    consecutiveFailuresRef.current = 0;
+    setPollError(null);
     await pollAll();
   };
 
@@ -97,6 +130,11 @@ const InstallProgressScreen = () => {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
+        <IconButton
+          icon="arrow-left"
+          onPress={() => navigation.goBack()}
+          style={styles.backButton}
+        />
         <Text
           variant="headlineSmall"
           style={[styles.title, { color: theme.colors.onBackground }]}
@@ -104,6 +142,15 @@ const InstallProgressScreen = () => {
           Installing {packageName}
         </Text>
       </View>
+
+      {pollError && (
+        <View style={styles.errorBanner}>
+          <Icon source="alert-circle" size={20} color={theme.colors.error} />
+          <Text variant="bodyMedium" style={[styles.errorText, { color: theme.colors.error }]}>
+            {pollError}
+          </Text>
+        </View>
+      )}
 
       <ScrollView contentContainerStyle={styles.scroll}>
         {installs.map((entry) => {
@@ -119,7 +166,7 @@ const InstallProgressScreen = () => {
                     variant="bodySmall"
                     style={{ color: theme.colors.onSurfaceVariant }}
                   >
-                    {statusValue === 'pending' && 'Installing...'}
+                    {statusValue === 'pending' && (pollError ? 'Status unknown' : 'Installing...')}
                     {statusValue === 'completed' && 'Installed successfully'}
                     {statusValue === 'failed' && (status?.error_message || 'Installation failed')}
                     {statusValue === 'expired' && 'Request timed out — node may be offline'}
@@ -127,8 +174,11 @@ const InstallProgressScreen = () => {
                 </View>
 
                 <View style={styles.statusIcon}>
-                  {statusValue === 'pending' && (
+                  {statusValue === 'pending' && !pollError && (
                     <ActivityIndicator size={24} />
+                  )}
+                  {statusValue === 'pending' && pollError && (
+                    <Icon source="help-circle" size={28} color={theme.colors.outline} />
                   )}
                   {statusValue === 'completed' && (
                     <Icon source="check-circle" size={28} color="#22c55e" />
@@ -141,8 +191,8 @@ const InstallProgressScreen = () => {
 
               {statusValue === 'failed' && (
                 <Card.Actions>
-                  <Button compact onPress={() => handleRetry(entry)}>
-                    Refresh
+                  <Button compact onPress={() => handleCheckStatus()}>
+                    Check Status
                   </Button>
                 </Card.Actions>
               )}
@@ -151,14 +201,23 @@ const InstallProgressScreen = () => {
         })}
       </ScrollView>
 
-      {allDone && (
+      {(allDone || pollError) && (
         <View style={styles.footer}>
+          {pollError && (
+            <Button
+              mode="outlined"
+              onPress={handleCheckStatus}
+              style={{ flex: 1, marginRight: 8 }}
+            >
+              Retry
+            </Button>
+          )}
           <Button
             mode="contained"
             onPress={() => navigation.popToTop()}
             style={{ flex: 1 }}
           >
-            Done
+            {allDone ? 'Done' : 'Back'}
           </Button>
         </View>
       )}
@@ -168,8 +227,18 @@ const InstallProgressScreen = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, paddingTop: 48 },
-  header: { paddingHorizontal: 16, marginBottom: 16 },
-  title: { fontWeight: 'bold' },
+  header: { flexDirection: 'row', alignItems: 'center', paddingRight: 16, marginBottom: 16 },
+  backButton: { marginLeft: 4 },
+  title: { fontWeight: 'bold', flex: 1 },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 8,
+    marginBottom: 8,
+  },
+  errorText: { flex: 1 },
   scroll: { padding: 16, gap: 12, paddingBottom: 100 },
   card: {},
   cardContent: {
@@ -180,6 +249,7 @@ const styles = StyleSheet.create({
   },
   statusIcon: { marginLeft: 12 },
   footer: {
+    flexDirection: 'row',
     position: 'absolute',
     bottom: 0,
     left: 0,

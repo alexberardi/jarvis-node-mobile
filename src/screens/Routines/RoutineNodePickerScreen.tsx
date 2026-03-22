@@ -3,6 +3,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useCallback, useEffect, useState } from 'react';
 import { FlatList, StyleSheet, View } from 'react-native';
 import {
+  ActivityIndicator,
   Button,
   Checkbox,
   IconButton,
@@ -33,12 +34,29 @@ const RoutineNodePickerScreen = () => {
   const [pushing, setPushing] = useState(false);
   const [results, setResults] = useState<PushResult[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getRoutine(route.params.routineId).then((r) => setRoutine(r ?? null));
-    listNodes()
-      .then(setNodes)
-      .catch(() => setError('Could not load nodes'));
+    let mounted = true;
+    const load = async () => {
+      try {
+        const [r, nodeList] = await Promise.all([
+          getRoutine(route.params.routineId),
+          listNodes(),
+        ]);
+        if (!mounted) return;
+        setRoutine(r ?? null);
+        setNodes(nodeList);
+      } catch (err) {
+        if (!mounted) return;
+        console.error('[RoutineNodePickerScreen] Failed to load data', err);
+        setError('Could not load data.');
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+    load();
+    return () => { mounted = false; };
   }, [route.params.routineId]);
 
   const toggleNode = useCallback((nodeId: string) => {
@@ -118,6 +136,22 @@ const RoutineNodePickerScreen = () => {
     );
   };
 
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.headerRow}>
+          <IconButton icon="arrow-left" onPress={() => navigation.goBack()} />
+          <Text variant="headlineSmall" style={{ fontWeight: 'bold', flex: 1 }}>
+            Push to Nodes
+          </Text>
+        </View>
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" />
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <View style={styles.headerRow}>
@@ -195,6 +229,7 @@ const RoutineNodePickerScreen = () => {
 const styles = StyleSheet.create({
   container: { flex: 1, paddingTop: 48 },
   headerRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   list: { paddingBottom: 16 },
   actions: {
     flexDirection: 'row',
