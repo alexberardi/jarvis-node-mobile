@@ -87,7 +87,7 @@ const HomeScreen = () => {
     }
   }, []);
 
-  const { messages, isLoading, warmupState, toolCount, toolNames, sendMessage, clearConversation, refreshTools } = useChat({
+  const { messages, isLoading, warmupState, toolCount, toolNames, connectionError, sendMessage, clearConversation, refreshTools } = useChat({
     nodeId: selectedNodeId,
     householdId,
     accessToken: authState.accessToken,
@@ -309,6 +309,23 @@ const HomeScreen = () => {
         </View>
       )}
 
+      {/* Connection error banner */}
+      {connectionError && (
+        <View style={[styles.connectionBanner, { backgroundColor: `${theme.colors.error}15` }]}>
+          <Text variant="bodySmall" style={{ color: theme.colors.error, flex: 1 }}>
+            {connectionError}
+          </Text>
+          <Button
+            mode="text"
+            compact
+            onPress={refreshTools}
+            labelStyle={{ fontSize: 12 }}
+          >
+            Retry
+          </Button>
+        </View>
+      )}
+
       {/* Message list */}
       <FlatList
         ref={flatListRef}
@@ -462,6 +479,12 @@ const styles = StyleSheet.create({
   },
   inputOutline: {
     borderRadius: 24,
+  },
+  connectionBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 6,
   },
   onboarding: {
     flex: 1,
