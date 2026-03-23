@@ -64,6 +64,12 @@ const HomeScreen = () => {
   const householdId = authState.activeHouseholdId;
   const { isRecording, startRecording, stopRecording } = useVoiceRecording();
 
+  // Reset node selection and chat state when household changes
+  useEffect(() => {
+    setSelectedNodeId(null);
+    setNodeCount(null);
+  }, [householdId]);
+
   // Load auto-play preference
   useEffect(() => {
     AsyncStorage.getItem(AUTO_PLAY_TTS_KEY).then((val) => setAutoPlayTTS(val === 'true'));
@@ -309,8 +315,8 @@ const HomeScreen = () => {
         </View>
       )}
 
-      {/* Connection error banner */}
-      {connectionError && (
+      {/* Connection error banner — only show if we actually tried to connect */}
+      {connectionError && connectionError.trim() !== '' && warmupState !== 'idle' && nodeCount !== 0 && (
         <View style={[styles.connectionBanner, { backgroundColor: `${theme.colors.error}15` }]}>
           <Text variant="bodySmall" style={{ color: theme.colors.error, flex: 1 }}>
             {connectionError}

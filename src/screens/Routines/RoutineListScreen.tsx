@@ -12,6 +12,7 @@ import {
   Chip,
   FAB,
   IconButton,
+  Menu,
   SegmentedButtons,
   Text,
   useTheme,
@@ -72,6 +73,7 @@ const RoutineListScreen = () => {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
   const [fabOpen, setFabOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -161,6 +163,30 @@ const RoutineListScreen = () => {
               <Text variant="titleMedium" style={[{ flex: 1 }, !bgEnabled && { opacity: 0.5 }]}>
                 {item.name}
               </Text>
+              <Menu
+                visible={menuOpen === item.id}
+                onDismiss={() => setMenuOpen(null)}
+                anchor={
+                  <IconButton
+                    icon="dots-vertical"
+                    size={20}
+                    onPress={() => setMenuOpen(item.id)}
+                    style={{ margin: -4 }}
+                  />
+                }
+              >
+                <Menu.Item
+                  leadingIcon="history"
+                  title="View History"
+                  onPress={() => {
+                    setMenuOpen(null);
+                    navigation.navigate('RoutineHistory', {
+                      routineId: item.id,
+                      routineName: item.name,
+                    });
+                  }}
+                />
+              </Menu>
             </View>
             <View style={styles.chips}>
               {item.trigger_phrases.slice(0, 3).map((phrase) => (

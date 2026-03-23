@@ -12,7 +12,8 @@ import {
   useTheme,
 } from 'react-native-paper';
 
-import { pollInstallStatus } from '../../api/packageInstallApi';
+import { pollInstallStatus, requestInstall } from '../../api/packageInstallApi';
+import { pollTestInstallStatus } from '../../api/testInstallApi';
 import { StoreStackParamList } from '../../navigation/types';
 import type { InstallStatus, InstallStatusValue } from '../../types/Package';
 
@@ -35,11 +36,14 @@ const InstallProgressScreen = () => {
   const route = useRoute<Route>();
   const theme = useTheme();
 
-  const installs: InstallEntry[] = JSON.parse(route.params.installs);
-  const { packageName } = route.params;
+  const initialInstalls: InstallEntry[] = JSON.parse(route.params.installs);
+  const { packageName, commandName, githubRepoUrl, gitTag, mode } = route.params;
+  const isTestInstall = mode === 'test';
 
+  const [installs, setInstalls] = useState<InstallEntry[]>(initialInstalls);
   const [statuses, setStatuses] = useState<Map<string, InstallStatus>>(new Map());
   const [pollError, setPollError] = useState<string | null>(null);
+  const [retrying, setRetrying] = useState<Set<string>>(new Set());
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const consecutiveFailuresRef = useRef(0);
 
@@ -54,7 +58,9 @@ const InstallProgressScreen = () => {
     try {
       const updates = await Promise.allSettled(
         installs.map(async (entry) => {
-          const status = await pollInstallStatus(entry.nodeId, entry.requestId);
+          const status = isTestInstall
+            ? await pollTestInstallStatus(entry.nodeId, entry.requestId)
+            : await pollInstallStatus(entry.nodeId, entry.requestId);
           return { key: entry.requestId, status };
         }),
       );
@@ -122,6 +128,45 @@ const InstallProgressScreen = () => {
     await pollAll();
   };
 
+  const handleRetry = async (entry: InstallEntry) => {
+    setRetrying((prev) => new Set(prev).add(entry.nodeId));
+    try {
+      const result = await requestInstall(entry.nodeId, commandName, githubRepoUrl, gitTag);
+      const newEntry: InstallEntry = { ...entry, requestId: result.id };
+
+      setInstalls((prev) => prev.map((e) => (e.nodeId === entry.nodeId ? newEntry : e)));
+      setStatuses((prev) => {
+        const next = new Map(prev);
+        next.delete(entry.requestId);
+        return next;
+      });
+
+      // Resume polling if it was stopped
+      if (!intervalRef.current) {
+        consecutiveFailuresRef.current = 0;
+        setPollError(null);
+        intervalRef.current = setInterval(pollAll, POLL_INTERVAL_MS);
+      }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Retry failed';
+      setStatuses((prev) => {
+        const next = new Map(prev);
+        next.set(entry.requestId, {
+          ...prev.get(entry.requestId)!,
+          status: 'failed',
+          error_message: msg,
+        });
+        return next;
+      });
+    } finally {
+      setRetrying((prev) => {
+        const next = new Set(prev);
+        next.delete(entry.nodeId);
+        return next;
+      });
+    }
+  };
+
   const allDone = installs.every((entry) => {
     const s = statuses.get(entry.requestId);
     return s && TERMINAL_STATES.has(s.status);
@@ -139,7 +184,7 @@ const InstallProgressScreen = () => {
           variant="headlineSmall"
           style={[styles.title, { color: theme.colors.onBackground }]}
         >
-          Installing {packageName}
+          {isTestInstall ? 'Testing' : 'Installing'} {packageName}
         </Text>
       </View>
 
@@ -189,10 +234,15 @@ const InstallProgressScreen = () => {
                 </View>
               </Card.Content>
 
-              {statusValue === 'failed' && (
+              {!isTestInstall && (statusValue === 'failed' || statusValue === 'expired') && (
                 <Card.Actions>
-                  <Button compact onPress={() => handleCheckStatus()}>
-                    Check Status
+                  <Button
+                    compact
+                    onPress={() => handleRetry(entry)}
+                    loading={retrying.has(entry.nodeId)}
+                    disabled={retrying.has(entry.nodeId)}
+                  >
+                    Retry
                   </Button>
                 </Card.Actions>
               )}

@@ -79,12 +79,16 @@ export function useChat({
       toolsRef.current = null;
       setWarmupState('idle');
       setToolCount(0);
+      setConnectionError(null);
       return;
     }
 
     let cancelled = false;
 
     const startup = async () => {
+      setConnectionError(null);
+      setToolCount(0);
+      setToolNames([]);
       setWarmupState('loading_tools');
 
       // Fetch tools fresh from CC (MQTT to node — no caching).
