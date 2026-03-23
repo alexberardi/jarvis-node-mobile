@@ -8,8 +8,10 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { AuthProvider } from './src/auth/AuthContext';
+import ConnectionBanner from './src/components/ConnectionBanner';
 import { DEV_MODE } from './src/config/env';
 import { ConfigProvider } from './src/contexts/ConfigContext';
+import { ConnectionProvider } from './src/contexts/ConnectionContext';
 import { usePushNotifications } from './src/hooks/usePushNotifications';
 import RootNavigator from './src/navigation/RootNavigator';
 import { ThemeProvider, useThemePreference } from './src/theme/ThemeProvider';
@@ -32,14 +34,17 @@ const AppContent = () => {
     <PaperProvider theme={paperTheme}>
       <QueryClientProvider client={queryClient}>
         <ConfigProvider>
-          <AuthProvider>
-            <PushNotificationManager>
-              <NavigationContainer theme={navTheme}>
-                <RootNavigator />
-                <StatusBar style={isDark ? 'light' : 'dark'} />
-              </NavigationContainer>
-            </PushNotificationManager>
-          </AuthProvider>
+          <ConnectionProvider>
+            <AuthProvider>
+              <PushNotificationManager>
+                <NavigationContainer theme={navTheme}>
+                  <ConnectionBanner />
+                  <RootNavigator />
+                  <StatusBar style={isDark ? 'light' : 'dark'} />
+                </NavigationContainer>
+              </PushNotificationManager>
+            </AuthProvider>
+          </ConnectionProvider>
         </ConfigProvider>
       </QueryClientProvider>
     </PaperProvider>

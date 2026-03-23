@@ -33,6 +33,15 @@ export interface RoutineBackground {
   alert_ttl_minutes: number;
 }
 
+export interface RoutinePlaceholder {
+  type: 'device';
+  domain: string;
+  label: string;
+  required: boolean;
+}
+
+export type RoutineStatus = 'ready' | 'needs_config' | 'missing_commands';
+
 export interface Routine {
   id: string;
   name: string;
@@ -41,6 +50,8 @@ export interface Routine {
   response_instruction: string;
   response_length: ResponseLength;
   background: RoutineBackground | null;
+  placeholders?: Record<string, RoutinePlaceholder>;
+  required_commands?: string[];
 }
 
 export const DEFAULT_BACKGROUND: RoutineBackground = {

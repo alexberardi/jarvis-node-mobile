@@ -22,7 +22,9 @@ import { RoutinesStackParamList } from '../../navigation/types';
 import {
   deleteRoutine,
   loadRoutines,
+  saveRoutine,
 } from '../../services/routineStorageService';
+import { shareRoutine, parseImportedRoutine } from '../../services/routineExportService';
 import type { Routine } from '../../types/Routine';
 
 type Nav = NativeStackNavigationProp<RoutinesStackParamList>;
@@ -93,6 +95,48 @@ const RoutineListScreen = () => {
       load();
     }, [load]),
   );
+
+  const handleImportFromClipboard = useCallback(async () => {
+    try {
+      const ExpoClipboard = await import('expo-clipboard');
+      const text = await ExpoClipboard.getStringAsync();
+      if (!text.trim()) {
+        Alert.alert('Empty clipboard', 'Copy a routine JSON to your clipboard first, then tap Import.');
+        return;
+      }
+      const routine = parseImportedRoutine(text);
+      if (!routine) {
+        Alert.alert('Invalid routine', 'The clipboard does not contain a valid routine JSON.');
+        return;
+      }
+      // Check for name conflict
+      const existing = routines.find((r) => r.id === routine.id);
+      if (existing) {
+        Alert.alert(
+          'Routine exists',
+          `A routine named "${routine.name}" already exists. Overwrite it?`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Overwrite',
+              style: 'destructive',
+              onPress: async () => {
+                await saveRoutine(routine);
+                load();
+                Alert.alert('Imported', `"${routine.name}" has been imported.`);
+              },
+            },
+          ],
+        );
+      } else {
+        await saveRoutine(routine);
+        load();
+        Alert.alert('Imported', `"${routine.name}" has been imported.`);
+      }
+    } catch {
+      Alert.alert('Import failed', 'Could not read from clipboard.');
+    }
+  }, [routines, load]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -186,6 +230,16 @@ const RoutineListScreen = () => {
                     });
                   }}
                 />
+                <Menu.Item
+                  leadingIcon="export-variant"
+                  title="Export"
+                  onPress={() => {
+                    setMenuOpen(null);
+                    shareRoutine(item).catch(() =>
+                      Alert.alert('Error', 'Failed to export routine'),
+                    );
+                  }}
+                />
               </Menu>
             </View>
             <View style={styles.chips}>
@@ -206,6 +260,20 @@ const RoutineListScreen = () => {
                   textStyle={[styles.chipText, { color: theme.colors.primary }]}
                 >
                   {schedule}
+                </Chip>
+              )}
+              {item.placeholders && Object.keys(item.placeholders).length > 0 && (
+                <Chip
+                  compact
+                  icon="wrench"
+                  style={[styles.scheduleBadge, { borderColor: theme.colors.tertiary }]}
+                  textStyle={[styles.chipText, { color: theme.colors.tertiary }]}
+                  onPress={() => {
+                    // Navigate to placeholder resolver (needs a node — use first available)
+                    // TODO: proper node selection
+                  }}
+                >
+                  Configure devices
                 </Chip>
               )}
             </View>
@@ -288,6 +356,11 @@ const RoutineListScreen = () => {
             icon: 'auto-fix',
             label: 'AI Builder',
             onPress: () => navigation.navigate('RoutineBuilder'),
+          },
+          {
+            icon: 'import',
+            label: 'Import from Clipboard',
+            onPress: handleImportFromClipboard,
           },
         ]}
         onStateChange={({ open }) => setFabOpen(open)}

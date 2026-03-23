@@ -6,6 +6,7 @@ import RoutineEditScreen from '../screens/Routines/RoutineEditScreen';
 import RoutineHistoryScreen from '../screens/Routines/RoutineHistoryScreen';
 import RoutineListScreen from '../screens/Routines/RoutineListScreen';
 import RoutineNodePickerScreen from '../screens/Routines/RoutineNodePickerScreen';
+import PlaceholderResolverScreen from '../screens/Routines/PlaceholderResolverScreen';
 import RoutineSuggestScreen from '../screens/Routines/RoutineSuggestScreen';
 import { RoutinesStackParamList } from './types';
 
@@ -20,6 +21,7 @@ const RoutinesStackNavigator = () => {
       <Stack.Screen name="RoutineEdit" component={RoutineEditScreen} />
       <Stack.Screen name="RoutineNodePicker" component={RoutineNodePickerScreen} />
       <Stack.Screen name="RoutineHistory" component={RoutineHistoryScreen} />
+      <Stack.Screen name="PlaceholderResolver" component={PlaceholderResolverScreen} />
     </Stack.Navigator>
   );
 };
