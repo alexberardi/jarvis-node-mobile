@@ -593,7 +593,7 @@ const SettingsScreen = () => {
 
       <Divider style={styles.divider} />
       <Text variant="bodySmall" style={styles.version}>
-        Jarvis Mobile v0.1.0
+        Jarvis Mobile v{require('../../../app.json').expo.version}
       </Text>
 
     </ScrollView>
