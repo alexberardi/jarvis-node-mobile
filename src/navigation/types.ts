@@ -18,6 +18,7 @@ export type AuthStackParamList = {
 export type NodesStackParamList = {
   NodeList: undefined;
   AddNode: undefined;
+  NodeDetail: { nodeId: string };
   NodeSettings: { nodeId: string; room: string | null };
   ImportKey: undefined;
   IntegrationAuth: {
@@ -64,6 +65,7 @@ export type RoutinesStackParamList = {
   RoutineBuilder: undefined;
   RoutineEdit: { routineId?: string; routineData?: string };
   RoutineNodePicker: { routineId: string };
+  RoutineHistory: { routineId: string; routineName: string };
 };
 
 export type InboxStackParamList = {
@@ -74,6 +76,7 @@ export type InboxStackParamList = {
 export type StoreStackParamList = {
   StoreBrowse: undefined;
   StoreDetail: { commandName: string };
+  TestInstall: undefined;
   NodePickerSheet: {
     nodes: string;           // JSON-serialized NodeInfo[]
     commandName: string;
@@ -85,6 +88,10 @@ export type StoreStackParamList = {
   InstallProgress: {
     installs: string;        // JSON-serialized InstallEntry[]
     packageName: string;
+    commandName: string;
+    githubRepoUrl: string;
+    gitTag: string | null;
+    mode?: 'store' | 'test'; // 'test' uses test-install poll endpoint
   };
 };
 

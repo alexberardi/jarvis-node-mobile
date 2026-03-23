@@ -4,6 +4,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useCallback } from 'react';
 
 import ImportKeyScreen from '../screens/ImportKey/ImportKeyScreen';
+import NodeDetailScreen from '../screens/Nodes/NodeDetailScreen';
 import NodeListScreen from '../screens/Nodes/NodeListScreen';
 import NodeSettingsScreen from '../screens/Nodes/NodeSettingsScreen';
 import IntegrationAuthScreen from '../screens/Settings/IntegrationAuthScreen';
@@ -24,6 +25,7 @@ const NodesStackNavigator = () => {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="NodeList" component={NodeListScreen} />
       <Stack.Screen name="AddNode" component={ProvisioningNavigator} />
+      <Stack.Screen name="NodeDetail" component={NodeDetailScreen} />
       <Stack.Screen name="NodeSettings" component={NodeSettingsScreen} />
       <Stack.Screen name="ImportKey" component={ImportKeyWrapper} />
       <Stack.Screen name="IntegrationAuth" component={IntegrationAuthScreen} />

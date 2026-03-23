@@ -68,6 +68,9 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
   const [inviteMaxUses, setInviteMaxUses] = useState('');
   const [creatingInvite, setCreatingInvite] = useState(false);
 
+  // Leave household
+  const [leaving, setLeaving] = useState(false);
+
   // Loading / error state for members + invites
   const [membersLoading, setMembersLoading] = useState(true);
   const [membersError, setMembersError] = useState<string | null>(null);
@@ -77,6 +80,7 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
   const currentMember = members.find((m) => m.user_id === currentUser?.id);
   const isAdmin = currentMember?.role === 'admin';
   const canInvite = isAdmin || currentMember?.role === 'power_user';
+  const canLeave = (authState.households?.length ?? 0) > 1;
 
   // Load members and invites — always fetch both, filter invite display via canInvite
   const loadMembersAndInvites = useCallback(async () => {
@@ -170,6 +174,35 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
       setCreatingInvite(false);
     }
   }, [householdId, inviteRole, inviteExpiry, inviteMaxUses, headers]);
+
+  // Leave household
+  const handleLeaveHousehold = useCallback(() => {
+    const isLastMember = members.length === 1;
+    const message = isLastMember
+      ? 'You are the only member. This household and all its nodes will be deleted.'
+      : 'You will lose access to this household\'s nodes and settings.';
+
+    Alert.alert('Leave Household', message, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Leave',
+        style: 'destructive',
+        onPress: async () => {
+          setLeaving(true);
+          try {
+            await authApi.post(`/households/${householdId}/leave`, {}, { headers });
+            fetchHouseholds();
+            navigation.goBack();
+          } catch (err: unknown) {
+            const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to leave household';
+            Alert.alert('Error', msg);
+          } finally {
+            setLeaving(false);
+          }
+        },
+      },
+    ]);
+  }, [householdId, members.length, headers, fetchHouseholds, navigation]);
 
   // Revoke invite
   const handleRevokeInvite = useCallback((invite: InviteCode) => {
@@ -345,6 +378,31 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
                   )}
                 </View>
               ))}
+            </Card.Content>
+          </Card>
+        )}
+
+        {/* Leave Household */}
+        {canLeave && (
+          <Card style={[styles.card, { borderColor: theme.colors.error, borderWidth: 1 }]}>
+            <Card.Content>
+              <Text variant="titleSmall" style={{ color: theme.colors.error, marginBottom: 8 }}>
+                Danger Zone
+              </Text>
+              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 12 }}>
+                Leave this household. You'll lose access to its nodes and settings.
+                {members.length === 1 && ' This household will be deleted since you\'re the only member.'}
+              </Text>
+              <Button
+                mode="outlined"
+                textColor={theme.colors.error}
+                style={{ borderColor: theme.colors.error }}
+                onPress={handleLeaveHousehold}
+                loading={leaving}
+                icon="logout"
+              >
+                Leave Household
+              </Button>
             </Card.Content>
           </Card>
         )}

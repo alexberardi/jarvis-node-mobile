@@ -5,6 +5,7 @@ import InstallProgressScreen from '../screens/Store/InstallProgressScreen';
 import NodePickerSheet from '../screens/Store/NodePickerSheet';
 import StoreBrowseScreen from '../screens/Store/StoreBrowseScreen';
 import StoreDetailScreen from '../screens/Store/StoreDetailScreen';
+import TestInstallScreen from '../screens/Store/TestInstallScreen';
 import { StoreStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<StoreStackParamList>();
@@ -16,6 +17,7 @@ const StoreStackNavigator = () => {
       <Stack.Screen name="StoreDetail" component={StoreDetailScreen} />
       <Stack.Screen name="NodePickerSheet" component={NodePickerSheet} />
       <Stack.Screen name="InstallProgress" component={InstallProgressScreen} />
+      <Stack.Screen name="TestInstall" component={TestInstallScreen} />
     </Stack.Navigator>
   );
 };

@@ -62,6 +62,10 @@ const SettingsScreen = () => {
   const [joinStatus, setJoinStatus] = useState<{ valid: boolean; household_name: string | null } | null>(null);
   const [joinError, setJoinError] = useState('');
 
+  // Household create flow
+  const [newHouseholdName, setNewHouseholdName] = useState('');
+  const [creatingHousehold, setCreatingHousehold] = useState(false);
+
   const handleValidateJoin = useCallback(async () => {
     const code = joinCode.trim();
     if (!code) { setJoinStatus(null); return; }
@@ -98,6 +102,25 @@ const SettingsScreen = () => {
       setJoinError(msg);
     }
   }, [joinCode, authState.accessToken, fetchHouseholds]);
+
+  const handleCreateHousehold = useCallback(async () => {
+    const name = newHouseholdName.trim();
+    if (!name) return;
+    setCreatingHousehold(true);
+    try {
+      await authApi.post('/households', { name }, {
+        headers: { Authorization: `Bearer ${authState.accessToken}` },
+      });
+      setNewHouseholdName('');
+      fetchHouseholds();
+      Alert.alert('Created!', `Household "${name}" has been created.`);
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to create household';
+      Alert.alert('Error', msg);
+    } finally {
+      setCreatingHousehold(false);
+    }
+  }, [newHouseholdName, authState.accessToken, fetchHouseholds]);
 
   // Smart Home config (device manager + primary node)
   const [smartHomeConfig, setSmartHomeConfig] = useState<SmartHomeConfig | null>(null);
@@ -324,6 +347,31 @@ const SettingsScreen = () => {
           >
             Join
           </Button>
+
+          {/* Create new household */}
+          <Text variant="titleSmall" style={{ fontWeight: '600', marginTop: 16, marginBottom: 4 }}>
+            Create New Household
+          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <TextInput
+              mode="outlined"
+              label="Household name"
+              value={newHouseholdName}
+              onChangeText={setNewHouseholdName}
+              dense
+              style={{ flex: 1 }}
+              onSubmitEditing={handleCreateHousehold}
+            />
+            <Button
+              mode="contained"
+              onPress={handleCreateHousehold}
+              loading={creatingHousehold}
+              disabled={!newHouseholdName.trim() || creatingHousehold}
+              compact
+            >
+              Create
+            </Button>
+          </View>
         </Card.Content>
       </Card>
 
