@@ -66,6 +66,9 @@ const NodePickerSheet = () => {
       navigation.replace('InstallProgress', {
         installs: JSON.stringify(installs),
         packageName,
+        commandName,
+        githubRepoUrl,
+        gitTag: gitTag || null,
       });
     } catch (e: unknown) {
       Alert.alert('Install Error', e instanceof Error ? e.message : 'Failed to start install');

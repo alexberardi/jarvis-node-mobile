@@ -97,9 +97,8 @@ const NodeListScreen = () => {
     <Card
       style={styles.card}
       onPress={() =>
-        navigation.navigate('NodeSettings', {
+        navigation.navigate('NodeDetail', {
           nodeId: item.node_id,
-          room: item.room,
         })
       }
       onLongPress={canDelete ? () => setDeleteTarget(item) : undefined}

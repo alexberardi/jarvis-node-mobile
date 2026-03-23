@@ -264,6 +264,14 @@ const StoreBrowseScreen = () => {
         >
           Pantry
         </Text>
+        <Button
+          icon="flask-outline"
+          mode="text"
+          compact
+          onPress={() => navigation.navigate('TestInstall')}
+        >
+          Test
+        </Button>
       </View>
 
       <Searchbar

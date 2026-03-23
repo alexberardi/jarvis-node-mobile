@@ -191,6 +191,9 @@ const StoreDetailScreen = () => {
             },
           ]),
           packageName: detail.display_name || detail.command_name,
+          commandName: downloadInfo.command_name,
+          githubRepoUrl: downloadInfo.github_repo_url,
+          gitTag: downloadInfo.git_tag,
         });
       } else if (availableNodes.length === 0) {
         Alert.alert('Already Installed', 'This command is already installed on all your nodes.');
