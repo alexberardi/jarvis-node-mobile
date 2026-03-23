@@ -66,6 +66,7 @@ export type RoutinesStackParamList = {
   RoutineEdit: { routineId?: string; routineData?: string };
   RoutineNodePicker: { routineId: string };
   RoutineHistory: { routineId: string; routineName: string };
+  PlaceholderResolver: { routineId: string; nodeId: string };
 };
 
 export type InboxStackParamList = {
