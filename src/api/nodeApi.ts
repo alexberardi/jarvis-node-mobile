@@ -31,12 +31,11 @@ export const listNodes = async (householdId?: string): Promise<NodeInfo[]> => {
 };
 
 export const getNode = async (nodeId: string): Promise<NodeInfo> => {
-  const nodes = await listNodes();
-  const node = nodes.find((n) => n.node_id === nodeId);
-  if (!node) {
-    throw new Error('Node not found');
-  }
-  return node;
+  const res = await axios.get<NodeInfo>(
+    `${getCommandCenterUrl()}/api/v0/admin/nodes/${nodeId}`,
+    { timeout: 10000 },
+  );
+  return res.data;
 };
 
 export const deleteNode = async (
