@@ -33,14 +33,15 @@ import {
   DeviceFamilyEntry,
 } from '../../services/settingsDecryptService';
 import { listNodes, NodeInfo } from '../../api/nodeApi';
-import { hasK2 } from '../../services/k2Service';
+import { hasK2, generateK2, storeK2 } from '../../services/k2Service';
+import { provisionK2ToNode } from '../../api/nodeSettingsApi';
 import SecretEditDialog from '../../components/SecretEditDialog';
 import { encryptAndPushConfig } from '../../services/configPushService';
 import type { AuthenticationConfig } from '../../types/SmartHome';
 
 type ScreenRoute = RouteProp<NodesStackParamList, 'NodeSettings'>;
 
-type LoadState = 'loading' | 'loaded' | 'error' | 'timeout';
+type LoadState = 'loading' | 'loaded' | 'error' | 'timeout' | 'needs_k2';
 
 const POLL_INTERVAL_MS = 2000;
 const POLL_TIMEOUT_MS = 30000;
@@ -170,11 +171,38 @@ const NodeSettingsScreen: React.FC = () => {
     }
   }, []);
 
+  const [provisioningK2, setProvisioningK2] = useState(false);
+
+  const provisionAndLoad = useCallback(async () => {
+    setProvisioningK2(true);
+    try {
+      const keyPair = await generateK2(nodeId);
+      await provisionK2ToNode(nodeId, keyPair.k2, keyPair.kid, keyPair.createdAt);
+      await storeK2(keyPair);
+      // Small delay for node to process K2
+      await new Promise((r) => setTimeout(r, 1000));
+      setLoadState('loading');
+      loadSettings();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to provision encryption key');
+      setLoadState('error');
+    } finally {
+      setProvisioningK2(false);
+    }
+  }, [nodeId]);
+
   const loadSettings = useCallback(async () => {
     const token = authState.accessToken;
     if (!token) {
       setError('Not authenticated');
       setLoadState('error');
+      return;
+    }
+
+    // Check if we have K2 for this node
+    const k2Exists = await hasK2(nodeId);
+    if (!k2Exists) {
+      setLoadState('needs_k2');
       return;
     }
 
@@ -746,6 +774,28 @@ const NodeSettingsScreen: React.FC = () => {
   const headerTitle = room ? `${room} Settings` : 'Node Settings';
 
   const renderContent = () => {
+    if (loadState === 'needs_k2') {
+      return (
+        <View style={styles.center}>
+          <Icon source="key-variant" size={48} color={theme.colors.primary} />
+          <Text variant="titleMedium" style={{ marginTop: 16, marginBottom: 8 }}>
+            Encryption Key Required
+          </Text>
+          <Text variant="bodyMedium" style={{ textAlign: 'center', opacity: 0.7, marginBottom: 20, paddingHorizontal: 24 }}>
+            This node doesn't have an encryption key yet. Generate one to securely view and edit settings.
+          </Text>
+          <Button
+            mode="contained"
+            onPress={provisionAndLoad}
+            loading={provisioningK2}
+            disabled={provisioningK2}
+          >
+            Generate Encryption Key
+          </Button>
+        </View>
+      );
+    }
+
     if (loadState === 'loading') {
       return (
         <View style={styles.center}>
