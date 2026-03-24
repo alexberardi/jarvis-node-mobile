@@ -55,3 +55,19 @@ export const pollSettingsResult = async (
   );
   return res.data;
 };
+
+/**
+ * Provision K2 encryption key to a node via CC MQTT relay.
+ * Used for Docker/headless nodes that aren't reachable via direct AP.
+ */
+export const provisionK2ToNode = async (
+  nodeId: string,
+  k2: string,
+  kid: string,
+  createdAt: string,
+): Promise<void> => {
+  await apiClient.post(
+    `${getCommandCenterUrl()}/api/v0/nodes/${nodeId}/k2`,
+    { k2, kid, created_at: createdAt },
+  );
+};
