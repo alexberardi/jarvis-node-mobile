@@ -18,11 +18,12 @@ const ConnectionBanner = () => {
   const prevStatus = useRef(status);
   const slideAnim = useRef(new Animated.Value(0)).current;
 
-  // Detect transition from offline → connected
+  // Detect transition from offline → connected (only show once per outage)
   useEffect(() => {
     if (prevStatus.current === 'offline' && status === 'connected') {
       setShowReconnected(true);
       const timer = setTimeout(() => setShowReconnected(false), 3000);
+      prevStatus.current = status;
       return () => clearTimeout(timer);
     }
     prevStatus.current = status;
