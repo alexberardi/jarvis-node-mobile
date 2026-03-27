@@ -72,10 +72,14 @@ export function useChat({
   const abortRef = useRef<AbortController | null>(null);
   const assistantIdRef = useRef<string | null>(null);
   const toolsRef = useRef<NodeToolsResponse | null>(null);
+  const accessTokenRef = useRef(accessToken);
+  accessTokenRef.current = accessToken;
+  // Track auth readiness (changes once: false → true), not the token value (changes on every refresh)
+  const isAuthenticated = !!accessToken;
 
   // Preemptive startup: fetch tools → warmup conversation
   useEffect(() => {
-    if (!nodeId || !householdId || !accessToken) {
+    if (!nodeId || !householdId || !isAuthenticated) {
       toolsRef.current = null;
       setWarmupState('idle');
       setToolCount(0);
@@ -136,11 +140,11 @@ export function useChat({
     return () => {
       cancelled = true;
     };
-  }, [nodeId, householdId, accessToken, timezone]);
+  }, [nodeId, householdId, isAuthenticated, timezone]);
 
   const sendMessage = useCallback(
     (text: string) => {
-      if (!nodeId || !householdId || !accessToken || isLoading) return;
+      if (!nodeId || !householdId || !accessTokenRef.current || isLoading) return;
 
       const userMsg: ChatMessage = {
         id: generateId(),
@@ -261,7 +265,7 @@ export function useChat({
               }
             : {}),
         },
-        accessToken,
+        accessTokenRef.current!,
         handleEvent,
         controller.signal,
       ).catch((err) => {
@@ -283,11 +287,11 @@ export function useChat({
         setConnectionError('Could not reach Jarvis server.');
       });
     },
-    [nodeId, householdId, accessToken, conversationId, isLoading, timezone],
+    [nodeId, householdId, conversationId, isLoading, timezone],
   );
 
   const doWarmup = useCallback(() => {
-    if (!nodeId || !householdId || !accessToken) return;
+    if (!nodeId || !householdId || !accessTokenRef.current) return;
     setWarmupState('warming_up');
     // CC fetches tools from node via MQTT — no caching
     warmupChat(nodeId, householdId, undefined, undefined, timezone)
@@ -299,7 +303,7 @@ export function useChat({
       .catch(() => {
         setWarmupState('ready');
       });
-  }, [nodeId, householdId, accessToken, timezone]);
+  }, [nodeId, householdId, timezone]);
 
   const clearConversation = useCallback(() => {
     abortRef.current?.abort();

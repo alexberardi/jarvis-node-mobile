@@ -33,12 +33,14 @@ const BASE_INTERVAL_MS = 30_000;    // 30s when healthy
 const BACKOFF_INTERVAL_MS = 15_000; // 15s when offline (want faster recovery detection)
 const HEALTH_TIMEOUT_MS = 5_000;    // 5s timeout for health check
 const INITIAL_DELAY_MS = 3_000;     // Wait 3s before first check (let app settle)
+const OFFLINE_THRESHOLD = 2;        // Consecutive failures before showing offline
 
 export const ConnectionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [status, setStatus] = useState<ConnectionStatus>('checking');
   const [failCount, setFailCount] = useState(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountedRef = useRef(true);
+  const consecutiveFailsRef = useRef(0);
 
   const checkHealth = useCallback(async () => {
     const ccUrl = getCommandCenterUrl();
@@ -60,16 +62,25 @@ export const ConnectionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       if (!mountedRef.current) return;
 
       if (res.ok) {
-        setStatus('connected');
+        consecutiveFailsRef.current = 0;
         setFailCount(0);
+        // Only transition to 'connected' if we were actually offline
+        // (avoids flicker from checking → connected on startup noise)
+        setStatus((prev) => prev === 'checking' || prev === 'offline' ? 'connected' : prev);
       } else {
-        setStatus('offline');
-        setFailCount((prev) => prev + 1);
+        consecutiveFailsRef.current += 1;
+        setFailCount(consecutiveFailsRef.current);
+        if (consecutiveFailsRef.current >= OFFLINE_THRESHOLD) {
+          setStatus('offline');
+        }
       }
     } catch {
       if (!mountedRef.current) return;
-      setStatus('offline');
-      setFailCount((prev) => prev + 1);
+      consecutiveFailsRef.current += 1;
+      setFailCount(consecutiveFailsRef.current);
+      if (consecutiveFailsRef.current >= OFFLINE_THRESHOLD) {
+        setStatus('offline');
+      }
     }
   }, []);
 
