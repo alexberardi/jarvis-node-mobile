@@ -20,10 +20,10 @@ export interface UnreadCountResponse {
   count: number;
 }
 
-const getBaseUrl = () => {
+const getBaseUrl = (): string => {
   const { notificationsUrl } = getServiceConfig();
   if (!notificationsUrl) {
-    throw new Error('Notifications service URL not configured');
+    throw new Error('Notifications service not available');
   }
   return notificationsUrl;
 };
