@@ -105,9 +105,7 @@ const HomeScreen = () => {
   useFocusEffect(
     useCallback(() => {
       if (!authState.accessToken) return;
-      getUnreadCount().then(setUnreadCount).catch((err) => {
-        console.error('[HomeScreen] Failed to fetch unread count', err);
-      });
+      getUnreadCount().then(setUnreadCount).catch(() => {});
 
       // Re-warmup when returning from another tab (e.g., after Pantry install)
       // to pick up newly installed/removed commands.
