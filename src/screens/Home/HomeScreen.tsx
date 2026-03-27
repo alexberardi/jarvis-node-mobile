@@ -93,7 +93,7 @@ const HomeScreen = () => {
     }
   }, []);
 
-  const { messages, isLoading, warmupState, toolCount, toolNames, connectionError, sendMessage, clearConversation, refreshTools } = useChat({
+  const { messages, isLoading, warmupState, toolCount, toolNames, sendMessage, clearConversation, refreshTools } = useChat({
     nodeId: selectedNodeId,
     householdId,
     accessToken: authState.accessToken,
@@ -102,9 +102,12 @@ const HomeScreen = () => {
 
   // Refresh unread count + tools on focus
   const hasNavigatedAway = useRef(false);
+  const accessTokenRef = useRef(authState.accessToken);
+  accessTokenRef.current = authState.accessToken;
+
   useFocusEffect(
     useCallback(() => {
-      if (!authState.accessToken) return;
+      if (!accessTokenRef.current) return;
       getUnreadCount().then(setUnreadCount).catch(() => {});
 
       // Re-warmup when returning from another tab (e.g., after Pantry install)
@@ -115,7 +118,7 @@ const HomeScreen = () => {
       return () => {
         hasNavigatedAway.current = true;
       };
-    }, [authState.accessToken, refreshTools]),
+    }, [refreshTools]),
   );
 
   const handleSend = useCallback(() => {
@@ -313,22 +316,7 @@ const HomeScreen = () => {
         </View>
       )}
 
-      {/* Connection error banner — only show if we actually tried to connect */}
-      {connectionError && connectionError.trim() !== '' && warmupState !== 'idle' && nodeCount !== 0 && (
-        <View style={[styles.connectionBanner, { backgroundColor: `${theme.colors.error}15` }]}>
-          <Text variant="bodySmall" style={{ color: theme.colors.error, flex: 1 }}>
-            {connectionError}
-          </Text>
-          <Button
-            mode="text"
-            compact
-            onPress={refreshTools}
-            labelStyle={{ fontSize: 12 }}
-          >
-            Retry
-          </Button>
-        </View>
-      )}
+      {/* Connection errors now handled by global ConnectionBanner in App.tsx */}
 
       {/* Message list */}
       <FlatList
@@ -483,12 +471,6 @@ const styles = StyleSheet.create({
   },
   inputOutline: {
     borderRadius: 24,
-  },
-  connectionBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 6,
   },
   onboarding: {
     flex: 1,
