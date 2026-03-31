@@ -78,6 +78,8 @@ const NodeSettingsScreen: React.FC = () => {
     valueType: string;
     isSet: boolean;
     currentValue?: string;
+    enumValues?: string[];
+    presets?: Record<string, Record<string, string>>;
   } | null>(null);
 
   // Track enabled/disabled state per command (keyed by raw command_name)
@@ -296,6 +298,8 @@ const NodeSettingsScreen: React.FC = () => {
       valueType: secret.value_type,
       isSet: secret.is_set,
       currentValue: !secret.is_sensitive ? secret.value : undefined,
+      enumValues: secret.enum_values,
+      presets: secret.presets,
     });
   };
 
@@ -304,6 +308,39 @@ const NodeSettingsScreen: React.FC = () => {
     cleanup();
     loadSettings();
   };
+
+  const handlePresetsAvailable = useCallback(
+    (presetValues: Record<string, string>) => {
+      const entries = Object.entries(presetValues);
+      // Find friendly names from all known secrets
+      const allSecrets = commands.flatMap((c) => c.secrets);
+      const lines = entries.map(([key, val]) => {
+        const secret = allSecrets.find((s) => s.key === key);
+        return `${secret?.friendly_name ?? key}: ${val}`;
+      });
+
+      Alert.alert(
+        'Apply Defaults?',
+        `This will set:\n\n${lines.join('\n')}\n\nYou can override individual values afterward.`,
+        [
+          { text: 'Skip', style: 'cancel' },
+          {
+            text: 'Apply',
+            onPress: async () => {
+              try {
+                await encryptAndPushConfig(nodeId, 'settings:secrets', presetValues);
+                cleanup();
+                loadSettings();
+              } catch {
+                Alert.alert('Error', 'Failed to apply defaults');
+              }
+            },
+          },
+        ],
+      );
+    },
+    [commands, nodeId, cleanup, loadSettings],
+  );
 
   const handleAuthenticate = (group: ServiceGroup) => {
     if (!group.auth || !authState.accessToken) return;
@@ -912,6 +949,9 @@ const NodeSettingsScreen: React.FC = () => {
           valueType={editingSecret.valueType}
           isSet={editingSecret.isSet}
           currentValue={editingSecret.currentValue}
+          enumValues={editingSecret.enumValues}
+          presets={editingSecret.presets}
+          onPresetsAvailable={handlePresetsAvailable}
         />
       )}
 

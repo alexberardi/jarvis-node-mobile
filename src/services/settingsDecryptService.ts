@@ -13,6 +13,8 @@ export interface CommandSecretEntry {
   is_set: boolean;
   value?: string;
   friendly_name?: string;
+  enum_values?: string[];
+  presets?: Record<string, Record<string, string>>;
 }
 
 export interface CommandParameterEntry {

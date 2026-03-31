@@ -4,6 +4,7 @@ import {
   Button,
   Dialog,
   HelperText,
+  Menu,
   Portal,
   Switch,
   Text,
@@ -23,6 +24,9 @@ export interface SecretEditDialogProps {
   valueType: string;
   isSet: boolean;
   currentValue?: string;
+  enumValues?: string[];
+  presets?: Record<string, Record<string, string>>;
+  onPresetsAvailable?: (presetValues: Record<string, string>) => void;
 }
 
 const SecretEditDialog: React.FC<SecretEditDialogProps> = ({
@@ -36,11 +40,15 @@ const SecretEditDialog: React.FC<SecretEditDialogProps> = ({
   valueType,
   isSet,
   currentValue,
+  enumValues,
+  presets,
+  onPresetsAvailable,
 }) => {
   const [value, setValue] = useState(currentValue ?? '');
   const [boolValue, setBoolValue] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [enumMenuVisible, setEnumMenuVisible] = useState(false);
 
   const handleSave = async () => {
     setSaving(true);
@@ -66,6 +74,10 @@ const SecretEditDialog: React.FC<SecretEditDialogProps> = ({
         { [secretKey]: finalValue },
       );
       onSaved();
+
+      if (presets && presets[finalValue] && onPresetsAvailable) {
+        onPresetsAvailable(presets[finalValue]);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save');
     } finally {
@@ -97,6 +109,63 @@ const SecretEditDialog: React.FC<SecretEditDialogProps> = ({
     secretKey.toLowerCase().includes('password') ||
     secretKey.toLowerCase().includes('secret');
 
+  const hasEnum = enumValues && enumValues.length > 0;
+
+  const renderInput = () => {
+    if (valueType === 'bool') {
+      return (
+        <View style={styles.switchRow}>
+          <Text variant="bodyMedium">Enabled</Text>
+          <Switch value={boolValue} onValueChange={setBoolValue} />
+        </View>
+      );
+    }
+
+    if (hasEnum) {
+      return (
+        <Menu
+          visible={enumMenuVisible}
+          onDismiss={() => setEnumMenuVisible(false)}
+          anchor={
+            <TextInput
+              mode="outlined"
+              value={value}
+              label={isSet ? 'New value' : 'Value'}
+              style={styles.input}
+              right={<TextInput.Icon icon="menu-down" onPress={() => setEnumMenuVisible(true)} />}
+              onFocus={() => setEnumMenuVisible(true)}
+              editable={false}
+              placeholder="Select..."
+            />
+          }
+        >
+          {enumValues.map((v) => (
+            <Menu.Item
+              key={v}
+              title={v}
+              onPress={() => { setValue(v); setEnumMenuVisible(false); }}
+            />
+          ))}
+        </Menu>
+      );
+    }
+
+    return (
+      <TextInput
+        label={isSet ? 'New value' : 'Value'}
+        value={value}
+        onChangeText={setValue}
+        mode="outlined"
+        secureTextEntry={isSecureField}
+        autoCapitalize="none"
+        autoCorrect={false}
+        keyboardType={valueType === 'int' ? 'numeric' : 'default'}
+        style={styles.input}
+        autoFocus
+      />
+    );
+  };
+
   return (
     <Portal>
       <Dialog visible={visible} onDismiss={onDismiss}>
@@ -106,25 +175,7 @@ const SecretEditDialog: React.FC<SecretEditDialogProps> = ({
             {description}
           </Text>
 
-          {valueType === 'bool' ? (
-            <View style={styles.switchRow}>
-              <Text variant="bodyMedium">Enabled</Text>
-              <Switch value={boolValue} onValueChange={setBoolValue} />
-            </View>
-          ) : (
-            <TextInput
-              label={isSet ? 'New value' : 'Value'}
-              value={value}
-              onChangeText={setValue}
-              mode="outlined"
-              secureTextEntry={isSecureField}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType={valueType === 'int' ? 'numeric' : 'default'}
-              style={styles.input}
-              autoFocus
-            />
-          )}
+          {renderInput()}
 
           {error && (
             <HelperText type="error" visible>
