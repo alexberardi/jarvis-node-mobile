@@ -11,6 +11,7 @@ import {
   TextInput,
 } from 'react-native-paper';
 
+import { useAuth } from '../auth/AuthContext';
 import { encryptAndPushConfig } from '../services/configPushService';
 
 export interface SecretEditDialogProps {
@@ -22,6 +23,7 @@ export interface SecretEditDialogProps {
   secretKey: string;
   description: string;
   valueType: string;
+  scope: string;
   isSet: boolean;
   currentValue?: string;
   enumValues?: string[];
@@ -38,12 +40,14 @@ const SecretEditDialog: React.FC<SecretEditDialogProps> = ({
   secretKey,
   description,
   valueType,
+  scope,
   isSet,
   currentValue,
   enumValues,
   presets,
   onPresetsAvailable,
 }) => {
+  const { state: authState } = useAuth();
   const [value, setValue] = useState(currentValue ?? '');
   const [boolValue, setBoolValue] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -68,10 +72,14 @@ const SecretEditDialog: React.FC<SecretEditDialogProps> = ({
     }
 
     try {
+      const configData: Record<string, string> = { [secretKey]: finalValue };
+      if (scope === 'user' && authState.user?.id) {
+        configData.__user_id__ = String(authState.user.id);
+      }
       await encryptAndPushConfig(
         nodeId,
         'settings:secrets',
-        { [secretKey]: finalValue },
+        configData,
       );
       onSaved();
 
