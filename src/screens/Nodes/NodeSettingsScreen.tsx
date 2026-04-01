@@ -1,7 +1,7 @@
 import { useNavigation, useRoute, useFocusEffect, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import {
   Appbar,
   ActivityIndicator,
@@ -12,6 +12,7 @@ import {
   Menu,
   Modal,
   Portal,
+  Snackbar,
   Surface,
   Switch,
   Text,
@@ -76,6 +77,7 @@ const NodeSettingsScreen: React.FC = () => {
     key: string;
     description: string;
     valueType: string;
+    scope: string;
     isSet: boolean;
     currentValue?: string;
     enumValues?: string[];
@@ -84,6 +86,9 @@ const NodeSettingsScreen: React.FC = () => {
 
   // Track enabled/disabled state per command (keyed by raw command_name)
   const [commandStates, setCommandStates] = useState<Record<string, boolean>>({});
+
+  // Personal scope info tooltip
+  const [showPersonalInfo, setShowPersonalInfo] = useState(false);
 
   // Setup guide modal
   const [guideContent, setGuideContent] = useState<{ title: string; markdown: string } | null>(null);
@@ -296,6 +301,7 @@ const NodeSettingsScreen: React.FC = () => {
       key: secret.key,
       description: secret.description,
       valueType: secret.value_type,
+      scope: secret.scope,
       isSet: secret.is_set,
       currentValue: !secret.is_sensitive ? secret.value : undefined,
       enumValues: secret.enum_values,
@@ -328,7 +334,11 @@ const NodeSettingsScreen: React.FC = () => {
             text: 'Apply',
             onPress: async () => {
               try {
-                await encryptAndPushConfig(nodeId, 'settings:secrets', presetValues);
+                const payload = { ...presetValues };
+                if (authState.user?.id) {
+                  payload.__user_id__ = String(authState.user.id);
+                }
+                await encryptAndPushConfig(nodeId, 'settings:secrets', payload);
                 cleanup();
                 loadSettings();
               } catch {
@@ -502,6 +512,14 @@ const NodeSettingsScreen: React.FC = () => {
       return;
     }
 
+    // Include __user_id__ if any selected secrets are user-scoped
+    const hasUserScoped = syncGroup.secrets.some(
+      (s) => selectedSecretKeys.has(s.key) && s.scope === 'user',
+    );
+    if (hasUserScoped && authState.user?.id) {
+      secretsMap.__user_id__ = String(authState.user.id);
+    }
+
     // Push to each selected node
     let successCount = 0;
     let failCount = 0;
@@ -565,9 +583,20 @@ const NodeSettingsScreen: React.FC = () => {
           <View style={styles.secretRow}>
             <Icon source={iconName} size={20} color={iconColor} />
             <View style={styles.secretInfo}>
-              <Text variant="bodyMedium" style={{ fontWeight: '500' }}>
-                {secret.friendly_name ?? secret.key}
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Text variant="bodyMedium" style={{ fontWeight: '500' }}>
+                  {secret.friendly_name ?? secret.key}
+                </Text>
+                {secret.scope === 'user' && (
+                  <Pressable onPress={() => setShowPersonalInfo(true)} hitSlop={8}>
+                    <Icon
+                      source="account"
+                      size={14}
+                      color={theme.colors.primary}
+                    />
+                  </Pressable>
+                )}
+              </View>
               {valuePreview ? (
                 <Text
                   variant="bodySmall"
@@ -947,6 +976,7 @@ const NodeSettingsScreen: React.FC = () => {
           secretKey={editingSecret.key}
           description={editingSecret.description}
           valueType={editingSecret.valueType}
+          scope={editingSecret.scope}
           isSet={editingSecret.isSet}
           currentValue={editingSecret.currentValue}
           enumValues={editingSecret.enumValues}
@@ -1092,6 +1122,14 @@ const NodeSettingsScreen: React.FC = () => {
           )}
         </Modal>
       </Portal>
+
+      <Snackbar
+        visible={showPersonalInfo}
+        onDismiss={() => setShowPersonalInfo(false)}
+        duration={3000}
+      >
+        This setting is personal — each household member configures their own.
+      </Snackbar>
     </View>
   );
 };

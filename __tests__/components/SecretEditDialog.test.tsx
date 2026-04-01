@@ -25,6 +25,7 @@ const baseProps = {
   secretKey: 'WEATHER_API_KEY',
   description: 'API key for the weather service',
   valueType: 'string',
+  scope: 'integration',
   isSet: false,
 };
 
