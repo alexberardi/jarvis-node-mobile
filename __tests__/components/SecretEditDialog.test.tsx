@@ -10,6 +10,12 @@ jest.mock('../../src/services/configPushService', () => ({
   encryptAndPushConfig: jest.fn(),
 }));
 
+jest.mock('../../src/auth/AuthContext', () => ({
+  useAuth: () => ({
+    state: { user: { id: 1 }, accessToken: 'tok-123' },
+  }),
+}));
+
 const mockedEncrypt = encryptAndPushConfig as jest.MockedFunction<typeof encryptAndPushConfig>;
 
 const wrapper = ({ children }: { children: React.ReactNode }) => (

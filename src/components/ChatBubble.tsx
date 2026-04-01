@@ -1,7 +1,9 @@
 import React, { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { LayoutChangeEvent, Pressable, StyleSheet, View } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import { Button, IconButton, Text, useTheme } from 'react-native-paper';
+
+const COLLAPSE_HEIGHT = 400;
 
 import type { ChatAction, ChatMessage } from '../api/chatApi';
 
@@ -46,6 +48,8 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
   const [completionText, setCompletionText] = useState<string | null>(null);
   const [previewExpanded, setPreviewExpanded] = useState(false);
+  const [contentHeight, setContentHeight] = useState(0);
+  const [expanded, setExpanded] = useState(false);
 
   const mdStyles = useMemo(
     () => ({
@@ -131,9 +135,29 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
             {message.content}
           </Text>
         ) : (
-          <Markdown style={mdStyles}>
-            {stripThinkTags(message.content) + (isStreaming ? '\u258C' : '')}
-          </Markdown>
+          <>
+            <View
+              style={contentHeight > COLLAPSE_HEIGHT && !expanded ? { maxHeight: COLLAPSE_HEIGHT, overflow: 'hidden' } : undefined}
+            >
+              <View
+                onLayout={(e: LayoutChangeEvent) => {
+                  const h = e.nativeEvent.layout.height;
+                  if (h > contentHeight) setContentHeight(h);
+                }}
+              >
+                <Markdown style={mdStyles}>
+                  {stripThinkTags(message.content) + (isStreaming ? '\u258C' : '')}
+                </Markdown>
+              </View>
+            </View>
+            {contentHeight > COLLAPSE_HEIGHT && (
+              <Pressable onPress={() => setExpanded((v) => !v)} style={styles.showMore}>
+                <Text variant="labelSmall" style={{ color: theme.colors.primary, fontWeight: '600' }}>
+                  {expanded ? 'Show less' : 'Show more'}
+                </Text>
+              </Pressable>
+            )}
+          </>
         )}
 
         {/* Preview card (e.g., email draft) */}
@@ -199,15 +223,27 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
           </View>
         )}
 
-        {!isUser && message.content.length > 0 && !isStreaming && !hasActions && onPlayTTS && (
+        {!isUser && message.content.length > 0 && !isStreaming && (
           <View style={styles.ttsRow}>
-            <IconButton
-              icon={isSpeaking ? 'stop' : 'volume-high'}
-              size={16}
-              onPress={() => onPlayTTS(stripMarkdown(stripThinkTags(message.content)))}
-              iconColor={theme.colors.outline}
-              style={styles.ttsButton}
-            />
+            {message.roundTripMs != null && (
+              <Text
+                variant="labelSmall"
+                style={[styles.roundTrip, { color: theme.colors.outline }]}
+              >
+                {message.roundTripMs < 1000
+                  ? `${message.roundTripMs}ms`
+                  : `${(message.roundTripMs / 1000).toFixed(1)}s`}
+              </Text>
+            )}
+            {!hasActions && onPlayTTS && (
+              <IconButton
+                icon={isSpeaking ? 'stop' : 'volume-high'}
+                size={16}
+                onPress={() => onPlayTTS(stripMarkdown(stripThinkTags(message.content)))}
+                iconColor={theme.colors.outline}
+                style={styles.ttsButton}
+              />
+            )}
           </View>
         )}
       </View>
@@ -283,6 +319,15 @@ const styles = StyleSheet.create({
   },
   ttsButton: {
     margin: 0,
+  },
+  roundTrip: {
+    alignSelf: 'center',
+    opacity: 0.6,
+    fontSize: 11,
+  },
+  showMore: {
+    paddingTop: 6,
+    alignItems: 'center',
   },
 });
 
