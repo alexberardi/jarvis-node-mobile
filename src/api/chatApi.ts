@@ -28,6 +28,7 @@ export interface ChatMessage {
   role: 'user' | 'assistant' | 'status';
   content: string;
   timestamp: number;
+  roundTripMs?: number;
   actions?: ChatAction[];
   actionContext?: ChatActionContext;
   actionPreview?: string;
