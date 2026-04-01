@@ -71,6 +71,7 @@ export function useChat({
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const assistantIdRef = useRef<string | null>(null);
+  const sendTimestampRef = useRef<number>(0);
   const toolsRef = useRef<NodeToolsResponse | null>(null);
   const accessTokenRef = useRef(accessToken);
   accessTokenRef.current = accessToken;
@@ -163,6 +164,7 @@ export function useChat({
         timestamp: Date.now(),
       };
 
+      sendTimestampRef.current = Date.now();
       setMessages((prev) => [...prev, userMsg, assistantMsg]);
       setIsLoading(true);
 
@@ -200,7 +202,8 @@ export function useChat({
             );
             break;
 
-          case 'done':
+          case 'done': {
+            const roundTripMs = Date.now() - sendTimestampRef.current;
             if (event.conversation_id) {
               setConversationId(event.conversation_id);
             }
@@ -211,6 +214,7 @@ export function useChat({
                     ...msg,
                     role: 'assistant' as const,
                     content: event.full_text ?? msg.content,
+                    roundTripMs,
                     actions: event.actions,
                     actionContext: event.action_context,
                     actionPreview: event.action_preview,
@@ -225,6 +229,7 @@ export function useChat({
               onAssistantDone(event.full_text);
             }
             break;
+          }
 
           case 'error':
             if (event.conversation_id) {
