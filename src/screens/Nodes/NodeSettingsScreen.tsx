@@ -356,10 +356,13 @@ const NodeSettingsScreen: React.FC = () => {
   const handleUninstall = useCallback(
     (group: ServiceGroup) => {
       setOpenMenu(null);
-      const commandName = group.serviceName;
+      // Use the raw command name from commandStates — matches package name in node metadata
+      const rawNames = Object.keys(group.commandStates);
+      const commandName = rawNames[0] ?? group.serviceName;
+      const displayName = group.serviceName;
       Alert.alert(
         'Uninstall Package',
-        `Remove "${commandName}" from this node?`,
+        `Remove "${displayName}" from this node?`,
         [
           { text: 'Cancel', style: 'cancel' },
           {
