@@ -39,6 +39,7 @@ import { provisionK2ToNode } from '../../api/nodeSettingsApi';
 import SecretEditDialog from '../../components/SecretEditDialog';
 import { encryptAndPushConfig } from '../../services/configPushService';
 import type { AuthenticationConfig } from '../../types/SmartHome';
+import { requestUninstall, pollUninstallStatus } from '../../api/packageInstallApi';
 
 type ScreenRoute = RouteProp<NodesStackParamList, 'NodeSettings'>;
 
@@ -350,6 +351,50 @@ const NodeSettingsScreen: React.FC = () => {
       );
     },
     [commands, nodeId, cleanup, loadSettings],
+  );
+
+  const handleUninstall = useCallback(
+    (group: ServiceGroup) => {
+      setOpenMenu(null);
+      const commandName = group.serviceName;
+      Alert.alert(
+        'Uninstall Package',
+        `Remove "${commandName}" from this node?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Uninstall',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                const { id } = await requestUninstall(nodeId, commandName);
+                // Poll for result
+                let attempts = 0;
+                while (attempts < 15) {
+                  await new Promise((r) => setTimeout(r, 2000));
+                  const result = await pollUninstallStatus(nodeId, id);
+                  if (result.status === 'completed') {
+                    Alert.alert('Uninstalled', `"${commandName}" has been removed.`);
+                    cleanup();
+                    loadSettings();
+                    return;
+                  }
+                  if (result.status === 'failed') {
+                    Alert.alert('Failed', result.error_message ?? 'Uninstall failed');
+                    return;
+                  }
+                  attempts++;
+                }
+                Alert.alert('Timeout', 'Node did not respond in time.');
+              } catch (err) {
+                Alert.alert('Error', 'Failed to request uninstall');
+              }
+            },
+          },
+        ],
+      );
+    },
+    [nodeId, cleanup, loadSettings],
   );
 
   const handleAuthenticate = (group: ServiceGroup) => {
@@ -694,6 +739,11 @@ const NodeSettingsScreen: React.FC = () => {
                 }}
               />
             ) : null}
+            <Menu.Item
+              leadingIcon="delete-outline"
+              title="Uninstall"
+              onPress={() => handleUninstall(group)}
+            />
           </Menu>
         </View>
 
