@@ -42,6 +42,27 @@ export const pollInstallStatus = async (
   return res.data;
 };
 
+export const requestUninstall = async (
+  nodeId: string,
+  commandName: string,
+): Promise<InstallRequest> => {
+  const res = await apiClient.post<InstallRequest>(
+    `${getBaseUrl()}/api/v0/nodes/${nodeId}/package-uninstall`,
+    { command_name: commandName },
+  );
+  return res.data;
+};
+
+export const pollUninstallStatus = async (
+  nodeId: string,
+  requestId: string,
+): Promise<InstallStatus> => {
+  const res = await apiClient.get<InstallStatus>(
+    `${getBaseUrl()}/api/v0/nodes/${nodeId}/package-uninstall/${requestId}`,
+  );
+  return res.data;
+};
+
 /** Install a prompt provider directly to the command center (no node/MQTT). */
 export const requestCCInstall = async (
   githubRepoUrl: string,
