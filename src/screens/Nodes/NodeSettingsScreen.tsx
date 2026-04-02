@@ -97,6 +97,9 @@ const NodeSettingsScreen: React.FC = () => {
   // Ellipsis menu state (which group's menu is open)
   const [openMenu, setOpenMenu] = useState<string | null>(null);
 
+  // Uninstall state
+  const [uninstallingCommand, setUninstallingCommand] = useState<string | null>(null);
+
   // Sync flow state
   const [householdNodes, setHouseholdNodes] = useState<(NodeInfo & { hasK2: boolean })[]>([]);
   const [syncGroup, setSyncGroup] = useState<ServiceGroup | null>(null);
@@ -356,7 +359,6 @@ const NodeSettingsScreen: React.FC = () => {
   const handleUninstall = useCallback(
     (group: ServiceGroup) => {
       setOpenMenu(null);
-      // Use the raw command name from commandStates — matches package name in node metadata
       const rawNames = Object.keys(group.commandStates);
       const commandName = rawNames[0] ?? group.serviceName;
       const displayName = group.serviceName;
@@ -369,27 +371,30 @@ const NodeSettingsScreen: React.FC = () => {
             text: 'Uninstall',
             style: 'destructive',
             onPress: async () => {
+              setUninstallingCommand(commandName);
               try {
                 const { id } = await requestUninstall(nodeId, commandName);
-                // Poll for result
                 let attempts = 0;
                 while (attempts < 15) {
                   await new Promise((r) => setTimeout(r, 2000));
                   const result = await pollUninstallStatus(nodeId, id);
                   if (result.status === 'completed') {
-                    Alert.alert('Uninstalled', `"${commandName}" has been removed.`);
+                    setUninstallingCommand(null);
                     cleanup();
                     loadSettings();
                     return;
                   }
                   if (result.status === 'failed') {
+                    setUninstallingCommand(null);
                     Alert.alert('Failed', result.error_message ?? 'Uninstall failed');
                     return;
                   }
                   attempts++;
                 }
+                setUninstallingCommand(null);
                 Alert.alert('Timeout', 'Node did not respond in time.');
               } catch (err) {
+                setUninstallingCommand(null);
                 Alert.alert('Error', 'Failed to request uninstall');
               }
             },
@@ -677,6 +682,20 @@ const NodeSettingsScreen: React.FC = () => {
     const hasMultipleCommands = rawNames.length > 1;
     const menuKey = group.serviceName;
     const hasConfiguredSecrets = group.secrets.some((s) => s.is_set);
+    const isUninstalling = rawNames.some((n) => uninstallingCommand === n);
+
+    if (isUninstalling) {
+      return (
+        <View key={group.serviceName} style={styles.groupContainer}>
+          <Surface style={{ backgroundColor: theme.colors.surface, alignItems: 'center', paddingVertical: 20, borderRadius: 12, padding: 16 }} elevation={1}>
+            <ActivityIndicator size="small" style={{ marginBottom: 8 }} />
+            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+              Uninstalling {group.serviceName}...
+            </Text>
+          </Surface>
+        </View>
+      );
+    }
 
     return (
       <View key={group.serviceName} style={styles.groupContainer}>
