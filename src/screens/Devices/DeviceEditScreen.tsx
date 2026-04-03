@@ -6,9 +6,11 @@ import {
   Appbar,
   Button,
   Chip,
+  Dialog,
   Divider,
   List,
   Menu,
+  Portal,
   Text,
   TextInput,
   useTheme,
@@ -21,6 +23,7 @@ import {
   updateDevice,
   deleteDevice,
   controlDevice,
+  type InputRequest,
 } from '../../api/smartHomeApi';
 import DeviceControlPanel from '../../components/device-controls/DeviceControlPanel';
 import type { DeviceListItem, JarvisButton, Room } from '../../types/SmartHome';
@@ -39,6 +42,8 @@ const DeviceEditScreen = ({ navigation, route }: Props) => {
   const [roomMenuVisible, setRoomMenuVisible] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [lastAction, setLastAction] = useState<string | null>(null);
+  const [inputDialog, setInputDialog] = useState<InputRequest | null>(null);
+  const [inputValue, setInputValue] = useState('');
 
   const { data: devices, isLoading: devicesLoading } = useQuery({
     queryKey: ['devices', householdId],
@@ -114,7 +119,11 @@ const DeviceEditScreen = ({ navigation, route }: Props) => {
     setActionLoading(action.button_action);
     try {
       const result = await controlDevice(householdId, deviceId, action.button_action);
-      if (result.success) {
+      if (result.input_required) {
+        // Device needs user input (e.g. PIN for Apple TV pairing)
+        setInputDialog(result.input_required);
+        setInputValue('');
+      } else if (result.success) {
         setLastAction(action.button_text);
         setTimeout(() => setLastAction(null), 3000);
       } else {
@@ -126,6 +135,28 @@ const DeviceEditScreen = ({ navigation, route }: Props) => {
       setActionLoading(null);
     }
   }, [device, householdId, deviceId]);
+
+  const handleInputSubmit = useCallback(async () => {
+    if (!inputDialog || !device) return;
+    setInputDialog(null);
+    setActionLoading(inputDialog.follow_up_action);
+    try {
+      const result = await controlDevice(householdId, deviceId, inputDialog.follow_up_action, {
+        session_id: inputDialog.session_id,
+        pin: inputValue,
+      });
+      if (result.success) {
+        setLastAction('Paired');
+        setTimeout(() => setLastAction(null), 3000);
+      } else {
+        Alert.alert('Pairing Failed', result.error || 'Could not complete pairing');
+      }
+    } catch (err) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Pairing failed');
+    } finally {
+      setActionLoading(null);
+    }
+  }, [inputDialog, inputValue, device, householdId, deviceId]);
 
   if (devicesLoading) {
     return (
@@ -274,6 +305,30 @@ const DeviceEditScreen = ({ navigation, route }: Props) => {
           Delete Device
         </Button>
       </ScrollView>
+
+      {/* Input dialog for device pairing (PIN entry, etc.) */}
+      <Portal>
+        <Dialog visible={inputDialog !== null} onDismiss={() => setInputDialog(null)}>
+          <Dialog.Title>{inputDialog?.type === 'pin' ? 'Enter PIN' : 'Input Required'}</Dialog.Title>
+          <Dialog.Content>
+            <Text variant="bodyMedium" style={{ marginBottom: 12 }}>
+              {inputDialog?.prompt}
+            </Text>
+            <TextInput
+              label={inputDialog?.type === 'pin' ? 'PIN' : 'Value'}
+              value={inputValue}
+              onChangeText={setInputValue}
+              mode="outlined"
+              keyboardType={inputDialog?.type === 'pin' ? 'number-pad' : 'default'}
+              autoFocus
+            />
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setInputDialog(null)}>Cancel</Button>
+            <Button onPress={handleInputSubmit} disabled={!inputValue}>Submit</Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
     </View>
   );
 };
