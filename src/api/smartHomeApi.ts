@@ -111,11 +111,19 @@ export const importDevices = async (
 // Device Control (synchronous: mobile -> CC -> MQTT -> node -> result -> mobile)
 // =============================================================================
 
+export interface InputRequest {
+  type: 'pin' | 'text' | 'confirm';
+  prompt: string;
+  session_id: string;
+  follow_up_action: string;
+}
+
 export interface DeviceControlResponse {
   success: boolean;
   entity_id: string;
   action: string;
   error: string | null;
+  input_required?: InputRequest;
 }
 
 export const controlDevice = async (
