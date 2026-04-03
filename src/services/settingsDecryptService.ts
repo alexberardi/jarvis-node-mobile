@@ -46,6 +46,7 @@ export interface DeviceFamilyEntry {
   secrets: CommandSecretEntry[];
   authentication?: AuthenticationConfig;
   is_configured: boolean;
+  setup_guide?: string;
 }
 
 export interface DeviceManagerEntry {
