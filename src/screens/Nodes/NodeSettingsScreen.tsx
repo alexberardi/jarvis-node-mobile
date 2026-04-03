@@ -895,6 +895,18 @@ const NodeSettingsScreen: React.FC = () => {
           </Surface>
         )}
 
+        {family.setup_guide && (
+          <Button
+            mode="text"
+            icon="help-circle-outline"
+            compact
+            onPress={() => setGuideContent({ title: family.friendly_name, markdown: family.setup_guide! })}
+            style={{ alignSelf: 'flex-start', marginTop: 4 }}
+          >
+            Setup Help
+          </Button>
+        )}
+
         {family.authentication && (
           <Button
             mode="contained-tonal"
