@@ -25,7 +25,7 @@ export interface ChatActionContext {
 
 export interface ChatMessage {
   id: string;
-  role: 'user' | 'assistant' | 'status';
+  role: 'user' | 'assistant' | 'status' | 'acknowledgment';
   content: string;
   timestamp: number;
   roundTripMs?: number;
@@ -35,7 +35,7 @@ export interface ChatMessage {
 }
 
 export interface ChatStreamEvent {
-  type: 'status' | 'delta' | 'done' | 'error';
+  type: 'status' | 'delta' | 'done' | 'error' | 'acknowledgment';
   text?: string;
   message?: string;
   conversation_id?: string;
