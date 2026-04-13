@@ -187,6 +187,21 @@ export function useChat({
             });
             break;
 
+          case 'acknowledgment':
+            setMessages((prev) =>
+              prev.map((msg) => {
+                if (msg.id === assistantIdRef.current) {
+                  return {
+                    ...msg,
+                    role: 'acknowledgment' as const,
+                    content: event.text ?? '',
+                  };
+                }
+                return msg;
+              }),
+            );
+            break;
+
           case 'delta':
             setMessages((prev) =>
               prev.map((msg) => {
@@ -194,7 +209,9 @@ export function useChat({
                   return {
                     ...msg,
                     role: 'assistant' as const,
-                    content: (msg.role === 'status' ? '' : msg.content) + (event.text ?? ''),
+                    content:
+                      (msg.role === 'status' || msg.role === 'acknowledgment' ? '' : msg.content) +
+                      (event.text ?? ''),
                   };
                 }
                 return msg;

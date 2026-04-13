@@ -79,6 +79,8 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
     );
   }
 
+  // Acknowledgment renders like assistant (normal bubble) — it will be
+  // replaced by the real response when delta events arrive.
   const isUser = message.role === 'user';
   const hasActions = !isUser && !isStreaming && message.actions && message.actions.length > 0 && !completionText;
 

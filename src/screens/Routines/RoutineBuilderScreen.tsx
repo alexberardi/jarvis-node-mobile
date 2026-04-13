@@ -39,7 +39,7 @@ import { ROUTINE_API_KEY as SECURE_STORE_KEY } from '../../config/storageKeys';
 
 interface ChatMessage {
   id: string;
-  role: 'user' | 'assistant' | 'status';
+  role: 'user' | 'assistant' | 'status' | 'acknowledgment';
   content: string;
   routine?: GeneratedRoutine;
   testResults?: StepResult[];
