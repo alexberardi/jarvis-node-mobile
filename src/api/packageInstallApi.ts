@@ -63,17 +63,27 @@ export const pollUninstallStatus = async (
   return res.data;
 };
 
-/** Install a prompt provider directly to the command center (no node/MQTT). */
+/** Install a prompt provider to the command center (async, returns request_id for polling). */
 export const requestCCInstall = async (
   githubRepoUrl: string,
   gitTag: string | null,
-): Promise<{ status: string; provider_name: string; package_name: string }> => {
-  const res = await apiClient.post(
+): Promise<InstallRequest> => {
+  const res = await apiClient.post<InstallRequest>(
     `${getBaseUrl()}/api/v0/prompt-providers/install`,
     {
       github_repo_url: githubRepoUrl,
       git_tag: gitTag,
     },
+  );
+  return res.data;
+};
+
+/** Poll prompt provider install status on command center. */
+export const pollCCInstallStatus = async (
+  requestId: string,
+): Promise<InstallStatus> => {
+  const res = await apiClient.get<InstallStatus>(
+    `${getBaseUrl()}/api/v0/prompt-providers/install/${requestId}`,
   );
   return res.data;
 };

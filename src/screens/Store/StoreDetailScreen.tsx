@@ -111,34 +111,26 @@ const StoreDetailScreen = () => {
       // Get download info (repo URL + exact git tag)
       const downloadInfo = await getDownloadInfo(commandName);
 
-      // Prompt providers install to CC directly (no node picker)
+      // Prompt providers install to CC directly (async with polling)
       if (hasPromptProvider) {
-        Alert.alert(
-          'Install to Command Center',
-          'Prompt providers install to the command center, not to individual nodes. Continue?',
-          [
-            { text: 'Cancel', style: 'cancel', onPress: () => setInstalling(false) },
-            {
-              text: 'Install',
-              onPress: async () => {
-                try {
-                  const result = await requestCCInstall(
-                    downloadInfo.github_repo_url,
-                    downloadInfo.git_tag,
-                  );
-                  Alert.alert(
-                    'Installed',
-                    `Provider "${result.provider_name}" installed successfully.`,
-                  );
-                } catch (err: unknown) {
-                  Alert.alert('Install Error', err instanceof Error ? err.message : 'Failed to install provider');
-                } finally {
-                  setInstalling(false);
-                }
-              },
-            },
-          ],
-        );
+        try {
+          const result = await requestCCInstall(
+            downloadInfo.github_repo_url,
+            downloadInfo.git_tag,
+          );
+          navigation.navigate('InstallProgress', {
+            installs: JSON.stringify([result.id]),
+            packageName: detail.display_name || commandName,
+            commandName,
+            githubRepoUrl: downloadInfo.github_repo_url,
+            gitTag: downloadInfo.git_tag,
+            mode: 'cc-provider',
+          });
+        } catch (err: unknown) {
+          Alert.alert('Install Error', err instanceof Error ? err.message : 'Failed to start install');
+        } finally {
+          setInstalling(false);
+        }
         return;
       }
 
