@@ -45,7 +45,7 @@ const NodeSelector: React.FC<NodeSelectorProps> = ({
         }
       })
       .catch((err) => {
-        console.error('[NodeSelector] Failed to load nodes', err);
+        console.warn('[NodeSelector] Failed to load nodes', err.message ?? err);
       });
   }, [householdId, selectedNodeId, onSelectNode]);
 

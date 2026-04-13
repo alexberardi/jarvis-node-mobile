@@ -12,7 +12,7 @@ import {
   useTheme,
 } from 'react-native-paper';
 
-import { pollInstallStatus, requestInstall } from '../../api/packageInstallApi';
+import { pollCCInstallStatus, pollInstallStatus, requestInstall } from '../../api/packageInstallApi';
 import { pollTestInstallStatus } from '../../api/testInstallApi';
 import { StoreStackParamList } from '../../navigation/types';
 import type { InstallStatus, InstallStatusValue } from '../../types/Package';
@@ -36,9 +36,13 @@ const InstallProgressScreen = () => {
   const route = useRoute<Route>();
   const theme = useTheme();
 
-  const initialInstalls: InstallEntry[] = JSON.parse(route.params.installs);
   const { packageName, commandName, githubRepoUrl, gitTag, mode } = route.params;
   const isTestInstall = mode === 'test';
+  const isCCProvider = mode === 'cc-provider';
+
+  const initialInstalls: InstallEntry[] = isCCProvider
+    ? [{ requestId: JSON.parse(route.params.installs)[0], nodeId: 'cc', nodeName: 'Command Center' }]
+    : JSON.parse(route.params.installs);
 
   const [installs, setInstalls] = useState<InstallEntry[]>(initialInstalls);
   const [statuses, setStatuses] = useState<Map<string, InstallStatus>>(new Map());
@@ -58,9 +62,11 @@ const InstallProgressScreen = () => {
     try {
       const updates = await Promise.allSettled(
         installs.map(async (entry) => {
-          const status = isTestInstall
-            ? await pollTestInstallStatus(entry.nodeId, entry.requestId)
-            : await pollInstallStatus(entry.nodeId, entry.requestId);
+          const status = isCCProvider
+            ? await pollCCInstallStatus(entry.requestId)
+            : isTestInstall
+              ? await pollTestInstallStatus(entry.nodeId, entry.requestId)
+              : await pollInstallStatus(entry.nodeId, entry.requestId);
           return { key: entry.requestId, status };
         }),
       );
@@ -184,7 +190,7 @@ const InstallProgressScreen = () => {
           variant="headlineSmall"
           style={[styles.title, { color: theme.colors.onBackground }]}
         >
-          {isTestInstall ? 'Testing' : 'Installing'} {packageName}
+          {isTestInstall ? 'Testing' : 'Installing'} {packageName || commandName}
         </Text>
       </View>
 
@@ -234,7 +240,7 @@ const InstallProgressScreen = () => {
                 </View>
               </Card.Content>
 
-              {!isTestInstall && (statusValue === 'failed' || statusValue === 'expired') && (
+              {!isTestInstall && !isCCProvider && (statusValue === 'failed' || statusValue === 'expired') && (
                 <Card.Actions>
                   <Button
                     compact
