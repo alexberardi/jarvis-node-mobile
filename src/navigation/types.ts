@@ -92,7 +92,7 @@ export type StoreStackParamList = {
     commandName: string;
     githubRepoUrl: string;
     gitTag: string | null;
-    mode?: 'store' | 'test'; // 'test' uses test-install poll endpoint
+    mode?: 'store' | 'test' | 'cc-provider'; // 'cc-provider' polls CC directly
   };
 };
 

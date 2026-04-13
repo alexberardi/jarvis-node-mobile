@@ -1,5 +1,5 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   FlatList,
@@ -49,13 +49,27 @@ const DeviceRoomAssignmentScreen = ({ navigation, route }: Props) => {
   const householdId = authState.activeHouseholdId!;
   const accessToken = authState.accessToken!;
 
-  // Build rooms from HA areas
+  // Build rooms: HA areas for HA source, Jarvis rooms for direct
   const initialRooms: RoomOption[] = useMemo(
     () => haAreas.map((a) => ({ id: `ha_${a.area_id}`, name: a.name })),
     [haAreas],
   );
 
   const [rooms, setRooms] = useState<RoomOption[]>(initialRooms);
+
+  // For non-HA devices, load Jarvis rooms
+  useEffect(() => {
+    if (source === 'direct' && rooms.length === 0) {
+      smartHomeApi.listRooms(householdId).then((jarvisRooms) => {
+        const options = jarvisRooms.map((r) => ({ id: r.id, name: r.name }));
+        setRooms(options);
+        // Auto-assign first room if only one device
+        if (options.length > 0 && selectedDevices.length === 1) {
+          setDeviceRooms({ [selectedDevices[0].entity_id]: options[0].id });
+        }
+      }).catch(() => {});
+    }
+  }, [source, householdId]);
   const [deviceRooms, setDeviceRooms] = useState<Record<string, string | null>>(
     () => {
       const map: Record<string, string | null> = {};
@@ -187,6 +201,18 @@ const DeviceRoomAssignmentScreen = ({ navigation, route }: Props) => {
     );
   };
 
+  const showRoomPicker = useCallback((entityId: string) => {
+    const options = [
+      { text: 'No room', onPress: () => setDeviceRooms((prev) => ({ ...prev, [entityId]: null })) },
+      ...rooms.map((room) => ({
+        text: room.name,
+        onPress: () => setDeviceRooms((prev) => ({ ...prev, [entityId]: room.id })),
+      })),
+      { text: 'Cancel', style: 'cancel' as const },
+    ];
+    Alert.alert('Assign Room', 'Select a room for this device', options);
+  }, [rooms]);
+
   const renderDevice = useCallback(
     ({ item }: { item: EnrichedEntity }) => {
       const currentRoomId = deviceRooms[item.entity_id];
@@ -200,47 +226,17 @@ const DeviceRoomAssignmentScreen = ({ navigation, route }: Props) => {
               {item.entity_id}
             </Text>
           </View>
-          <Menu
-            visible={menuVisible === item.entity_id}
-            onDismiss={() => setMenuVisible(null)}
-            anchor={
-              <Button
-                mode="outlined"
-                compact
-                onPress={() => setMenuVisible(item.entity_id)}
-              >
-                {currentRoom?.name || 'No room'}
-              </Button>
-            }
+          <Button
+            mode="outlined"
+            compact
+            onPress={() => showRoomPicker(item.entity_id)}
           >
-            <Menu.Item
-              title="No room"
-              onPress={() => {
-                setDeviceRooms((prev) => ({
-                  ...prev,
-                  [item.entity_id]: null,
-                }));
-                setMenuVisible(null);
-              }}
-            />
-            {rooms.map((room) => (
-              <Menu.Item
-                key={room.id}
-                title={room.name}
-                onPress={() => {
-                  setDeviceRooms((prev) => ({
-                    ...prev,
-                    [item.entity_id]: room.id,
-                  }));
-                  setMenuVisible(null);
-                }}
-              />
-            ))}
-          </Menu>
+            {currentRoom?.name || 'No room'}
+          </Button>
         </View>
       );
     },
-    [deviceRooms, rooms, menuVisible],
+    [deviceRooms, rooms, showRoomPicker],
   );
 
   return (
@@ -267,23 +263,26 @@ const DeviceRoomAssignmentScreen = ({ navigation, route }: Props) => {
         </Button>
       </View>
 
-      {/* Optional: node to push config to */}
-      <TextInput
-        mode="outlined"
-        placeholder="Node ID (to push HA config)"
-        value={nodeId}
-        onChangeText={setNodeId}
-        style={styles.nodeInput}
-        dense
-      />
+      {/* Optional: node to push HA config to (HA only) */}
+      {source !== 'direct' && (
+        <TextInput
+          mode="outlined"
+          placeholder="Node ID (to push HA config)"
+          value={nodeId}
+          onChangeText={setNodeId}
+          style={styles.nodeInput}
+          dense
+        />
+      )}
 
       {/* Device list */}
-      <FlatList
-        data={selectedDevices}
-        keyExtractor={(e) => e.entity_id}
-        renderItem={renderDevice}
-        style={styles.list}
-      />
+      <View style={styles.list}>
+        {selectedDevices.map((item) => (
+          <View key={item.entity_id}>
+            {renderDevice({ item } as any)}
+          </View>
+        ))}
+      </View>
 
       <View style={styles.bottomActions}>
         <Button

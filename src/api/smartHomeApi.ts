@@ -132,12 +132,20 @@ export const controlDevice = async (
   action: string,
   data?: Record<string, unknown>,
 ): Promise<DeviceControlResponse> => {
-  const res = await apiClient.post<DeviceControlResponse>(
-    `${getBaseUrl()}/api/v0/households/${householdId}/devices/${deviceId}/control`,
-    { action, data },
-    { timeout: 15000 }, // 15s to accommodate the 10s MQTT wait
-  );
-  return res.data;
+  const url = `${getBaseUrl()}/api/v0/households/${householdId}/devices/${deviceId}/control`;
+  console.log('[controlDevice] POST', url, 'action=', action);
+  try {
+    const res = await apiClient.post<DeviceControlResponse>(
+      url,
+      { action, data },
+      { timeout: 15000 },
+    );
+    console.log('[controlDevice] response:', JSON.stringify(res.data));
+    return res.data;
+  } catch (err: any) {
+    console.error('[controlDevice] ERROR:', err?.message, err?.response?.status, err?.response?.data);
+    throw err;
+  }
 };
 
 // =============================================================================
