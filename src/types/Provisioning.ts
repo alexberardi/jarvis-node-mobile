@@ -69,6 +69,7 @@ export interface ApiProvisioningRequest {
   wifi_password: string;
   room: string;
   command_center_url: string;
+  config_service_url?: string;
   household_id: string;
   node_id: string;
   provisioning_token: string;
