@@ -23,6 +23,7 @@ import {
   fetchRoutineHistory,
   RoutineExecution,
 } from '../../api/routineHistoryApi';
+import { NodeUpdateSection } from '../../components/NodeUpdateSection';
 import { NodesStackParamList } from '../../navigation/types';
 
 type Nav = NativeStackNavigationProp<NodesStackParamList>;
@@ -124,6 +125,10 @@ const OverviewTab = ({
           <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Routines</Text>
         </View>
       </View>
+
+      <Divider style={{ marginVertical: 8 }} />
+
+      <NodeUpdateSection node={node} />
 
       <Divider style={{ marginVertical: 8 }} />
 

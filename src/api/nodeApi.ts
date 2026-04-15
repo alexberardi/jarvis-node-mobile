@@ -18,6 +18,11 @@ export interface NodeInfo {
   routine_count: number | null;
   python_version: string | null;
   platform: string | null;
+  // Version info reported by the node (nullable for pre-upgrade nodes)
+  last_seen_version: string | null;
+  install_mode: string | null;
+  git_sha: string | null;
+  is_busy: boolean;
 }
 
 export const listNodes = async (householdId?: string): Promise<NodeInfo[]> => {
