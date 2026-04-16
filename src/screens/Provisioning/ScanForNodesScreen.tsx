@@ -74,7 +74,7 @@ const ScanForNodesScreen = ({ navigation }: Props) => {
   };
 
   const openWiFiSettings = () => {
-    Linking.openURL('App-Prefs:WIFI');
+    Linking.openURL('App-Prefs:root=WIFI');
   };
 
   return (
