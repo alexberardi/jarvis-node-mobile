@@ -20,6 +20,7 @@
         "NSCameraUsageDescription": "Camera access is required to scan QR codes for node pairing",
         "NSLocalNetworkUsageDescription": "Jarvis needs local network access to discover your self-hosted server.",
         "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true,
           "NSAllowsLocalNetworking": true
         },
         "ITSAppUsesNonExemptEncryption": false,
