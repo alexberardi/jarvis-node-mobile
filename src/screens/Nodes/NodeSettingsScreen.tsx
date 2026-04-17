@@ -243,6 +243,7 @@ const NodeSettingsScreen: React.FC = () => {
                 result.snapshot.tag,
               );
               setCommands(snapshot.commands);
+              console.log('[DEBUG] device_families from snapshot:', JSON.stringify((snapshot.device_families ?? []).map((f: any) => f.family_name)));
               setDeviceFamilies(snapshot.device_families ?? []);
               const states: Record<string, boolean> = {};
               for (const cmd of snapshot.commands) {
@@ -427,8 +428,27 @@ const NodeSettingsScreen: React.FC = () => {
   const handleAuthenticateFamily = (family: DeviceFamilyEntry) => {
     if (!family.authentication || !authState.accessToken) return;
 
+    // Interpolate secret values into the auth config URLs.
+    // e.g. Nest's authorize_url contains {project_id} which must be
+    // replaced with the actual NEST_PROJECT_ID before opening the browser.
+    const authConfig = { ...family.authentication };
+    if (authConfig.authorize_url && family.secrets) {
+      for (const secret of family.secrets) {
+        if (secret.value) {
+          // Replace {KEY_NAME} patterns — strip the provider prefix and
+          // try both the raw key and a lowercase short form.
+          const placeholder = `{${secret.key.toLowerCase()}}`;
+          const shortKey = secret.key.replace(/^[A-Z]+_/, '').toLowerCase();
+          const shortPlaceholder = `{${shortKey}}`;
+          authConfig.authorize_url = authConfig.authorize_url
+            .replace(placeholder, secret.value)
+            .replace(shortPlaceholder, secret.value);
+        }
+      }
+    }
+
     navigation.navigate('IntegrationAuth', {
-      authConfig: JSON.stringify(family.authentication),
+      authConfig: JSON.stringify(authConfig),
       nodeId,
       accessToken: authState.accessToken,
     });
