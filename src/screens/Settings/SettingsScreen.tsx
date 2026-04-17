@@ -37,6 +37,7 @@ import {
   arePushNotificationsEnabled,
   setPushNotificationsEnabled,
 } from '../../services/pushNotificationService';
+import { getVoiceProfileStatus } from '../../api/voiceProfileApi';
 
 const THEME_BUTTONS = [
   { value: 'light', label: 'Light', icon: 'white-balance-sunny' },
@@ -126,6 +127,9 @@ const SettingsScreen = () => {
   const [smartHomeConfig, setSmartHomeConfig] = useState<SmartHomeConfig | null>(null);
   const [smartHomeLoading, setSmartHomeLoading] = useState(false);
 
+  // Voice profile status
+  const [hasVoiceProfile, setHasVoiceProfile] = useState<boolean | null>(null);
+
   const householdId = authState.activeHouseholdId;
 
   // Load settings
@@ -137,6 +141,15 @@ const SettingsScreen = () => {
       .then(setPushEnabled)
       .catch((err) => console.error('[SettingsScreen] Failed to load push setting', err));
   }, []);
+
+  // Load voice profile status
+  useEffect(() => {
+    if (householdId) {
+      getVoiceProfileStatus(householdId)
+        .then((s) => setHasVoiceProfile(s.has_profile))
+        .catch(() => setHasVoiceProfile(null));
+    }
+  }, [householdId]);
 
   const handleAutoPlayToggle = useCallback(async (value: boolean) => {
     setAutoPlayTTS(value);
@@ -374,6 +387,32 @@ const SettingsScreen = () => {
           </View>
         </Card.Content>
       </Card>
+
+      {/* Voice Recognition */}
+      {householdId && (
+        <Card style={styles.card}>
+          <Card.Content>
+            <Text variant="titleMedium" style={styles.sectionTitle}>
+              Voice Recognition
+            </Text>
+            <TouchableRipple onPress={() => navigation.navigate('VoiceProfile')}>
+              <View style={styles.switchRow}>
+                <View style={{ flex: 1 }}>
+                  <Text variant="bodyMedium">Voice Profile</Text>
+                  <Text variant="bodySmall" style={styles.hint}>
+                    {hasVoiceProfile === null
+                      ? 'Checking...'
+                      : hasVoiceProfile
+                        ? 'Enrolled — Jarvis recognizes your voice'
+                        : 'Not set up — tap to enroll'}
+                  </Text>
+                </View>
+                <Icon source="chevron-right" size={24} />
+              </View>
+            </TouchableRipple>
+          </Card.Content>
+        </Card>
+      )}
 
       {/* Appearance */}
       <Card style={styles.card}>

@@ -111,4 +111,5 @@ export type RootStackParamList = {
   Settings: undefined;
   HouseholdEdit: { householdId: string; householdName: string };
   SmartHomeSetup: NavigatorScreenParams<SmartHomeSetupParamList>;
+  VoiceProfile: undefined;
 };
