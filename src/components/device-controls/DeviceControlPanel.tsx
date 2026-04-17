@@ -205,7 +205,14 @@ const DeviceControlPanel: React.FC<Props> = ({
       );
 
     case 'camera':
-      return <CameraControl state={effectiveState} />;
+      return (
+        <CameraControl
+          state={effectiveState}
+          householdId={householdId}
+          deviceId={deviceId}
+          deviceName={device.name}
+        />
+      );
 
     case 'cover':
       return (

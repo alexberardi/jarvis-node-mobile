@@ -133,6 +133,7 @@ export interface AuthenticationConfig {
   extra_authorize_params?: Record<string, string>;
   extra_exchange_params?: Record<string, string>;
   send_redirect_uri_in_exchange?: boolean;
+  client_secret?: string;               // Web Application OAuth (server-side, for camera support)
   supports_pkce?: boolean;
 
   // Native app redirect: provider redirects to the app via custom URL scheme

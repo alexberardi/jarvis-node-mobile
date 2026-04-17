@@ -35,6 +35,7 @@ export type DevicesStackParamList = {
   ExternalDeviceDetail: { device: string; householdId: string };
   RoomManagement: undefined;
   DeviceDiscovery: { nodeId: string };
+  CameraView: { deviceId: string; householdId: string; deviceName: string };
 };
 
 export type SmartHomeSetupParamList = {
