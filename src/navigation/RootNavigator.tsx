@@ -9,6 +9,7 @@ import MainTabNavigator from './MainTabNavigator';
 import SmartHomeSetupNavigator from './SmartHomeSetupNavigator';
 import HouseholdEditScreen from '../screens/Settings/HouseholdEditScreen';
 import SettingsScreen from '../screens/Settings/SettingsScreen';
+import VoiceProfileScreen from '../screens/Settings/VoiceProfileScreen';
 import { RootStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -44,6 +45,7 @@ const RootNavigator = () => {
         options={{ presentation: 'modal' }}
       />
       <Stack.Screen name="HouseholdEdit" component={HouseholdEditScreen} />
+      <Stack.Screen name="VoiceProfile" component={VoiceProfileScreen} />
       <Stack.Screen
         name="SmartHomeSetup"
         component={SmartHomeSetupNavigator}
