@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, StyleSheet, View } from 'react-native';
-import { Button, Chip, IconButton, Text, TextInput, useTheme } from 'react-native-paper';
+import { Button, Chip, Icon, IconButton, Text, TextInput, useTheme } from 'react-native-paper';
 
 import { controlDevice } from '../../api/smartHomeApi';
 import type { DeviceState } from '../../types/SmartHome';
@@ -188,28 +188,48 @@ const ClimateControl: React.FC<Props> = ({
         </View>
       )}
 
-      {/* Manual temperature input (no live state) */}
+      {/* Error / offline banner + manual fallback (no live state) */}
       {!hasLiveState && (
-        <View style={styles.manualTempRow}>
-          <TextInput
-            label={`Temperature (°${unit})`}
-            value={manualTemp}
-            onChangeText={setManualTemp}
-            keyboardType="numeric"
-            mode="outlined"
-            style={styles.manualTempInput}
-            disabled={loading !== null}
-          />
-          <Button
-            mode="contained"
-            onPress={handleManualTempSubmit}
-            loading={loading === 'manual'}
-            disabled={loading !== null || !manualTemp.trim()}
-            style={styles.manualTempButton}
-          >
-            Set
-          </Button>
-        </View>
+        <>
+          <View style={[styles.errorBanner, { backgroundColor: theme.colors.errorContainer }]}>
+            <Icon source="wifi-off" size={20} color={theme.colors.onErrorContainer} />
+            <Text
+              variant="bodySmall"
+              style={[styles.errorText, { color: theme.colors.onErrorContainer }]}
+            >
+              {state.error || 'Could not reach device'}
+            </Text>
+            <Button
+              mode="text"
+              compact
+              onPress={onStateChange}
+              textColor={theme.colors.onErrorContainer}
+            >
+              Retry
+            </Button>
+          </View>
+
+          <View style={styles.manualTempRow}>
+            <TextInput
+              label={`Temperature (°${unit})`}
+              value={manualTemp}
+              onChangeText={setManualTemp}
+              keyboardType="numeric"
+              mode="outlined"
+              style={styles.manualTempInput}
+              disabled={loading !== null}
+            />
+            <Button
+              mode="contained"
+              onPress={handleManualTempSubmit}
+              loading={loading === 'manual'}
+              disabled={loading !== null || !manualTemp.trim()}
+              style={styles.manualTempButton}
+            >
+              Set
+            </Button>
+          </View>
+        </>
       )}
 
       {/* Mode selector chips */}
@@ -243,6 +263,15 @@ const styles = StyleSheet.create({
   },
   targetDisplay: { alignItems: 'center', minWidth: 80 },
   tempButton: {},
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+  },
+  errorText: { flex: 1 },
   manualTempRow: {
     flexDirection: 'row',
     alignItems: 'center',
