@@ -21,7 +21,7 @@ const CameraControl: React.FC<Props> = ({ state, householdId, deviceId, deviceNa
   const navigation = useNavigation<Nav>();
 
   const s = state.state ?? {};
-  const online = (s.online as boolean) ?? (s.connectivity === 'ONLINE') ?? false;
+  const online = (s.online as boolean | undefined) ?? (s.connectivity === 'ONLINE');
   const stateUnknown = state.state === null;
 
   // Allow streaming even when state is unknown (token may be expired but camera is fine)
