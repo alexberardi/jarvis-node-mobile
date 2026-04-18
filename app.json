@@ -27,7 +27,8 @@
         "CFBundleURLTypes": [
           {
             "CFBundleURLSchemes": [
-              "com.googleusercontent.apps.683175564329-24fi9h6hck48hfrbjhb24vf12680e5ec"
+              "com.googleusercontent.apps.683175564329-24fi9h6hck48hfrbjhb24vf12680e5ec",
+              "com.jarvis.app"
             ]
           }
         ]
