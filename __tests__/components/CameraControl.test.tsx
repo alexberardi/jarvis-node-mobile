@@ -6,6 +6,11 @@ import CameraControl from '../../src/components/device-controls/CameraControl';
 import { lightTheme } from '../../src/theme';
 import type { DeviceState } from '../../src/types/SmartHome';
 
+const mockNavigate = jest.fn();
+jest.mock('@react-navigation/native', () => ({
+  useNavigation: () => ({ navigate: mockNavigate }),
+}));
+
 const wrapper = ({ children }: { children: React.ReactNode }) => (
   <PaperProvider theme={lightTheme}>{children}</PaperProvider>
 );
@@ -20,10 +25,12 @@ const makeState = (overrides: Partial<DeviceState> = {}): DeviceState => ({
 });
 
 describe('CameraControl', () => {
+  beforeEach(() => mockNavigate.mockClear());
+
   it('shows "Online" chip when camera is online', () => {
     const state = makeState({ state: { online: true } });
     const { getByText } = render(
-      <CameraControl state={state} />,
+      <CameraControl state={state} householdId="h1" deviceId="d1" />,
       { wrapper },
     );
     expect(getByText('Online')).toBeTruthy();
@@ -38,21 +45,30 @@ describe('CameraControl', () => {
     expect(getByText('Offline')).toBeTruthy();
   });
 
-  it('shows "Live stream not yet supported" text', () => {
+  it('shows "View Live" button when online with device info', () => {
     const state = makeState({ state: { online: true } });
     const { getByText } = render(
-      <CameraControl state={state} />,
+      <CameraControl state={state} householdId="h1" deviceId="d1" />,
       { wrapper },
     );
-    expect(getByText('Live stream not yet supported')).toBeTruthy();
+    expect(getByText('View Live')).toBeTruthy();
   });
 
-  it('defaults to offline when state is null', () => {
-    const state = makeState({ state: null });
+  it('shows "Camera is offline" when offline', () => {
+    const state = makeState({ state: { online: false } });
     const { getByText } = render(
       <CameraControl state={state} />,
       { wrapper },
     );
-    expect(getByText('Offline')).toBeTruthy();
+    expect(getByText('Camera is offline')).toBeTruthy();
+  });
+
+  it('defaults to "Status Unknown" when state is null', () => {
+    const state = makeState({ state: null });
+    const { getByText } = render(
+      <CameraControl state={state} householdId="h1" deviceId="d1" />,
+      { wrapper },
+    );
+    expect(getByText('Status Unknown')).toBeTruthy();
   });
 });
