@@ -388,12 +388,12 @@ const SettingsScreen = () => {
         </Card.Content>
       </Card>
 
-      {/* Voice Recognition */}
+      {/* Voice */}
       {householdId && (
         <Card style={styles.card}>
           <Card.Content>
             <Text variant="titleMedium" style={styles.sectionTitle}>
-              Voice Recognition
+              Voice
             </Text>
             <TouchableRipple onPress={() => navigation.navigate('VoiceProfile')}>
               <View style={styles.switchRow}>
@@ -405,6 +405,18 @@ const SettingsScreen = () => {
                       : hasVoiceProfile
                         ? 'Enrolled — Jarvis recognizes your voice'
                         : 'Not set up — tap to enroll'}
+                  </Text>
+                </View>
+                <Icon source="chevron-right" size={24} />
+              </View>
+            </TouchableRipple>
+            <Divider style={{ marginVertical: 4 }} />
+            <TouchableRipple onPress={() => navigation.navigate('RecentCommands')}>
+              <View style={styles.switchRow}>
+                <View style={{ flex: 1 }}>
+                  <Text variant="bodyMedium">Command Feedback</Text>
+                  <Text variant="bodySmall" style={styles.hint}>
+                    Rate recent voice commands — helps Jarvis learn your patterns
                   </Text>
                 </View>
                 <Icon source="chevron-right" size={24} />
