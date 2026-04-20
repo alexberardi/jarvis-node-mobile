@@ -50,3 +50,18 @@ export const deleteNode = async (
     `${getCommandCenterUrl()}/api/v0/admin/nodes/${nodeId}`,
   );
 };
+
+/**
+ * Update a node's config.json settings via MQTT.
+ * The node merges the settings and optionally restarts.
+ */
+export const updateNodeConfig = async (
+  nodeId: string,
+  settings: Record<string, number | string | boolean>,
+  restart: boolean = true,
+): Promise<void> => {
+  await apiClient.post(
+    `${getCommandCenterUrl()}/api/v0/nodes/${nodeId}/node-config`,
+    { settings, restart },
+  );
+};
