@@ -73,6 +73,14 @@ export type RoutinesStackParamList = {
 export type InboxStackParamList = {
   InboxList: undefined;
   InboxDetail: { itemId: string };
+  AdapterProposal: { itemId: string };
+  AdapterProposalDetail: { proposalId: string };
+  AdapterDeployed: { itemId: string };
+};
+
+export type RecentCommandsStackParamList = {
+  RecentCommandsList: undefined;
+  RecentCommandDetail: { transcriptId: number };
 };
 
 export type StoreStackParamList = {
@@ -109,6 +117,7 @@ export type RootStackParamList = {
   Auth: NavigatorScreenParams<AuthStackParamList>;
   Main: NavigatorScreenParams<MainTabParamList>;
   Inbox: NavigatorScreenParams<InboxStackParamList>;
+  RecentCommands: NavigatorScreenParams<RecentCommandsStackParamList> | undefined;
   Settings: undefined;
   HouseholdEdit: { householdId: string; householdName: string };
   SmartHomeSetup: NavigatorScreenParams<SmartHomeSetupParamList>;

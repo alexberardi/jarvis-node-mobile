@@ -17,6 +17,20 @@ const CATEGORY_COLORS: Record<string, string> = {
   alert: '#ef4444',
   reminder: '#f59e0b',
   confirmation: '#3b82f6',
+  adapter_proposal: '#10b981',
+  adapter_deployed: '#0ea5e9',
+  adapter_reverted: '#64748b',
+};
+
+const routeForCategory = (category: string): keyof InboxStackParamList => {
+  switch (category) {
+    case 'adapter_proposal':
+      return 'AdapterProposal';
+    case 'adapter_deployed':
+      return 'AdapterDeployed';
+    default:
+      return 'InboxDetail';
+  }
 };
 
 const stripThinkTags = (text: string): string => {
@@ -112,7 +126,16 @@ const InboxListScreen = () => {
     >
       <Card
         style={[styles.card, !item.is_read && styles.unreadCard]}
-        onPress={() => navigation.navigate('InboxDetail', { itemId: item.id })}
+        onPress={() => {
+          const route = routeForCategory(item.category);
+          if (route === 'InboxDetail') {
+            navigation.navigate('InboxDetail', { itemId: item.id });
+          } else if (route === 'AdapterProposal') {
+            navigation.navigate('AdapterProposal', { itemId: item.id });
+          } else if (route === 'AdapterDeployed') {
+            navigation.navigate('AdapterDeployed', { itemId: item.id });
+          }
+        }}
       >
         <Card.Content>
           <View style={styles.cardHeader}>
