@@ -6,6 +6,7 @@ import { useAuth } from '../auth/AuthContext';
 import AuthNavigator from './AuthNavigator';
 import InboxStackNavigator from './InboxStackNavigator';
 import MainTabNavigator from './MainTabNavigator';
+import RecentCommandsStackNavigator from './RecentCommandsStackNavigator';
 import SmartHomeSetupNavigator from './SmartHomeSetupNavigator';
 import HouseholdEditScreen from '../screens/Settings/HouseholdEditScreen';
 import SettingsScreen from '../screens/Settings/SettingsScreen';
@@ -46,6 +47,7 @@ const RootNavigator = () => {
       />
       <Stack.Screen name="HouseholdEdit" component={HouseholdEditScreen} />
       <Stack.Screen name="VoiceProfile" component={VoiceProfileScreen} />
+      <Stack.Screen name="RecentCommands" component={RecentCommandsStackNavigator} />
       <Stack.Screen
         name="SmartHomeSetup"
         component={SmartHomeSetupNavigator}

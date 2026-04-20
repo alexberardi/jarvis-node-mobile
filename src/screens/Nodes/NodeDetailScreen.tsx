@@ -24,6 +24,7 @@ import {
   RoutineExecution,
 } from '../../api/routineHistoryApi';
 import { NodeUpdateSection } from '../../components/NodeUpdateSection';
+import { NodeVoiceSettings } from '../../components/NodeVoiceSettings';
 import { NodesStackParamList } from '../../navigation/types';
 
 type Nav = NativeStackNavigationProp<NodesStackParamList>;
@@ -166,6 +167,8 @@ const OverviewTab = ({
         left={(props) => <List.Icon {...props} icon="identifier" />}
         right={() => <IconButton icon="content-copy" size={18} onPress={onCopyId} />}
       />
+
+      <NodeVoiceSettings nodeId={nodeId} />
     </>
   );
 };
