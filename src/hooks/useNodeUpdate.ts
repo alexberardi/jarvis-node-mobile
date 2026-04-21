@@ -61,10 +61,48 @@ export const useNodeUpdate = (nodeId: string): UseNodeUpdate => {
         }
         return created;
       } catch (e: unknown) {
-        const msg =
+        const status = (e as { response?: { status?: number } })?.response?.status;
+        const detail =
           (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+
+        // 409 means an update is already queued/in-progress. The detail is an
+        // object {message, task_id, state} — re-attach to the existing task and
+        // poll it so the UI shows live progress instead of an error.
+        if (
+          status === 409 &&
+          detail &&
+          typeof detail === 'object' &&
+          'task_id' in (detail as Record<string, unknown>)
+        ) {
+          const taskId = String((detail as { task_id: unknown }).task_id);
+          try {
+            const existing = await getNodeTask(taskId);
+            setTask(existing);
+            if (!isTerminalState(existing.state)) {
+              pollRef.current = setTimeout(
+                () => pollTask(existing.id),
+                ACTIVE_POLL_MS,
+              );
+            }
+            return existing;
+          } catch (fetchErr) {
+            const msg =
+              fetchErr instanceof Error
+                ? fetchErr.message
+                : 'Update is in progress but status is unavailable';
+            setError(msg);
+            throw new Error(msg);
+          }
+        }
+
+        const detailMsg =
+          detail && typeof detail === 'object' && 'message' in (detail as Record<string, unknown>)
+            ? String((detail as { message: unknown }).message)
+            : typeof detail === 'string'
+            ? detail
+            : null;
         const fallback = e instanceof Error ? e.message : 'Update request failed';
-        const final = typeof msg === 'string' ? msg : fallback;
+        const final = detailMsg ?? fallback;
         setError(final);
         throw new Error(final);
       } finally {
