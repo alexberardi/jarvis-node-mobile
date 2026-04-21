@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   getNodeTask,
   isTerminalState,
+  listNodeTasks,
   NodeTask,
   requestNodeUpdate,
 } from '../api/nodeUpdateApi';
@@ -12,7 +13,10 @@ type TriggerFn = (targetVersion?: string | null) => Promise<NodeTask>;
 interface UseNodeUpdate {
   task: NodeTask | null;
   error: string | null;
+  /** True while the trigger() call is in flight. */
   loading: boolean;
+  /** True while we check the server for an in-flight task on mount. */
+  rehydrating: boolean;
   /** Queue an update on the CC. The polling effect takes over from there. */
   trigger: TriggerFn;
   /** Drop the local reference to a completed task (so the UI resets). */
@@ -25,6 +29,7 @@ export const useNodeUpdate = (nodeId: string): UseNodeUpdate => {
   const [task, setTask] = useState<NodeTask | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [rehydrating, setRehydrating] = useState(true);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const stopPolling = useCallback(() => {
@@ -48,6 +53,36 @@ export const useNodeUpdate = (nodeId: string): UseNodeUpdate => {
     },
     [],
   );
+
+  // On mount (or nodeId change) check the server for an already-running
+  // update task. If one exists, seed state from it and resume polling so
+  // navigating away + back doesn't lose progress or show the Update button
+  // for an install that's still in flight.
+  useEffect(() => {
+    let cancelled = false;
+    setRehydrating(true);
+    listNodeTasks(nodeId, 5)
+      .then((tasks) => {
+        if (cancelled) return;
+        const active = tasks.find(
+          (t) => t.kind === 'update' && !isTerminalState(t.state),
+        );
+        if (active) {
+          setTask(active);
+          pollRef.current = setTimeout(() => pollTask(active.id), ACTIVE_POLL_MS);
+        }
+      })
+      .catch(() => {
+        // Non-fatal — just means the user has to tap Update if there
+        // wasn't an in-flight task they missed.
+      })
+      .finally(() => {
+        if (!cancelled) setRehydrating(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [nodeId, pollTask]);
 
   const trigger: TriggerFn = useCallback(
     async (targetVersion = null) => {
@@ -120,5 +155,5 @@ export const useNodeUpdate = (nodeId: string): UseNodeUpdate => {
 
   useEffect(() => () => stopPolling(), [stopPolling]);
 
-  return { task, error, loading, trigger, reset };
+  return { task, error, loading, rehydrating, trigger, reset };
 };

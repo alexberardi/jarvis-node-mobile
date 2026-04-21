@@ -43,7 +43,7 @@ const stateLabel = (state: string): string => {
 export const NodeUpdateSection: React.FC<Props> = ({ node }) => {
   const theme = useTheme();
   const [latest, setLatest] = useState<LatestRelease | null>(null);
-  const { task, error, loading, trigger } = useNodeUpdate(node.node_id);
+  const { task, error, loading, rehydrating, trigger } = useNodeUpdate(node.node_id);
 
   useEffect(() => {
     let cancelled = false;
@@ -85,7 +85,7 @@ export const NodeUpdateSection: React.FC<Props> = ({ node }) => {
             </Text>
           )}
         </View>
-        {supported && updateAvailable && !isActive && (
+        {supported && updateAvailable && !isActive && !rehydrating && (
           <Button
             mode="contained"
             onPress={() => trigger(null)}
@@ -94,6 +94,9 @@ export const NodeUpdateSection: React.FC<Props> = ({ node }) => {
           >
             Update
           </Button>
+        )}
+        {rehydrating && (
+          <ActivityIndicator size={16} style={{ marginLeft: 8 }} />
         )}
       </View>
 
