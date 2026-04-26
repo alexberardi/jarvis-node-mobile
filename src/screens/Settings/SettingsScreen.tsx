@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useQueryClient } from '@tanstack/react-query';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import {
@@ -37,6 +38,7 @@ import {
   arePushNotificationsEnabled,
   setPushNotificationsEnabled,
 } from '../../services/pushNotificationService';
+import { clearUserData } from '../../services/clearUserData';
 import { getVoiceProfileStatus } from '../../api/voiceProfileApi';
 
 const THEME_BUTTONS = [
@@ -51,6 +53,7 @@ const SettingsScreen = () => {
   const { state: authState, logout, switchHousehold, fetchHouseholds } = useAuth();
   const { config, isUsingCloud, manualUrl, rediscover, setManualUrl } =
     useConfig();
+  const queryClient = useQueryClient();
   const { paperTheme, themePreference, setThemePreference } = useThemePreference();
 
   const [urlInput, setUrlInput] = useState(manualUrl ?? '');
@@ -223,6 +226,11 @@ const SettingsScreen = () => {
     setSaving(true);
     try {
       await setManualUrl(trimmed || null);
+      // Switching environments — wipe per-user / per-env caches so dev
+      // nodes, K2 keys, and react-query data don't bleed into prod.
+      // Logs the user out (auth tokens are wiped); they re-auth against
+      // the new environment.
+      await clearUserData({ queryClient });
     } catch {
       Alert.alert('Error', 'Failed to connect to that config service URL.');
     } finally {
@@ -235,6 +243,9 @@ const SettingsScreen = () => {
     setSaving(true);
     try {
       await setManualUrl(null);
+      // See handleSaveUrl — clearing the override is also an env change
+      // (manual → auto-discovered cloud), so wipe caches + log out.
+      await clearUserData({ queryClient });
     } catch (err) {
       console.error('[SettingsScreen] Failed to clear config URL', err);
       Alert.alert('Error', 'Could not clear the config URL.');
