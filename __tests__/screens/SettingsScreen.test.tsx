@@ -1,6 +1,7 @@
 import React from 'react';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import { PaperProvider } from 'react-native-paper';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import SettingsScreen from '../../src/screens/Settings/SettingsScreen';
 import { lightTheme } from '../../src/theme';
@@ -92,9 +93,16 @@ jest.mock('../../src/api/smartHomeApi', () => ({
   }),
 }));
 
-const wrapper = ({ children }: { children: React.ReactNode }) => (
-  <PaperProvider theme={lightTheme}>{children}</PaperProvider>
-);
+const wrapper = ({ children }: { children: React.ReactNode }) => {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return (
+    <QueryClientProvider client={queryClient}>
+      <PaperProvider theme={lightTheme}>{children}</PaperProvider>
+    </QueryClientProvider>
+  );
+};
 
 describe('SettingsScreen', () => {
   beforeEach(() => {
