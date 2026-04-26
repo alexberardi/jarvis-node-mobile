@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useQueryClient } from '@tanstack/react-query';
 import React, {
   createContext,
   useCallback,
@@ -9,6 +10,8 @@ import React, {
 } from 'react';
 
 import { setK2UserId } from '../services/k2Service';
+import { clearUserData } from '../services/clearUserData';
+import { useConfig } from '../contexts/ConfigContext';
 
 import { configureApiClient } from '../api/apiClient';
 import authApi from '../api/authApi';
@@ -94,6 +97,8 @@ const parseUser = (value: string | null): AuthUser | null => {
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, setState] = useState<AuthState>(initialState);
+  const queryClient = useQueryClient();
+  const { rediscover } = useConfig();
 
   // Ref to always have current tokens for the API client interceptor
   const stateRef = React.useRef(state);
@@ -162,15 +167,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   );
 
   const logout = useCallback(async () => {
-    // Don't clear K2 userId — keys persist in SecureStore and the next
-    // login sets the correct userId. Clearing would make the scoped keys
-    // unreachable if the same user logs back in before the app restarts.
-    await AsyncStorage.multiRemove([ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, USER_KEY, ACTIVE_HOUSEHOLD_KEY]);
+    // Wipe all per-user / per-environment caches before resetting state.
+    // Without this, dev-environment node IDs, K2 keys, cached service URLs,
+    // and react-query data (devices/rooms/smartHomeConfig keyed by
+    // householdId) bleed into the next environment the user logs into.
+    await clearUserData({ queryClient, rediscover });
     setState({
       ...initialState,
       isLoading: false,
     });
-  }, []);
+  }, [queryClient, rediscover]);
 
   // Wire up the API client interceptor so all apiClient requests
   // automatically attach the current token and retry on 401.
