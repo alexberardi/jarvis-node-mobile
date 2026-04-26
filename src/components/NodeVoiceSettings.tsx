@@ -24,6 +24,7 @@ interface VoiceSettings {
   silence_duration: number;
   barge_in_enabled: boolean;
   follow_up_listen_seconds: number;
+  volume_percent: number;
 }
 
 const DEFAULTS: VoiceSettings = {
@@ -32,6 +33,7 @@ const DEFAULTS: VoiceSettings = {
   silence_duration: 0.5,
   barge_in_enabled: true,
   follow_up_listen_seconds: 5,
+  volume_percent: 100,
 };
 
 interface SliderRowProps {
@@ -89,6 +91,7 @@ export const NodeVoiceSettings = ({ nodeId }: Props) => {
       silence_duration: nc.silence_duration ?? DEFAULTS.silence_duration,
       barge_in_enabled: nc.barge_in_enabled ?? DEFAULTS.barge_in_enabled,
       follow_up_listen_seconds: nc.follow_up_listen_seconds ?? DEFAULTS.follow_up_listen_seconds,
+      volume_percent: nc.volume_percent ?? DEFAULTS.volume_percent,
     });
     seededRef.current = true;
   }, [snapshot, snapshotState]);
@@ -107,6 +110,7 @@ export const NodeVoiceSettings = ({ nodeId }: Props) => {
         silence_duration: settings.silence_duration,
         barge_in_enabled: settings.barge_in_enabled,
         follow_up_listen_seconds: settings.follow_up_listen_seconds,
+        volume_percent: settings.volume_percent,
       };
       await updateNodeConfig(nodeId, payload, true);
       setDirty(false);
@@ -152,6 +156,21 @@ export const NodeVoiceSettings = ({ nodeId }: Props) => {
         )}
       />
       <Card.Content>
+        <SliderRow
+          label="Speaker Volume"
+          value={settings.volume_percent}
+          displayValue={`${Math.round(settings.volume_percent)}%`}
+          min={0}
+          max={100}
+          step={5}
+          onChange={(v) => update('volume_percent', v)}
+        />
+        <Text variant="labelSmall" style={styles.hint}>
+          Output level for TTS responses and chimes.
+        </Text>
+
+        <Divider style={styles.divider} />
+
         <SliderRow
           label="Wake Word Sensitivity"
           value={settings.wake_word_threshold}
