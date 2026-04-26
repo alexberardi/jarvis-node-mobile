@@ -67,6 +67,7 @@ export interface NodeConfigSnapshot {
   max_record_seconds?: number;
   barge_in_enabled?: boolean;
   follow_up_listen_seconds?: number;
+  volume_percent?: number;
 }
 
 export interface SettingsSnapshot {
