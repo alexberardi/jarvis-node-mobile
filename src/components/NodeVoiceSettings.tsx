@@ -1,16 +1,18 @@
 import Slider from '@react-native-community/slider';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import {
   Button,
   Card,
   Divider,
+  Icon,
   Switch,
   Text,
   useTheme,
 } from 'react-native-paper';
 
 import { updateNodeConfig } from '../api/nodeApi';
+import { useSettingsSnapshot } from '../hooks/useSettingsSnapshot';
 
 interface Props {
   nodeId: string;
@@ -72,6 +74,24 @@ export const NodeVoiceSettings = ({ nodeId }: Props) => {
   const [settings, setSettings] = useState<VoiceSettings>({ ...DEFAULTS });
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const seededRef = useRef(false);
+
+  const { snapshot, state: snapshotState } = useSettingsSnapshot({ nodeId });
+
+  useEffect(() => {
+    if (seededRef.current) return;
+    if (snapshotState !== 'loaded') return;
+    const nc = snapshot?.node_config;
+    if (!nc) return;
+    setSettings({
+      wake_word_threshold: nc.wake_word_threshold ?? DEFAULTS.wake_word_threshold,
+      silence_threshold: nc.silence_threshold ?? DEFAULTS.silence_threshold,
+      silence_duration: nc.silence_duration ?? DEFAULTS.silence_duration,
+      barge_in_enabled: nc.barge_in_enabled ?? DEFAULTS.barge_in_enabled,
+      follow_up_listen_seconds: nc.follow_up_listen_seconds ?? DEFAULTS.follow_up_listen_seconds,
+    });
+    seededRef.current = true;
+  }, [snapshot, snapshotState]);
 
   const update = useCallback((key: keyof VoiceSettings, value: number | boolean) => {
     setSettings((prev) => ({ ...prev, [key]: value }));
@@ -96,6 +116,27 @@ export const NodeVoiceSettings = ({ nodeId }: Props) => {
       setSaving(false);
     }
   }, [nodeId, settings]);
+
+  if (snapshotState === 'no_access') {
+    return (
+      <Card style={styles.card}>
+        <Card.Title
+          title="Voice Settings"
+          titleVariant="titleMedium"
+          left={(props) => (
+            <View {...props} style={[styles.iconCircle, { backgroundColor: theme.colors.surfaceVariant }]}>
+              <Icon source="lock" size={18} color={theme.colors.onSurfaceVariant} />
+            </View>
+          )}
+        />
+        <Card.Content>
+          <Text variant="bodyMedium" style={{ opacity: 0.7 }}>
+            This node was set up on another device. Open the app on that device to view or change its voice settings.
+          </Text>
+        </Card.Content>
+      </Card>
+    );
+  }
 
   return (
     <Card style={styles.card}>

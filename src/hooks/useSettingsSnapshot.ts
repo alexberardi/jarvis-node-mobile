@@ -13,13 +13,20 @@ import {
 } from '../api/nodeSettingsApi';
 import {
   decryptSettingsSnapshot,
+  MissingK2KeyError,
   type SettingsSnapshot,
 } from '../services/settingsDecryptService';
 
 const POLL_INTERVAL_MS = 1500;
 const POLL_TIMEOUT_MS = 30000;
 
-export type SnapshotState = 'idle' | 'loading' | 'loaded' | 'timeout' | 'error';
+export type SnapshotState =
+  | 'idle'
+  | 'loading'
+  | 'loaded'
+  | 'timeout'
+  | 'error'
+  | 'no_access';
 
 interface UseSettingsSnapshotOptions {
   /** Specific node ID to fetch from. If omitted, uses the first available node. */
@@ -110,6 +117,23 @@ export function useSettingsSnapshot(
                 setState('loaded');
               }
             } catch (decryptErr) {
+              if (decryptErr instanceof MissingK2KeyError) {
+                // Expected when this device didn't provision the node
+                // (e.g., node set up on the user's phone, viewed on a
+                // simulator or second device). Not an error — just no
+                // access. Use debug log so it doesn't surface in LogBox.
+                console.debug(
+                  '[useSettingsSnapshot] No K2 key on this device for node',
+                  decryptErr.nodeId,
+                );
+                if (mountedRef.current) {
+                  setError(
+                    'This node was set up on another device. Open the app on that device to view or change its settings.',
+                  );
+                  setState('no_access');
+                }
+                return;
+              }
               console.error('[useSettingsSnapshot] Decryption failed', decryptErr);
               if (mountedRef.current) {
                 setError(
