@@ -18,7 +18,9 @@ import {
   Appbar,
   Button,
   Card,
+  Divider,
   Icon,
+  List,
   Text,
 } from 'react-native-paper';
 
@@ -28,26 +30,35 @@ import { useThemePreference } from '../../theme/ThemeProvider';
 import {
   deleteVoiceProfile,
   enrollVoiceProfile,
+  getNodeEnrollmentResult,
   getVoiceProfileStatus,
+  startNodeEnrollment,
   verifyVoiceProfile,
 } from '../../api/voiceProfileApi';
+import { listNodes, type NodeInfo } from '../../api/nodeApi';
 
 // --- Types ---
 
 type Phase =
   | 'loading'
-  | 'idle'           // no profile enrolled
-  | 'enrolled'       // profile exists
-  | 'recording'      // recording enrollment sample
-  | 'uploading'      // enrolling with backend
-  | 'test_prompt'    // prompt user to test
-  | 'test_recording' // recording test sample
-  | 'verifying'      // verifying match
-  | 'test_result'    // showing match result
+  | 'idle'             // no profile enrolled
+  | 'enrolled'         // profile exists
+  | 'select_target'    // pick phone vs a specific node for enrollment
+  | 'recording'        // recording enrollment sample (phone)
+  | 'uploading'        // enrolling with backend
+  | 'awaiting_node'    // node is recording + uploading; polling for result
+  | 'test_prompt'      // prompt user to test
+  | 'test_recording'   // recording test sample
+  | 'verifying'        // verifying match
+  | 'test_result'      // showing match result
   | 'deleting';
 
+// Deliberately avoid "Hey Jarvis" / wake-word phrasing — when this is
+// read aloud near a node mic during enrollment, any wake-word substring
+// would trigger the wake detector and conflict with the enrollment
+// recording.
 const ENROLLMENT_PROMPT =
-  "Hey Jarvis, set a timer for five minutes, then remind me to check the oven. Also, what's the weather like tomorrow morning?";
+  "Please set a timer for five minutes, then remind me to check the oven. Also, what's the weather like tomorrow morning?";
 
 const TEST_PROMPT =
   'Now say something different — any question or command. We\'ll check if it matches your voice.';
@@ -70,8 +81,16 @@ const VoiceProfileScreen = () => {
   const [confidence, setConfidence] = useState(0);
   const [matched, setMatched] = useState(false);
 
+  // Node-mediated enrollment state
+  const [nodes, setNodes] = useState<NodeInfo[]>([]);
+  const [loadingNodes, setLoadingNodes] = useState(false);
+  const [activeNode, setActiveNode] = useState<NodeInfo | null>(null);
+  const [nodeRequestId, setNodeRequestId] = useState<string | null>(null);
+
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const autoStopRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollDeadlineRef = useRef<number>(0);
 
   // --- Lifecycle ---
 
@@ -88,8 +107,10 @@ const VoiceProfileScreen = () => {
   const clearTimers = () => {
     if (timerRef.current) clearInterval(timerRef.current);
     if (autoStopRef.current) clearTimeout(autoStopRef.current);
+    if (pollRef.current) clearInterval(pollRef.current);
     timerRef.current = null;
     autoStopRef.current = null;
+    pollRef.current = null;
   };
 
   // --- API calls ---
@@ -107,6 +128,70 @@ const VoiceProfileScreen = () => {
       setPhase('idle');
     }
   }, [householdId]);
+
+  // --- Node target selection ---
+
+  const openTargetPicker = useCallback(async () => {
+    setError(null);
+    setPhase('select_target');
+    if (!householdId) return;
+    setLoadingNodes(true);
+    try {
+      const all = await listNodes(householdId);
+      // Only show online nodes — offline ones can't record.
+      setNodes(all.filter((n) => n.online));
+    } catch (e) {
+      console.error('[VoiceProfile] listNodes failed:', e);
+      setError('Could not load nodes — you can still enroll on your phone.');
+      setNodes([]);
+    } finally {
+      setLoadingNodes(false);
+    }
+  }, [householdId]);
+
+  const startNodeFlow = useCallback(async (node: NodeInfo) => {
+    setError(null);
+    setActiveNode(node);
+    setPhase('awaiting_node');
+    try {
+      const { request_id } = await startNodeEnrollment(
+        node.node_id,
+        ENROLLMENT_PROMPT,
+        8.0,
+      );
+      setNodeRequestId(request_id);
+
+      // Poll every 1s, up to 60s total. Node-side flow runs ~10s
+      // (TTS cue + 8s record + upload), so 60s gives generous slack.
+      pollDeadlineRef.current = Date.now() + 60_000;
+      pollRef.current = setInterval(async () => {
+        if (Date.now() > pollDeadlineRef.current) {
+          clearTimers();
+          setError('Node didn\'t report back in time. Try again.');
+          setPhase('idle');
+          return;
+        }
+        try {
+          const result = await getNodeEnrollmentResult(request_id);
+          if (result === null) return; // still pending
+          clearTimers();
+          if (result.success) {
+            setPhase('test_prompt');
+          } else {
+            setError(`Enrollment failed: ${result.error || 'unknown error'}`);
+            setPhase('idle');
+          }
+        } catch (e) {
+          console.error('[VoiceProfile] poll failed:', e);
+          // transient errors — keep polling until deadline
+        }
+      }, 1000);
+    } catch (e) {
+      console.error('[VoiceProfile] startNodeEnrollment failed:', e);
+      setError('Could not start enrollment on that node.');
+      setPhase('idle');
+    }
+  }, []);
 
   // --- Recording logic ---
 
@@ -227,11 +312,90 @@ const VoiceProfileScreen = () => {
         <Button
           mode="contained"
           icon="microphone"
-          onPress={() => startRecordingFlow('enroll')}
+          onPress={openTargetPicker}
           style={styles.button}
         >
           Start Recording
         </Button>
+      </Card.Content>
+    </Card>
+  );
+
+  const renderSelectTarget = () => (
+    <Card style={styles.card}>
+      <Card.Content>
+        <Icon source="microphone-settings" size={48} color={paperTheme.colors.primary} />
+        <Text variant="titleMedium" style={styles.title}>
+          Where do you want to enroll?
+        </Text>
+        <Text variant="bodyMedium" style={styles.body}>
+          Voice recognition works best when the same mic is used at
+          enrollment and at runtime. If you mostly speak to a stationary
+          node, enroll on that node — its mic will produce a better
+          match than the phone's.
+        </Text>
+
+        <Button
+          mode="contained"
+          icon="cellphone"
+          onPress={() => startRecordingFlow('enroll')}
+          style={styles.button}
+        >
+          This Phone
+        </Button>
+
+        <Text variant="labelSmall" style={[styles.body, { marginTop: 16 }]}>
+          Or pick a node:
+        </Text>
+
+        {loadingNodes ? (
+          <ActivityIndicator style={styles.button} />
+        ) : nodes.length === 0 ? (
+          <Text variant="bodySmall" style={[styles.body, { opacity: 0.6 }]}>
+            No online nodes available.
+          </Text>
+        ) : (
+          <View>
+            {nodes.map((node) => (
+              <List.Item
+                key={node.node_id}
+                title={node.room || 'Unnamed node'}
+                description={node.user || node.node_id.substring(0, 8)}
+                left={(props) => <List.Icon {...props} icon="speaker" />}
+                onPress={() => startNodeFlow(node)}
+                style={styles.nodeRow}
+              />
+            ))}
+          </View>
+        )}
+
+        <Divider style={{ marginVertical: 12 }} />
+
+        <Button
+          mode="text"
+          onPress={() => setPhase(phase === 'select_target' ? 'idle' : 'enrolled')}
+        >
+          Cancel
+        </Button>
+      </Card.Content>
+    </Card>
+  );
+
+  const renderAwaitingNode = () => (
+    <Card style={styles.card}>
+      <Card.Content style={styles.center}>
+        <Icon source="microphone" size={64} color={paperTheme.colors.primary} />
+        <Text variant="titleMedium" style={styles.title}>
+          Recording on {activeNode?.room || 'node'}
+        </Text>
+        <ActivityIndicator size="large" style={{ marginVertical: 12 }} />
+        <Text variant="bodyMedium" style={styles.prompt}>
+          The node will play a cue and then record. Read this prompt
+          aloud when you hear it:{'\n\n'}"{ENROLLMENT_PROMPT}"
+        </Text>
+        <Text variant="bodySmall" style={[styles.body, { marginTop: 12 }]}>
+          Request ID: {nodeRequestId?.substring(0, 8) || '...'}
+        </Text>
       </Card.Content>
     </Card>
   );
@@ -355,7 +519,7 @@ const VoiceProfileScreen = () => {
             </Button>
             <Button
               mode="outlined"
-              onPress={() => startRecordingFlow('enroll')}
+              onPress={openTargetPicker}
               style={styles.button}
             >
               Re-Record Profile
@@ -387,7 +551,7 @@ const VoiceProfileScreen = () => {
         <Button
           mode="outlined"
           icon="refresh"
-          onPress={() => startRecordingFlow('enroll')}
+          onPress={openTargetPicker}
           style={styles.button}
         >
           Update Profile
@@ -422,6 +586,10 @@ const VoiceProfileScreen = () => {
         return renderLoading();
       case 'idle':
         return renderIdle();
+      case 'select_target':
+        return renderSelectTarget();
+      case 'awaiting_node':
+        return renderAwaitingNode();
       case 'recording':
         return renderRecording('enroll');
       case 'uploading':
@@ -504,6 +672,9 @@ const styles = StyleSheet.create({
   },
   skipButton: {
     marginTop: 4,
+  },
+  nodeRow: {
+    paddingHorizontal: 0,
   },
   statusText: {
     marginTop: 12,
