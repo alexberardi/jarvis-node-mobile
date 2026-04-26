@@ -26,6 +26,7 @@ import {
 import { NodeUpdateSection } from '../../components/NodeUpdateSection';
 import { NodeVoiceSettings } from '../../components/NodeVoiceSettings';
 import { NodesStackParamList } from '../../navigation/types';
+import { hasK2 } from '../../services/k2Service';
 
 type Nav = NativeStackNavigationProp<NodesStackParamList>;
 type Route = RouteProp<NodesStackParamList, 'NodeDetail'>;
@@ -356,6 +357,19 @@ const NodeDetailScreen = () => {
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [tab, setTab] = useState<Tab>('overview');
+  // null = checking, true = key on this device, false = no key
+  // (node was set up on another device — hide the settings gear).
+  const [hasSettingsAccess, setHasSettingsAccess] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    hasK2(nodeId).then((result) => {
+      if (mounted) setHasSettingsAccess(result);
+    });
+    return () => {
+      mounted = false;
+    };
+  }, [nodeId]);
 
   const loadNode = useCallback(async () => {
     try {
@@ -411,10 +425,12 @@ const NodeDetailScreen = () => {
         <Text variant="headlineSmall" style={{ fontWeight: 'bold', flex: 1 }}>
           {node.room || 'Node'}
         </Text>
-        <IconButton
-          icon="cog-outline"
-          onPress={() => navigation.navigate('NodeSettings', { nodeId, room: node.room })}
-        />
+        {hasSettingsAccess && (
+          <IconButton
+            icon="cog-outline"
+            onPress={() => navigation.navigate('NodeSettings', { nodeId, room: node.room })}
+          />
+        )}
       </View>
 
       {/* Tab selector */}
