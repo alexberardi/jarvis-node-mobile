@@ -7,10 +7,11 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
   StyleSheet,
   View,
 } from 'react-native';
-import { Badge, Button, IconButton, Snackbar, Text, TextInput, useTheme } from 'react-native-paper';
+import { Badge, Button, Divider, IconButton, Modal, Portal, Snackbar, Text, TextInput, TouchableRipple, useTheme } from 'react-native-paper';
 
 import { Audio } from 'expo-av';
 
@@ -93,7 +94,9 @@ const HomeScreen = () => {
     }
   }, []);
 
-  const { messages, isLoading, warmupState, toolCount, toolNames, sendMessage, clearConversation, refreshTools } = useChat({
+  const [showToolsModal, setShowToolsModal] = useState(false);
+
+  const { messages, isLoading, warmupState, toolCount, toolNames, toolInfos, sendMessage, clearConversation, refreshTools } = useChat({
     nodeId: selectedNodeId,
     householdId,
     accessToken: authState.accessToken,
@@ -300,9 +303,11 @@ const HomeScreen = () => {
           {selectedNodeId && warmupState !== 'idle' && (
             <View style={styles.warmupIndicator}>
               {warmupState === 'ready' ? (
-                <Text variant="labelSmall" style={{ color: theme.colors.primary }}>
-                  {toolCount} tools loaded
-                </Text>
+                <TouchableRipple onPress={() => setShowToolsModal(true)} borderless>
+                  <Text variant="labelSmall" style={{ color: theme.colors.primary }}>
+                    {toolCount} tools loaded
+                  </Text>
+                </TouchableRipple>
               ) : (
                 <View style={styles.warmupLoading}>
                   <ActivityIndicator size={10} color={theme.colors.outline} />
@@ -402,6 +407,38 @@ const HomeScreen = () => {
       >
         {snackbar}
       </Snackbar>
+
+      <Portal>
+        <Modal
+          visible={showToolsModal}
+          onDismiss={() => setShowToolsModal(false)}
+          contentContainerStyle={[styles.toolsModal, { backgroundColor: theme.colors.surface }]}
+        >
+          <Text variant="titleMedium" style={{ fontWeight: '600', marginBottom: 12 }}>
+            Enabled Commands ({toolInfos.length})
+          </Text>
+          <ScrollView style={{ flex: 1 }}>
+            {toolInfos.map((tool, i) => (
+              <View key={tool.name}>
+                {i > 0 && <Divider />}
+                <View style={styles.toolRow}>
+                  <Text variant="bodyMedium" style={{ fontWeight: '600' }}>
+                    {tool.name.replace(/_/g, ' ')}
+                  </Text>
+                  {!!tool.description && (
+                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 2 }}>
+                      {tool.description}
+                    </Text>
+                  )}
+                </View>
+              </View>
+            ))}
+          </ScrollView>
+          <Button onPress={() => setShowToolsModal(false)} style={{ marginTop: 12 }}>
+            Close
+          </Button>
+        </Modal>
+      </Portal>
     </KeyboardAvoidingView>
   );
 };
@@ -477,6 +514,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 32,
+  },
+  toolsModal: {
+    margin: 20,
+    borderRadius: 16,
+    padding: 20,
+    height: '75%',
+  },
+  toolRow: {
+    paddingVertical: 10,
+    paddingHorizontal: 4,
   },
 });
 

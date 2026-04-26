@@ -20,6 +20,11 @@ function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
 
+export interface ToolInfo {
+  name: string;
+  description: string;
+}
+
 /** Extract tool names from OpenAI-format tool definitions. */
 function extractToolNames(tools: Record<string, unknown>[]): string[] {
   return tools
@@ -28,6 +33,18 @@ function extractToolNames(tools: Record<string, unknown>[]): string[] {
       return (fn?.name as string) ?? '';
     })
     .filter(Boolean);
+}
+
+/** Extract name + description pairs from OpenAI-format tool definitions. */
+function extractToolInfos(tools: Record<string, unknown>[]): ToolInfo[] {
+  return tools
+    .map((t) => {
+      const fn = t.function as Record<string, unknown> | undefined;
+      const name = (fn?.name as string) ?? '';
+      const description = (fn?.description as string) ?? '';
+      return name ? { name, description } : null;
+    })
+    .filter((t): t is ToolInfo => t !== null);
 }
 
 export type WarmupState = 'idle' | 'loading_tools' | 'warming_up' | 'ready';
@@ -47,6 +64,7 @@ interface UseChatReturn {
   warmupState: WarmupState;
   toolCount: number;
   toolNames: string[];
+  toolInfos: ToolInfo[];
   /** Non-null when the command center is unreachable. */
   connectionError: string | null;
   sendMessage: (text: string) => void;
@@ -68,6 +86,7 @@ export function useChat({
   const [warmupState, setWarmupState] = useState<WarmupState>('idle');
   const [toolCount, setToolCount] = useState(0);
   const [toolNames, setToolNames] = useState<string[]>([]);
+  const [toolInfos, setToolInfos] = useState<ToolInfo[]>([]);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const assistantIdRef = useRef<string | null>(null);
@@ -94,6 +113,7 @@ export function useChat({
       setConnectionError(null);
       setToolCount(0);
       setToolNames([]);
+      setToolInfos([]);
       setWarmupState('loading_tools');
 
       // Fetch tools fresh from CC (MQTT to node — no caching).
@@ -103,6 +123,7 @@ export function useChat({
           toolsRef.current = fresh;
           setToolCount(fresh.client_tools.length);
           setToolNames(extractToolNames(fresh.client_tools));
+          setToolInfos(extractToolInfos(fresh.client_tools));
           setConnectionError(null);
         }
       } catch {
@@ -352,6 +373,7 @@ export function useChat({
     warmupState,
     toolCount,
     toolNames,
+    toolInfos,
     connectionError,
     sendMessage,
     clearConversation,
