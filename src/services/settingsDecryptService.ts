@@ -59,12 +59,23 @@ export interface DeviceManagerEntry {
   authentication?: AuthenticationConfig;
 }
 
+export interface NodeConfigSnapshot {
+  wake_word_threshold?: number;
+  silence_threshold?: number;
+  silence_duration?: number;
+  min_record_seconds?: number;
+  max_record_seconds?: number;
+  barge_in_enabled?: boolean;
+  follow_up_listen_seconds?: number;
+}
+
 export interface SettingsSnapshot {
   schema_version: number;
   commands_schema_version: number;
   commands: CommandSettingsEntry[];
   device_families?: DeviceFamilyEntry[];
   device_managers?: DeviceManagerEntry[];
+  node_config?: NodeConfigSnapshot;
 }
 
 /**
@@ -78,6 +89,21 @@ function base64UrlDecode(str: string): string {
   const base64 = padded.replace(/-/g, '+').replace(/_/g, '/');
   const binary = atob(base64);
   return binary;
+}
+
+/**
+ * Thrown when a node's K2 key isn't on this device — typically because
+ * the node was provisioned on a different device. Distinct from a true
+ * decryption failure so callers can render a "no access" UI instead of
+ * a generic error.
+ */
+export class MissingK2KeyError extends Error {
+  readonly nodeId: string;
+  constructor(nodeId: string) {
+    super(`No K2 key on this device for node ${nodeId}`);
+    this.name = 'MissingK2KeyError';
+    this.nodeId = nodeId;
+  }
 }
 
 /**
@@ -97,7 +123,7 @@ export async function decryptSettingsSnapshot(
 ): Promise<SettingsSnapshot> {
   const k2 = await getK2(nodeId);
   if (!k2) {
-    throw new Error(`No K2 key found for node ${nodeId}`);
+    throw new MissingK2KeyError(nodeId);
   }
 
   const aad = `${nodeId}:settings:snapshot`;
