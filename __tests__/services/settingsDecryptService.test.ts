@@ -46,7 +46,7 @@ describe('settingsDecryptService', () => {
 
       await expect(
         decryptSettingsSnapshot(mockNodeId, 'cipher', 'nonce', 'tag'),
-      ).rejects.toThrow(`No K2 key found for node ${mockNodeId}`);
+      ).rejects.toThrow(`No K2 key on this device for node ${mockNodeId}`);
 
       expect(getK2).toHaveBeenCalledWith(mockNodeId);
     });
