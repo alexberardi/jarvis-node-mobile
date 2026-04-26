@@ -1,6 +1,7 @@
 import React from 'react';
 import { renderHook, act, waitFor } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { AuthProvider, useAuth } from '../../src/auth/AuthContext';
 import authApi from '../../src/api/authApi';
@@ -15,9 +16,33 @@ jest.mock('../../src/api/authApi', () => ({
   },
 }));
 
-const wrapper = ({ children }: { children: React.ReactNode }) => (
-  <AuthProvider>{children}</AuthProvider>
-);
+// AuthProvider depends on ConfigContext for `rediscover`. Mock it so we don't
+// need to spin up the real network-discovery flow in tests.
+jest.mock('../../src/contexts/ConfigContext', () => ({
+  useConfig: () => ({
+    config: {
+      configServiceUrl: 'http://localhost:7700',
+      authBaseUrl: 'http://localhost:7701',
+      commandCenterUrl: 'http://localhost:7703',
+    },
+    isUsingCloud: false,
+    fallbackMessage: null,
+    manualUrl: null,
+    rediscover: jest.fn().mockResolvedValue(undefined),
+    setManualUrl: jest.fn().mockResolvedValue(undefined),
+  }),
+}));
+
+const wrapper = ({ children }: { children: React.ReactNode }) => {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return (
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>{children}</AuthProvider>
+    </QueryClientProvider>
+  );
+};
 
 describe('AuthContext', () => {
   beforeEach(() => {
