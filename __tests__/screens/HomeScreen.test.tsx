@@ -33,6 +33,7 @@ jest.mock('../../src/hooks/useChat', () => ({
     warmupState: 'idle',
     toolCount: 0,
     toolNames: [],
+    toolInfos: [],
     sendMessage: mockSendMessage,
     clearConversation: mockClearConversation,
     refreshTools: mockRefreshTools,
