@@ -43,12 +43,42 @@ export const getNode = async (nodeId: string): Promise<NodeInfo> => {
   return res.data;
 };
 
-export const deleteNode = async (
+/**
+ * Begin a factory reset for a node. Creates a tracked task on the
+ * command center, publishes the MQTT trigger, and returns the task id
+ * so the caller can poll progress.
+ *
+ * The node will report status updates (in_progress → success | failed)
+ * back to CC during the reset; on success the node row is marked
+ * inactive and the device reboots into provisioning mode.
+ */
+export const factoryResetNode = async (
   nodeId: string,
-): Promise<void> => {
-  await apiClient.delete(
-    `${getCommandCenterUrl()}/api/v0/admin/nodes/${nodeId}`,
+): Promise<{ task_id: string }> => {
+  const res = await apiClient.post<{ task_id: string; reset_token: string }>(
+    `${getCommandCenterUrl()}/api/v0/admin/nodes/${nodeId}/factory-reset`,
   );
+  // reset_token is for the node's status callbacks — the mobile client
+  // doesn't need it.
+  return { task_id: res.data.task_id };
+};
+
+export interface NodeTask {
+  id: string;
+  node_id: string;
+  kind: string;
+  state: 'pending' | 'dispatched' | 'in_progress' | 'success' | 'failed';
+  error_message: string | null;
+  created_at: string;
+  updated_at: string;
+  finished_at: string | null;
+}
+
+export const getNodeTask = async (taskId: string): Promise<NodeTask> => {
+  const res = await apiClient.get<NodeTask>(
+    `${getCommandCenterUrl()}/api/v0/tasks/${taskId}`,
+  );
+  return res.data;
 };
 
 /**
