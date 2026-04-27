@@ -290,6 +290,7 @@ const StoreBrowseScreen = () => {
         >
           <Chip
             selected={!selectedCategory}
+            showSelectedCheck={false}
             onPress={() => setSelectedCategory(null)}
             compact
           >
@@ -299,6 +300,7 @@ const StoreBrowseScreen = () => {
             <Chip
               key={cat.name}
               selected={selectedCategory === cat.name}
+              showSelectedCheck={false}
               onPress={() =>
                 setSelectedCategory(selectedCategory === cat.name ? null : cat.name)
               }
@@ -320,6 +322,9 @@ const StoreBrowseScreen = () => {
           <Chip
             key={opt.value}
             selected={sort === opt.value}
+            showSelectedCheck={false}
+            showSelectedOverlay={false}
+            mode="outlined"
             onPress={() => setSort(opt.value)}
             compact
           >
@@ -355,9 +360,9 @@ const styles = StyleSheet.create({
   },
   title: { fontWeight: 'bold', flex: 1 },
   searchbar: { marginHorizontal: 16, marginBottom: 8 },
-  categoryRow: { marginBottom: 8, flexGrow: 0 },
-  sortRow: { marginBottom: 4, flexGrow: 0 },
-  chipRowContent: { gap: 8, paddingHorizontal: 16 },
+  categoryRow: { marginBottom: 6, flexGrow: 0, flexShrink: 0 },
+  sortRow: { marginBottom: 8, flexGrow: 0, flexShrink: 0 },
+  chipRowContent: { gap: 6, paddingHorizontal: 16, paddingVertical: 4 },
   list: { padding: 16, gap: 12, paddingBottom: 32 },
   emptyList: { flexGrow: 1, justifyContent: 'center', alignItems: 'center' },
   emptyContent: { alignItems: 'center', paddingTop: 48 },
