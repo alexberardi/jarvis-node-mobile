@@ -5,14 +5,12 @@ import { FlatList, StyleSheet, View } from 'react-native';
 import {
   Button,
   Card,
-  Dialog,
   FAB,
-  Portal,
   Text,
   useTheme,
 } from 'react-native-paper';
 
-import { deleteNode, listNodes, NodeInfo } from '../../api/nodeApi';
+import { listNodes, NodeInfo } from '../../api/nodeApi';
 import { useAuth } from '../../auth/AuthContext';
 import { NodesStackParamList } from '../../navigation/types';
 
@@ -25,18 +23,6 @@ const NodeListScreen = () => {
   const [nodes, setNodes] = useState<NodeInfo[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Delete dialog state
-  const [deleteTarget, setDeleteTarget] = useState<NodeInfo | null>(null);
-  const [deleting, setDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-
-  const activeHousehold = authState.households.find(
-    (h) => h.id === authState.activeHouseholdId,
-  );
-  const canDelete =
-    activeHousehold?.role === 'admin' ||
-    activeHousehold?.role === 'power_user';
 
   const loadNodes = useCallback(async () => {
     try {
@@ -61,25 +47,6 @@ const NodeListScreen = () => {
     setRefreshing(false);
   }, [loadNodes]);
 
-  const handleDeleteConfirm = async () => {
-    if (!deleteTarget || !authState.accessToken) return;
-
-    setDeleting(true);
-    setDeleteError(null);
-
-    try {
-      await deleteNode(deleteTarget.node_id);
-      setDeleteTarget(null);
-      loadNodes();
-    } catch (err) {
-      setDeleteError(
-        err instanceof Error ? err.message : 'Failed to delete node',
-      );
-    } finally {
-      setDeleting(false);
-    }
-  };
-
   const formatLastSeen = (lastSeen: string | null): string => {
     if (!lastSeen) return 'Never';
     const date = new Date(lastSeen);
@@ -101,7 +68,6 @@ const NodeListScreen = () => {
           nodeId: item.node_id,
         })
       }
-      onLongPress={canDelete ? () => setDeleteTarget(item) : undefined}
     >
       <Card.Content>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -183,57 +149,6 @@ const NodeListScreen = () => {
         onPress={() => navigation.navigate('AddNode')}
         label="Add Node"
       />
-
-      <Portal>
-        <Dialog
-          visible={deleteTarget !== null}
-          onDismiss={() => {
-            setDeleteTarget(null);
-            setDeleteError(null);
-          }}
-        >
-          <Dialog.Title>Delete Node</Dialog.Title>
-          <Dialog.Content>
-            <Text variant="bodyMedium" style={styles.deleteInfo}>
-              {deleteTarget?.room || deleteTarget?.node_id}
-            </Text>
-            <Text
-              variant="bodySmall"
-              style={{ opacity: 0.6 }}
-            >
-              This will deregister the node from the command center and
-              jarvis-auth. This action cannot be undone.
-            </Text>
-            {deleteError && (
-              <Text
-                variant="bodySmall"
-                style={{ color: theme.colors.error, marginTop: 8 }}
-              >
-                {deleteError}
-              </Text>
-            )}
-          </Dialog.Content>
-          <Dialog.Actions>
-            <Button
-              onPress={() => {
-                setDeleteTarget(null);
-                setDeleteError(null);
-              }}
-              disabled={deleting}
-            >
-              Cancel
-            </Button>
-            <Button
-              onPress={handleDeleteConfirm}
-              disabled={deleting}
-              loading={deleting}
-              textColor={theme.colors.error}
-            >
-              Delete
-            </Button>
-          </Dialog.Actions>
-        </Dialog>
-      </Portal>
     </View>
   );
 };
@@ -252,7 +167,6 @@ const styles = StyleSheet.create({
   emptyList: { flexGrow: 1, justifyContent: 'center', alignItems: 'center' },
   card: {},
   fab: { position: 'absolute', right: 16, bottom: 24 },
-  deleteInfo: { fontWeight: '600', marginBottom: 8 },
 });
 
 export default NodeListScreen;
