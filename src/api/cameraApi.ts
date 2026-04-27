@@ -12,11 +12,7 @@ export interface CameraInfo {
 }
 
 export interface StartStreamParams {
-  refresh_token: string;
-  client_id: string;
-  client_secret: string;
-  project_id: string;
-  protocols: string;
+  protocols?: string;
 }
 
 export interface StartStreamResponse {
@@ -34,11 +30,12 @@ export const listCameras = async (householdId: string): Promise<CameraInfo[]> =>
 export const startCameraStream = async (
   householdId: string,
   deviceId: string,
-  params: StartStreamParams,
+  params?: StartStreamParams,
 ): Promise<StartStreamResponse> => {
   const res = await apiClient.post<StartStreamResponse>(
     `${getCommandCenterUrl()}/api/v0/households/${householdId}/cameras/${deviceId}/stream`,
-    params,
+    params ?? {},
+    { timeout: 20000 }, // 20s: 10s MQTT credential fetch + go2rtc registration
   );
   return res.data;
 };
