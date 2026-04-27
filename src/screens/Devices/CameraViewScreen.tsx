@@ -1,18 +1,16 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Video, ResizeMode } from 'expo-av';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Appbar, Button, Chip, Text, useTheme } from 'react-native-paper';
 
 import { startCameraStream, stopCameraStream, getCameraStreamUrl } from '../../api/cameraApi';
 import { useAuth } from '../../auth/AuthContext';
-import { useSettingsSnapshot } from '../../hooks/useSettingsSnapshot';
 import type { DevicesStackParamList } from '../../navigation/types';
-import type { CommandSecretEntry, DeviceFamilyEntry } from '../../services/settingsDecryptService';
 
 type Props = NativeStackScreenProps<DevicesStackParamList, 'CameraView'>;
 
-type Phase = 'loading_creds' | 'starting_stream' | 'streaming' | 'error';
+type Phase = 'starting_stream' | 'streaming' | 'error';
 
 const CameraViewScreen = ({ navigation, route }: Props) => {
   const { deviceId, householdId, deviceName } = route.params;
@@ -20,83 +18,28 @@ const CameraViewScreen = ({ navigation, route }: Props) => {
   const { state: authState } = useAuth();
   const videoRef = useRef<Video>(null);
 
-  const [phase, setPhase] = useState<Phase>('loading_creds');
+  const [phase, setPhase] = useState<Phase>('starting_stream');
   const [error, setError] = useState<string | null>(null);
   const [streamUrl, setStreamUrl] = useState<string | null>(null);
   const [streamName, setStreamName] = useState<string | null>(null);
 
-  // Fetch and decrypt node settings to get Nest credentials
-  const { snapshot, state: snapshotState, error: snapshotError } = useSettingsSnapshot({
-    includeValues: true,
-    enabled: phase === 'loading_creds',
-  });
-
-  // Extract Nest credentials from decrypted settings snapshot
-  const getNestCredentials = useCallback(() => {
-    if (!snapshot?.device_families) return null;
-
-    const nestFamily: DeviceFamilyEntry | undefined = snapshot.device_families.find(
-      (f) => f.family_name === 'nest',
-    );
-    if (!nestFamily) return null;
-
-    const getSecret = (key: string): string | undefined => {
-      const entry: CommandSecretEntry | undefined = nestFamily.secrets.find(
-        (s) => s.key === key,
-      );
-      return entry?.value;
-    };
-
-    const refreshToken = getSecret('NEST_REFRESH_TOKEN');
-    const clientId = getSecret('NEST_WEB_CLIENT_ID');
-    const clientSecret = getSecret('NEST_WEB_CLIENT_SECRET');
-    const projectId = getSecret('NEST_PROJECT_ID');
-
-    if (!refreshToken || !clientId || !clientSecret || !projectId) {
-      return null;
-    }
-
-    return { refreshToken, clientId, clientSecret, projectId };
-  }, [snapshot]);
-
-  // Start stream once credentials are available
+  // Start stream on mount — CC handles credential retrieval from the node via MQTT
   useEffect(() => {
-    if (phase !== 'loading_creds') return;
+    if (phase !== 'starting_stream') return;
 
-    if (snapshotState === 'loaded' && snapshot) {
-      const creds = getNestCredentials();
-      if (!creds) {
-        setError('Nest camera credentials not found. Set up Web OAuth in Node Settings.');
-        setPhase('error');
-        return;
-      }
-
-      setPhase('starting_stream');
-
-      startCameraStream(householdId, deviceId, {
-        refresh_token: creds.refreshToken,
-        client_id: creds.clientId,
-        client_secret: creds.clientSecret,
-        project_id: creds.projectId,
-        protocols: 'RTSP',
+    startCameraStream(householdId, deviceId)
+      .then((resp) => {
+        setStreamName(resp.stream_name);
+        const url = getCameraStreamUrl(resp.stream_name, 'stream.m3u8');
+        setStreamUrl(url);
+        setPhase('streaming');
       })
-        .then((resp) => {
-          setStreamName(resp.stream_name);
-          // Build the full proxied stream URL with auth token
-          const url = getCameraStreamUrl(resp.stream_name, 'stream.m3u8');
-          setStreamUrl(url);
-          setPhase('streaming');
-        })
-        .catch((err) => {
-          const msg = err?.response?.data?.detail ?? err.message ?? 'Failed to start stream';
-          setError(msg);
-          setPhase('error');
-        });
-    } else if (snapshotState === 'error' || snapshotState === 'timeout') {
-      setError(snapshotError ?? 'Failed to load credentials');
-      setPhase('error');
-    }
-  }, [phase, snapshotState, snapshot, getNestCredentials, householdId, deviceId, snapshotError]);
+      .catch((err) => {
+        const msg = err?.response?.data?.detail ?? err.message ?? 'Failed to start stream';
+        setError(msg);
+        setPhase('error');
+      });
+  }, [phase, householdId, deviceId]);
 
   // Clean up stream on unmount
   useEffect(() => {
@@ -111,7 +54,7 @@ const CameraViewScreen = ({ navigation, route }: Props) => {
     setError(null);
     setStreamUrl(null);
     setStreamName(null);
-    setPhase('loading_creds');
+    setPhase('starting_stream');
   };
 
   return (
@@ -122,10 +65,10 @@ const CameraViewScreen = ({ navigation, route }: Props) => {
       </Appbar.Header>
 
       <View style={styles.content}>
-        {(phase === 'loading_creds' || phase === 'starting_stream') && (
+        {phase === 'starting_stream' && (
           <View style={styles.centered}>
             <Text variant="bodyLarge" style={{ color: theme.colors.onSurfaceVariant }}>
-              {phase === 'loading_creds' ? 'Loading credentials...' : 'Starting stream...'}
+              Starting stream...
             </Text>
           </View>
         )}
