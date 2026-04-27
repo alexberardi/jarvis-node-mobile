@@ -33,7 +33,7 @@ import {
   CommandSecretEntry,
   DeviceFamilyEntry,
 } from '../../services/settingsDecryptService';
-import { listNodes, NodeInfo } from '../../api/nodeApi';
+import { factoryResetNode, getNodeTask, listNodes, NodeInfo } from '../../api/nodeApi';
 import { hasK2, generateK2, storeK2 } from '../../services/k2Service';
 import { provisionK2ToNode } from '../../api/nodeSettingsApi';
 import SecretEditDialog from '../../components/SecretEditDialog';
@@ -107,6 +107,16 @@ const NodeSettingsScreen: React.FC = () => {
   const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set());
   const [selectedSecretKeys, setSelectedSecretKeys] = useState<Set<string>>(new Set());
   const [syncing, setSyncing] = useState(false);
+
+  // Factory-reset flow state
+  type FactoryResetStep =
+    | { kind: 'closed' }
+    | { kind: 'confirm' }
+    | { kind: 'running'; taskId: string; state: string }
+    | { kind: 'success' }
+    | { kind: 'error'; message: string };
+  const [factoryReset, setFactoryReset] = useState<FactoryResetStep>({ kind: 'closed' });
+  const factoryResetPollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Group commands by associated_service, dedup secrets within each group
   const serviceGroups = useMemo(() => {
@@ -405,6 +415,85 @@ const NodeSettingsScreen: React.FC = () => {
     },
     [nodeId, cleanup, loadSettings],
   );
+
+  // ---- Factory Reset --------------------------------------------------
+
+  const stopFactoryResetPoll = useCallback(() => {
+    if (factoryResetPollRef.current) {
+      clearTimeout(factoryResetPollRef.current);
+      factoryResetPollRef.current = null;
+    }
+  }, []);
+
+  const pollFactoryResetTask = useCallback(
+    async (taskId: string, attemptsLeft: number) => {
+      try {
+        const task = await getNodeTask(taskId);
+        if (task.state === 'success') {
+          stopFactoryResetPoll();
+          setFactoryReset({ kind: 'success' });
+          return;
+        }
+        if (task.state === 'failed') {
+          stopFactoryResetPoll();
+          setFactoryReset({
+            kind: 'error',
+            message: task.error_message ?? 'Factory reset failed on the node.',
+          });
+          return;
+        }
+        if (attemptsLeft <= 0) {
+          stopFactoryResetPoll();
+          setFactoryReset({
+            kind: 'error',
+            message:
+              'The node didn\'t finish resetting in time. It may still be working — check back in a minute.',
+          });
+          return;
+        }
+        setFactoryReset({ kind: 'running', taskId, state: task.state });
+        factoryResetPollRef.current = setTimeout(
+          () => pollFactoryResetTask(taskId, attemptsLeft - 1),
+          2000,
+        );
+      } catch (err) {
+        stopFactoryResetPoll();
+        setFactoryReset({
+          kind: 'error',
+          message: err instanceof Error ? err.message : 'Failed to check reset status',
+        });
+      }
+    },
+    [stopFactoryResetPoll],
+  );
+
+  const handleFactoryResetConfirm = useCallback(async () => {
+    setFactoryReset({ kind: 'running', taskId: '', state: 'pending' });
+    try {
+      const { task_id } = await factoryResetNode(nodeId);
+      // 60s ceiling: 30 attempts × 2s. Long enough for slow reboots but
+      // bounded so a wedged node surfaces an error instead of spinning.
+      pollFactoryResetTask(task_id, 30);
+    } catch (err) {
+      setFactoryReset({
+        kind: 'error',
+        message: err instanceof Error ? err.message : 'Failed to start reset',
+      });
+    }
+  }, [nodeId, pollFactoryResetTask]);
+
+  const closeFactoryReset = useCallback(() => {
+    stopFactoryResetPoll();
+    const wasSuccess = factoryReset.kind === 'success';
+    setFactoryReset({ kind: 'closed' });
+    if (wasSuccess) {
+      // Inactive node will be filtered out of the list automatically.
+      navigation.navigate('NodeList');
+    }
+  }, [factoryReset.kind, navigation, stopFactoryResetPoll]);
+
+  // Cleanup any in-flight poll if the screen unmounts mid-reset.
+  useEffect(() => stopFactoryResetPoll, [stopFactoryResetPoll]);
 
   const handleAuthenticate = (group: ServiceGroup) => {
     if (!group.auth || !authState.accessToken) return;
@@ -1057,6 +1146,31 @@ const NodeSettingsScreen: React.FC = () => {
           </>
         )}
 
+        {/* Danger Zone — kept deliberately minimal and at the bottom so
+            it's hard to invoke by accident. Factory reset wipes config,
+            keys, and reboots the device. */}
+        <View style={styles.sectionHeader}>
+          <Text variant="titleSmall" style={{ color: theme.colors.error, fontWeight: '600' }}>
+            Danger Zone
+          </Text>
+        </View>
+        <Surface style={[styles.dangerCard, { borderColor: theme.colors.error }]} elevation={0}>
+          <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 12 }}>
+            Factory reset wipes this node's credentials and keys, then
+            reboots it into provisioning mode. You'll need to re-pair it
+            before it can be used again.
+          </Text>
+          <Button
+            mode="outlined"
+            icon="alert-octagon-outline"
+            textColor={theme.colors.error}
+            style={{ borderColor: theme.colors.error }}
+            onPress={() => setFactoryReset({ kind: 'confirm' })}
+          >
+            Factory Reset
+          </Button>
+        </Surface>
+
       </ScrollView>
     );
   };
@@ -1088,6 +1202,103 @@ const NodeSettingsScreen: React.FC = () => {
           onPresetsAvailable={handlePresetsAvailable}
         />
       )}
+
+      {/* Factory Reset Modal */}
+      <Portal>
+        <Modal
+          visible={factoryReset.kind !== 'closed'}
+          onDismiss={() => {
+            // Allow dismiss only when not actively running, so a tap-out
+            // doesn't strand the user mid-reset.
+            if (
+              factoryReset.kind === 'confirm' ||
+              factoryReset.kind === 'success' ||
+              factoryReset.kind === 'error'
+            ) {
+              closeFactoryReset();
+            }
+          }}
+          contentContainerStyle={[styles.guideModal, { backgroundColor: theme.colors.surface }]}
+        >
+          {factoryReset.kind === 'confirm' && (
+            <>
+              <Text variant="titleLarge" style={{ fontWeight: '600', marginBottom: 8, color: theme.colors.error }}>
+                Factory Reset {room ?? 'Node'}?
+              </Text>
+              <Text variant="bodyMedium" style={{ marginBottom: 16 }}>
+                This wipes the node's credentials, encryption keys, WiFi
+                settings, and local database, then reboots it into
+                provisioning mode. You'll need to re-pair it before it
+                can be used again.
+              </Text>
+              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 24 }}>
+                This action cannot be undone.
+              </Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8 }}>
+                <Button onPress={closeFactoryReset}>Cancel</Button>
+                <Button
+                  mode="contained"
+                  buttonColor={theme.colors.error}
+                  textColor={theme.colors.onError}
+                  onPress={handleFactoryResetConfirm}
+                >
+                  Factory Reset
+                </Button>
+              </View>
+            </>
+          )}
+
+          {factoryReset.kind === 'running' && (
+            <>
+              <Text variant="titleLarge" style={{ fontWeight: '600', marginBottom: 16 }}>
+                Resetting {room ?? 'Node'}…
+              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+                <ActivityIndicator />
+                <Text variant="bodyMedium">
+                  {factoryReset.state === 'in_progress'
+                    ? 'Wiping configuration on the node…'
+                    : factoryReset.state === 'dispatched'
+                    ? 'Reset request sent — waiting for the node…'
+                    : 'Starting reset…'}
+                </Text>
+              </View>
+              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                The node will reboot into provisioning mode when finished.
+              </Text>
+            </>
+          )}
+
+          {factoryReset.kind === 'success' && (
+            <>
+              <Text variant="titleLarge" style={{ fontWeight: '600', marginBottom: 12 }}>
+                Reset complete
+              </Text>
+              <Text variant="bodyMedium" style={{ marginBottom: 24 }}>
+                {room ?? 'The node'} has been wiped and is rebooting. It
+                will appear in the Add Node flow once it's back online.
+              </Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
+                <Button mode="contained" onPress={closeFactoryReset}>Done</Button>
+              </View>
+            </>
+          )}
+
+          {factoryReset.kind === 'error' && (
+            <>
+              <Text variant="titleLarge" style={{ fontWeight: '600', marginBottom: 12, color: theme.colors.error }}>
+                Reset failed
+              </Text>
+              <Text variant="bodyMedium" style={{ marginBottom: 24 }}>
+                {factoryReset.message}
+              </Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
+                <Button onPress={closeFactoryReset}>Close</Button>
+              </View>
+            </>
+          )}
+        </Modal>
+      </Portal>
 
       {/* Sync: Node Picker Modal */}
       <Portal>
@@ -1304,6 +1515,15 @@ const styles = StyleSheet.create({
   scanButtonContainer: {
     paddingHorizontal: 16,
     marginTop: 16,
+  },
+  dangerCard: {
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 24,
+    padding: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    backgroundColor: 'transparent',
   },
   secretRow: {
     flexDirection: 'row',
