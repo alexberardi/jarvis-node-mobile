@@ -56,7 +56,7 @@ jobs:
     name: Build iOS & Submit to TestFlight
     needs: [lint-and-typecheck, test]
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-    runs-on: ubuntu-latest
+    runs-on: macos-15
 
     steps:
       - uses: actions/checkout@v4
@@ -75,13 +75,33 @@ jobs:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
 
+      - name: Select Xcode 26
+        run: |
+          XCODE26=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | head -1)
+          if [ -n "$XCODE26" ]; then
+            sudo xcode-select -s "$XCODE26"
+            echo "Selected $XCODE26"
+          else
+            echo "Available Xcode versions:"
+            ls -d /Applications/Xcode*.app
+            echo "::warning::Xcode 26 not available on this runner — build may fail App Store upload"
+          fi
+          xcodebuild -version
+
       - name: Write Apple API key
         run: echo "$APPLE_API_KEY_P8" > ${{ github.workspace }}/apple-api-key.p8
         env:
           APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
 
-      - name: Build iOS & Submit to TestFlight
-        run: eas build --platform ios --profile production --auto-submit --non-interactive
+      - name: Build iOS locally
+        run: eas build --platform ios --profile production --local --non-interactive --output ${{ github.workspace }}/build.ipa
+        env:
+          EXPO_ASC_API_KEY_PATH: ${{ github.workspace }}/apple-api-key.p8
+          EXPO_ASC_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          EXPO_ASC_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+
+      - name: Submit to TestFlight
+        run: eas submit --platform ios --profile production --path ${{ github.workspace }}/build.ipa --non-interactive
         env:
           EXPO_ASC_API_KEY_PATH: ${{ github.workspace }}/apple-api-key.p8
           EXPO_ASC_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
