@@ -1,3 +1,4 @@
+import * as Clipboard from 'expo-clipboard';
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Text, Card, Button, HelperText, TextInput } from 'react-native-paper';
@@ -31,6 +32,7 @@ const K2QRCode: React.FC<K2QRCodeProps> = ({
   const [qrData, setQrData] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     const generateQR = async () => {
@@ -108,6 +110,19 @@ const K2QRCode: React.FC<K2QRCodeProps> = ({
       <Text style={styles.modeText}>
         {mode === 'plain' ? 'Plain (no password)' : 'Password protected'}
       </Text>
+      <Button
+        mode="text"
+        icon="content-copy"
+        compact
+        onPress={async () => {
+          await Clipboard.setStringAsync(qrData);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2000);
+        }}
+        style={{ marginTop: 8 }}
+      >
+        {copied ? 'Copied!' : 'Copy to Clipboard'}
+      </Button>
     </View>
   );
 };

@@ -6,6 +6,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getDeviceState } from '../../api/smartHomeApi';
 import ActionButtons from '../ActionButtons';
 import type { DeviceListItem, DeviceState, JarvisButton } from '../../types/SmartHome';
+import AlarmControl from './AlarmControl';
 import CameraControl from './CameraControl';
 import ClimateControl from './ClimateControl';
 import CoverControl from './CoverControl';
@@ -27,6 +28,7 @@ interface Props {
 
 /** Map device domain to the control_type used by domain components. */
 const DOMAIN_TO_CONTROL_TYPE: Record<string, string> = {
+  security_system: 'alarm',
   climate: 'thermostat',
   light: 'light',
   switch: 'toggle',
@@ -55,6 +57,7 @@ const DEFAULT_UI_HINTS: Record<string, DeviceState['ui_hints']> = {
     step: 1,
     unit: '%',
   },
+  security_system: { control_type: 'alarm', features: ['away', 'home', 'off'] },
   lock: { control_type: 'lock', features: [] },
   cover: { control_type: 'cover', features: [], min_value: 0, max_value: 100, step: 1, unit: '%' },
   camera: { control_type: 'camera', features: [] },
@@ -177,6 +180,16 @@ const DeviceControlPanel: React.FC<Props> = ({
     case 'toggle':
       return (
         <SwitchControl
+          householdId={householdId}
+          deviceId={deviceId}
+          state={effectiveState}
+          onStateChange={invalidateState}
+        />
+      );
+
+    case 'alarm':
+      return (
+        <AlarmControl
           householdId={householdId}
           deviceId={deviceId}
           state={effectiveState}
