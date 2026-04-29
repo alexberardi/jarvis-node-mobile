@@ -33,6 +33,7 @@ import {
   getNodeEnrollmentResult,
   getVoiceProfileStatus,
   startNodeEnrollment,
+  startNodeVerification,
   verifyVoiceProfile,
 } from '../../api/voiceProfileApi';
 import { listNodes, type NodeInfo } from '../../api/nodeApi';
@@ -63,6 +64,9 @@ const ENROLLMENT_PROMPT =
 const TEST_PROMPT =
   'Now say something different — any question or command. We\'ll check if it matches your voice.';
 
+const VERIFY_NODE_PROMPT =
+  "What's the weather like this weekend? Also, can you set a reminder for tomorrow at noon?";
+
 const MAX_RECORD_MS = 10_000;
 
 // --- Component ---
@@ -91,6 +95,8 @@ const VoiceProfileScreen = () => {
   const autoStopRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollDeadlineRef = useRef<number>(0);
+  // Tracks whether the target picker is for enrollment or testing
+  const targetPurposeRef = useRef<'enroll' | 'test'>('enroll');
 
   // --- Lifecycle ---
 
@@ -131,8 +137,9 @@ const VoiceProfileScreen = () => {
 
   // --- Node target selection ---
 
-  const openTargetPicker = useCallback(async () => {
+  const openTargetPicker = useCallback(async (purpose: 'enroll' | 'test' = 'enroll') => {
     setError(null);
+    targetPurposeRef.current = purpose;
     setPhase('select_target');
     if (!householdId) return;
     setLoadingNodes(true);
@@ -190,6 +197,49 @@ const VoiceProfileScreen = () => {
       console.error('[VoiceProfile] startNodeEnrollment failed:', e);
       setError('Could not start enrollment on that node.');
       setPhase('idle');
+    }
+  }, []);
+
+  const startNodeVerifyFlow = useCallback(async (node: NodeInfo) => {
+    setError(null);
+    setActiveNode(node);
+    setPhase('awaiting_node');
+    try {
+      const { request_id } = await startNodeVerification(
+        node.node_id,
+        VERIFY_NODE_PROMPT,
+        5.0,
+      );
+      setNodeRequestId(request_id);
+
+      pollDeadlineRef.current = Date.now() + 60_000;
+      pollRef.current = setInterval(async () => {
+        if (Date.now() > pollDeadlineRef.current) {
+          clearTimers();
+          setError('Node didn\'t report back in time. Try again.');
+          setPhase('enrolled');
+          return;
+        }
+        try {
+          const result = await getNodeEnrollmentResult(request_id);
+          if (result === null) return;
+          clearTimers();
+          if (result.success) {
+            setMatched(result.matched ?? false);
+            setConfidence(Math.round((result.confidence ?? 0) * 100));
+            setPhase('test_result');
+          } else {
+            setError(`Verification failed: ${result.error || 'unknown error'}`);
+            setPhase('enrolled');
+          }
+        } catch (e) {
+          console.error('[VoiceProfile] verify poll failed:', e);
+        }
+      }, 1000);
+    } catch (e) {
+      console.error('[VoiceProfile] startNodeVerification failed:', e);
+      setError('Could not start verification on that node.');
+      setPhase('enrolled');
     }
   }, []);
 
@@ -312,7 +362,7 @@ const VoiceProfileScreen = () => {
         <Button
           mode="contained"
           icon="microphone"
-          onPress={openTargetPicker}
+          onPress={() => openTargetPicker()}
           style={styles.button}
         >
           Start Recording
@@ -362,7 +412,7 @@ const VoiceProfileScreen = () => {
                 title={node.room || 'Unnamed node'}
                 description={node.user || node.node_id.substring(0, 8)}
                 left={(props) => <List.Icon {...props} icon="speaker" />}
-                onPress={() => startNodeFlow(node)}
+                onPress={() => targetPurposeRef.current === 'test' ? startNodeVerifyFlow(node) : startNodeFlow(node)}
                 style={styles.nodeRow}
               />
             ))}
@@ -381,24 +431,28 @@ const VoiceProfileScreen = () => {
     </Card>
   );
 
-  const renderAwaitingNode = () => (
+  const renderAwaitingNode = () => {
+    const isVerify = targetPurposeRef.current === 'test';
+    const prompt = isVerify ? VERIFY_NODE_PROMPT : ENROLLMENT_PROMPT;
+    return (
     <Card style={styles.card}>
       <Card.Content style={styles.center}>
         <Icon source="microphone" size={64} color={paperTheme.colors.primary} />
         <Text variant="titleMedium" style={styles.title}>
-          Recording on {activeNode?.room || 'node'}
+          {isVerify ? 'Testing' : 'Recording'} on {activeNode?.room || 'node'}
         </Text>
         <ActivityIndicator size="large" style={{ marginVertical: 12 }} />
         <Text variant="bodyMedium" style={styles.prompt}>
           The node will play a cue and then record. Read this prompt
-          aloud when you hear it:{'\n\n'}"{ENROLLMENT_PROMPT}"
+          aloud when you hear it:{'\n\n'}"{prompt}"
         </Text>
         <Text variant="bodySmall" style={[styles.body, { marginTop: 12 }]}>
           Request ID: {nodeRequestId?.substring(0, 8) || '...'}
         </Text>
       </Card.Content>
     </Card>
-  );
+    );
+  };
 
   const renderRecording = (purpose: 'enroll' | 'test') => (
     <Card style={styles.card}>
@@ -458,10 +512,10 @@ const VoiceProfileScreen = () => {
         <Button
           mode="contained"
           icon="microphone"
-          onPress={() => startRecordingFlow('test')}
+          onPress={() => activeNode ? startNodeVerifyFlow(activeNode) : startRecordingFlow('test')}
           style={styles.button}
         >
-          Test My Voice
+          Test My Voice{activeNode ? ` on ${activeNode.room || 'node'}` : ''}
         </Button>
         <Button
           mode="text"
@@ -512,14 +566,14 @@ const VoiceProfileScreen = () => {
             <Button
               mode="contained"
               icon="microphone"
-              onPress={() => startRecordingFlow('test')}
+              onPress={() => activeNode ? startNodeVerifyFlow(activeNode) : startRecordingFlow('test')}
               style={styles.button}
             >
               Try Test Again
             </Button>
             <Button
               mode="outlined"
-              onPress={openTargetPicker}
+              onPress={() => openTargetPicker()}
               style={styles.button}
             >
               Re-Record Profile
@@ -543,7 +597,7 @@ const VoiceProfileScreen = () => {
         <Button
           mode="contained"
           icon="microphone"
-          onPress={() => startRecordingFlow('test')}
+          onPress={() => openTargetPicker('test')}
           style={styles.button}
         >
           Test Match
@@ -551,7 +605,7 @@ const VoiceProfileScreen = () => {
         <Button
           mode="outlined"
           icon="refresh"
-          onPress={openTargetPicker}
+          onPress={() => openTargetPicker()}
           style={styles.button}
         >
           Update Profile

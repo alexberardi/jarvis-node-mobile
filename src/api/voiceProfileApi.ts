@@ -128,6 +128,9 @@ export interface NodeEnrollmentResult {
   duration_secs?: number;
   response?: VoiceProfileEnrollResult;
   error?: string;
+  // verify_voice results
+  matched?: boolean;
+  confidence?: number;
 }
 
 /**
@@ -147,6 +150,27 @@ export const startNodeEnrollment = async (
       node_id: nodeId,
       prompt_text: promptText ?? '',
       duration_secs: durationSecs ?? 8.0,
+    },
+  );
+  return res.data;
+};
+
+/**
+ * Trigger a node to record + verify a voice sample using its own mic.
+ * Same polling flow as enrollment — returns a request_id.
+ */
+export const startNodeVerification = async (
+  nodeId: string,
+  promptText?: string,
+  durationSecs?: number,
+): Promise<StartNodeEnrollmentResponse> => {
+  const baseUrl = getCommandCenterUrl();
+  const res = await apiClient.post<StartNodeEnrollmentResponse>(
+    `${baseUrl}/api/v0/mobile/voice-profile/start-node-verification`,
+    {
+      node_id: nodeId,
+      prompt_text: promptText ?? '',
+      duration_secs: durationSecs ?? 5.0,
     },
   );
   return res.data;
