@@ -658,9 +658,16 @@ const NodeSettingsScreen: React.FC = () => {
               result.snapshot.nonce,
               result.snapshot.tag,
             );
-            // Extract values from the full snapshot
+            // Extract values from the full snapshot (commands + device families)
             for (const cmd of snapshot.commands) {
               for (const secret of cmd.secrets) {
+                if (selectedSecretKeys.has(secret.key) && secret.value) {
+                  secretsMap[secret.key] = secret.value;
+                }
+              }
+            }
+            for (const family of snapshot.device_families ?? []) {
+              for (const secret of family.secrets) {
                 if (selectedSecretKeys.has(secret.key) && secret.value) {
                   secretsMap[secret.key] = secret.value;
                 }
