@@ -75,9 +75,6 @@ jobs:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
 
-      - name: Install Fastlane
-        run: brew install fastlane
-
       - name: Write Apple API key
         run: echo "$APPLE_API_KEY_P8" > ${{ github.workspace }}/apple-api-key.p8
         env:
@@ -86,9 +83,13 @@ jobs:
       - name: Build iOS locally
         run: eas build --platform ios --profile production --local --non-interactive --output ${{ github.workspace }}/build.ipa
         env:
-          EXPO_APPLE_APP_STORE_CONNECT_API_KEY_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
-          EXPO_APPLE_APP_STORE_CONNECT_API_KEY_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
-          EXPO_APPLE_APP_STORE_CONNECT_API_KEY_PATH: ${{ github.workspace }}/apple-api-key.p8
+          EXPO_ASC_API_KEY_PATH: ${{ github.workspace }}/apple-api-key.p8
+          EXPO_ASC_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          EXPO_ASC_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
 
       - name: Submit to TestFlight
         run: eas submit --platform ios --profile production --path ${{ github.workspace }}/build.ipa --non-interactive
+        env:
+          EXPO_ASC_API_KEY_PATH: ${{ github.workspace }}/apple-api-key.p8
+          EXPO_ASC_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          EXPO_ASC_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
