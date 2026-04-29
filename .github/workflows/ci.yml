@@ -56,7 +56,7 @@ jobs:
     name: Build iOS & Submit to TestFlight
     needs: [lint-and-typecheck, test]
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
@@ -80,15 +80,8 @@ jobs:
         env:
           APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
 
-      - name: Build iOS locally
-        run: eas build --platform ios --profile production --local --non-interactive --output ${{ github.workspace }}/build.ipa
-        env:
-          EXPO_ASC_API_KEY_PATH: ${{ github.workspace }}/apple-api-key.p8
-          EXPO_ASC_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
-          EXPO_ASC_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
-
-      - name: Submit to TestFlight
-        run: eas submit --platform ios --profile production --path ${{ github.workspace }}/build.ipa --non-interactive
+      - name: Build iOS & Submit to TestFlight
+        run: eas build --platform ios --profile production --auto-submit --non-interactive
         env:
           EXPO_ASC_API_KEY_PATH: ${{ github.workspace }}/apple-api-key.p8
           EXPO_ASC_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
