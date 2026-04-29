@@ -36,7 +36,8 @@
         "EXPO_PUBLIC_PANTRY_URL": "https://pantry-api.jarvisautomation.io"
       },
       "ios": {
-        "resourceClass": "m-medium"
+        "resourceClass": "m-medium",
+        "image": "latest"
       },
       "autoIncrement": true
     }
