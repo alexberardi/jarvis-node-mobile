@@ -21,6 +21,10 @@ import {
 } from 'react-native-paper';
 import Markdown from 'react-native-markdown-display';
 
+import { K2BackupCard } from '../../components/K2QRCode';
+import { getK2 } from '../../services/k2Service';
+import type { K2KeyPair } from '../../services/k2Service';
+
 import { useAuth } from '../../auth/AuthContext';
 import { NodesStackParamList } from '../../navigation/types';
 import {
@@ -99,6 +103,9 @@ const NodeSettingsScreen: React.FC = () => {
 
   // Uninstall state
   const [uninstallingCommand, setUninstallingCommand] = useState<string | null>(null);
+
+  // Export K2 flow
+  const [exportKeyPair, setExportKeyPair] = useState<K2KeyPair | null>(null);
 
   // Sync flow state
   const [householdNodes, setHouseholdNodes] = useState<(NodeInfo & { hasK2: boolean })[]>([]);
@@ -1026,6 +1033,25 @@ const NodeSettingsScreen: React.FC = () => {
             Authenticate with {family.authentication.friendly_name ?? family.authentication.provider ?? 'Provider'}
           </Button>
         )}
+
+        {hasSecrets && family.secrets.some((s) => s.is_set) && (
+          <Button
+            mode="text"
+            icon="sync"
+            compact
+            onPress={() => startSyncFlow({
+              serviceName: family.friendly_name,
+              secrets: family.secrets,
+              auth: family.authentication,
+              commands: [],
+              commandStates: {},
+              setupGuide: family.setup_guide,
+            })}
+            style={{ alignSelf: 'flex-start', marginTop: 4 }}
+          >
+            Sync to other nodes
+          </Button>
+        )}
       </View>
     );
   };
@@ -1145,6 +1171,25 @@ const NodeSettingsScreen: React.FC = () => {
             </View>
           </>
         )}
+
+        {/* Export Key + Danger Zone */}
+        <Divider style={{ marginTop: 24, marginBottom: 8 }} />
+        <Button
+          mode="text"
+          icon="key-variant"
+          compact
+          onPress={async () => {
+            const kp = await getK2(nodeId);
+            if (kp) {
+              setExportKeyPair(kp);
+            } else {
+              Alert.alert('No Key', 'No encryption key found for this node.');
+            }
+          }}
+          style={{ alignSelf: 'flex-start' }}
+        >
+          Export Encryption Key
+        </Button>
 
         {/* Danger Zone — kept deliberately minimal and at the bottom so
             it's hard to invoke by accident. Factory reset wipes config,
@@ -1435,6 +1480,24 @@ const NodeSettingsScreen: React.FC = () => {
               </ScrollView>
             </>
           )}
+        </Modal>
+      </Portal>
+
+      {/* Export Key Modal */}
+      <Portal>
+        <Modal
+          visible={exportKeyPair !== null}
+          onDismiss={() => setExportKeyPair(null)}
+          contentContainerStyle={[styles.guideModal, { backgroundColor: theme.colors.surface }]}
+        >
+          <ScrollView>
+            {exportKeyPair && (
+              <K2BackupCard
+                keyPair={exportKeyPair}
+                onDone={() => setExportKeyPair(null)}
+              />
+            )}
+          </ScrollView>
         </Modal>
       </Portal>
 
