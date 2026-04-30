@@ -45,10 +45,11 @@ export const pollInstallStatus = async (
 export const requestUninstall = async (
   nodeId: string,
   commandName: string,
+  componentType: string,
 ): Promise<InstallRequest> => {
   const res = await apiClient.post<InstallRequest>(
     `${getBaseUrl()}/api/v0/nodes/${nodeId}/package-uninstall`,
-    { command_name: commandName },
+    { command_name: commandName, component_type: componentType },
   );
   return res.data;
 };
