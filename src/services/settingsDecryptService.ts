@@ -47,6 +47,7 @@ export interface DeviceFamilyEntry {
   authentication?: AuthenticationConfig;
   is_configured: boolean;
   setup_guide?: string;
+  is_custom?: boolean;
 }
 
 export interface DeviceManagerEntry {
