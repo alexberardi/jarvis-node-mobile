@@ -425,7 +425,7 @@ const NodeDetailScreen = () => {
         <Text variant="headlineSmall" style={{ fontWeight: 'bold', flex: 1 }}>
           {node.room || 'Node'}
         </Text>
-        {hasSettingsAccess && (
+        {(hasSettingsAccess || node.needs_k2) && (
           <IconButton
             icon="cog-outline"
             onPress={() => navigation.navigate('NodeSettings', { nodeId, room: node.room })}
