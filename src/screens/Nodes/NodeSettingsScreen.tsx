@@ -391,7 +391,53 @@ const NodeSettingsScreen: React.FC = () => {
             onPress: async () => {
               setUninstallingCommand(commandName);
               try {
-                const { id } = await requestUninstall(nodeId, commandName);
+                const { id } = await requestUninstall(nodeId, commandName, 'command');
+                let attempts = 0;
+                while (attempts < 15) {
+                  await new Promise((r) => setTimeout(r, 2000));
+                  const result = await pollUninstallStatus(nodeId, id);
+                  if (result.status === 'completed') {
+                    setUninstallingCommand(null);
+                    cleanup();
+                    loadSettings();
+                    return;
+                  }
+                  if (result.status === 'failed') {
+                    setUninstallingCommand(null);
+                    Alert.alert('Failed', result.error_message ?? 'Uninstall failed');
+                    return;
+                  }
+                  attempts++;
+                }
+                setUninstallingCommand(null);
+                Alert.alert('Timeout', 'Node did not respond in time.');
+              } catch (err) {
+                setUninstallingCommand(null);
+                Alert.alert('Error', 'Failed to request uninstall');
+              }
+            },
+          },
+        ],
+      );
+    },
+    [nodeId, cleanup, loadSettings],
+  );
+
+  const handleUninstallFamily = useCallback(
+    (family: DeviceFamilyEntry) => {
+      setOpenMenu(null);
+      Alert.alert(
+        'Uninstall Package',
+        `Remove "${family.friendly_name}" from this node? All configured secrets will be removed.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Uninstall',
+            style: 'destructive',
+            onPress: async () => {
+              setUninstallingCommand(family.family_name);
+              try {
+                const { id } = await requestUninstall(nodeId, family.family_name, 'device_protocol');
                 let attempts = 0;
                 while (attempts < 15) {
                   await new Promise((r) => setTimeout(r, 2000));
@@ -967,6 +1013,22 @@ const NodeSettingsScreen: React.FC = () => {
 
   const renderDeviceFamilyCard = (family: DeviceFamilyEntry) => {
     const hasSecrets = family.secrets.length > 0;
+    const hasConfiguredSecrets = family.secrets.some((s) => s.is_set);
+    const menuKey = `df:${family.family_name}`;
+    const isUninstalling = uninstallingCommand === family.family_name;
+
+    if (isUninstalling) {
+      return (
+        <View key={family.family_name} style={styles.groupContainer}>
+          <Surface style={{ backgroundColor: theme.colors.surface, alignItems: 'center', paddingVertical: 20, borderRadius: 12, padding: 16 }} elevation={1}>
+            <ActivityIndicator size="small" style={{ marginBottom: 8 }} />
+            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+              Uninstalling {family.friendly_name}...
+            </Text>
+          </Surface>
+        </View>
+      );
+    }
 
     return (
       <View key={family.family_name} style={styles.groupContainer}>
@@ -980,6 +1042,67 @@ const NodeSettingsScreen: React.FC = () => {
               <Icon source="check-circle" size={18} color={theme.colors.primary} />
             )}
           </View>
+          <Menu
+            visible={openMenu === menuKey}
+            onDismiss={() => setOpenMenu(null)}
+            anchor={
+              <TouchableRipple onPress={() => setOpenMenu(menuKey)} style={styles.menuAnchor}>
+                <Icon source="dots-vertical" size={22} color={theme.colors.onSurfaceVariant} />
+              </TouchableRipple>
+            }
+          >
+            {hasConfiguredSecrets && householdNodes.length > 0 ? (
+              <Menu.Item
+                leadingIcon="sync"
+                title="Sync to other nodes"
+                onPress={() => startSyncFlow({
+                  serviceName: family.friendly_name,
+                  secrets: family.secrets,
+                  auth: family.authentication,
+                  commands: [],
+                  commandStates: {},
+                  setupGuide: family.setup_guide,
+                })}
+              />
+            ) : hasConfiguredSecrets ? (
+              <Menu.Item
+                leadingIcon="sync"
+                title="Sync to other nodes"
+                onPress={async () => {
+                  setOpenMenu(null);
+                  const hId = authState.activeHouseholdId;
+                  const allNodes = await listNodes(hId ?? undefined);
+                  const siblings = allNodes.filter((n) => n.node_id !== nodeId);
+                  if (siblings.length === 0) {
+                    Alert.alert('No Other Nodes', 'This is the only node in the household.');
+                  } else {
+                    const withK2 = await Promise.all(
+                      siblings.map(async (n) => ({
+                        ...n,
+                        hasK2: await hasK2(n.node_id),
+                      })),
+                    );
+                    setHouseholdNodes(withK2);
+                    setSelectedNodeIds(new Set(withK2.filter((n) => n.hasK2).map((n) => n.node_id)));
+                    setSyncGroup({
+                      serviceName: family.friendly_name,
+                      secrets: family.secrets,
+                      auth: family.authentication,
+                      commands: [],
+                      commandStates: {},
+                      setupGuide: family.setup_guide,
+                    });
+                    setSyncStep('nodes');
+                  }
+                }}
+              />
+            ) : null}
+            <Menu.Item
+              leadingIcon="delete-outline"
+              title="Uninstall"
+              onPress={() => handleUninstallFamily(family)}
+            />
+          </Menu>
         </View>
 
         {family.description ? (
@@ -1038,25 +1161,6 @@ const NodeSettingsScreen: React.FC = () => {
             style={styles.authButton}
           >
             Authenticate with {family.authentication.friendly_name ?? family.authentication.provider ?? 'Provider'}
-          </Button>
-        )}
-
-        {hasSecrets && family.secrets.some((s) => s.is_set) && (
-          <Button
-            mode="text"
-            icon="sync"
-            compact
-            onPress={() => startSyncFlow({
-              serviceName: family.friendly_name,
-              secrets: family.secrets,
-              auth: family.authentication,
-              commands: [],
-              commandStates: {},
-              setupGuide: family.setup_guide,
-            })}
-            style={{ alignSelf: 'flex-start', marginTop: 4 }}
-          >
-            Sync to other nodes
           </Button>
         )}
       </View>
