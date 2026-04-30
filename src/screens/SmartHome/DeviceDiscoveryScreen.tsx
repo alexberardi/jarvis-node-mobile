@@ -92,7 +92,7 @@ const DeviceDiscoveryScreen = ({ navigation, route }: Props) => {
             setDevices(
               result.devices.map((d) => ({
                 ...d,
-                selected: !d.already_registered,
+                selected: false,
               })),
             );
             setScanState('results');
