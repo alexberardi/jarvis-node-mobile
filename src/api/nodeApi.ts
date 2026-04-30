@@ -23,6 +23,9 @@ export interface NodeInfo {
   install_mode: string | null;
   git_sha: string | null;
   is_busy: boolean;
+  // True when the node has no K2 secrets-encryption key yet — gates the
+  // settings gear so the user can pair K2 even on a fresh device.
+  needs_k2: boolean;
 }
 
 export const listNodes = async (householdId?: string): Promise<NodeInfo[]> => {
