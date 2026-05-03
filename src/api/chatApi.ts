@@ -32,6 +32,7 @@ export interface ChatMessage {
   actions?: ChatAction[];
   actionContext?: ChatActionContext;
   actionPreview?: string;
+  reasoning?: string;
 }
 
 export interface ChatStreamEvent {
@@ -45,6 +46,7 @@ export interface ChatStreamEvent {
   actions?: ChatAction[];
   action_context?: ChatActionContext;
   action_preview?: string;
+  reasoning?: string;
 }
 
 export interface SendChatRequest {
@@ -55,6 +57,7 @@ export interface SendChatRequest {
   timezone?: string;
   client_tools?: Record<string, unknown>[];
   available_commands?: Record<string, unknown>[];
+  include_reasoning?: boolean;
 }
 
 export interface NodeToolsResponse {
