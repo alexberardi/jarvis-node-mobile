@@ -50,6 +50,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
   const [previewExpanded, setPreviewExpanded] = useState(false);
   const [contentHeight, setContentHeight] = useState(0);
   const [expanded, setExpanded] = useState(false);
+  const [reasoningExpanded, setReasoningExpanded] = useState(false);
 
   const mdStyles = useMemo(
     () => ({
@@ -138,6 +139,32 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
           </Text>
         ) : (
           <>
+            {/* Collapsible reasoning section */}
+            {message.reasoning && !isStreaming && (
+              <View style={styles.reasoningContainer}>
+                <Pressable
+                  onPress={() => setReasoningExpanded((v) => !v)}
+                  style={styles.reasoningToggle}
+                >
+                  <Text
+                    variant="labelSmall"
+                    style={{ color: theme.colors.outline, fontStyle: 'italic' }}
+                  >
+                    {reasoningExpanded ? 'Hide thinking' : 'Show thinking'}
+                  </Text>
+                </Pressable>
+                {reasoningExpanded && (
+                  <View style={[styles.reasoningContent, { backgroundColor: 'rgba(0,0,0,0.06)' }]}>
+                    <Text
+                      variant="bodySmall"
+                      style={{ color: theme.colors.onSurface, opacity: 0.7 }}
+                    >
+                      {message.reasoning}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
             <View
               style={contentHeight > COLLAPSE_HEIGHT && !expanded ? { maxHeight: COLLAPSE_HEIGHT, overflow: 'hidden' } : undefined}
             >
@@ -330,6 +357,17 @@ const styles = StyleSheet.create({
   showMore: {
     paddingTop: 6,
     alignItems: 'center',
+  },
+  reasoningContainer: {
+    marginBottom: 8,
+  },
+  reasoningToggle: {
+    paddingVertical: 2,
+  },
+  reasoningContent: {
+    marginTop: 4,
+    padding: 8,
+    borderRadius: 8,
   },
 });
 

@@ -256,6 +256,7 @@ export function useChat({
                     actions: event.actions,
                     actionContext: event.action_context,
                     actionPreview: event.action_preview,
+                    reasoning: event.reasoning,
                   };
                 }
                 return msg;
@@ -301,6 +302,7 @@ export function useChat({
           household_id: householdId,
           conversation_id: conversationId ?? undefined,
           timezone,
+          include_reasoning: true,
           ...(includeTools
             ? {
                 client_tools: tools.client_tools,
