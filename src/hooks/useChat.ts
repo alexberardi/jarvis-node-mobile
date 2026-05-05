@@ -15,6 +15,7 @@ import {
   sendChatMessage,
   warmupChat,
 } from '../api/chatApi';
+import { useToolsVersion } from '../contexts/ToolsContext';
 
 function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -69,8 +70,6 @@ interface UseChatReturn {
   connectionError: string | null;
   sendMessage: (text: string) => void;
   clearConversation: () => void;
-  /** Force re-warmup (e.g., after installing a new command). */
-  refreshTools: () => void;
 }
 
 export function useChat({
@@ -96,8 +95,12 @@ export function useChat({
   accessTokenRef.current = accessToken;
   // Track auth readiness (changes once: false → true), not the token value (changes on every refresh)
   const isAuthenticated = !!accessToken;
+  // Re-warmup only when tools change (Pantry install/uninstall), not on every tab nav
+  const { toolsVersion } = useToolsVersion();
 
-  // Preemptive startup: fetch tools → warmup conversation
+  // Preemptive startup: fetch tools → warmup conversation.
+  // Runs on first mount + when node/household changes + when toolsVersion bumps.
+  // Does NOT re-run on tab navigation (state persists since HomeScreen stays mounted).
   useEffect(() => {
     if (!nodeId || !householdId || !isAuthenticated) {
       toolsRef.current = null;
@@ -162,7 +165,7 @@ export function useChat({
     return () => {
       cancelled = true;
     };
-  }, [nodeId, householdId, isAuthenticated, timezone]);
+  }, [nodeId, householdId, isAuthenticated, timezone, toolsVersion]);
 
   const sendMessage = useCallback(
     (text: string) => {
@@ -257,6 +260,7 @@ export function useChat({
                     actionContext: event.action_context,
                     actionPreview: event.action_preview,
                     reasoning: event.reasoning,
+                    traceSummary: event.trace_summary,
                   };
                 }
                 return msg;
@@ -281,6 +285,7 @@ export function useChat({
                     ...msg,
                     role: 'assistant' as const,
                     content: event.message ?? 'Something went wrong.',
+                    traceSummary: event.trace_summary,
                   };
                 }
                 return msg;
@@ -359,15 +364,6 @@ export function useChat({
     doWarmup();
   }, [doWarmup]);
 
-  const refreshTools = useCallback(() => {
-    abortRef.current?.abort();
-    setMessages([]);
-    setConversationId(null);
-    setIsLoading(false);
-    setWarmupState('idle');
-    doWarmup();
-  }, [doWarmup]);
-
   return {
     messages,
     conversationId,
@@ -379,6 +375,5 @@ export function useChat({
     connectionError,
     sendMessage,
     clearConversation,
-    refreshTools,
   };
 }

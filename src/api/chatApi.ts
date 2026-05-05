@@ -23,6 +23,20 @@ export interface ChatActionContext {
   context: Record<string, unknown>;
 }
 
+export interface ServiceHop {
+  service: string;
+  duration_ms: number;
+  status: string;
+  steps: string[];
+}
+
+export interface TraceSummary {
+  total_duration_ms: number;
+  span_count: number;
+  status: string;
+  service_hops: ServiceHop[];
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant' | 'status' | 'acknowledgment';
@@ -33,6 +47,7 @@ export interface ChatMessage {
   actionContext?: ChatActionContext;
   actionPreview?: string;
   reasoning?: string;
+  traceSummary?: TraceSummary;
 }
 
 export interface ChatStreamEvent {
@@ -47,6 +62,7 @@ export interface ChatStreamEvent {
   action_context?: ChatActionContext;
   action_preview?: string;
   reasoning?: string;
+  trace_summary?: TraceSummary;
 }
 
 export interface SendChatRequest {
