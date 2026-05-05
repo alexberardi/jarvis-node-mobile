@@ -6,6 +6,7 @@ import { Button, IconButton, Text, useTheme } from 'react-native-paper';
 const COLLAPSE_HEIGHT = 400;
 
 import type { ChatAction, ChatMessage } from '../api/chatApi';
+import TraceWaterfall from './TraceWaterfall';
 
 /** Strip <think>...</think> blocks from LLM output (Qwen3 reasoning traces). */
 function stripThinkTags(text: string): string {
@@ -51,6 +52,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
   const [contentHeight, setContentHeight] = useState(0);
   const [expanded, setExpanded] = useState(false);
   const [reasoningExpanded, setReasoningExpanded] = useState(false);
+  const [traceExpanded, setTraceExpanded] = useState(false);
 
   const mdStyles = useMemo(
     () => ({
@@ -275,6 +277,31 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
             )}
           </View>
         )}
+
+        {/* Trace toggle + waterfall */}
+        {!isUser && !isStreaming && message.traceSummary && (
+          <View style={styles.traceSection}>
+            <Pressable
+              onPress={() => setTraceExpanded((v) => !v)}
+              style={styles.traceToggle}
+            >
+              <Text
+                variant="labelSmall"
+                style={{ color: theme.colors.outline, fontStyle: 'italic' }}
+              >
+                {traceExpanded ? 'Hide trace' : `Show trace (${message.traceSummary.service_hops.length} hops)`}
+              </Text>
+            </Pressable>
+            {(traceExpanded || message.traceSummary.status === 'error') && (
+              <View style={[styles.traceContainer, { backgroundColor: 'rgba(0,0,0,0.06)' }]}>
+                <TraceWaterfall
+                  hops={message.traceSummary.service_hops}
+                  totalMs={message.traceSummary.total_duration_ms}
+                />
+              </View>
+            )}
+          </View>
+        )}
       </View>
     </View>
   );
@@ -365,6 +392,17 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   reasoningContent: {
+    marginTop: 4,
+    padding: 8,
+    borderRadius: 8,
+  },
+  traceSection: {
+    marginTop: 4,
+  },
+  traceToggle: {
+    paddingVertical: 2,
+  },
+  traceContainer: {
     marginTop: 4,
     padding: 8,
     borderRadius: 8,
