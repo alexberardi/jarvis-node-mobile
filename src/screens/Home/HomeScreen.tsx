@@ -96,15 +96,15 @@ const HomeScreen = () => {
 
   const [showToolsModal, setShowToolsModal] = useState(false);
 
-  const { messages, isLoading, warmupState, toolCount, toolNames, toolInfos, sendMessage, clearConversation, refreshTools } = useChat({
+  const { messages, isLoading, warmupState, toolCount, toolNames, toolInfos, sendMessage, clearConversation } = useChat({
     nodeId: selectedNodeId,
     householdId,
     accessToken: authState.accessToken,
     onAssistantDone: handleAutoPlay,
   });
 
-  // Refresh unread count + tools on focus
-  const hasNavigatedAway = useRef(false);
+  // Refresh unread count on focus (but NOT tools — those persist across tabs
+  // and only re-warmup when toolsVersion changes via ToolsContext).
   const accessTokenRef = useRef(authState.accessToken);
   accessTokenRef.current = authState.accessToken;
 
@@ -112,16 +112,7 @@ const HomeScreen = () => {
     useCallback(() => {
       if (!accessTokenRef.current) return;
       getUnreadCount().then(setUnreadCount).catch(() => {});
-
-      // Re-warmup when returning from another tab (e.g., after Pantry install)
-      // to pick up newly installed/removed commands.
-      if (hasNavigatedAway.current) {
-        refreshTools();
-      }
-      return () => {
-        hasNavigatedAway.current = true;
-      };
-    }, [refreshTools]),
+    }, []),
   );
 
   const handleSend = useCallback(() => {

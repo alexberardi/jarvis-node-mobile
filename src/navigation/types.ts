@@ -18,7 +18,7 @@ export type AuthStackParamList = {
 export type NodesStackParamList = {
   NodeList: undefined;
   AddNode: undefined;
-  NodeDetail: { nodeId: string };
+  NodeDetail: { nodeId: string; initialTab?: 'overview' | 'hardware' | 'packages' | 'activity' };
   NodeSettings: { nodeId: string; room: string | null };
   ImportKey: undefined;
   IntegrationAuth: {

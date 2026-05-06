@@ -1,6 +1,5 @@
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import * as Clipboard from 'expo-clipboard';
 import React, { useCallback, useEffect, useState } from 'react';
 import { FlatList, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import {
@@ -12,7 +11,6 @@ import {
   IconButton,
   List,
   SegmentedButtons,
-  Snackbar,
   Text,
   useTheme,
 } from 'react-native-paper';
@@ -24,13 +22,13 @@ import {
   RoutineExecution,
 } from '../../api/routineHistoryApi';
 import { NodeUpdateSection } from '../../components/NodeUpdateSection';
-import { NodeVoiceSettings } from '../../components/NodeVoiceSettings';
+import { HardwareTab } from './HardwareTab';
 import { NodesStackParamList } from '../../navigation/types';
 import { hasK2 } from '../../services/k2Service';
 
 type Nav = NativeStackNavigationProp<NodesStackParamList>;
 type Route = RouteProp<NodesStackParamList, 'NodeDetail'>;
-type Tab = 'overview' | 'packages' | 'activity';
+type Tab = 'overview' | 'hardware' | 'packages' | 'activity';
 
 // =============================================================================
 // Helpers
@@ -82,12 +80,8 @@ interface CommandInfo {
 
 const OverviewTab = ({
   node,
-  nodeId,
-  onCopyId,
 }: {
   node: NodeInfo;
-  nodeId: string;
-  onCopyId: () => void;
 }) => {
   const theme = useTheme();
 
@@ -131,45 +125,6 @@ const OverviewTab = ({
       <Divider style={{ marginVertical: 8 }} />
 
       <NodeUpdateSection node={node} />
-
-      <Divider style={{ marginVertical: 8 }} />
-
-      {/* Detail rows */}
-      <List.Item
-        title="Voice Mode"
-        description={node.voice_mode || 'brief'}
-        left={(props) => <List.Icon {...props} icon="microphone" />}
-      />
-      {node.platform && (
-        <List.Item
-          title="Platform"
-          description={node.platform}
-          left={(props) => <List.Icon {...props} icon="chip" />}
-        />
-      )}
-      {node.python_version && (
-        <List.Item
-          title="Python"
-          description={node.python_version}
-          left={(props) => <List.Icon {...props} icon="language-python" />}
-        />
-      )}
-      {node.adapter_hash && (
-        <List.Item
-          title="Adapter"
-          description={node.adapter_hash}
-          left={(props) => <List.Icon {...props} icon="tune" />}
-        />
-      )}
-      <List.Item
-        title="Node ID"
-        description={nodeId}
-        descriptionNumberOfLines={1}
-        left={(props) => <List.Icon {...props} icon="identifier" />}
-        right={() => <IconButton icon="content-copy" size={18} onPress={onCopyId} />}
-      />
-
-      <NodeVoiceSettings nodeId={nodeId} />
     </>
   );
 };
@@ -349,14 +304,13 @@ const NodeDetailScreen = () => {
   const navigation = useNavigation<Nav>();
   const route = useRoute<Route>();
   const theme = useTheme();
-  const { nodeId } = route.params;
+  const { nodeId, initialTab } = route.params;
 
   const [node, setNode] = useState<NodeInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
-  const [tab, setTab] = useState<Tab>('overview');
+  const [tab, setTab] = useState<Tab>(initialTab || 'overview');
   // null = checking, true = key on this device, false = no key
   // (node was set up on another device — hide the settings gear).
   const [hasSettingsAccess, setHasSettingsAccess] = useState<boolean | null>(null);
@@ -392,11 +346,6 @@ const NodeDetailScreen = () => {
     await loadNode();
     setRefreshing(false);
   }, [loadNode]);
-
-  const handleCopyId = async () => {
-    await Clipboard.setStringAsync(nodeId);
-    setCopied(true);
-  };
 
   if (loading) {
     return (
@@ -441,6 +390,9 @@ const NodeDetailScreen = () => {
           density="small"
           buttons={[
             { value: 'overview', label: 'Overview' },
+            ...(node.install_mode !== 'docker'
+              ? [{ value: 'hardware', label: 'Hardware' }]
+              : []),
             { value: 'packages', label: 'Packages' },
             { value: 'activity', label: 'Activity' },
           ]}
@@ -453,17 +405,16 @@ const NodeDetailScreen = () => {
           contentContainerStyle={styles.scroll}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         >
-          <OverviewTab node={node} nodeId={nodeId} onCopyId={handleCopyId} />
+          <OverviewTab node={node} />
         </ScrollView>
       )}
+
+      {tab === 'hardware' && <HardwareTab nodeId={nodeId} node={node} />}
 
       {tab === 'packages' && <PackagesTab nodeId={nodeId} />}
 
       {tab === 'activity' && <ActivityTab nodeId={nodeId} />}
 
-      <Snackbar visible={copied} onDismiss={() => setCopied(false)} duration={2000}>
-        Node ID copied
-      </Snackbar>
     </View>
   );
 };
