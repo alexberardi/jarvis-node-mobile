@@ -14,6 +14,7 @@ import {
 
 import { pollCCInstallStatus, pollInstallStatus, requestInstall } from '../../api/packageInstallApi';
 import { pollTestInstallStatus } from '../../api/testInstallApi';
+import { useToolsVersion } from '../../contexts/ToolsContext';
 import { StoreStackParamList } from '../../navigation/types';
 import type { InstallStatus, InstallStatusValue } from '../../types/Package';
 
@@ -35,6 +36,7 @@ const InstallProgressScreen = () => {
   const navigation = useNavigation<Nav>();
   const route = useRoute<Route>();
   const theme = useTheme();
+  const { invalidateTools } = useToolsVersion();
 
   const { packageName, commandName, githubRepoUrl, gitTag, mode } = route.params;
   const isTestInstall = mode === 'test';
@@ -124,7 +126,8 @@ const InstallProgressScreen = () => {
     });
     if (allTerminal) {
       stopPolling();
-      // No cache to clear — tools are fetched fresh on every warmup.
+      // Signal that tools changed so useChat re-warms on next use.
+      invalidateTools();
     }
   }, [statuses, installs, stopPolling]);
 
