@@ -25,15 +25,17 @@ interface VoiceSettings {
   barge_in_enabled: boolean;
   follow_up_listen_seconds: number;
   volume_percent: number;
+  is_muted: boolean;
 }
 
 const DEFAULTS: VoiceSettings = {
   wake_word_threshold: 0.5,
-  silence_threshold: 500,
-  silence_duration: 0.5,
+  silence_threshold: 300,
+  silence_duration: 0.8,
   barge_in_enabled: true,
   follow_up_listen_seconds: 5,
   volume_percent: 100,
+  is_muted: false,
 };
 
 interface SliderRowProps {
@@ -92,6 +94,7 @@ export const NodeVoiceSettings = ({ nodeId }: Props) => {
       barge_in_enabled: nc.barge_in_enabled ?? DEFAULTS.barge_in_enabled,
       follow_up_listen_seconds: nc.follow_up_listen_seconds ?? DEFAULTS.follow_up_listen_seconds,
       volume_percent: nc.volume_percent ?? DEFAULTS.volume_percent,
+      is_muted: nc.hardware?.is_muted ?? DEFAULTS.is_muted,
     });
     seededRef.current = true;
   }, [snapshot, snapshotState]);
@@ -111,8 +114,9 @@ export const NodeVoiceSettings = ({ nodeId }: Props) => {
         barge_in_enabled: settings.barge_in_enabled,
         follow_up_listen_seconds: settings.follow_up_listen_seconds,
         volume_percent: settings.volume_percent,
+        is_muted: settings.is_muted,
       };
-      await updateNodeConfig(nodeId, payload, true);
+      await updateNodeConfig(nodeId, payload, false);
       setDirty(false);
     } catch (e) {
       console.error('Failed to update node config:', e);
@@ -167,6 +171,19 @@ export const NodeVoiceSettings = ({ nodeId }: Props) => {
         />
         <Text variant="labelSmall" style={styles.hint}>
           Output level for TTS responses and chimes.
+          {settings.volume_percent >= 85 && ' Test in small steps — Line Out can spike.'}
+        </Text>
+
+        <View style={styles.switchRow}>
+          <Text variant="bodyMedium">Mute</Text>
+          <Switch
+            value={settings.is_muted}
+            onValueChange={(v) => update('is_muted', v)}
+            color={theme.colors.primary}
+          />
+        </View>
+        <Text variant="labelSmall" style={styles.hint}>
+          Silences TTS + music output. Mic and wake word still active.
         </Text>
 
         <Divider style={styles.divider} />
@@ -252,7 +269,7 @@ export const NodeVoiceSettings = ({ nodeId }: Props) => {
             loading={saving}
             disabled={saving}
           >
-            Apply & Restart Node
+            Save Changes
           </Button>
         </Card.Actions>
       )}

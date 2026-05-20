@@ -3,6 +3,7 @@
  *
  * Sections:
  * - Bluetooth: scan, pair, manage (BluetoothSection)
+ * - Speaker HAT: ReSpeaker LED + button controls (only shown when detected)
  * - Voice Recognition: enrollment status + link to VoiceProfileScreen
  * - Device Info: metadata rows moved from Overview (voice mode, platform, etc.)
  * - Voice Settings: NodeVoiceSettings component moved from Overview
@@ -27,6 +28,7 @@ import { NodeInfo } from '../../api/nodeApi';
 import { getVoiceProfileStatus } from '../../api/voiceProfileApi';
 import { BluetoothSection } from '../../components/BluetoothSection';
 import { NodeVoiceSettings } from '../../components/NodeVoiceSettings';
+import { SpeakerHATCard } from '../../components/SpeakerHATCard';
 import { useAuth } from '../../auth/AuthContext';
 import { RootStackParamList } from '../../navigation/types';
 
@@ -69,6 +71,9 @@ export const HardwareTab = ({ nodeId, node }: Props) => {
     <ScrollView contentContainerStyle={styles.scroll}>
       {/* Bluetooth */}
       <BluetoothSection nodeId={nodeId} />
+
+      {/* Speaker HAT (only renders when node reports hat_detected) */}
+      <SpeakerHATCard nodeId={nodeId} />
 
       {/* Voice Recognition */}
       <Card style={styles.card}>
