@@ -192,7 +192,7 @@ export const NodeVoiceSettings = ({ nodeId }: Props) => {
           label="Wake Word Sensitivity"
           value={settings.wake_word_threshold}
           displayValue={settings.wake_word_threshold.toFixed(2)}
-          min={0.3}
+          min={0.2}
           max={0.9}
           step={0.05}
           onChange={(v) => update('wake_word_threshold', v)}
@@ -207,13 +207,14 @@ export const NodeVoiceSettings = ({ nodeId }: Props) => {
           label="Silence Threshold (RMS)"
           value={settings.silence_threshold}
           displayValue={String(Math.round(settings.silence_threshold))}
-          min={100}
-          max={1000}
-          step={50}
+          min={500}
+          max={10000}
+          step={250}
           onChange={(v) => update('silence_threshold', v)}
         />
         <Text variant="labelSmall" style={styles.hint}>
-          Audio below this level counts as silence. Raise for noisy rooms.
+          Audio below this level counts as silence. Raise for noisy rooms
+          (fans, AC, server hum).
         </Text>
 
         <Divider style={styles.divider} />
