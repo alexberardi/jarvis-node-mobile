@@ -10,13 +10,16 @@ import {
   Icon,
   IconButton,
   List,
+  Modal,
+  Portal,
   SegmentedButtons,
+  Surface,
   Text,
   useTheme,
 } from 'react-native-paper';
 
 import { fetchNodeTools } from '../../api/chatApi';
-import { getNode, NodeInfo } from '../../api/nodeApi';
+import { deleteNode, getNode, NodeInfo } from '../../api/nodeApi';
 import {
   fetchRoutineHistory,
   RoutineExecution,
@@ -24,7 +27,7 @@ import {
 import { NodeUpdateSection } from '../../components/NodeUpdateSection';
 import { HardwareTab } from './HardwareTab';
 import { NodesStackParamList } from '../../navigation/types';
-import { hasK2 } from '../../services/k2Service';
+import { deleteK2, hasK2 } from '../../services/k2Service';
 
 type Nav = NativeStackNavigationProp<NodesStackParamList>;
 type Route = RouteProp<NodesStackParamList, 'NodeDetail'>;
@@ -78,12 +81,40 @@ interface CommandInfo {
 // Overview Tab
 // =============================================================================
 
+type DeleteStep =
+  | { kind: 'closed' }
+  | { kind: 'confirm' }
+  | { kind: 'running' }
+  | { kind: 'error'; message: string };
+
 const OverviewTab = ({
   node,
+  canDelete,
 }: {
   node: NodeInfo;
+  canDelete: boolean;
 }) => {
   const theme = useTheme();
+  const navigation = useNavigation<Nav>();
+  const [deleteStep, setDeleteStep] = useState<DeleteStep>({ kind: 'closed' });
+
+  const handleDelete = useCallback(async () => {
+    setDeleteStep({ kind: 'running' });
+    try {
+      await deleteNode(node.node_id);
+      // Best-effort local K2 cleanup — failure here doesn't block navigation.
+      try {
+        await deleteK2(node.node_id);
+      } catch {}
+      setDeleteStep({ kind: 'closed' });
+      navigation.navigate('NodeList');
+    } catch (err) {
+      setDeleteStep({
+        kind: 'error',
+        message: err instanceof Error ? err.message : 'Failed to delete node',
+      });
+    }
+  }, [node.node_id, navigation]);
 
   return (
     <>
@@ -125,6 +156,93 @@ const OverviewTab = ({
       <Divider style={{ marginVertical: 8 }} />
 
       <NodeUpdateSection node={node} />
+
+      {canDelete && (
+        <>
+          <View style={styles.dangerHeader}>
+            <Text variant="titleSmall" style={{ color: theme.colors.error, fontWeight: '600' }}>
+              Danger Zone
+            </Text>
+          </View>
+          <Surface style={[styles.dangerCard, { borderColor: theme.colors.error }]} elevation={0}>
+            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 12 }}>
+              Deletes this node from your household. If it's still online,
+              it'll be wiped and rebooted into provisioning mode. Safe to use
+              even if the node has already been reset or reflashed.
+            </Text>
+            <Button
+              mode="outlined"
+              icon="delete-alert-outline"
+              textColor={theme.colors.error}
+              style={{ borderColor: theme.colors.error }}
+              onPress={() => setDeleteStep({ kind: 'confirm' })}
+            >
+              Delete Node
+            </Button>
+          </Surface>
+        </>
+      )}
+
+      <Portal>
+        <Modal
+          visible={deleteStep.kind !== 'closed'}
+          onDismiss={() => {
+            // Block dismiss while the request is in flight.
+            if (deleteStep.kind !== 'running') {
+              setDeleteStep({ kind: 'closed' });
+            }
+          }}
+          contentContainerStyle={[styles.modalCard, { backgroundColor: theme.colors.surface }]}
+        >
+          {deleteStep.kind === 'confirm' && (
+            <>
+              <Text variant="titleLarge" style={{ fontWeight: '600', marginBottom: 8, color: theme.colors.error }}>
+                Delete {node.room ?? 'Node'}?
+              </Text>
+              <Text variant="bodyMedium" style={{ marginBottom: 16 }}>
+                This removes the node from your household and revokes its
+                credentials. If the node is online, it will also be wiped and
+                rebooted into provisioning mode.
+              </Text>
+              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 24 }}>
+                This action cannot be undone.
+              </Text>
+              <View style={styles.modalActions}>
+                <Button onPress={() => setDeleteStep({ kind: 'closed' })}>Cancel</Button>
+                <Button
+                  mode="contained"
+                  buttonColor={theme.colors.error}
+                  textColor={theme.colors.onError}
+                  onPress={handleDelete}
+                >
+                  Delete
+                </Button>
+              </View>
+            </>
+          )}
+
+          {deleteStep.kind === 'running' && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <ActivityIndicator />
+              <Text variant="bodyMedium">Deleting node…</Text>
+            </View>
+          )}
+
+          {deleteStep.kind === 'error' && (
+            <>
+              <Text variant="titleLarge" style={{ fontWeight: '600', marginBottom: 12, color: theme.colors.error }}>
+                Delete failed
+              </Text>
+              <Text variant="bodyMedium" style={{ marginBottom: 24 }}>
+                {deleteStep.message}
+              </Text>
+              <View style={styles.modalActions}>
+                <Button onPress={() => setDeleteStep({ kind: 'closed' })}>Close</Button>
+              </View>
+            </>
+          )}
+        </Modal>
+      </Portal>
     </>
   );
 };
@@ -405,7 +523,7 @@ const NodeDetailScreen = () => {
           contentContainerStyle={styles.scroll}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         >
-          <OverviewTab node={node} />
+          <OverviewTab node={node} canDelete={hasSettingsAccess === true} />
         </ScrollView>
       )}
 
@@ -468,6 +586,29 @@ const styles = StyleSheet.create({
   activityRow: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  dangerHeader: {
+    marginTop: 32,
+    marginBottom: 8,
+    paddingHorizontal: 20,
+  },
+  dangerCard: {
+    marginHorizontal: 16,
+    marginBottom: 24,
+    padding: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    backgroundColor: 'transparent',
+  },
+  modalCard: {
+    margin: 20,
+    borderRadius: 16,
+    padding: 20,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 8,
   },
 });
 

@@ -47,54 +47,48 @@ export const getNode = async (nodeId: string): Promise<NodeInfo> => {
 };
 
 /**
- * Begin a factory reset for a node. Creates a tracked task on the
- * command center, publishes the MQTT trigger, and returns the task id
- * so the caller can poll progress.
- *
- * The node will report status updates (in_progress → success | failed)
- * back to CC during the reset; on success the node row is marked
- * inactive and the device reboots into provisioning mode.
+ * Delete a node from the household. Best-effort publishes a factory-reset
+ * MQTT to wipe the device, then unconditionally removes the household and
+ * auth records — so it succeeds even when the node is offline or has
+ * already been reflashed.
  */
-export const factoryResetNode = async (
-  nodeId: string,
-): Promise<{ task_id: string }> => {
-  const res = await apiClient.post<{ task_id: string; reset_token: string }>(
-    `${getCommandCenterUrl()}/api/v0/admin/nodes/${nodeId}/factory-reset`,
+export const deleteNode = async (nodeId: string): Promise<void> => {
+  await apiClient.delete(
+    `${getCommandCenterUrl()}/api/v0/admin/nodes/${nodeId}`,
   );
-  // reset_token is for the node's status callbacks — the mobile client
-  // doesn't need it.
-  return { task_id: res.data.task_id };
-};
-
-export interface NodeTask {
-  id: string;
-  node_id: string;
-  kind: string;
-  state: 'pending' | 'dispatched' | 'in_progress' | 'success' | 'failed';
-  error_message: string | null;
-  created_at: string;
-  updated_at: string;
-  finished_at: string | null;
-}
-
-export const getNodeTask = async (taskId: string): Promise<NodeTask> => {
-  const res = await apiClient.get<NodeTask>(
-    `${getCommandCenterUrl()}/api/v0/tasks/${taskId}`,
-  );
-  return res.data;
 };
 
 /**
  * Update a node's config.json settings via MQTT.
- * The node merges the settings and optionally restarts.
+ *
+ * The node merges the settings into config.json and applies live where
+ * possible. ``restart`` is only honored when one of the touched keys is
+ * in the node's ``_KEYS_REQUIRING_RESTART`` set (currently just
+ * ``wake_word_model``) — for everything else the value is read fresh
+ * the next time the node consumes it.
  */
 export const updateNodeConfig = async (
   nodeId: string,
   settings: Record<string, number | string | boolean>,
-  restart: boolean = true,
+  restart: boolean = false,
 ): Promise<void> => {
   await apiClient.post(
     `${getCommandCenterUrl()}/api/v0/nodes/${nodeId}/node-config`,
     { settings, restart },
+  );
+};
+
+/**
+ * Preview an LED pattern on the node for ``duration_seconds`` then revert.
+ * Ephemeral — does not persist any state. Drives the Test LEDs picker.
+ */
+export const previewLedPattern = async (
+  nodeId: string,
+  pattern: string,
+  durationSeconds: number = 3.0,
+): Promise<void> => {
+  await apiClient.post(
+    `${getCommandCenterUrl()}/api/v0/nodes/${nodeId}/led/preview`,
+    { pattern, duration_seconds: durationSeconds },
   );
 };
