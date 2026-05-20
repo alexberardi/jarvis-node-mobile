@@ -60,6 +60,14 @@ export interface DeviceManagerEntry {
   authentication?: AuthenticationConfig;
 }
 
+export interface NodeHardwareInfo {
+  hat_detected?: boolean;
+  led_chain_available?: boolean;
+  button_available?: boolean;
+  audio_card?: string | null;
+  is_muted?: boolean;
+}
+
 export interface NodeConfigSnapshot {
   wake_word_threshold?: number;
   silence_threshold?: number;
@@ -69,6 +77,9 @@ export interface NodeConfigSnapshot {
   barge_in_enabled?: boolean;
   follow_up_listen_seconds?: number;
   volume_percent?: number;
+  led_enabled?: boolean;
+  led_brightness_percent?: number;
+  hardware?: NodeHardwareInfo;
 }
 
 export interface SettingsSnapshot {
