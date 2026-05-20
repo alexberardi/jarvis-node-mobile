@@ -134,6 +134,26 @@ const StoreDetailScreen = () => {
         return;
       }
 
+      const aptPackages: string[] =
+        (downloadInfo.manifest as { apt_packages?: string[] })?.apt_packages ?? [];
+      if (aptPackages.length > 0) {
+        const userConsented = await new Promise<boolean>((resolve) => {
+          Alert.alert(
+            'Root-privileged install',
+            `This package will install: ${aptPackages.join(', ')}. These run with root privileges. Continue?`,
+            [
+              { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+              { text: 'Continue', onPress: () => resolve(true) },
+            ],
+            { cancelable: true, onDismiss: () => resolve(false) },
+          );
+        });
+        if (!userConsented) {
+          setInstalling(false);
+          return;
+        }
+      }
+
       // Get household nodes
       const nodes = await fetchHouseholdNodes();
 
