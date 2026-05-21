@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
+  cancelNodeTask,
   getNodeTask,
   isTerminalState,
   listNodeTasks,
@@ -15,10 +16,14 @@ interface UseNodeUpdate {
   error: string | null;
   /** True while the trigger() call is in flight. */
   loading: boolean;
+  /** True while the cancel() call is in flight. */
+  cancelling: boolean;
   /** True while we check the server for an in-flight task on mount. */
   rehydrating: boolean;
   /** Queue an update on the CC. The polling effect takes over from there. */
   trigger: TriggerFn;
+  /** Cancel the current open task on the CC. Resolves once it's marked failed. */
+  cancel: () => Promise<void>;
   /** Drop the local reference to a completed task (so the UI resets). */
   reset: () => void;
 }
@@ -29,6 +34,7 @@ export const useNodeUpdate = (nodeId: string): UseNodeUpdate => {
   const [task, setTask] = useState<NodeTask | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [rehydrating, setRehydrating] = useState(true);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -147,6 +153,22 @@ export const useNodeUpdate = (nodeId: string): UseNodeUpdate => {
     [nodeId, pollTask],
   );
 
+  const cancel = useCallback(async () => {
+    if (!task || isTerminalState(task.state)) return;
+    setCancelling(true);
+    setError(null);
+    try {
+      const cancelled = await cancelNodeTask(nodeId, task.id);
+      stopPolling();
+      setTask(cancelled);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Cancel failed');
+      throw e;
+    } finally {
+      setCancelling(false);
+    }
+  }, [nodeId, task, stopPolling]);
+
   const reset = useCallback(() => {
     stopPolling();
     setTask(null);
@@ -155,5 +177,5 @@ export const useNodeUpdate = (nodeId: string): UseNodeUpdate => {
 
   useEffect(() => () => stopPolling(), [stopPolling]);
 
-  return { task, error, loading, rehydrating, trigger, reset };
+  return { task, error, loading, cancelling, rehydrating, trigger, cancel, reset };
 };
