@@ -11,7 +11,11 @@ import {
   useTheme,
 } from 'react-native-paper';
 
-import { updateNodeConfig } from '../api/nodeApi';
+import {
+  pollAmbientNoiseResult,
+  triggerAmbientNoiseMeasurement,
+  updateNodeConfig,
+} from '../api/nodeApi';
 import { useSettingsSnapshot } from '../hooks/useSettingsSnapshot';
 
 interface Props {
@@ -24,16 +28,22 @@ interface VoiceSettings {
   silence_duration: number;
   barge_in_enabled: boolean;
   follow_up_listen_seconds: number;
+  follow_up_silence_duration: number;
+  follow_up_min_record_after_onset_secs: number;
+  follow_up_min_speech_secs: number;
   volume_percent: number;
   is_muted: boolean;
 }
 
 const DEFAULTS: VoiceSettings = {
   wake_word_threshold: 0.5,
-  silence_threshold: 300,
-  silence_duration: 0.8,
+  silence_threshold: 5000,
+  silence_duration: 0.5,
   barge_in_enabled: true,
-  follow_up_listen_seconds: 5,
+  follow_up_listen_seconds: 10,
+  follow_up_silence_duration: 0.5,
+  follow_up_min_record_after_onset_secs: 0.7,
+  follow_up_min_speech_secs: 0.3,
   volume_percent: 100,
   is_muted: false,
 };
@@ -79,6 +89,10 @@ export const NodeVoiceSettings = ({ nodeId }: Props) => {
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const seededRef = useRef(false);
+  const [calibration, setCalibration] = useState<{
+    status: 'idle' | 'measuring' | 'done' | 'error';
+    message?: string;
+  }>({ status: 'idle' });
 
   const { snapshot, state: snapshotState } = useSettingsSnapshot({ nodeId });
 
@@ -93,6 +107,10 @@ export const NodeVoiceSettings = ({ nodeId }: Props) => {
       silence_duration: nc.silence_duration ?? DEFAULTS.silence_duration,
       barge_in_enabled: nc.barge_in_enabled ?? DEFAULTS.barge_in_enabled,
       follow_up_listen_seconds: nc.follow_up_listen_seconds ?? DEFAULTS.follow_up_listen_seconds,
+      follow_up_silence_duration: nc.follow_up_silence_duration ?? DEFAULTS.follow_up_silence_duration,
+      follow_up_min_record_after_onset_secs:
+        nc.follow_up_min_record_after_onset_secs ?? DEFAULTS.follow_up_min_record_after_onset_secs,
+      follow_up_min_speech_secs: nc.follow_up_min_speech_secs ?? DEFAULTS.follow_up_min_speech_secs,
       volume_percent: nc.volume_percent ?? DEFAULTS.volume_percent,
       is_muted: nc.hardware?.is_muted ?? DEFAULTS.is_muted,
     });
@@ -104,6 +122,43 @@ export const NodeVoiceSettings = ({ nodeId }: Props) => {
     setDirty(true);
   }, []);
 
+  const handleCalibrate = useCallback(async () => {
+    setCalibration({ status: 'measuring' });
+    try {
+      const { request_id } = await triggerAmbientNoiseMeasurement(nodeId, 3.0);
+      // Capture is ~3s — poll up to 15s with a 500ms cadence to absorb MQTT
+      // jitter and the round-trip to the node.
+      const deadline = Date.now() + 15000;
+      while (Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 500));
+        const poll = await pollAmbientNoiseResult(nodeId, request_id);
+        if (poll.status === 'completed' && poll.result) {
+          const r = poll.result;
+          if (r.success && r.suggested_silence_threshold) {
+            update('silence_threshold', r.suggested_silence_threshold);
+            const floor = r.p75_rms != null ? Math.round(r.p75_rms) : null;
+            setCalibration({
+              status: 'done',
+              message: floor != null
+                ? `Ambient ~${floor} RMS → set to ${r.suggested_silence_threshold}`
+                : `Set to ${r.suggested_silence_threshold}`,
+            });
+          } else {
+            setCalibration({
+              status: 'error',
+              message: r.error ?? 'Measurement failed',
+            });
+          }
+          return;
+        }
+      }
+      setCalibration({ status: 'error', message: 'Timed out — is the node online?' });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Calibration failed';
+      setCalibration({ status: 'error', message: msg });
+    }
+  }, [nodeId, update]);
+
   const handleSave = useCallback(async () => {
     setSaving(true);
     try {
@@ -113,6 +168,9 @@ export const NodeVoiceSettings = ({ nodeId }: Props) => {
         silence_duration: settings.silence_duration,
         barge_in_enabled: settings.barge_in_enabled,
         follow_up_listen_seconds: settings.follow_up_listen_seconds,
+        follow_up_silence_duration: settings.follow_up_silence_duration,
+        follow_up_min_record_after_onset_secs: settings.follow_up_min_record_after_onset_secs,
+        follow_up_min_speech_secs: settings.follow_up_min_speech_secs,
         volume_percent: settings.volume_percent,
         is_muted: settings.is_muted,
       };
@@ -207,14 +265,41 @@ export const NodeVoiceSettings = ({ nodeId }: Props) => {
           label="Silence Threshold (RMS)"
           value={settings.silence_threshold}
           displayValue={String(Math.round(settings.silence_threshold))}
-          min={500}
+          min={1000}
           max={10000}
-          step={250}
+          step={100}
           onChange={(v) => update('silence_threshold', v)}
         />
         <Text variant="labelSmall" style={styles.hint}>
           Audio below this level counts as silence. Raise for noisy rooms
-          (fans, AC, server hum).
+          (fans, AC, server hum). Typical: 3000–6000.
+        </Text>
+        <View style={styles.calibrateRow}>
+          <Button
+            mode="outlined"
+            icon="auto-fix"
+            onPress={handleCalibrate}
+            loading={calibration.status === 'measuring'}
+            disabled={calibration.status === 'measuring'}
+            compact
+          >
+            {calibration.status === 'measuring' ? 'Measuring…' : 'Set Automatically'}
+          </Button>
+          {calibration.message ? (
+            <Text
+              variant="labelSmall"
+              style={[
+                styles.calibrateMessage,
+                calibration.status === 'error' && { color: theme.colors.error },
+              ]}
+            >
+              {calibration.message}
+            </Text>
+          ) : null}
+        </View>
+        <Text variant="labelSmall" style={styles.hint}>
+          Stays quiet in the room for ~3s and picks a threshold above the
+          measured noise floor.
         </Text>
 
         <Divider style={styles.divider} />
@@ -222,10 +307,10 @@ export const NodeVoiceSettings = ({ nodeId }: Props) => {
         <SliderRow
           label="Silence Duration"
           value={settings.silence_duration}
-          displayValue={`${settings.silence_duration.toFixed(1)}s`}
+          displayValue={`${settings.silence_duration.toFixed(2)}s`}
           min={0.3}
-          max={2.0}
-          step={0.1}
+          max={1.5}
+          step={0.05}
           onChange={(v) => update('silence_duration', v)}
         />
         <Text variant="labelSmall" style={styles.hint}>
@@ -237,14 +322,66 @@ export const NodeVoiceSettings = ({ nodeId }: Props) => {
         <SliderRow
           label="Follow-up Timeout"
           value={settings.follow_up_listen_seconds}
-          displayValue={`${settings.follow_up_listen_seconds.toFixed(0)}s`}
+          displayValue={
+            settings.follow_up_listen_seconds === 0
+              ? 'Off'
+              : `${settings.follow_up_listen_seconds.toFixed(0)}s`
+          }
           min={0}
-          max={10}
+          max={15}
           step={1}
           onChange={(v) => update('follow_up_listen_seconds', v)}
         />
         <Text variant="labelSmall" style={styles.hint}>
-          Seconds to wait for follow-up speech after a response. 0 = disabled.
+          How long to wait for a follow-up reply after a response. 0 = off.
+        </Text>
+
+        <Divider style={styles.divider} />
+
+        <SliderRow
+          label="Follow-up Silence Duration"
+          value={settings.follow_up_silence_duration}
+          displayValue={`${settings.follow_up_silence_duration.toFixed(2)}s`}
+          min={0.3}
+          max={1.0}
+          step={0.05}
+          onChange={(v) => update('follow_up_silence_duration', v)}
+        />
+        <Text variant="labelSmall" style={styles.hint}>
+          Silence window that ends a follow-up capture. Longer rides through
+          natural inter-word pauses; shorter feels snappier.
+        </Text>
+
+        <Divider style={styles.divider} />
+
+        <SliderRow
+          label="Follow-up Min Record"
+          value={settings.follow_up_min_record_after_onset_secs}
+          displayValue={`${settings.follow_up_min_record_after_onset_secs.toFixed(1)}s`}
+          min={0.5}
+          max={2.0}
+          step={0.1}
+          onChange={(v) => update('follow_up_min_record_after_onset_secs', v)}
+        />
+        <Text variant="labelSmall" style={styles.hint}>
+          Minimum recording after speech starts. Prevents cutting off short
+          replies on a fricative tail ("sh", "f").
+        </Text>
+
+        <Divider style={styles.divider} />
+
+        <SliderRow
+          label="Follow-up Min Speech"
+          value={settings.follow_up_min_speech_secs}
+          displayValue={`${settings.follow_up_min_speech_secs.toFixed(2)}s`}
+          min={0.2}
+          max={1.0}
+          step={0.05}
+          onChange={(v) => update('follow_up_min_speech_secs', v)}
+        />
+        <Text variant="labelSmall" style={styles.hint}>
+          Shortest valid follow-up reply length. Lower catches "yes" / "no";
+          higher rejects brief ambient bursts.
         </Text>
 
         <Divider style={styles.divider} />
@@ -314,5 +451,17 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  calibrateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 4,
+    marginBottom: 2,
+  },
+  calibrateMessage: {
+    flexShrink: 1,
+    opacity: 0.75,
   },
 });

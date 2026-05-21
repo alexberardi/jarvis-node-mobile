@@ -16,10 +16,13 @@ import {
   Button,
   Card,
   Chip,
+  Dialog,
   Divider,
   Icon,
   List,
+  Portal,
   Snackbar,
+  Switch,
   Text,
   useTheme,
 } from 'react-native-paper';
@@ -33,7 +36,9 @@ import {
   pairBluetoothDevice,
   pollBluetoothPair,
   pollBluetoothScan,
+  releaseBluetoothDevice,
   requestBluetoothScan,
+  setBluetoothAutoConnect,
 } from '../api/bluetoothApi';
 
 interface Props {
@@ -65,6 +70,12 @@ export const BluetoothSection = ({ nodeId }: Props) => {
   const [error, setError] = useState<string | null>(null);
   const [snackbar, setSnackbar] = useState<string | null>(null);
   const [discoverableCountdown, setDiscoverableCountdown] = useState(0);
+  // Optimistic local state for the per-device auto-reconnect switch.
+  // The status endpoint doesn't return auto_connect yet, so we assume
+  // `true` (the node's default) until the user toggles it; tapping the
+  // switch fires the command and updates this map.
+  const [autoConnect, setAutoConnect] = useState<Record<string, boolean>>({});
+  const [forgetTarget, setForgetTarget] = useState<BluetoothDevice | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -184,6 +195,39 @@ export const BluetoothSection = ({ nodeId }: Props) => {
     }
   }, [nodeId, loadStatus]);
 
+  // ── Auto-reconnect toggle ──────────────────────────────────────────────
+
+  const handleAutoConnectToggle = useCallback(async (
+    device: BluetoothDevice,
+    enabled: boolean,
+  ) => {
+    // Optimistic update — flip the switch immediately so the user sees
+    // feedback even before the network round-trip lands.
+    setAutoConnect((prev) => ({ ...prev, [device.mac_address]: enabled }));
+    try {
+      await setBluetoothAutoConnect(nodeId, device.mac_address, enabled);
+    } catch {
+      // Revert and surface — better than silently leaving a wrong state.
+      setAutoConnect((prev) => ({ ...prev, [device.mac_address]: !enabled }));
+      setError('Failed to update auto-reconnect');
+    }
+  }, [nodeId]);
+
+  // ── Forget (with confirmation) ─────────────────────────────────────────
+
+  const handleConfirmForget = useCallback(async () => {
+    if (!forgetTarget) return;
+    const target = forgetTarget;
+    setForgetTarget(null);
+    try {
+      await releaseBluetoothDevice(nodeId, target.mac_address, true);
+      setSnackbar(`Forgot ${target.name}`);
+      loadStatus();
+    } catch {
+      setError('Failed to forget device');
+    }
+  }, [nodeId, forgetTarget, loadStatus]);
+
   // ── Discoverable ───────────────────────────────────────────────────────
 
   const handleMakeDiscoverable = useCallback(async () => {
@@ -209,6 +253,52 @@ export const BluetoothSection = ({ nodeId }: Props) => {
   }, [nodeId]);
 
   // ── Render ─────────────────────────────────────────────────────────────
+
+  const renderSavedDevice = (d: BluetoothDevice) => {
+    const icon = DEVICE_TYPE_ICONS[d.device_type] || 'bluetooth';
+    const isConnected = d.connected;
+    const ac = autoConnect[d.mac_address] ?? d.auto_connect ?? true;
+
+    return (
+      <Card key={d.mac_address} mode="outlined" style={styles.deviceCard}>
+        <Card.Title
+          title={d.name}
+          subtitle={d.device_type}
+          left={(props) => <Icon {...props} source={icon} size={28} />}
+          right={() =>
+            isConnected ? (
+              <Chip compact style={{ marginRight: 12 }}>Connected</Chip>
+            ) : (
+              <Chip compact mode="outlined" style={{ marginRight: 12 }}>Paired</Chip>
+            )
+          }
+        />
+        <Card.Actions style={styles.deviceActions}>
+          <View style={styles.autoRow}>
+            <Text variant="bodySmall" style={{ marginRight: 8, color: theme.colors.onSurfaceVariant }}>
+              Auto-reconnect
+            </Text>
+            <Switch value={ac} onValueChange={(v) => handleAutoConnectToggle(d, v)} />
+          </View>
+          <View style={styles.buttonRow}>
+            {isConnected && (
+              <Button compact mode="text" onPress={() => handleDisconnect(d)}>
+                Disconnect
+              </Button>
+            )}
+            <Button
+              compact
+              mode="text"
+              textColor={theme.colors.error}
+              onPress={() => setForgetTarget(d)}
+            >
+              Forget
+            </Button>
+          </View>
+        </Card.Actions>
+      </Card>
+    );
+  };
 
   const renderDeviceItem = ({ item }: { item: BluetoothDevice }) => {
     const icon = DEVICE_TYPE_ICONS[item.device_type] || 'bluetooth';
@@ -240,25 +330,15 @@ export const BluetoothSection = ({ nodeId }: Props) => {
     <Card style={styles.card}>
       <Card.Title title="Bluetooth" left={(props) => <Icon {...props} source="bluetooth" size={24} />} />
       <Card.Content>
-        {/* Current connected devices */}
-        {status && status.connected.length > 0 && (
+        {/* Saved devices — connected first, then paired-but-not-connected.
+            Each row gets the full Disconnect / Auto-reconnect / Forget controls. */}
+        {status && (status.connected.length > 0 || status.paired.length > 0) && (
           <View style={styles.section}>
             <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 4 }}>
-              Connected
+              Saved devices
             </Text>
-            {status.connected.map((d) => (
-              <List.Item
-                key={d.mac_address}
-                title={d.name}
-                description={d.device_type}
-                left={(props) => <List.Icon {...props} icon={DEVICE_TYPE_ICONS[d.device_type] || 'bluetooth'} />}
-                right={() => (
-                  <Button compact mode="text" onPress={() => handleDisconnect(d)}>
-                    Disconnect
-                  </Button>
-                )}
-              />
-            ))}
+            {status.connected.map(renderSavedDevice)}
+            {status.paired.map(renderSavedDevice)}
             <Divider style={{ marginVertical: 8 }} />
           </View>
         )}
@@ -398,6 +478,26 @@ export const BluetoothSection = ({ nodeId }: Props) => {
       <Snackbar visible={!!snackbar} onDismiss={() => setSnackbar(null)} duration={3000}>
         {snackbar || ''}
       </Snackbar>
+
+      {/* Forget confirmation — destructive, requires explicit confirm */}
+      <Portal>
+        <Dialog visible={!!forgetTarget} onDismiss={() => setForgetTarget(null)}>
+          <Dialog.Title>Forget device?</Dialog.Title>
+          <Dialog.Content>
+            <Text variant="bodyMedium">
+              This removes the pairing for {forgetTarget?.name || 'this device'}.
+              You'll need to put it back in pairing mode and pair from scratch
+              the next time you want to use it.
+            </Text>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setForgetTarget(null)}>Cancel</Button>
+            <Button onPress={handleConfirmForget} textColor={theme.colors.error}>
+              Forget
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
     </Card>
   );
 };
@@ -411,4 +511,8 @@ const styles = StyleSheet.create({
   scanning: { alignItems: 'center', paddingVertical: 24 },
   discoverableCard: { alignItems: 'center', padding: 24, borderRadius: 12 },
   errorRow: { flexDirection: 'row', alignItems: 'center', marginTop: 12, paddingHorizontal: 4 },
+  deviceCard: { marginBottom: 8 },
+  deviceActions: { justifyContent: 'space-between', flexWrap: 'wrap' },
+  autoRow: { flexDirection: 'row', alignItems: 'center' },
+  buttonRow: { flexDirection: 'row' },
 });
