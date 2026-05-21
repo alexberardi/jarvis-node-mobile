@@ -42,6 +42,7 @@ const PATTERNS: { key: string; label: string }[] = [
   { key: 'thinking', label: 'Thinking' },
   { key: 'speaking', label: 'Speaking' },
   { key: 'error', label: 'Error' },
+  { key: 'not_for_me', label: 'Not for me' },
   { key: 'alert', label: 'Alert' },
   { key: 'muted', label: 'Muted' },
   { key: 'shutdown_warning', label: 'Shutdown' },
