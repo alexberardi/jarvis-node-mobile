@@ -92,3 +92,47 @@ export const previewLedPattern = async (
     { pattern, duration_seconds: durationSeconds },
   );
 };
+
+export interface AmbientNoiseResult {
+  success: boolean;
+  duration_seconds?: number;
+  chunks?: number;
+  p50_rms?: number;
+  p75_rms?: number;
+  p95_rms?: number;
+  max_rms?: number;
+  suggested_silence_threshold?: number;
+  error?: string;
+}
+
+export interface AmbientNoisePollResponse {
+  request_id: string;
+  status: 'pending' | 'completed';
+  completed_at?: string | null;
+  result?: AmbientNoiseResult | null;
+}
+
+/**
+ * Ask the node to measure the current ambient noise floor.
+ * Returns a request_id that the caller polls via {@link pollAmbientNoiseResult}.
+ */
+export const triggerAmbientNoiseMeasurement = async (
+  nodeId: string,
+  durationSeconds: number = 3.0,
+): Promise<{ request_id: string }> => {
+  const res = await apiClient.post<{ request_id: string; status: string }>(
+    `${getCommandCenterUrl()}/api/v0/nodes/${nodeId}/ambient-noise-measurements`,
+    { duration_seconds: durationSeconds },
+  );
+  return { request_id: res.data.request_id };
+};
+
+export const pollAmbientNoiseResult = async (
+  nodeId: string,
+  requestId: string,
+): Promise<AmbientNoisePollResponse> => {
+  const res = await apiClient.get<AmbientNoisePollResponse>(
+    `${getCommandCenterUrl()}/api/v0/nodes/${nodeId}/ambient-noise-measurements/${requestId}`,
+  );
+  return res.data;
+};

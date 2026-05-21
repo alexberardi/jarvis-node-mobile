@@ -16,6 +16,13 @@ export interface BluetoothDevice {
   device_type: string;
   paired: boolean;
   connected: boolean;
+  /**
+   * Whether the node should auto-reconnect to this device on boot and
+   * during the periodic reconnect loop. Currently best-effort —
+   * the status endpoint doesn't include this yet, so the UI assumes
+   * `true` (the node's default) until the user toggles it.
+   */
+  auto_connect?: boolean;
 }
 
 export interface BluetoothScanResponse {
@@ -126,6 +133,47 @@ export const disconnectBluetoothDevice = async (
   const baseUrl = getCommandCenterUrl();
   await apiClient.post(`${baseUrl}/api/v0/nodes/${nodeId}/bluetooth/disconnect`, {
     mac_address: macAddress,
+  });
+};
+
+/**
+ * Release a Bluetooth device.
+ *
+ * forget=false (default): disconnect + disable auto-reconnect, but keep
+ * the pair so the user can reconnect with one tap. Use this to free the
+ * device for the user's phone temporarily.
+ *
+ * forget=true: full unpair (removes bluez bond + saved record). User
+ * must put the device back in pairing mode and re-pair from scratch.
+ */
+export const releaseBluetoothDevice = async (
+  nodeId: string,
+  macAddress: string,
+  forget: boolean = false,
+): Promise<void> => {
+  const baseUrl = getCommandCenterUrl();
+  await apiClient.post(`${baseUrl}/api/v0/nodes/${nodeId}/bluetooth/release`, {
+    mac_address: macAddress,
+    forget,
+  });
+};
+
+/**
+ * Toggle whether the node auto-reconnects to this device on boot.
+ *
+ * Pairing stays intact either way — this only controls the periodic
+ * reconnect loop. Useful for devices the user shares between the Pi
+ * and another host (phone, etc.).
+ */
+export const setBluetoothAutoConnect = async (
+  nodeId: string,
+  macAddress: string,
+  enabled: boolean,
+): Promise<void> => {
+  const baseUrl = getCommandCenterUrl();
+  await apiClient.post(`${baseUrl}/api/v0/nodes/${nodeId}/bluetooth/auto-connect`, {
+    mac_address: macAddress,
+    enabled,
   });
 };
 

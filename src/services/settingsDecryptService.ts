@@ -76,6 +76,9 @@ export interface NodeConfigSnapshot {
   max_record_seconds?: number;
   barge_in_enabled?: boolean;
   follow_up_listen_seconds?: number;
+  follow_up_silence_duration?: number;
+  follow_up_min_record_after_onset_secs?: number;
+  follow_up_min_speech_secs?: number;
   volume_percent?: number;
   led_enabled?: boolean;
   led_brightness_percent?: number;
