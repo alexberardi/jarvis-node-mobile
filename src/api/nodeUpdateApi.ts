@@ -74,5 +74,17 @@ export const listNodeTasks = async (
   return res.data;
 };
 
+export const cancelNodeTask = async (
+  nodeId: string,
+  taskId: string,
+): Promise<NodeTask> => {
+  const res = await apiClient.post<NodeTask>(
+    `${base()}/api/v0/nodes/${nodeId}/tasks/${taskId}/cancel`,
+    {},
+    { timeout: 10000 },
+  );
+  return res.data;
+};
+
 export const isTerminalState = (state: NodeTaskState): boolean =>
   state === 'success' || state === 'failed';

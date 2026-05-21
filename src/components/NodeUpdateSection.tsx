@@ -43,7 +43,8 @@ const stateLabel = (state: string): string => {
 export const NodeUpdateSection: React.FC<Props> = ({ node }) => {
   const theme = useTheme();
   const [latest, setLatest] = useState<LatestRelease | null>(null);
-  const { task, error, loading, rehydrating, trigger } = useNodeUpdate(node.node_id);
+  const { task, error, loading, cancelling, rehydrating, trigger, cancel } =
+    useNodeUpdate(node.node_id);
 
   useEffect(() => {
     let cancelled = false;
@@ -116,6 +117,19 @@ export const NodeUpdateSection: React.FC<Props> = ({ node }) => {
             {stateLabel(task.state)}
             {task.target_version ? ` → ${task.target_version}` : ''}
           </Text>
+          <Button
+            mode="text"
+            compact
+            onPress={() => {
+              cancel().catch(() => {
+                /* error surfaced via the `error` state below */
+              });
+            }}
+            loading={cancelling}
+            disabled={cancelling}
+          >
+            Cancel
+          </Button>
         </View>
       )}
 
