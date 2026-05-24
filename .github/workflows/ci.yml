@@ -106,3 +106,42 @@ jobs:
           EXPO_ASC_API_KEY_PATH: ${{ github.workspace }}/apple-api-key.p8
           EXPO_ASC_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           EXPO_ASC_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+
+  build-and-submit-android:
+    name: Build Android & Submit to Play Store
+    needs: [lint-and-typecheck, test]
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Write Google Play service account key
+        run: echo "$GOOGLE_SERVICE_ACCOUNT_JSON" > ${{ github.workspace }}/google-service-account.json
+        env:
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+
+      - name: Build Android locally
+        run: eas build --platform android --profile production --local --non-interactive --output ${{ github.workspace }}/build.aab
+
+      - name: Submit to Play Store
+        run: eas submit --platform android --profile production --path ${{ github.workspace }}/build.aab --non-interactive
