@@ -338,7 +338,12 @@ const HomeScreen = () => {
               <Button
                 mode="contained"
                 icon="plus"
-                onPress={() => navigation.getParent()?.navigate('NodesTab', { screen: 'AddNode' })}
+                onPress={() =>
+                  navigation.navigate('Main', {
+                    screen: 'NodesTab',
+                    params: { screen: 'AddNode' },
+                  })
+                }
               >
                 Add Your First Node
               </Button>

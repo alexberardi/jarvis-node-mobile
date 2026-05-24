@@ -431,6 +431,16 @@ const VoiceProfileScreen = () => {
     </Card>
   );
 
+  const cancelNodeFlow = useCallback(() => {
+    clearTimers();
+    setNodeRequestId(null);
+    setActiveNode(null);
+    setError(null);
+    // Return to whichever resting state matched where the flow started:
+    // verification was launched from "enrolled"; enrollment from "idle".
+    setPhase(targetPurposeRef.current === 'test' ? 'enrolled' : 'idle');
+  }, []);
+
   const renderAwaitingNode = () => {
     const isVerify = targetPurposeRef.current === 'test';
     const prompt = isVerify ? VERIFY_NODE_PROMPT : ENROLLMENT_PROMPT;
@@ -449,6 +459,14 @@ const VoiceProfileScreen = () => {
         <Text variant="bodySmall" style={[styles.body, { marginTop: 12 }]}>
           Request ID: {nodeRequestId?.substring(0, 8) || '...'}
         </Text>
+        <Button
+          mode="outlined"
+          onPress={cancelNodeFlow}
+          style={styles.button}
+          icon="stop"
+        >
+          Cancel
+        </Button>
       </Card.Content>
     </Card>
     );
