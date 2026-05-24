@@ -38,6 +38,10 @@
       "ios": {
         "resourceClass": "m-medium"
       },
+      "android": {
+        "buildType": "app-bundle",
+        "resourceClass": "medium"
+      },
       "autoIncrement": true
     }
   },
@@ -45,6 +49,10 @@
     "production": {
       "ios": {
         "ascAppId": "6760924901"
+      },
+      "android": {
+        "serviceAccountKeyPath": "./google-service-account.json",
+        "track": "internal"
       }
     }
   }
