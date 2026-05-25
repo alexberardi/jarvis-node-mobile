@@ -1,6 +1,6 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import React, { useState } from 'react';
-import { StyleSheet, View, Linking } from 'react-native';
+import { StyleSheet, View, Linking, Platform } from 'react-native';
 import { Appbar, Button, Card, HelperText, Text, TextInput, Divider } from 'react-native-paper';
 
 import { useAuth } from '../../auth/AuthContext';
@@ -73,8 +73,27 @@ const ScanForNodesScreen = ({ navigation }: Props) => {
     }
   };
 
-  const openWiFiSettings = () => {
-    Linking.openURL('App-Prefs:root=WIFI');
+  const openWiFiSettings = async () => {
+    // Android: there's a public intent that lands directly on the WiFi pane.
+    if (Platform.OS === 'android') {
+      try {
+        await Linking.sendIntent('android.settings.WIFI_SETTINGS');
+        return;
+      } catch {
+        // fall through to the generic openSettings fallback below
+      }
+    }
+    // iOS: `App-Prefs:root=WIFI` was a private URL scheme Apple progressively
+    // blocked; on modern iOS it falls back to the app's own settings page
+    // (Settings → Apps → Jarvis), which is the bug we're fixing. There is no
+    // public API for jumping directly to the WiFi pane, so the best we can do
+    // is open Settings root and let the user tap WiFi themselves — the
+    // adjacent instruction text covers this.
+    try {
+      await Linking.openURL('App-Prefs:');
+    } catch {
+      await Linking.openSettings();
+    }
   };
 
   return (
