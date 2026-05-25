@@ -2,6 +2,7 @@ import Slider from '@react-native-community/slider';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import {
+  ActivityIndicator,
   Button,
   Card,
   Divider,
@@ -198,6 +199,37 @@ export const NodeVoiceSettings = ({ nodeId }: Props) => {
         <Card.Content>
           <Text variant="bodyMedium" style={{ opacity: 0.7 }}>
             This node was set up on another device. Open the app on that device to view or change its voice settings.
+          </Text>
+        </Card.Content>
+      </Card>
+    );
+  }
+
+  // Until the snapshot lands, show a placeholder card with a spinner
+  // instead of falling back to the in-memory ``DEFAULTS``. The earlier
+  // behavior briefly rendered every slider at its default position
+  // before the real node config arrived (~500-1500 ms later), creating
+  // a flicker that misrepresented the live state.
+  if (snapshotState !== 'loaded' || !seededRef.current) {
+    return (
+      <Card style={styles.card}>
+        <Card.Title
+          title="Voice Settings"
+          titleVariant="titleMedium"
+          left={(props) => (
+            <View {...props} style={[styles.iconCircle, { backgroundColor: theme.colors.primaryContainer }]}>
+              <Text style={{ fontSize: 18 }}>
+                {'\u{1F399}'}
+              </Text>
+            </View>
+          )}
+        />
+        <Card.Content style={styles.loadingBody}>
+          <ActivityIndicator animating size="small" />
+          <Text variant="bodySmall" style={{ marginLeft: 12, opacity: 0.7 }}>
+            {snapshotState === 'error'
+              ? 'Could not reach the node — try again in a moment.'
+              : 'Loading current settings from the node…'}
           </Text>
         </Card.Content>
       </Card>
@@ -451,6 +483,11 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  loadingBody: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
   },
   calibrateRow: {
     flexDirection: 'row',
