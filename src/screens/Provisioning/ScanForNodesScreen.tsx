@@ -153,7 +153,7 @@ const ScanForNodesScreen = ({ navigation }: Props) => {
                   style={styles.wifiButton}
                   icon="wifi"
                 >
-                  Open WiFi Settings
+                  Open Settings
                 </Button>
 
                 <Button
