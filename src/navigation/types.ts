@@ -27,6 +27,13 @@ export type NodesStackParamList = {
     accessToken: string;
     providerBaseUrl?: string;    // Skip discovery if known
   };
+  FastPathInspect: {
+    nodeId: string;
+    groupName: string;
+    // JSON-serialized [{ command_name, fast_paths: FastPathEntry[] }] —
+    // navigation params must be serializable.
+    commandsJson: string;
+  };
 };
 
 export type DevicesStackParamList = {

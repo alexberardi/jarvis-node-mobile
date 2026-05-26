@@ -158,5 +158,63 @@ describe('settingsDecryptService', () => {
         decryptSettingsSnapshot(mockNodeId, 'ct', 'iv', 'tag'),
       ).rejects.toThrow();
     });
+
+    it('should parse agents field with full metadata', async () => {
+      const snapshot = {
+        schema_version: 1,
+        commands_schema_version: 2,
+        commands: [],
+        agents: [
+          {
+            agent_name: 'ha_snapshot',
+            description: 'Home Assistant state poller',
+            enabled: true,
+            schedule: { interval_seconds: 60, run_on_startup: true },
+            associated_service: 'Home Assistant',
+          },
+          {
+            agent_name: 'calendar_alerts',
+            description: 'Calendar reminders',
+            enabled: false,
+            schedule: { interval_seconds: 300, run_on_startup: true },
+          },
+        ],
+      };
+      const base64urlPayload = toBase64url(JSON.stringify(snapshot));
+
+      (getK2 as jest.Mock).mockResolvedValue(mockK2);
+      (aesGcmDecrypt as jest.Mock).mockResolvedValue(base64urlPayload);
+
+      const result = await decryptSettingsSnapshot(mockNodeId, 'ct', 'iv', 'tag');
+
+      expect(result.agents).toHaveLength(2);
+      expect(result.agents![0]).toEqual({
+        agent_name: 'ha_snapshot',
+        description: 'Home Assistant state poller',
+        enabled: true,
+        schedule: { interval_seconds: 60, run_on_startup: true },
+        associated_service: 'Home Assistant',
+      });
+      expect(result.agents![1].associated_service).toBeUndefined();
+      expect(result.agents![1].enabled).toBe(false);
+    });
+
+    it('should handle snapshots from older nodes without agents field', async () => {
+      // Backward-compat: pre-agent_registry nodes don't include this key.
+      const snapshot = {
+        schema_version: 1,
+        commands_schema_version: 2,
+        commands: [{ command_name: 'jokes', description: 'Tell a joke', secrets: [] }],
+      };
+      const base64urlPayload = toBase64url(JSON.stringify(snapshot));
+
+      (getK2 as jest.Mock).mockResolvedValue(mockK2);
+      (aesGcmDecrypt as jest.Mock).mockResolvedValue(base64urlPayload);
+
+      const result = await decryptSettingsSnapshot(mockNodeId, 'ct', 'iv', 'tag');
+
+      expect(result.agents).toBeUndefined();
+      expect(result.commands).toHaveLength(1);
+    });
   });
 });
