@@ -101,6 +101,7 @@ export interface NodeConfigSnapshot {
   min_record_seconds?: number;
   max_record_seconds?: number;
   barge_in_enabled?: boolean;
+  wake_ack_audio_enabled?: boolean;
   follow_up_listen_seconds?: number;
   follow_up_silence_duration?: number;
   follow_up_min_record_after_onset_secs?: number;
