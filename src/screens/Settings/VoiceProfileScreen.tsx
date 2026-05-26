@@ -1,13 +1,16 @@
 /**
  * Voice Profile enrollment, testing, and management screen.
  *
+ * Node-mic only — phone-mic enrollment was dropped because its acoustic
+ * profile diverges enough from the stationary node's mic that profiles
+ * built on phone audio score poorly at runtime. Every flow on this
+ * screen orchestrates the target node's mic via MQTT.
+ *
  * Flow:
- * 1. Check if profile exists → show appropriate state
- * 2. Record: user reads a prompt sentence (~5–10s)
- * 3. Enroll: upload WAV to CC → whisper
- * 4. Test: record new phrase → verify match → show confidence
- * 5. Update: same as enroll (overwrites)
- * 6. Delete: confirmation → remove
+ * 1. Check if profile exists → idle / enrolled
+ * 2. Pick a node → orchestrate 3 takes (varied prompts) on that node
+ * 3. After all takes: test verification on the same node
+ * 4. Enrolled view: add one more sample, re-record all, or delete
  */
 
 import { useNavigation } from '@react-navigation/native';
@@ -25,16 +28,13 @@ import {
 } from 'react-native-paper';
 
 import { useAuth } from '../../auth/AuthContext';
-import { useVoiceRecording } from '../../hooks/useVoiceRecording';
 import { useThemePreference } from '../../theme/ThemeProvider';
 import {
   deleteVoiceProfile,
-  enrollVoiceProfile,
   getNodeEnrollmentResult,
   getVoiceProfileStatus,
   startNodeEnrollment,
   startNodeVerification,
-  verifyVoiceProfile,
 } from '../../api/voiceProfileApi';
 import { listNodes, type NodeInfo } from '../../api/nodeApi';
 
@@ -44,30 +44,53 @@ type Phase =
   | 'loading'
   | 'idle'             // no profile enrolled
   | 'enrolled'         // profile exists
-  | 'select_target'    // pick phone vs a specific node for enrollment
-  | 'recording'        // recording enrollment sample (phone)
-  | 'uploading'        // enrolling with backend
+  | 'select_target'    // pick which node to enroll/test on
   | 'awaiting_node'    // node is recording + uploading; polling for result
-  | 'test_prompt'      // prompt user to test
-  | 'test_recording'   // recording test sample
-  | 'verifying'        // verifying match
+  | 'test_prompt'      // prompt user to verify after enrollment
   | 'test_result'      // showing match result
   | 'deleting';
 
-// Deliberately avoid "Hey Jarvis" / wake-word phrasing — when this is
-// read aloud near a node mic during enrollment, any wake-word substring
-// would trigger the wake detector and conflict with the enrollment
-// recording.
-const ENROLLMENT_PROMPT =
-  "Please set a timer for five minutes, then remind me to check the oven. Also, what's the weather like tomorrow morning?";
+// Multi-take wizard state. When non-null, we're mid-wizard — each take is
+// a full round-trip (mobile → CC → MQTT → node TTS + record + upload →
+// mobile poll). After all `totalTakes` complete, we drop into test_prompt.
+// `useExplicitIndices` is unused for node-mic (the whisper backend
+// auto-allocates next index for each enrollment), kept structurally for
+// symmetry with the prior phone-mic flow.
+type MultiTakeContext = {
+  totalTakes: number;
+  currentTake: number; // 0-indexed
+  node: NodeInfo;
+};
 
-const TEST_PROMPT =
-  'Now say something different — any question or command. We\'ll check if it matches your voice.';
+const TARGET_TAKES = 3;
+
+// Deliberately avoid "Hey Jarvis" / wake-word phrasing — when read aloud
+// near a node mic during enrollment, any wake-word substring would
+// trigger the wake detector and conflict with the enrollment recording.
+//
+// The 3-take wizard uses prompts with deliberately varied prosody —
+// command/question/statement. ECAPA is text-independent but reading the
+// same sentence 3 times produces a tight centroid around one prosodic
+// pattern; varied prompts force varied intonation, widening the centroid
+// so everyday speech (which spans all these patterns) matches reliably.
+const ENROLLMENT_PROMPTS: string[] = [
+  // 1. Commands — flat-then-emphatic prosody
+  "Please set a timer for five minutes, then remind me to check the oven. Also, what's the weather like tomorrow morning?",
+  // 2. Questions — rising intonation at the end of each clause
+  "Can you tell me what's on my calendar today? Are there any reminders for this afternoon? And how long until sunset?",
+  // 3. Casual statements — declarative, calmer pace
+  "I'm thinking about ordering something light for dinner tonight, maybe a salad or a sandwich. Tomorrow I'd like to start the day a bit earlier.",
+];
 
 const VERIFY_NODE_PROMPT =
   "What's the weather like this weekend? Also, can you set a reminder for tomorrow at noon?";
 
-const MAX_RECORD_MS = 10_000;
+// Per-take poll deadline. Each cycle is ~10s (TTS cue + 8s record + upload),
+// so 60s gives generous slack for network/disk variance.
+const POLL_DEADLINE_MS = 60_000;
+const POLL_INTERVAL_MS = 1_000;
+const NODE_ENROLLMENT_DURATION_S = 8.0;
+const NODE_VERIFICATION_DURATION_S = 5.0;
 
 // --- Component ---
 
@@ -75,15 +98,24 @@ const VoiceProfileScreen = () => {
   const navigation = useNavigation();
   const { state: authState } = useAuth();
   const { paperTheme } = useThemePreference();
-  const { isRecording, startRecording, stopRecording } = useVoiceRecording();
 
   const householdId = authState.activeHouseholdId;
 
   const [phase, setPhase] = useState<Phase>('loading');
   const [error, setError] = useState<string | null>(null);
-  const [elapsed, setElapsed] = useState(0);
   const [confidence, setConfidence] = useState(0);
   const [matched, setMatched] = useState(false);
+  const [sampleCount, setSampleCount] = useState(0);
+
+  // Multi-take wizard state. Null when not in a wizard.
+  // Mirrored in a ref so async polling closures can read the latest value
+  // without being trapped in a stale snapshot from before setMultiTake
+  // re-rendered.
+  const [multiTake, setMultiTake] = useState<MultiTakeContext | null>(null);
+  const multiTakeRef = useRef<MultiTakeContext | null>(null);
+  useEffect(() => {
+    multiTakeRef.current = multiTake;
+  }, [multiTake]);
 
   // Node-mediated enrollment state
   const [nodes, setNodes] = useState<NodeInfo[]>([]);
@@ -91,12 +123,14 @@ const VoiceProfileScreen = () => {
   const [activeNode, setActiveNode] = useState<NodeInfo | null>(null);
   const [nodeRequestId, setNodeRequestId] = useState<string | null>(null);
 
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const autoStopRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollDeadlineRef = useRef<number>(0);
-  // Tracks whether the target picker is for enrollment or testing
-  const targetPurposeRef = useRef<'enroll' | 'test'>('enroll');
+  // What the node picker should do when a node is tapped:
+  //   'enroll'  → fresh 3-take wizard (clears existing profile)
+  //   'add_one' → single-take wizard appended to existing profile
+  //   'test'    → run node verification against existing profile
+  type TargetPurpose = 'enroll' | 'add_one' | 'test';
+  const targetPurposeRef = useRef<TargetPurpose>('enroll');
 
   // --- Lifecycle ---
 
@@ -111,11 +145,7 @@ const VoiceProfileScreen = () => {
   }, [householdId]);
 
   const clearTimers = () => {
-    if (timerRef.current) clearInterval(timerRef.current);
-    if (autoStopRef.current) clearTimeout(autoStopRef.current);
     if (pollRef.current) clearInterval(pollRef.current);
-    timerRef.current = null;
-    autoStopRef.current = null;
     pollRef.current = null;
   };
 
@@ -127,6 +157,7 @@ const VoiceProfileScreen = () => {
     setError(null);
     try {
       const status = await getVoiceProfileStatus(householdId);
+      setSampleCount(status.sample_count);
       setPhase(status.has_profile ? 'enrolled' : 'idle');
     } catch (e) {
       console.error('[VoiceProfile] status check failed:', e);
@@ -137,7 +168,7 @@ const VoiceProfileScreen = () => {
 
   // --- Node target selection ---
 
-  const openTargetPicker = useCallback(async (purpose: 'enroll' | 'test' = 'enroll') => {
+  const openTargetPicker = useCallback(async (purpose: TargetPurpose = 'enroll') => {
     setError(null);
     targetPurposeRef.current = purpose;
     setPhase('select_target');
@@ -149,58 +180,134 @@ const VoiceProfileScreen = () => {
       setNodes(all.filter((n) => n.online));
     } catch (e) {
       console.error('[VoiceProfile] listNodes failed:', e);
-      setError('Could not load nodes — you can still enroll on your phone.');
+      setError('Could not load nodes.');
       setNodes([]);
     } finally {
       setLoadingNodes(false);
     }
   }, [householdId]);
 
-  const startNodeFlow = useCallback(async (node: NodeInfo) => {
+  // --- Multi-take node-mic enrollment ---
+
+  /**
+   * Trigger one node enrollment cycle for the current take in the
+   * wizard. Reads context from the ref so it can be safely re-invoked
+   * after `currentTake` increments without dependency-array churn.
+   */
+  const triggerCurrentNodeTake = useCallback(async () => {
+    const ctx = multiTakeRef.current;
+    if (!ctx || !householdId) return;
     setError(null);
-    setActiveNode(node);
     setPhase('awaiting_node');
+    const prompt =
+      ENROLLMENT_PROMPTS[ctx.currentTake % ENROLLMENT_PROMPTS.length];
     try {
       const { request_id } = await startNodeEnrollment(
-        node.node_id,
-        ENROLLMENT_PROMPT,
-        8.0,
+        ctx.node.node_id,
+        prompt,
+        NODE_ENROLLMENT_DURATION_S,
       );
       setNodeRequestId(request_id);
 
-      // Poll every 1s, up to 60s total. Node-side flow runs ~10s
-      // (TTS cue + 8s record + upload), so 60s gives generous slack.
-      pollDeadlineRef.current = Date.now() + 60_000;
+      pollDeadlineRef.current = Date.now() + POLL_DEADLINE_MS;
       pollRef.current = setInterval(async () => {
         if (Date.now() > pollDeadlineRef.current) {
           clearTimers();
-          setError('Node didn\'t report back in time. Try again.');
-          setPhase('idle');
+          setError("Node didn't report back in time. Try again.");
+          // Drop out of the wizard to whichever resting state matches.
+          multiTakeRef.current = null;
+          setMultiTake(null);
+          setPhase(sampleCount > 0 ? 'enrolled' : 'idle');
           return;
         }
         try {
           const result = await getNodeEnrollmentResult(request_id);
           if (result === null) return; // still pending
           clearTimers();
-          if (result.success) {
+          if (!result.success) {
+            setError(`Enrollment failed: ${result.error || 'unknown error'}`);
+            multiTakeRef.current = null;
+            setMultiTake(null);
+            setPhase(sampleCount > 0 ? 'enrolled' : 'idle');
+            return;
+          }
+
+          // Successful take. Pull fresh count so the UI reflects what
+          // whisper actually stored (auto-allocated indices can differ
+          // from currentTake when the user added samples piecemeal).
+          try {
+            const status = await getVoiceProfileStatus(householdId);
+            setSampleCount(status.sample_count);
+          } catch (statusErr) {
+            console.warn('[VoiceProfile] post-take status refresh failed:', statusErr);
+          }
+
+          const live = multiTakeRef.current;
+          if (!live) return; // user cancelled mid-poll
+          const nextTake = live.currentTake + 1;
+          if (nextTake >= live.totalTakes) {
+            // Wizard complete — drop into the test step.
+            multiTakeRef.current = null;
+            setMultiTake(null);
             setPhase('test_prompt');
           } else {
-            setError(`Enrollment failed: ${result.error || 'unknown error'}`);
-            setPhase('idle');
+            const advanced = { ...live, currentTake: nextTake };
+            multiTakeRef.current = advanced;
+            setMultiTake(advanced);
+            // Kick off the next take immediately.
+            await triggerCurrentNodeTake();
           }
         } catch (e) {
           console.error('[VoiceProfile] poll failed:', e);
           // transient errors — keep polling until deadline
         }
-      }, 1000);
+      }, POLL_INTERVAL_MS);
     } catch (e) {
       console.error('[VoiceProfile] startNodeEnrollment failed:', e);
       setError('Could not start enrollment on that node.');
-      setPhase('idle');
+      multiTakeRef.current = null;
+      setMultiTake(null);
+      setPhase(sampleCount > 0 ? 'enrolled' : 'idle');
     }
-  }, []);
+  }, [householdId, sampleCount]);
+
+  /**
+   * Begin a multi-take wizard on the given node.
+   * - clearExisting=true → wipes any prior profile so the new takes form
+   *   a fresh centroid (used for "Re-Record All").
+   * - totalTakes=1 with clearExisting=false → "Add One More Sample".
+   */
+  const startMultiTakeNodeWizard = useCallback(
+    async (node: NodeInfo, totalTakes: number, clearExisting: boolean) => {
+      if (!householdId) return;
+      setError(null);
+      setActiveNode(node);
+      if (clearExisting) {
+        setPhase('deleting');
+        try {
+          await deleteVoiceProfile(householdId);
+          setSampleCount(0);
+        } catch (e) {
+          console.error('[VoiceProfile] clear-before-wizard failed:', e);
+          setError('Could not clear existing profile. Try again.');
+          setPhase('idle');
+          return;
+        }
+      }
+      const ctx: MultiTakeContext = {
+        totalTakes,
+        currentTake: 0,
+        node,
+      };
+      multiTakeRef.current = ctx;
+      setMultiTake(ctx);
+      await triggerCurrentNodeTake();
+    },
+    [householdId, triggerCurrentNodeTake],
+  );
 
   const startNodeVerifyFlow = useCallback(async (node: NodeInfo) => {
+    if (!householdId) return;
     setError(null);
     setActiveNode(node);
     setPhase('awaiting_node');
@@ -208,15 +315,15 @@ const VoiceProfileScreen = () => {
       const { request_id } = await startNodeVerification(
         node.node_id,
         VERIFY_NODE_PROMPT,
-        5.0,
+        NODE_VERIFICATION_DURATION_S,
       );
       setNodeRequestId(request_id);
 
-      pollDeadlineRef.current = Date.now() + 60_000;
+      pollDeadlineRef.current = Date.now() + POLL_DEADLINE_MS;
       pollRef.current = setInterval(async () => {
         if (Date.now() > pollDeadlineRef.current) {
           clearTimers();
-          setError('Node didn\'t report back in time. Try again.');
+          setError("Node didn't report back in time. Try again.");
           setPhase('enrolled');
           return;
         }
@@ -235,81 +342,30 @@ const VoiceProfileScreen = () => {
         } catch (e) {
           console.error('[VoiceProfile] verify poll failed:', e);
         }
-      }, 1000);
+      }, POLL_INTERVAL_MS);
     } catch (e) {
       console.error('[VoiceProfile] startNodeVerification failed:', e);
       setError('Could not start verification on that node.');
       setPhase('enrolled');
     }
-  }, []);
+  }, [householdId]);
 
-  // --- Recording logic ---
-
-  const startRecordingFlow = useCallback(
-    async (purpose: 'enroll' | 'test') => {
-      setError(null);
-      setElapsed(0);
-
-      await startRecording();
-      setPhase(purpose === 'enroll' ? 'recording' : 'test_recording');
-
-      // Elapsed counter
-      const start = Date.now();
-      timerRef.current = setInterval(() => {
-        setElapsed(Math.floor((Date.now() - start) / 1000));
-      }, 500);
-
-      // Auto-stop after MAX_RECORD_MS
-      autoStopRef.current = setTimeout(async () => {
-        await finishRecording(purpose);
-      }, MAX_RECORD_MS);
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [startRecording],
-  );
-
-  const finishRecording = useCallback(
-    async (purpose: 'enroll' | 'test') => {
-      clearTimers();
-      const uri = await stopRecording();
-      if (!uri || !householdId) {
-        setError('Recording failed — no audio captured.');
-        setPhase(phase === 'test_recording' ? 'enrolled' : 'idle');
-        return;
-      }
-
-      if (purpose === 'enroll') {
-        setPhase('uploading');
-        try {
-          await enrollVoiceProfile(uri, householdId);
-          setPhase('test_prompt');
-        } catch (e) {
-          console.error('[VoiceProfile] enroll failed:', e);
-          setError('Enrollment failed. Please try again.');
-          setPhase('idle');
-        }
-      } else {
-        setPhase('verifying');
-        try {
-          const result = await verifyVoiceProfile(uri, householdId);
-          setMatched(result.matched);
-          setConfidence(Math.round(result.confidence * 100));
-          setPhase('test_result');
-        } catch (e) {
-          console.error('[VoiceProfile] verify failed:', e);
-          setError('Verification failed. Please try again.');
-          setPhase('enrolled');
-        }
-      }
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [householdId, stopRecording, phase],
-  );
-
-  const handleStopRecording = useCallback(() => {
-    const purpose = phase === 'recording' ? 'enroll' : 'test';
-    finishRecording(purpose);
-  }, [phase, finishRecording]);
+  const cancelNodeFlow = useCallback(() => {
+    clearTimers();
+    multiTakeRef.current = null;
+    setMultiTake(null);
+    setNodeRequestId(null);
+    setActiveNode(null);
+    setError(null);
+    // Verification was launched from "enrolled"; enrollment from "idle".
+    setPhase(
+      targetPurposeRef.current === 'test'
+        ? 'enrolled'
+        : sampleCount > 0
+          ? 'enrolled'
+          : 'idle',
+    );
+  }, [sampleCount]);
 
   const handleDelete = useCallback(() => {
     Alert.alert(
@@ -325,6 +381,7 @@ const VoiceProfileScreen = () => {
             setPhase('deleting');
             try {
               await deleteVoiceProfile(householdId);
+              setSampleCount(0);
               setPhase('idle');
             } catch (e) {
               console.error('[VoiceProfile] delete failed:', e);
@@ -356,8 +413,10 @@ const VoiceProfileScreen = () => {
           Set Up Voice Recognition
         </Text>
         <Text variant="bodyMedium" style={styles.body}>
-          Record a short voice sample so Jarvis can recognize you. This enables
-          personalized responses and per-user memories.
+          We'll record {TARGET_TAKES} short voice samples on the node you
+          pick — a command, a question, and a casual statement. The varied
+          prompts help Jarvis recognize you across the natural pitch and
+          tone shifts in your everyday speech.
         </Text>
         <Button
           mode="contained"
@@ -365,172 +424,140 @@ const VoiceProfileScreen = () => {
           onPress={() => openTargetPicker()}
           style={styles.button}
         >
-          Start Recording
+          Start Enrollment
         </Button>
       </Card.Content>
     </Card>
   );
 
-  const renderSelectTarget = () => (
-    <Card style={styles.card}>
-      <Card.Content>
-        <Icon source="microphone-settings" size={48} color={paperTheme.colors.primary} />
-        <Text variant="titleMedium" style={styles.title}>
-          Where do you want to enroll?
-        </Text>
-        <Text variant="bodyMedium" style={styles.body}>
-          Voice recognition works best when the same mic is used at
-          enrollment and at runtime. If you mostly speak to a stationary
-          node, enroll on that node — its mic will produce a better
-          match than the phone's.
-        </Text>
-
-        <Button
-          mode="contained"
-          icon="cellphone"
-          onPress={() => startRecordingFlow('enroll')}
-          style={styles.button}
-        >
-          This Phone
-        </Button>
-
-        <Text variant="labelSmall" style={[styles.body, { marginTop: 16 }]}>
-          Or pick a node:
-        </Text>
-
-        {loadingNodes ? (
-          <ActivityIndicator style={styles.button} />
-        ) : nodes.length === 0 ? (
-          <Text variant="bodySmall" style={[styles.body, { opacity: 0.6 }]}>
-            No online nodes available.
-          </Text>
-        ) : (
-          <View>
-            {nodes.map((node) => (
-              <List.Item
-                key={node.node_id}
-                title={node.room || 'Unnamed node'}
-                description={node.user || node.node_id.substring(0, 8)}
-                left={(props) => <List.Icon {...props} icon="speaker" />}
-                onPress={() => targetPurposeRef.current === 'test' ? startNodeVerifyFlow(node) : startNodeFlow(node)}
-                style={styles.nodeRow}
-              />
-            ))}
-          </View>
-        )}
-
-        <Divider style={{ marginVertical: 12 }} />
-
-        <Button
-          mode="text"
-          onPress={() => setPhase(phase === 'select_target' ? 'idle' : 'enrolled')}
-        >
-          Cancel
-        </Button>
-      </Card.Content>
-    </Card>
-  );
-
-  const cancelNodeFlow = useCallback(() => {
-    clearTimers();
-    setNodeRequestId(null);
-    setActiveNode(null);
-    setError(null);
-    // Return to whichever resting state matched where the flow started:
-    // verification was launched from "enrolled"; enrollment from "idle".
-    setPhase(targetPurposeRef.current === 'test' ? 'enrolled' : 'idle');
-  }, []);
-
-  const renderAwaitingNode = () => {
-    const isVerify = targetPurposeRef.current === 'test';
-    const prompt = isVerify ? VERIFY_NODE_PROMPT : ENROLLMENT_PROMPT;
+  const renderSelectTarget = () => {
+    const purpose = targetPurposeRef.current;
+    const heading =
+      purpose === 'test'
+        ? 'Pick a node to test on'
+        : purpose === 'add_one'
+          ? 'Add a sample on which node?'
+          : 'Pick a node to enroll on';
+    const subhead =
+      purpose === 'test'
+        ? 'The verification will run on the same mic, so use the node you usually speak to.'
+        : purpose === 'add_one'
+          ? 'One short take. Pick the node whose mic you want to enrich this profile with.'
+          : `Enrollment runs on the node's mic so daytime recognition matches your enrollment acoustics. ${TARGET_TAKES} takes total.`;
+    const onPickNode = (node: NodeInfo) => {
+      switch (purpose) {
+        case 'test':
+          return startNodeVerifyFlow(node);
+        case 'add_one':
+          return startMultiTakeNodeWizard(node, 1, false);
+        case 'enroll':
+        default:
+          return startMultiTakeNodeWizard(node, TARGET_TAKES, sampleCount > 0);
+      }
+    };
     return (
-    <Card style={styles.card}>
-      <Card.Content style={styles.center}>
-        <Icon source="microphone" size={64} color={paperTheme.colors.primary} />
-        <Text variant="titleMedium" style={styles.title}>
-          {isVerify ? 'Testing' : 'Recording'} on {activeNode?.room || 'node'}
-        </Text>
-        <ActivityIndicator size="large" style={{ marginVertical: 12 }} />
-        <Text variant="bodyMedium" style={styles.prompt}>
-          The node will play a cue and then record. Read this prompt
-          aloud when you hear it:{'\n\n'}"{prompt}"
-        </Text>
-        <Text variant="bodySmall" style={[styles.body, { marginTop: 12 }]}>
-          Request ID: {nodeRequestId?.substring(0, 8) || '...'}
-        </Text>
-        <Button
-          mode="outlined"
-          onPress={cancelNodeFlow}
-          style={styles.button}
-          icon="stop"
-        >
-          Cancel
-        </Button>
-      </Card.Content>
-    </Card>
+      <Card style={styles.card}>
+        <Card.Content>
+          <Icon source="microphone-settings" size={48} color={paperTheme.colors.primary} />
+          <Text variant="titleMedium" style={styles.title}>
+            {heading}
+          </Text>
+          <Text variant="bodyMedium" style={styles.body}>
+            {subhead}
+          </Text>
+
+          {loadingNodes ? (
+            <ActivityIndicator style={styles.button} />
+          ) : nodes.length === 0 ? (
+            <Text variant="bodySmall" style={[styles.body, { opacity: 0.6 }]}>
+              No online nodes available. Make sure a node is online and try again.
+            </Text>
+          ) : (
+            <View>
+              {nodes.map((node) => (
+                <List.Item
+                  key={node.node_id}
+                  title={node.room || 'Unnamed node'}
+                  description={node.user || node.node_id.substring(0, 8)}
+                  left={(props) => <List.Icon {...props} icon="speaker" />}
+                  onPress={() => onPickNode(node)}
+                  style={styles.nodeRow}
+                />
+              ))}
+            </View>
+          )}
+
+          <Divider style={{ marginVertical: 12 }} />
+
+          <Button
+            mode="text"
+            onPress={() =>
+              setPhase(sampleCount > 0 ? 'enrolled' : 'idle')
+            }
+          >
+            Cancel
+          </Button>
+        </Card.Content>
+      </Card>
     );
   };
 
-  const renderRecording = (purpose: 'enroll' | 'test') => (
-    <Card style={styles.card}>
-      <Card.Content style={styles.center}>
-        <Icon
-          source="microphone"
-          size={64}
-          color={paperTheme.colors.error}
-        />
-        <Text variant="titleMedium" style={styles.title}>
-          {purpose === 'enroll' ? 'Recording...' : 'Testing...'}
-        </Text>
-        <Text variant="headlineMedium" style={styles.timer}>
-          {elapsed}s / {MAX_RECORD_MS / 1000}s
-        </Text>
-        {purpose === 'enroll' && (
-          <Text variant="bodyMedium" style={styles.prompt}>
-            Please read aloud:{'\n'}"{ENROLLMENT_PROMPT}"
+  const renderAwaitingNode = () => {
+    const isVerify = targetPurposeRef.current === 'test' && !multiTake;
+    const prompt = isVerify
+      ? VERIFY_NODE_PROMPT
+      : multiTake
+        ? ENROLLMENT_PROMPTS[multiTake.currentTake % ENROLLMENT_PROMPTS.length]
+        : ENROLLMENT_PROMPTS[0];
+    const titleSuffix = multiTake
+      ? ` — Take ${multiTake.currentTake + 1} of ${multiTake.totalTakes}`
+      : '';
+    return (
+      <Card style={styles.card}>
+        <Card.Content style={styles.center}>
+          <Icon source="microphone" size={64} color={paperTheme.colors.primary} />
+          <Text variant="titleMedium" style={styles.title}>
+            {isVerify ? 'Testing' : 'Recording'} on {activeNode?.room || 'node'}
+            {titleSuffix}
           </Text>
-        )}
-        {purpose === 'test' && (
+          <ActivityIndicator size="large" style={{ marginVertical: 12 }} />
           <Text variant="bodyMedium" style={styles.prompt}>
-            Say anything — a question, a command, or just talk naturally.
+            The node will play a cue and then record. Read this prompt
+            aloud when you hear it:{'\n\n'}"{prompt}"
           </Text>
-        )}
-        <Button
-          mode="outlined"
-          onPress={handleStopRecording}
-          style={styles.button}
-          icon="stop"
-        >
-          Stop Recording
-        </Button>
-      </Card.Content>
-    </Card>
-  );
-
-  const renderUploading = () => (
-    <View style={styles.center}>
-      <ActivityIndicator size="large" />
-      <Text variant="bodyMedium" style={styles.statusText}>
-        Enrolling your voice...
-      </Text>
-    </View>
-  );
+          <Text variant="bodySmall" style={[styles.body, { marginTop: 12 }]}>
+            Request ID: {nodeRequestId?.substring(0, 8) || '...'}
+          </Text>
+          <Button
+            mode="outlined"
+            onPress={cancelNodeFlow}
+            style={styles.button}
+            icon="stop"
+          >
+            Cancel
+          </Button>
+        </Card.Content>
+      </Card>
+    );
+  };
 
   const renderTestPrompt = () => (
     <Card style={styles.card}>
       <Card.Content>
         <Icon source="check-circle" size={48} color={paperTheme.colors.primary} />
         <Text variant="titleMedium" style={styles.title}>
-          Voice Enrolled!
+          Enrollment Complete
         </Text>
         <Text variant="bodyMedium" style={styles.body}>
-          {TEST_PROMPT}
+          {sampleCount} samples enrolled on {activeNode?.room || 'the node'}.
+          Now let's verify it works — speak to the same node.
         </Text>
         <Button
           mode="contained"
           icon="microphone"
-          onPress={() => activeNode ? startNodeVerifyFlow(activeNode) : startRecordingFlow('test')}
+          onPress={() =>
+            activeNode ? startNodeVerifyFlow(activeNode) : openTargetPicker('test')
+          }
           style={styles.button}
         >
           Test My Voice{activeNode ? ` on ${activeNode.room || 'node'}` : ''}
@@ -546,15 +573,6 @@ const VoiceProfileScreen = () => {
     </Card>
   );
 
-  const renderVerifying = () => (
-    <View style={styles.center}>
-      <ActivityIndicator size="large" />
-      <Text variant="bodyMedium" style={styles.statusText}>
-        Checking for a match...
-      </Text>
-    </View>
-  );
-
   const renderTestResult = () => (
     <Card style={styles.card}>
       <Card.Content style={styles.center}>
@@ -568,8 +586,8 @@ const VoiceProfileScreen = () => {
         </Text>
         <Text variant="bodyMedium" style={styles.body}>
           {matched
-            ? 'Your voice profile is working. Jarvis will recognize you on any node in your household.'
-            : 'The test sample didn\'t match your profile. You can re-record your enrollment or try the test again.'}
+            ? 'Your voice profile is working on this node.'
+            : "The test sample didn't match your profile. You can re-record the test, add more enrollment samples, or re-record the full profile from scratch."}
         </Text>
         {matched ? (
           <Button
@@ -584,7 +602,9 @@ const VoiceProfileScreen = () => {
             <Button
               mode="contained"
               icon="microphone"
-              onPress={() => activeNode ? startNodeVerifyFlow(activeNode) : startRecordingFlow('test')}
+              onPress={() =>
+                activeNode ? startNodeVerifyFlow(activeNode) : openTargetPicker('test')
+              }
               style={styles.button}
             >
               Try Test Again
@@ -594,7 +614,7 @@ const VoiceProfileScreen = () => {
               onPress={() => openTargetPicker()}
               style={styles.button}
             >
-              Re-Record Profile
+              Add More Samples
             </Button>
           </>
         )}
@@ -610,7 +630,9 @@ const VoiceProfileScreen = () => {
           Voice Profile Active
         </Text>
         <Text variant="bodyMedium" style={styles.body}>
-          Jarvis recognizes your voice for personalized responses and memories.
+          {sampleCount === 1
+            ? '1 sample enrolled. Adding more samples improves accuracy across pitch and tone variation.'
+            : `${sampleCount} samples enrolled. Add more to widen recognition across pitch and tone.`}
         </Text>
         <Button
           mode="contained"
@@ -622,11 +644,19 @@ const VoiceProfileScreen = () => {
         </Button>
         <Button
           mode="outlined"
+          icon="plus"
+          onPress={() => openTargetPicker('add_one')}
+          style={styles.button}
+        >
+          Add One More Sample
+        </Button>
+        <Button
+          mode="outlined"
           icon="refresh"
           onPress={() => openTargetPicker()}
           style={styles.button}
         >
-          Update Profile
+          Re-Record All {TARGET_TAKES} Samples
         </Button>
         <Button
           mode="text"
@@ -662,16 +692,8 @@ const VoiceProfileScreen = () => {
         return renderSelectTarget();
       case 'awaiting_node':
         return renderAwaitingNode();
-      case 'recording':
-        return renderRecording('enroll');
-      case 'uploading':
-        return renderUploading();
       case 'test_prompt':
         return renderTestPrompt();
-      case 'test_recording':
-        return renderRecording('test');
-      case 'verifying':
-        return renderVerifying();
       case 'test_result':
         return renderTestResult();
       case 'enrolled':
@@ -734,10 +756,6 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     opacity: 0.8,
     paddingHorizontal: 8,
-  },
-  timer: {
-    marginVertical: 8,
-    fontVariant: ['tabular-nums'],
   },
   button: {
     marginTop: 8,

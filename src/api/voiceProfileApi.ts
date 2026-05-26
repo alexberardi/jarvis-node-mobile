@@ -12,6 +12,7 @@ import { getCommandCenterUrl } from '../config/serviceConfig';
 
 export interface VoiceProfileStatus {
   has_profile: boolean;
+  sample_count: number;
 }
 
 export interface VoiceProfileVerifyResult {
@@ -23,6 +24,20 @@ export interface VoiceProfileEnrollResult {
   status: string;
   user_id: number;
   household_id: string;
+  sample_index?: number;
+  total_samples?: number;
+}
+
+export interface VoiceProfileSample {
+  index: number;
+  filename: string;
+  size_bytes: number;
+}
+
+export interface VoiceProfileSamplesResponse {
+  household_id: string;
+  user_id: number;
+  samples: VoiceProfileSample[];
 }
 
 /**
@@ -41,10 +56,15 @@ export const getVoiceProfileStatus = async (
 
 /**
  * Upload a voice sample to enroll (or update) the user's voice profile.
+ *
+ * Pass an explicit ``sampleIndex`` to overwrite a specific take (used by
+ * the multi-take wizard's "retake" action). Omit it to append the next
+ * sample in sequence — the backend auto-allocates the index.
  */
 export const enrollVoiceProfile = async (
   audioUri: string,
   householdId: string,
+  sampleIndex?: number,
 ): Promise<VoiceProfileEnrollResult> => {
   const baseUrl = getCommandCenterUrl();
 
@@ -55,6 +75,9 @@ export const enrollVoiceProfile = async (
     name: 'enrollment.wav',
   } as unknown as Blob);
   formData.append('household_id', householdId);
+  if (sampleIndex !== undefined) {
+    formData.append('sample_index', String(sampleIndex));
+  }
 
   const res = await apiClient.post<VoiceProfileEnrollResult>(
     `${baseUrl}/api/v0/mobile/voice-profile/enroll`,
@@ -63,6 +86,35 @@ export const enrollVoiceProfile = async (
       headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 30000,
     },
+  );
+  return res.data;
+};
+
+/**
+ * List the current user's enrolled voice samples.
+ */
+export const getVoiceProfileSamples = async (
+  householdId: string,
+): Promise<VoiceProfileSamplesResponse> => {
+  const baseUrl = getCommandCenterUrl();
+  const res = await apiClient.get<VoiceProfileSamplesResponse>(
+    `${baseUrl}/api/v0/mobile/voice-profile/samples`,
+    { params: { household_id: householdId } },
+  );
+  return res.data;
+};
+
+/**
+ * Delete a single enrollment sample so the user can redo a bad take.
+ */
+export const deleteVoiceProfileSample = async (
+  householdId: string,
+  sampleIndex: number,
+): Promise<{ remaining_samples: number }> => {
+  const baseUrl = getCommandCenterUrl();
+  const res = await apiClient.delete<{ remaining_samples: number }>(
+    `${baseUrl}/api/v0/mobile/voice-profile/samples/${sampleIndex}`,
+    { params: { household_id: householdId } },
   );
   return res.data;
 };
