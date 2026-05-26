@@ -28,6 +28,7 @@ interface VoiceSettings {
   silence_threshold: number;
   silence_duration: number;
   barge_in_enabled: boolean;
+  wake_ack_audio_enabled: boolean;
   follow_up_listen_seconds: number;
   follow_up_silence_duration: number;
   follow_up_min_record_after_onset_secs: number;
@@ -41,6 +42,7 @@ const DEFAULTS: VoiceSettings = {
   silence_threshold: 5000,
   silence_duration: 0.5,
   barge_in_enabled: true,
+  wake_ack_audio_enabled: true,
   follow_up_listen_seconds: 10,
   follow_up_silence_duration: 0.5,
   follow_up_min_record_after_onset_secs: 0.7,
@@ -107,6 +109,7 @@ export const NodeVoiceSettings = ({ nodeId }: Props) => {
       silence_threshold: nc.silence_threshold ?? DEFAULTS.silence_threshold,
       silence_duration: nc.silence_duration ?? DEFAULTS.silence_duration,
       barge_in_enabled: nc.barge_in_enabled ?? DEFAULTS.barge_in_enabled,
+      wake_ack_audio_enabled: nc.wake_ack_audio_enabled ?? DEFAULTS.wake_ack_audio_enabled,
       follow_up_listen_seconds: nc.follow_up_listen_seconds ?? DEFAULTS.follow_up_listen_seconds,
       follow_up_silence_duration: nc.follow_up_silence_duration ?? DEFAULTS.follow_up_silence_duration,
       follow_up_min_record_after_onset_secs:
@@ -168,6 +171,7 @@ export const NodeVoiceSettings = ({ nodeId }: Props) => {
         silence_threshold: settings.silence_threshold,
         silence_duration: settings.silence_duration,
         barge_in_enabled: settings.barge_in_enabled,
+        wake_ack_audio_enabled: settings.wake_ack_audio_enabled,
         follow_up_listen_seconds: settings.follow_up_listen_seconds,
         follow_up_silence_duration: settings.follow_up_silence_duration,
         follow_up_min_record_after_onset_secs: settings.follow_up_min_record_after_onset_secs,
@@ -428,6 +432,22 @@ export const NodeVoiceSettings = ({ nodeId }: Props) => {
         </View>
         <Text variant="labelSmall" style={styles.hint}>
           Allow interrupting responses with the wake word.
+        </Text>
+
+        <Divider style={styles.divider} />
+
+        <View style={styles.switchRow}>
+          <Text variant="bodyMedium">Wake Acknowledgment Audio</Text>
+          <Switch
+            value={settings.wake_ack_audio_enabled}
+            onValueChange={(v) => update('wake_ack_audio_enabled', v)}
+            color={theme.colors.primary}
+          />
+        </View>
+        <Text variant="labelSmall" style={styles.hint}>
+          Play a spoken ack ("On it.") after the wake word. When off, the
+          LED is the only "I heard you" cue — feels snappier for fast-path
+          queries that respond in well under a second.
         </Text>
       </Card.Content>
 
