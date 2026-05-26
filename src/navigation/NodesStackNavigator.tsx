@@ -3,6 +3,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useCallback } from 'react';
 
+import FastPathInspectScreen from '../screens/Nodes/FastPathInspectScreen';
 import ImportKeyScreen from '../screens/ImportKey/ImportKeyScreen';
 import NodeDetailScreen from '../screens/Nodes/NodeDetailScreen';
 import NodeListScreen from '../screens/Nodes/NodeListScreen';
@@ -29,6 +30,7 @@ const NodesStackNavigator = () => {
       <Stack.Screen name="NodeSettings" component={NodeSettingsScreen} />
       <Stack.Screen name="ImportKey" component={ImportKeyWrapper} />
       <Stack.Screen name="IntegrationAuth" component={IntegrationAuthScreen} />
+      <Stack.Screen name="FastPathInspect" component={FastPathInspectScreen} />
     </Stack.Navigator>
   );
 };
