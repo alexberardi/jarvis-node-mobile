@@ -12,6 +12,7 @@ import {
   Menu,
   Modal,
   Portal,
+  SegmentedButtons,
   Snackbar,
   Surface,
   Switch,
@@ -36,6 +37,8 @@ import {
   CommandSettingsEntry,
   CommandSecretEntry,
   DeviceFamilyEntry,
+  AgentEntry,
+  FastPathEntry,
 } from '../../services/settingsDecryptService';
 import { listNodes, NodeInfo } from '../../api/nodeApi';
 import { hasK2, generateK2, storeK2 } from '../../services/k2Service';
@@ -48,6 +51,21 @@ import { requestUninstall, pollUninstallStatus } from '../../api/packageInstallA
 type ScreenRoute = RouteProp<NodesStackParamList, 'NodeSettings'>;
 
 type LoadState = 'loading' | 'loaded' | 'error' | 'timeout' | 'needs_k2';
+type Tab = 'commands' | 'agents' | 'integrations';
+
+function formatInterval(seconds: number): string {
+  if (seconds < 60) return `${seconds} sec`;
+  if (seconds < 3600) {
+    const m = Math.round(seconds / 60);
+    return m === 1 ? '1 minute' : `${m} minutes`;
+  }
+  if (seconds < 86400) {
+    const h = Math.round(seconds / 3600);
+    return h === 1 ? '1 hour' : `${h} hours`;
+  }
+  const d = Math.round(seconds / 86400);
+  return d === 1 ? '1 day' : `${d} days`;
+}
 
 const POLL_INTERVAL_MS = 2000;
 const POLL_TIMEOUT_MS = 30000;
@@ -62,6 +80,10 @@ interface ServiceGroup {
   commands: string[];
   /** Maps command_name (raw) to enabled state */
   commandStates: Record<string, boolean>;
+  /** Agents whose associated_service matches this group's serviceName. */
+  agents: AgentEntry[];
+  /** Per-command fast-path metadata for the "Inspect fast-paths" screen. */
+  fastPathsByCommand: { command_name: string; fast_paths: FastPathEntry[] }[];
 }
 
 const NodeSettingsScreen: React.FC = () => {
@@ -71,8 +93,10 @@ const NodeSettingsScreen: React.FC = () => {
   const { state: authState } = useAuth();
   const { nodeId, room } = route.params;
 
+  const [tab, setTab] = useState<Tab>('commands');
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [commands, setCommands] = useState<CommandSettingsEntry[]>([]);
+  const [agents, setAgents] = useState<AgentEntry[]>([]);
   const [deviceFamilies, setDeviceFamilies] = useState<DeviceFamilyEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -91,6 +115,9 @@ const NodeSettingsScreen: React.FC = () => {
 
   // Track enabled/disabled state per command (keyed by raw command_name)
   const [commandStates, setCommandStates] = useState<Record<string, boolean>>({});
+
+  // Track enabled/disabled state per agent (keyed by raw agent_name)
+  const [agentStates, setAgentStates] = useState<Record<string, boolean>>({});
 
   // Personal scope info tooltip
   const [showPersonalInfo, setShowPersonalInfo] = useState(false);
@@ -126,8 +153,17 @@ const NodeSettingsScreen: React.FC = () => {
 
       let group = groupMap.get(serviceName);
       if (!group) {
-        group = { serviceName, secrets: [], commands: [], commandStates: {}, auth: undefined, setupGuide: undefined };
+        group = { serviceName, secrets: [], commands: [], commandStates: {}, agents: [], auth: undefined, setupGuide: undefined, fastPathsByCommand: [] };
         groupMap.set(serviceName, group);
+      }
+
+      // Collect fast-path metadata for the "Inspect fast-paths" screen.
+      // Only include commands that actually declare patterns.
+      if (cmd.fast_paths && cmd.fast_paths.length > 0) {
+        group.fastPathsByCommand.push({
+          command_name: cmd.command_name,
+          fast_paths: cmd.fast_paths,
+        });
       }
 
       // Take first setup guide for the group
@@ -161,6 +197,17 @@ const NodeSettingsScreen: React.FC = () => {
       group.commandStates[cmd.command_name] = commandStates[cmd.command_name] !== false;
     }
 
+    // Attach agents to their parent group when associated_service matches.
+    // Agents without an associated_service stay out of any group (they show
+    // up in the Agents tab only).
+    for (const agent of agents) {
+      if (!agent.associated_service) continue;
+      const group = groupMap.get(agent.associated_service);
+      if (group) {
+        group.agents.push(agent);
+      }
+    }
+
     // Sort: integrations with secrets on top, then integrations without secrets,
     // then standalone commands without secrets at the bottom
     const groups = Array.from(groupMap.values());
@@ -180,7 +227,38 @@ const NodeSettingsScreen: React.FC = () => {
     });
 
     return groups;
-  }, [commands, commandStates]);
+  }, [commands, commandStates, agents]);
+
+  // Integrations tab shows groups with shared connection state — anything
+  // that bundles multiple components (commands+agents) or has secrets.
+  // A single-command package with no secrets and no agents is tier 2
+  // standalone and shows up only in the Commands tab.
+  const integrationServiceGroups = useMemo(
+    () => serviceGroups.filter(
+      (g) =>
+        g.secrets.length > 0 ||
+        Object.keys(g.commandStates).length + g.agents.length > 1,
+    ),
+    [serviceGroups],
+  );
+
+  // Flat sorted list for the Commands tab — every command, regardless of
+  // whether it belongs to an integration. Sort by display name so user can
+  // find things alphabetically.
+  const flatCommands = useMemo(
+    () => [...commands].sort((a, b) =>
+      a.command_name.localeCompare(b.command_name),
+    ),
+    [commands],
+  );
+
+  // Flat sorted list for the Agents tab.
+  const flatAgents = useMemo(
+    () => [...agents].sort((a, b) =>
+      a.agent_name.localeCompare(b.agent_name),
+    ),
+    [agents],
+  );
 
   const cleanup = useCallback(() => {
     if (pollTimerRef.current) {
@@ -250,6 +328,7 @@ const NodeSettingsScreen: React.FC = () => {
                 result.snapshot.tag,
               );
               setCommands(snapshot.commands);
+              setAgents(snapshot.agents ?? []);
               console.log('[DEBUG] device_families from snapshot:', JSON.stringify((snapshot.device_families ?? []).map((f: any) => f.family_name)));
               setDeviceFamilies(snapshot.device_families ?? []);
               const states: Record<string, boolean> = {};
@@ -257,6 +336,11 @@ const NodeSettingsScreen: React.FC = () => {
                 states[cmd.command_name] = cmd.enabled !== false;
               }
               setCommandStates(states);
+              const aStates: Record<string, boolean> = {};
+              for (const a of snapshot.agents ?? []) {
+                aStates[a.agent_name] = a.enabled !== false;
+              }
+              setAgentStates(aStates);
               setLoadState('loaded');
             } catch (decryptErr) {
               console.error('Settings decryption failed:', decryptErr);
@@ -529,14 +613,24 @@ const NodeSettingsScreen: React.FC = () => {
     [nodeId, authState.accessToken],
   );
 
-  const handleToggleGroup = useCallback(
-    (group: ServiceGroup, enabled: boolean) => {
-      const rawNames = Object.keys(group.commandStates);
-      for (const name of rawNames) {
-        handleToggleCommand(name, enabled);
+  const handleToggleAgent = useCallback(
+    async (agentName: string, enabled: boolean) => {
+      const token = authState.accessToken;
+      if (!token) return;
+
+      setAgentStates((prev) => ({ ...prev, [agentName]: enabled }));
+
+      try {
+        await encryptAndPushConfig(nodeId, 'agent_registry', {
+          agent_name: agentName,
+          enabled: enabled ? 'true' : 'false',
+        });
+      } catch (err) {
+        console.error('Failed to toggle agent:', err);
+        setAgentStates((prev) => ({ ...prev, [agentName]: !enabled }));
       }
     },
-    [handleToggleCommand],
+    [nodeId, authState.accessToken],
   );
 
   // ── Sync flow handlers ──────────────────────────────────────────────
@@ -756,13 +850,11 @@ const NodeSettingsScreen: React.FC = () => {
   };
 
   const renderServiceGroup = (group: ServiceGroup) => {
-    const allSet = group.secrets.every((s) => s.is_set);
     const rawNames = Object.keys(group.commandStates);
-    const groupEnabled = rawNames.some((n) => commandStates[n] !== false);
-    const hasMultipleCommands = rawNames.length > 1;
     const menuKey = group.serviceName;
     const hasConfiguredSecrets = group.secrets.some((s) => s.is_set);
     const isUninstalling = rawNames.some((n) => uninstallingCommand === n);
+    const componentCount = rawNames.length + group.agents.length;
 
     if (isUninstalling) {
       return (
@@ -780,12 +872,7 @@ const NodeSettingsScreen: React.FC = () => {
     return (
       <View key={group.serviceName} style={styles.groupContainer}>
         <View style={styles.groupHeader}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, gap: 8 }}>
-            <Icon
-              source={groupEnabled ? 'check-circle' : 'circle-outline'}
-              size={20}
-              color={groupEnabled ? (allSet ? theme.colors.primary : theme.colors.onSurfaceVariant) : theme.colors.outlineVariant}
-            />
+          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
             <Text variant="titleMedium" style={{ fontWeight: '600' }}>
               {group.serviceName}
             </Text>
@@ -799,14 +886,6 @@ const NodeSettingsScreen: React.FC = () => {
               </TouchableRipple>
             }
           >
-            <Menu.Item
-              leadingIcon={groupEnabled ? 'close-circle-outline' : 'check-circle-outline'}
-              title={groupEnabled ? 'Disable' : 'Enable'}
-              onPress={() => {
-                setOpenMenu(null);
-                handleToggleGroup(group, !groupEnabled);
-              }}
-            />
             {hasConfiguredSecrets && householdNodes.length > 0 ? (
               <Menu.Item
                 leadingIcon="sync"
@@ -841,6 +920,20 @@ const NodeSettingsScreen: React.FC = () => {
                 }}
               />
             ) : null}
+            {group.fastPathsByCommand.length > 0 ? (
+              <Menu.Item
+                leadingIcon="lightning-bolt-outline"
+                title="Inspect fast-paths"
+                onPress={() => {
+                  setOpenMenu(null);
+                  navigation.navigate('FastPathInspect', {
+                    nodeId,
+                    groupName: group.serviceName,
+                    commandsJson: JSON.stringify(group.fastPathsByCommand),
+                  });
+                }}
+              />
+            ) : null}
             <Menu.Item
               leadingIcon="delete-outline"
               title="Uninstall"
@@ -849,27 +942,62 @@ const NodeSettingsScreen: React.FC = () => {
           </Menu>
         </View>
 
-        {groupEnabled && hasMultipleCommands && (
+        {componentCount > 0 && (
           <Surface
             style={[
               styles.commandToggleCard,
               { backgroundColor: theme.colors.surface },
             ]}
           >
-            {rawNames.map((name, i) => (
-              <View key={name}>
-                <View style={styles.commandToggleRow}>
-                  <Text variant="bodyMedium" style={{ flex: 1 }}>
-                    {name.replace(/_/g, ' ')}
-                  </Text>
-                  <Switch
-                    value={commandStates[name] !== false}
-                    onValueChange={(val) => handleToggleCommand(name, val)}
-                  />
+            {rawNames.map((name, i) => {
+              const isLast =
+                i === rawNames.length - 1 && group.agents.length === 0;
+              return (
+                <View key={`cmd:${name}`}>
+                  <View style={styles.commandToggleRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text variant="bodyMedium">{name.replace(/_/g, ' ')}</Text>
+                      <Text
+                        variant="bodySmall"
+                        style={{ color: theme.colors.onSurfaceVariant }}
+                      >
+                        Command
+                      </Text>
+                    </View>
+                    <Switch
+                      value={commandStates[name] !== false}
+                      onValueChange={(val) => handleToggleCommand(name, val)}
+                    />
+                  </View>
+                  {!isLast && <Divider />}
                 </View>
-                {i < rawNames.length - 1 && <Divider />}
-              </View>
-            ))}
+              );
+            })}
+            {group.agents.map((agent, i) => {
+              const isLast = i === group.agents.length - 1;
+              return (
+                <View key={`agent:${agent.agent_name}`}>
+                  <View style={styles.commandToggleRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text variant="bodyMedium">
+                        {agent.agent_name.replace(/_/g, ' ')}
+                      </Text>
+                      <Text
+                        variant="bodySmall"
+                        style={{ color: theme.colors.onSurfaceVariant }}
+                      >
+                        Agent · runs every {formatInterval(agent.schedule.interval_seconds)}
+                      </Text>
+                    </View>
+                    <Switch
+                      value={agentStates[agent.agent_name] !== false}
+                      onValueChange={(val) => handleToggleAgent(agent.agent_name, val)}
+                    />
+                  </View>
+                  {!isLast && <Divider />}
+                </View>
+              );
+            })}
           </Surface>
         )}
 
@@ -878,16 +1006,15 @@ const NodeSettingsScreen: React.FC = () => {
             style={[
               styles.groupCard,
               { backgroundColor: theme.colors.surfaceVariant },
-              !groupEnabled && styles.disabledCard,
             ]}
           >
             {group.secrets.map((secret, i) =>
-              renderSecretRow(secret, i === group.secrets.length - 1, !groupEnabled),
+              renderSecretRow(secret, i === group.secrets.length - 1),
             )}
           </Surface>
         )}
 
-        {group.setupGuide && groupEnabled && (
+        {group.setupGuide && (
           <Button
             mode="text"
             icon="help-circle-outline"
@@ -899,7 +1026,7 @@ const NodeSettingsScreen: React.FC = () => {
           </Button>
         )}
 
-        {group.auth && groupEnabled && (
+        {group.auth && (
           <Button
             mode="contained-tonal"
             icon="login"
@@ -910,6 +1037,93 @@ const NodeSettingsScreen: React.FC = () => {
           </Button>
         )}
       </View>
+    );
+  };
+
+  /** Flat command row for the Commands tab. */
+  const renderCommandRow = (cmd: CommandSettingsEntry) => {
+    const enabled = commandStates[cmd.command_name] !== false;
+    const displayName = cmd.command_name.replace(/_/g, ' ');
+
+    return (
+      <Surface
+        key={cmd.command_name}
+        style={[styles.flatCard, { backgroundColor: theme.colors.surface }]}
+        elevation={1}
+      >
+        <View style={styles.flatRow}>
+          <View style={{ flex: 1, paddingRight: 12 }}>
+            <Text variant="titleSmall" style={{ fontWeight: '600' }}>
+              {displayName}
+            </Text>
+            {cmd.associated_service ? (
+              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                from {cmd.associated_service}
+              </Text>
+            ) : null}
+            {cmd.description ? (
+              <Text
+                variant="bodySmall"
+                style={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}
+                numberOfLines={2}
+              >
+                {cmd.description}
+              </Text>
+            ) : null}
+          </View>
+          <Switch
+            value={enabled}
+            onValueChange={(val) => handleToggleCommand(cmd.command_name, val)}
+          />
+        </View>
+      </Surface>
+    );
+  };
+
+  /** Flat agent row for the Agents tab. */
+  const renderAgentCard = (agent: AgentEntry) => {
+    const enabled = agentStates[agent.agent_name] !== false;
+    const displayName = agent.agent_name.replace(/_/g, ' ');
+    const intervalLabel = formatInterval(agent.schedule.interval_seconds);
+
+    return (
+      <Surface
+        key={agent.agent_name}
+        style={[styles.flatCard, { backgroundColor: theme.colors.surface }]}
+        elevation={1}
+      >
+        <View style={styles.flatRow}>
+          <View style={{ flex: 1, paddingRight: 12 }}>
+            <Text variant="titleSmall" style={{ fontWeight: '600' }}>
+              {displayName}
+            </Text>
+            {agent.associated_service ? (
+              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                from {agent.associated_service}
+              </Text>
+            ) : null}
+            {agent.description ? (
+              <Text
+                variant="bodySmall"
+                style={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}
+                numberOfLines={2}
+              >
+                {agent.description}
+              </Text>
+            ) : null}
+            <Text
+              variant="bodySmall"
+              style={{ color: theme.colors.onSurfaceVariant, marginTop: 4, fontStyle: 'italic' }}
+            >
+              Runs every {intervalLabel}
+            </Text>
+          </View>
+          <Switch
+            value={enabled}
+            onValueChange={(val) => handleToggleAgent(agent.agent_name, val)}
+          />
+        </View>
+      </Surface>
     );
   };
 
@@ -972,7 +1186,9 @@ const NodeSettingsScreen: React.FC = () => {
                   auth: family.authentication,
                   commands: [],
                   commandStates: {},
+                  agents: [],
                   setupGuide: family.setup_guide,
+                  fastPathsByCommand: [],
                 })}
               />
             ) : hasConfiguredSecrets ? (
@@ -1001,7 +1217,9 @@ const NodeSettingsScreen: React.FC = () => {
                       auth: family.authentication,
                       commands: [],
                       commandStates: {},
+                      agents: [],
                       setupGuide: family.setup_guide,
+                      fastPathsByCommand: [],
                     });
                     setSyncStep('nodes');
                   }
@@ -1128,92 +1346,129 @@ const NodeSettingsScreen: React.FC = () => {
       );
     }
 
-    if (commands.length === 0) {
-      return (
-        <View style={styles.center}>
-          <Text variant="bodyLarge" style={{ opacity: 0.6 }}>
-            No commands with configurable settings.
-          </Text>
-        </View>
-      );
-    }
-
-    const commandSecrets = serviceGroups.flatMap((g) => g.secrets);
+    const commandSecrets = integrationServiceGroups.flatMap((g) => g.secrets);
     const familySecrets = deviceFamilies.flatMap((f) => f.secrets);
     const allSecrets = [...commandSecrets, ...familySecrets];
-    const allConfigured = allSecrets.length > 0 && allSecrets.every((s) => s.is_set);
     const missingRequired = allSecrets.filter((s) => s.required && !s.is_set);
 
     return (
-      <ScrollView
-        contentContainerStyle={styles.list}
-        refreshControl={undefined}
-      >
-        {/* Status banner */}
-        {allConfigured ? (
-          <Surface style={[styles.banner, { backgroundColor: theme.colors.primaryContainer }]}>
-            <Icon source="check-circle" size={18} color={theme.colors.primary} />
-            <Text
-              variant="bodySmall"
-              style={{ color: theme.colors.onPrimaryContainer, marginLeft: 8, flex: 1 }}
-            >
-              All settings configured
-            </Text>
-          </Surface>
-        ) : missingRequired.length > 0 ? (
-          <Surface style={[styles.banner, { backgroundColor: theme.colors.errorContainer }]}>
-            <Icon source="alert-circle" size={18} color={theme.colors.error} />
-            <Text
-              variant="bodySmall"
-              style={{ color: theme.colors.onErrorContainer, marginLeft: 8, flex: 1 }}
-            >
-              {missingRequired.length} required setting{missingRequired.length > 1 ? 's' : ''} not configured
-            </Text>
-          </Surface>
-        ) : null}
+      <View style={{ flex: 1 }}>
+        <View style={styles.tabSelectorContainer}>
+          <SegmentedButtons
+            value={tab}
+            onValueChange={(v) => setTab(v as Tab)}
+            density="small"
+            buttons={[
+              { value: 'commands', label: 'Commands' },
+              { value: 'agents', label: 'Agents' },
+              { value: 'integrations', label: 'Integrations' },
+            ]}
+          />
+        </View>
 
-        {serviceGroups.map(renderServiceGroup)}
-
-        {deviceFamilies.length > 0 && (
-          <>
-            <View style={styles.sectionHeader}>
-              <Text variant="titleSmall" style={{ color: theme.colors.onSurfaceVariant, fontWeight: '600' }}>
-                Device Integrations
-              </Text>
-            </View>
-            {deviceFamilies.map(renderDeviceFamilyCard)}
-            <View style={styles.scanButtonContainer}>
-              <Button
-                mode="contained-tonal"
-                icon="radar"
-                onPress={handleScanForDevices}
-              >
-                Scan for Devices
-              </Button>
-            </View>
-          </>
+        {tab === 'commands' && (
+          <ScrollView contentContainerStyle={styles.list}>
+            {flatCommands.length === 0 ? (
+              <View style={styles.emptyTab}>
+                <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
+                  No commands installed.
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.flatListContainer}>
+                {flatCommands.map(renderCommandRow)}
+              </View>
+            )}
+          </ScrollView>
         )}
 
-        {/* Export Key + Danger Zone */}
-        <Divider style={{ marginTop: 24, marginBottom: 8 }} />
-        <Button
-          mode="text"
-          icon="key-variant"
-          compact
-          onPress={async () => {
-            const kp = await getK2(nodeId);
-            if (kp) {
-              setExportKeyPair(kp);
-            } else {
-              Alert.alert('No Key', 'No encryption key found for this node.');
-            }
-          }}
-          style={{ alignSelf: 'flex-start' }}
-        >
-          Export Encryption Key
-        </Button>
+        {tab === 'agents' && (
+          <ScrollView contentContainerStyle={styles.list}>
+            {flatAgents.length === 0 ? (
+              <View style={styles.emptyTab}>
+                <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
+                  No background agents on this node.
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.flatListContainer}>
+                {flatAgents.map(renderAgentCard)}
+              </View>
+            )}
+          </ScrollView>
+        )}
 
-      </ScrollView>
+        {tab === 'integrations' && (
+          <ScrollView contentContainerStyle={styles.list}>
+            {missingRequired.length > 0 && (
+              <Surface style={[styles.banner, { backgroundColor: theme.colors.errorContainer }]}>
+                <Icon source="alert-circle" size={18} color={theme.colors.error} />
+                <Text
+                  variant="bodySmall"
+                  style={{ color: theme.colors.onErrorContainer, marginLeft: 8, flex: 1 }}
+                >
+                  {missingRequired.length} required setting{missingRequired.length > 1 ? 's' : ''} not configured
+                </Text>
+              </Surface>
+            )}
+
+            {integrationServiceGroups.length === 0 && deviceFamilies.length === 0 ? (
+              <View style={styles.emptyTab}>
+                <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
+                  No integrations installed.
+                </Text>
+              </View>
+            ) : (
+              <>
+                {integrationServiceGroups.map(renderServiceGroup)}
+
+                {deviceFamilies.length > 0 && (
+                  <>
+                    {integrationServiceGroups.length > 0 && (
+                      <View style={styles.sectionHeader}>
+                        <Text
+                          variant="titleSmall"
+                          style={{ color: theme.colors.onSurfaceVariant, fontWeight: '600' }}
+                        >
+                          Device Protocols
+                        </Text>
+                      </View>
+                    )}
+                    {deviceFamilies.map(renderDeviceFamilyCard)}
+                    <View style={styles.scanButtonContainer}>
+                      <Button
+                        mode="contained-tonal"
+                        icon="radar"
+                        onPress={handleScanForDevices}
+                      >
+                        Scan for Devices
+                      </Button>
+                    </View>
+                  </>
+                )}
+              </>
+            )}
+
+            <Divider style={{ marginTop: 24, marginBottom: 8 }} />
+            <Button
+              mode="text"
+              icon="key-variant"
+              compact
+              onPress={async () => {
+                const kp = await getK2(nodeId);
+                if (kp) {
+                  setExportKeyPair(kp);
+                } else {
+                  Alert.alert('No Key', 'No encryption key found for this node.');
+                }
+              }}
+              style={{ alignSelf: 'flex-start', marginLeft: 16 }}
+            >
+              Export Encryption Key
+            </Button>
+          </ScrollView>
+        )}
+      </View>
     );
   };
 
@@ -1523,6 +1778,28 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     gap: 8,
     marginTop: 16,
+  },
+  tabSelectorContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  flatListContainer: {
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  flatCard: {
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  flatRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  emptyTab: {
+    alignItems: 'center',
+    paddingTop: 48,
+    paddingHorizontal: 32,
   },
 });
 

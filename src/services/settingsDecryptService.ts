@@ -26,6 +26,18 @@ export interface CommandParameterEntry {
   enum_values: string[] | null;
 }
 
+/**
+ * One LLM-bypass pattern declared by a command. Surfaced in the
+ * "Inspect fast-paths" screen so users can disable individual patterns
+ * when two installed packages collide on the same phrasing.
+ */
+export interface FastPathEntry {
+  id: string;            // stable across pkg versions (e.g. "weather.current")
+  description: string;   // what disabling this pattern would do
+  example: string;       // representative spoken phrase
+  enabled: boolean;      // computed from node-side disabled list
+}
+
 export interface CommandSettingsEntry {
   command_name: string;
   description: string;
@@ -35,6 +47,20 @@ export interface CommandSettingsEntry {
   authentication?: AuthenticationConfig;
   enabled?: boolean;
   parameters?: CommandParameterEntry[];
+  fast_paths?: FastPathEntry[];
+}
+
+export interface AgentScheduleEntry {
+  interval_seconds: number;
+  run_on_startup: boolean;
+}
+
+export interface AgentEntry {
+  agent_name: string;
+  description: string;
+  enabled: boolean;
+  schedule: AgentScheduleEntry;
+  associated_service?: string;
 }
 
 export interface DeviceFamilyEntry {
@@ -89,6 +115,7 @@ export interface SettingsSnapshot {
   schema_version: number;
   commands_schema_version: number;
   commands: CommandSettingsEntry[];
+  agents?: AgentEntry[];
   device_families?: DeviceFamilyEntry[];
   device_managers?: DeviceManagerEntry[];
   node_config?: NodeConfigSnapshot;
