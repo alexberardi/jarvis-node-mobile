@@ -48,6 +48,10 @@ export interface CommandSettingsEntry {
   enabled?: boolean;
   parameters?: CommandParameterEntry[];
   fast_paths?: FastPathEntry[];
+  /** Field tags from the node when third-party property access failed
+   * (e.g. `required_secrets`, `parameters`). Surface a configuration-error
+   * badge in the UI when non-empty. */
+  _errors?: string[];
 }
 
 export interface AgentScheduleEntry {
@@ -61,6 +65,11 @@ export interface AgentEntry {
   enabled: boolean;
   schedule: AgentScheduleEntry;
   associated_service?: string;
+  _errors?: string[];
+  /** Set by the node scheduler when an agent throws on 3 consecutive runs.
+   * `enabled` will be false; this string explains why. Cleared when the
+   * user manually re-enables. */
+  auto_disabled_reason?: string;
 }
 
 export interface DeviceFamilyEntry {
@@ -74,6 +83,7 @@ export interface DeviceFamilyEntry {
   is_configured: boolean;
   setup_guide?: string;
   is_custom?: boolean;
+  _errors?: string[];
 }
 
 export interface DeviceManagerEntry {
@@ -84,6 +94,7 @@ export interface DeviceManagerEntry {
   is_available: boolean;
   secrets: CommandSecretEntry[];
   authentication?: AuthenticationConfig;
+  _errors?: string[];
 }
 
 export interface NodeHardwareInfo {

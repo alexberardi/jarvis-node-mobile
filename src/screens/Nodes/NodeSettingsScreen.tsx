@@ -1040,6 +1040,35 @@ const NodeSettingsScreen: React.FC = () => {
     );
   };
 
+  /** Renders an inline warning when the node reported third-party field
+   * failures while building this entry's snapshot data. The detail (which
+   * fields failed) is in the node log; the badge tells the user "this
+   * package is broken, ping the author or reinstall". */
+  const renderConfigErrorBadge = (errors?: string[]) => {
+    if (!errors || errors.length === 0) return null;
+    const shown = errors.slice(0, 3).join(', ');
+    const overflow = errors.length > 3 ? '…' : '';
+    return (
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 6,
+          marginTop: 6,
+        }}
+      >
+        <Icon source="alert-circle-outline" size={14} color={theme.colors.error} />
+        <Text
+          variant="bodySmall"
+          style={{ color: theme.colors.error, flex: 1 }}
+          numberOfLines={2}
+        >
+          Configuration error: {shown}{overflow}
+        </Text>
+      </View>
+    );
+  };
+
   /** Flat command row for the Commands tab. */
   const renderCommandRow = (cmd: CommandSettingsEntry) => {
     const enabled = commandStates[cmd.command_name] !== false;
@@ -1070,6 +1099,7 @@ const NodeSettingsScreen: React.FC = () => {
                 {cmd.description}
               </Text>
             ) : null}
+            {renderConfigErrorBadge(cmd._errors)}
           </View>
           <Switch
             value={enabled}
@@ -1117,6 +1147,30 @@ const NodeSettingsScreen: React.FC = () => {
             >
               Runs every {intervalLabel}
             </Text>
+            {renderConfigErrorBadge(agent._errors)}
+            {agent.auto_disabled_reason ? (
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                  marginTop: 6,
+                }}
+              >
+                <Icon
+                  source="electric-switch"
+                  size={14}
+                  color={theme.colors.error}
+                />
+                <Text
+                  variant="bodySmall"
+                  style={{ color: theme.colors.error, flex: 1 }}
+                  numberOfLines={3}
+                >
+                  {agent.auto_disabled_reason}
+                </Text>
+              </View>
+            ) : null}
           </View>
           <Switch
             value={enabled}
@@ -1242,6 +1296,10 @@ const NodeSettingsScreen: React.FC = () => {
             {family.description}
           </Text>
         ) : null}
+
+        <View style={{ paddingHorizontal: 4 }}>
+          {renderConfigErrorBadge(family._errors)}
+        </View>
 
         {hasSecrets ? (
           <Surface
