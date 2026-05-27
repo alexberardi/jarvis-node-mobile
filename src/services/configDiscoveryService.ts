@@ -1,4 +1,5 @@
 import * as Network from 'expo-network';
+import Zeroconf, { Service as ZeroconfService } from 'react-native-zeroconf';
 
 import {
   ServiceConfig,
@@ -9,11 +10,13 @@ import {
 } from '../config/serviceConfig';
 
 const PROBE_TIMEOUT_MS = 1500;
-const DISCOVERY_TIMEOUT_MS = 10000;
+const DISCOVERY_TIMEOUT_MS = 15000;
+const FETCH_SERVICES_TIMEOUT_MS = 3000;
+const MDNS_TIMEOUT_MS = 5000;
+const MDNS_SERVICE_TYPE = 'jarvis-config';
+const MDNS_SERVICE_PROTOCOL = 'tcp';
 const CONFIG_SERVICE_PORTS = [7700];
-const BATCH_SIZE = 20;
-
-const PRIORITY_HOSTS = [1, 2, 10, 50, 100, 103, 150, 200];
+const BATCH_SIZE = 50;
 
 interface ServiceEntry {
   name: string;
@@ -63,8 +66,10 @@ const probeHost = async (ip: string, port: number): Promise<string | null> => {
 const fetchServiceUrls = async (
   configBaseUrl: string,
 ): Promise<ServiceConfig | null> => {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_SERVICES_TIMEOUT_MS);
   try {
-    const res = await fetch(`${configBaseUrl}/services`);
+    const res = await fetch(`${configBaseUrl}/services`, { signal: controller.signal });
     if (!res.ok) return null;
     const data: ServicesResponse = await res.json();
 
@@ -103,7 +108,69 @@ const fetchServiceUrls = async (
     };
   } catch {
     return null;
+  } finally {
+    clearTimeout(timer);
   }
+};
+
+/**
+ * Browse the LAN via mDNS/Bonjour for a Jarvis config service advertised
+ * under `_jarvis-config._tcp`. Returns a base URL on success, null on timeout
+ * or failure. Verifies the resolved host with probeHost before returning so a
+ * stale advertisement can't poison the cache.
+ */
+const discoverViaMDNS = (): Promise<string | null> => {
+  return new Promise((resolveOuter) => {
+    const zeroconf = new Zeroconf();
+    const tried = new Set<string>();
+    let settled = false;
+
+    const finish = (url: string | null) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      zeroconf.removeAllListeners();
+      try {
+        zeroconf.stop();
+      } catch {
+        // ignore
+      }
+      resolveOuter(url);
+    };
+
+    const timer = setTimeout(() => finish(null), MDNS_TIMEOUT_MS);
+
+    const tryService = async (service: ZeroconfService) => {
+      const key = service.fullName || service.name;
+      if (tried.has(key)) return;
+      tried.add(key);
+
+      const port = service.port ?? CONFIG_SERVICE_PORTS[0];
+      const candidates =
+        service.addresses?.length ? service.addresses : service.host ? [service.host] : [];
+
+      for (const addr of candidates) {
+        const verified = await probeHost(addr, port);
+        if (verified) {
+          finish(verified);
+          return;
+        }
+      }
+    };
+
+    zeroconf.on('resolved', (service: ZeroconfService) => {
+      void tryService(service);
+    });
+    zeroconf.on('error', () => {
+      // timeout path handles end-of-scan
+    });
+
+    try {
+      zeroconf.scan(MDNS_SERVICE_TYPE, MDNS_SERVICE_PROTOCOL, 'local.');
+    } catch {
+      finish(null);
+    }
+  });
 };
 
 /**
@@ -118,6 +185,11 @@ const getSubnetPrefix = (ip: string): string => {
 /**
  * Scan the local network for a Jarvis config service.
  * Returns the config service base URL if found, null otherwise.
+ *
+ * Strategy: fully parallel batched sweep of all 1-254 hosts on each known
+ * config-service port. Each probe is bounded by PROBE_TIMEOUT_MS. With
+ * BATCH_SIZE=50 and PROBE_TIMEOUT_MS=1500, a full /24 sweep completes in
+ * ~6 batches × 1.5s ≈ 9s worst case.
  */
 const scanLocalNetwork = async (): Promise<string | null> => {
   let deviceIp: string;
@@ -130,31 +202,11 @@ const scanLocalNetwork = async (): Promise<string | null> => {
   if (!deviceIp || deviceIp === '0.0.0.0') return null;
 
   const subnet = getSubnetPrefix(deviceIp);
+  const hosts: number[] = [];
+  for (let i = 1; i < 255; i++) hosts.push(i);
 
-  // Build priority host list
-  const priorityIps = PRIORITY_HOSTS.map((h) => `${subnet}.${h}`);
-
-  // Probe priority hosts first across all ports
-  for (const ip of priorityIps) {
-    const results = await Promise.all(
-      CONFIG_SERVICE_PORTS.map((port) => probeHost(ip, port)),
-    );
-    const found = results.find((r) => r !== null);
-    if (found) return found;
-  }
-
-  // Build remaining hosts (skip priority ones and skip .0 and .255)
-  const prioritySet = new Set(PRIORITY_HOSTS);
-  const remainingHosts: number[] = [];
-  for (let i = 1; i < 255; i++) {
-    if (!prioritySet.has(i)) {
-      remainingHosts.push(i);
-    }
-  }
-
-  // Scan remaining hosts in batches
-  for (let batchStart = 0; batchStart < remainingHosts.length; batchStart += BATCH_SIZE) {
-    const batch = remainingHosts.slice(batchStart, batchStart + BATCH_SIZE);
+  for (let batchStart = 0; batchStart < hosts.length; batchStart += BATCH_SIZE) {
+    const batch = hosts.slice(batchStart, batchStart + BATCH_SIZE);
     const batchPromises = batch.flatMap((h) => {
       const ip = `${subnet}.${h}`;
       return CONFIG_SERVICE_PORTS.map((port) => probeHost(ip, port));
@@ -169,9 +221,15 @@ const scanLocalNetwork = async (): Promise<string | null> => {
 
 /**
  * Main discovery function. Tiered strategy:
- * 1. Try cached config URL first (fast path)
- * 2. Scan local network for config service
- * 3. Fall back to cloud config
+ * 0. Manual URL override
+ * 1. Cached config URL
+ * 2. mDNS / Bonjour browse for _jarvis-config._tcp (fast, runs on every launch)
+ * 3. Scan local /24 (slow fallback, only when user explicitly opts in)
+ * 4. Empty config + "no server found" message
+ *
+ * `skipNetworkScan` only gates the LAN sweep. mDNS is cheap enough (≤5s) and
+ * provides instant discovery for users with the publisher set up, so it runs
+ * even on cold launch.
  */
 export const discoverConfigService = async (
   skipNetworkScan = false,
@@ -206,7 +264,18 @@ export const discoverConfigService = async (
     }
   }
 
-  // Tier 2: Scan local network (with timeout)
+  // Tier 2: mDNS browse (fast, always runs)
+  const mdnsUrl = await discoverViaMDNS();
+  if (mdnsUrl) {
+    const config = await fetchServiceUrls(mdnsUrl);
+    if (config) {
+      setServiceConfig(config);
+      await cacheConfig(config);
+      return { config, isCloud: false, fallbackMessage: null };
+    }
+  }
+
+  // Tier 3: Scan local network (with timeout)
   if (!skipNetworkScan) {
     const scanResult = await Promise.race([
       scanLocalNetwork(),

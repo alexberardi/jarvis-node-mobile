@@ -19,6 +19,7 @@
       "infoPlist": {
         "NSCameraUsageDescription": "Camera access is required to scan QR codes for node pairing",
         "NSLocalNetworkUsageDescription": "Jarvis needs local network access to discover your self-hosted server.",
+        "NSBonjourServices": ["_jarvis-config._tcp"],
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": true,
           "NSAllowsLocalNetworking": true
@@ -45,7 +46,9 @@
       "permissions": [
         "CAMERA",
         "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO"
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CHANGE_WIFI_MULTICAST_STATE",
+        "android.permission.ACCESS_WIFI_STATE"
       ]
     },
     "web": {

@@ -9,9 +9,7 @@ import * as Network from 'expo-network';
 
 const PROBE_TIMEOUT_MS = 1500;
 const DISCOVERY_TIMEOUT_MS = 15000;
-const BATCH_SIZE = 20;
-
-const PRIORITY_HOSTS = [1, 2, 10, 50, 100, 103, 150, 200];
+const BATCH_SIZE = 50;
 
 export interface DiscoveryResult {
   found: boolean;
@@ -70,27 +68,11 @@ const scanLocalNetwork = async (
   let scanned = 0;
   const total = 254;
 
-  // Probe priority hosts first
-  const priorityIps = PRIORITY_HOSTS.map((h) => `${subnet}.${h}`);
-  for (const ip of priorityIps) {
-    const result = await probeHost(ip, port, probePath);
-    scanned++;
-    onProgress?.(scanned, total);
-    if (result) return result;
-  }
+  const hosts: number[] = [];
+  for (let i = 1; i < 255; i++) hosts.push(i);
 
-  // Build remaining hosts
-  const prioritySet = new Set(PRIORITY_HOSTS);
-  const remainingHosts: number[] = [];
-  for (let i = 1; i < 255; i++) {
-    if (!prioritySet.has(i)) {
-      remainingHosts.push(i);
-    }
-  }
-
-  // Scan in batches
-  for (let batchStart = 0; batchStart < remainingHosts.length; batchStart += BATCH_SIZE) {
-    const batch = remainingHosts.slice(batchStart, batchStart + BATCH_SIZE);
+  for (let batchStart = 0; batchStart < hosts.length; batchStart += BATCH_SIZE) {
+    const batch = hosts.slice(batchStart, batchStart + BATCH_SIZE);
     const batchPromises = batch.map((h) => probeHost(`${subnet}.${h}`, port, probePath));
     const results = await Promise.all(batchPromises);
     scanned += batch.length;
