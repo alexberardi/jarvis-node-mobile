@@ -27,7 +27,7 @@ interface InstallEntry {
   nodeName: string;
 }
 
-const POLL_INTERVAL_MS = 2000;
+const POLL_INTERVAL_MS = 750;
 const MAX_CONSECUTIVE_FAILURES = 5;
 
 const TERMINAL_STATES: Set<InstallStatusValue> = new Set(['completed', 'failed', 'expired']);
