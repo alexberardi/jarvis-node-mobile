@@ -1,6 +1,6 @@
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Alert, Linking, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import {
   ActivityIndicator,
@@ -163,6 +163,12 @@ const InboxDetailScreen = () => {
   const { thinking, content } = parseThinkBlock(item.body);
   const useMarkdown = item.content_format === 'markdown' || item.content_format == null;
 
+  const linkUrl =
+    item.category === 'link'
+      ? (typeof item.metadata?.url === 'string' ? item.metadata.url : null) ||
+        (item.body.startsWith('http://') || item.body.startsWith('https://') ? item.body.trim() : null)
+      : null;
+
   return (
     <View style={styles.container}>
       <View style={[styles.header, { backgroundColor: theme.colors.background }]}>
@@ -221,7 +227,35 @@ const InboxDetailScreen = () => {
 
       <Divider style={{ marginBottom: 16 }} />
 
-      {useMarkdown ? (
+      {linkUrl ? (
+        <>
+          {item.summary && item.summary !== linkUrl && (
+            <Text variant="bodyMedium" style={[styles.body, { marginBottom: 16 }]}>
+              {item.summary}
+            </Text>
+          )}
+          <Button
+            mode="contained"
+            icon="open-in-new"
+            onPress={() => {
+              Linking.openURL(linkUrl).catch(() =>
+                Alert.alert('Error', 'Could not open the link.'),
+              );
+            }}
+            style={{ marginBottom: 12 }}
+          >
+            Open in browser
+          </Button>
+          <Text
+            variant="labelSmall"
+            style={{ color: theme.colors.onSurfaceVariant }}
+            selectable
+            numberOfLines={2}
+          >
+            {linkUrl}
+          </Text>
+        </>
+      ) : useMarkdown ? (
         <Markdown style={markdownStyles}>{content}</Markdown>
       ) : (
         <Text variant="bodyMedium" style={styles.body} selectable>

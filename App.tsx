@@ -1,5 +1,6 @@
 import 'react-native-gesture-handler';
 import React, { useCallback } from 'react';
+import { Linking } from 'react-native';
 import { createNavigationContainerRef, NavigationContainer } from '@react-navigation/native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StatusBar } from 'expo-status-bar';
@@ -43,6 +44,10 @@ const PushNotificationManager: React.FC<{ children: React.ReactNode }> = ({ chil
       (navigationRef as any).navigate('Inbox', {
         screen: 'InboxDetail',
         params: { itemId: data.inbox_item_id },
+      });
+    } else if (data.type === 'open_url' && typeof data.url === 'string') {
+      Linking.openURL(data.url).catch((err) => {
+        console.warn('[Push] Failed to open URL:', err);
       });
     }
   }, []);
