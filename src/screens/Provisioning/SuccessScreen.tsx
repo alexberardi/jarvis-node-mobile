@@ -1,4 +1,4 @@
-import { useNavigation } from '@react-navigation/native';
+import { CommonActions, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
 import React, { useState } from 'react';
 import { StyleSheet, View, ScrollView } from 'react-native';
@@ -20,10 +20,25 @@ const SuccessScreen = ({ navigation }: Props) => {
 
   const handleDone = () => {
     reset();
-    navigation.reset({
-      index: 0,
-      routes: [{ name: 'ScanForNodes' }],
-    });
+    // navigation.reset() here only resets the inner ProvisioningNavigator
+    // (would send the user back to ScanForNodes inside AddNode), not
+    // OUT of the provisioning flow. Reset the parent NodesStack so the
+    // user lands back on NodeList, where they expected "Done" to take
+    // them.
+    const parent = navigation.getParent();
+    if (parent) {
+      parent.dispatch(
+        CommonActions.reset({
+          index: 0,
+          routes: [{ name: 'NodeList' }],
+        }),
+      );
+    } else {
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'ScanForNodes' }],
+      });
+    }
   };
 
   const handleSetupSmartHome = () => {

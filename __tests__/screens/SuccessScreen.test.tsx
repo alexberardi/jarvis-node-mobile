@@ -12,7 +12,16 @@ jest.mock('@react-navigation/native', () => ({
 }));
 
 const mockReset = jest.fn();
-const mockNavigation = { reset: mockReset } as any;
+const mockParentDispatch = jest.fn();
+// getParent returns the NodesStack navigator in production. The default
+// here returns ``null`` so the SuccessScreen falls through to its
+// ``navigation.reset`` fallback — individual tests override getParent to
+// exercise the primary "exit provisioning" path.
+const mockGetParent: jest.Mock<{ dispatch: jest.Mock } | null> = jest.fn(() => null);
+const mockNavigation = {
+  reset: mockReset,
+  getParent: mockGetParent,
+} as any;
 
 const mockResetContext = jest.fn();
 
@@ -73,7 +82,10 @@ describe('SuccessScreen', () => {
     expect(getByTestId('done-button')).toBeTruthy();
   });
 
-  it('should reset navigation on done', () => {
+  it('should reset navigation on done (fallback when no parent)', () => {
+    // getParent returns null → fallback resets the provisioning stack
+    mockGetParent.mockReturnValueOnce(null);
+
     const { getByTestId } = render(
       <SuccessScreen navigation={mockNavigation} route={{} as any} />,
       { wrapper }
@@ -83,5 +95,26 @@ describe('SuccessScreen', () => {
 
     expect(mockResetContext).toHaveBeenCalled();
     expect(mockReset).toHaveBeenCalled();
+  });
+
+  it('should exit provisioning back to NodeList when parent stack is present', () => {
+    // Production path: getParent returns the NodesStack navigator,
+    // SuccessScreen dispatches a reset to NodeList on that parent
+    // instead of bouncing back to ScanForNodes inside ProvisioningNavigator.
+    mockGetParent.mockReturnValueOnce({ dispatch: mockParentDispatch });
+
+    const { getByTestId } = render(
+      <SuccessScreen navigation={mockNavigation} route={{} as any} />,
+      { wrapper }
+    );
+
+    fireEvent.press(getByTestId('done-button'));
+
+    expect(mockResetContext).toHaveBeenCalled();
+    expect(mockParentDispatch).toHaveBeenCalled();
+    const action = mockParentDispatch.mock.calls[0][0];
+    expect(action.payload?.routes?.[0]?.name).toBe('NodeList');
+    // Fallback navigation.reset must NOT fire when parent handled it
+    expect(mockReset).not.toHaveBeenCalled();
   });
 });
