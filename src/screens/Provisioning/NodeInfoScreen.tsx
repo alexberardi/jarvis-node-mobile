@@ -3,7 +3,9 @@ import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Appbar, Button, Card, Chip, Text } from 'react-native-paper';
 
+import { HelpIcon } from '../../components/HelpIcon';
 import { useProvisioningContext } from '../../contexts/ProvisioningContext';
+import { helpCopy } from '../../copy/help';
 import { ProvisioningStackParamList } from '../../navigation/types';
 
 type Props = NativeStackScreenProps<ProvisioningStackParamList, 'NodeInfo'>;
@@ -73,9 +75,12 @@ const NodeInfoScreen = ({ navigation }: Props) => {
               <Chip compact>{nodeInfo.state}</Chip>
             </View>
 
-            <Text variant="bodyMedium" style={[styles.label, styles.capabilitiesLabel]}>
-              Capabilities:
-            </Text>
+            <View style={styles.capabilitiesHeader}>
+              <Text variant="bodyMedium" style={styles.label}>
+                Capabilities:
+              </Text>
+              <HelpIcon text={helpCopy.provisioning.capabilities} size={16} />
+            </View>
             <View style={styles.capabilities}>
               {nodeInfo.capabilities.map((cap) => (
                 <Chip key={cap} style={styles.capabilityChip}>
@@ -122,7 +127,9 @@ const styles = StyleSheet.create({
     marginRight: 8,
     opacity: 0.7,
   },
-  capabilitiesLabel: {
+  capabilitiesHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginTop: 8,
     marginBottom: 8,
   },

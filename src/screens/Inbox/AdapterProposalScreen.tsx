@@ -30,6 +30,8 @@ import {
 } from '../../api/adaptersApi';
 import { getInboxItem, InboxItem } from '../../api/inboxApi';
 import { useAuth } from '../../auth/AuthContext';
+import { HelpIcon, InfoHelperText } from '../../components/HelpIcon';
+import { helpCopy } from '../../copy/help';
 import { InboxStackParamList } from '../../navigation/types';
 
 type Nav = NativeStackNavigationProp<InboxStackParamList>;
@@ -162,13 +164,18 @@ const AdapterProposalScreen = () => {
           {inboxItem.title}
         </Text>
 
-        <Text
-          variant="labelSmall"
-          style={{ color: theme.colors.onSurfaceVariant, marginBottom: 16 }}
-        >
-          Trained on {proposal.trained_on_examples ?? '?'} examples · expires{' '}
-          {new Date(proposal.expires_at).toLocaleDateString()}
-        </Text>
+        <InfoHelperText text={helpCopy.inbox.adapterProposal} />
+
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+          <Text
+            variant="labelSmall"
+            style={{ color: theme.colors.onSurfaceVariant, flex: 1 }}
+          >
+            Trained on {proposal.trained_on_examples ?? '?'} examples · expires{' '}
+            {new Date(proposal.expires_at).toLocaleDateString()}
+          </Text>
+          <HelpIcon text={helpCopy.inbox.adapterStats} size={16} />
+        </View>
 
         <Divider style={{ marginBottom: 16 }} />
 
@@ -185,16 +192,19 @@ const AdapterProposalScreen = () => {
 
         {canAct && (
           <View style={styles.actions}>
-            <Button
-              mode="contained"
-              onPress={onApply}
-              loading={acting === 'apply'}
-              disabled={acting !== null}
-              style={styles.primary}
-              labelStyle={{ fontWeight: '600' }}
-            >
-              Apply
-            </Button>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Button
+                mode="contained"
+                onPress={onApply}
+                loading={acting === 'apply'}
+                disabled={acting !== null}
+                style={[styles.primary, { flex: 1 }]}
+                labelStyle={{ fontWeight: '600' }}
+              >
+                Apply
+              </Button>
+              <HelpIcon text={helpCopy.inbox.applyAdapter} size={16} />
+            </View>
             <Button
               mode="outlined"
               onPress={onPreview}

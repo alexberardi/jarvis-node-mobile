@@ -26,7 +26,9 @@ import {
 } from 'react-native-paper';
 
 import { useAuth } from '../../auth/AuthContext';
+import { HelpIcon } from '../../components/HelpIcon';
 import ParameterArgRow from '../../components/ParameterArgRow';
+import { helpCopy } from '../../copy/help';
 import { useSettingsSnapshot } from '../../hooks/useSettingsSnapshot';
 import { RoutinesStackParamList } from '../../navigation/types';
 import {
@@ -466,7 +468,10 @@ const RoutineEditScreen = () => {
 
         {/* Trigger Phrases */}
         <View style={styles.section}>
-          <Text variant="titleSmall" style={[styles.sectionTitle, { color: theme.colors.primary }]}>Trigger Phrases</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Text variant="titleSmall" style={[styles.sectionTitle, { color: theme.colors.primary }]}>Trigger Phrases</Text>
+            <HelpIcon text={helpCopy.routines.triggerPhrases} size={16} />
+          </View>
           <View style={styles.triggerRow}>
             <TextInput mode="flat" label="Add phrase" value={triggerInput} onChangeText={setTriggerInput}
               onSubmitEditing={addTriggerPhrase} dense style={[styles.topInput, { flex: 1 }]} />
@@ -520,9 +525,11 @@ const RoutineEditScreen = () => {
         {/* Background Section */}
         <View style={styles.section}>
           <View style={styles.bgToggleRow}>
-            <Text variant="titleSmall" style={[styles.sectionTitle, { color: theme.colors.primary, flex: 1, marginBottom: 0 }]}>
+            <Text variant="titleSmall" style={[styles.sectionTitle, { color: theme.colors.primary, marginBottom: 0 }]}>
               Run in Background
             </Text>
+            <HelpIcon text={helpCopy.routines.runInBackground} size={16} />
+            <View style={{ flex: 1 }} />
             <Switch value={background !== null} onValueChange={toggleBackground} />
           </View>
 

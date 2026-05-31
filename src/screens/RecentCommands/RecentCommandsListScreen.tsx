@@ -6,6 +6,8 @@ import { Card, IconButton, Text, useTheme } from 'react-native-paper';
 
 import { listRecentTranscripts, rateTranscript, Rating, Transcript } from '../../api/transcriptsApi';
 import { useAuth } from '../../auth/AuthContext';
+import { InfoHelperText } from '../../components/HelpIcon';
+import { helpCopy } from '../../copy/help';
 import { RecentCommandsStackParamList } from '../../navigation/types';
 
 type Nav = NativeStackNavigationProp<RecentCommandsStackParamList>;
@@ -138,6 +140,9 @@ const RecentCommandsListScreen = () => {
         keyExtractor={(t) => String(t.id)}
         renderItem={renderItem}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        ListHeaderComponent={
+          items.length > 0 ? <InfoHelperText text={helpCopy.inbox.thumbsRating} /> : null
+        }
         ListEmptyComponent={
           <Text style={[styles.empty, { color: theme.colors.onSurfaceVariant }]}>
             No recent commands yet. Talk to Jarvis and they'll show up here.

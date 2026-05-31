@@ -12,6 +12,7 @@ import {
   Card,
   Chip,
   Icon,
+  IconButton,
   Searchbar,
   Text,
   useTheme,
@@ -21,7 +22,10 @@ import apiClient from '../../api/apiClient';
 import { fetchNodeTools } from '../../api/chatApi';
 import { browsePackages, getCategories } from '../../api/pantryApi';
 import { useAuth } from '../../auth/AuthContext';
+import { FirstRunCard } from '../../components/FirstRunCard';
 import { getServiceConfig } from '../../config/serviceConfig';
+import { helpCopy } from '../../copy/help';
+import { useFirstRun } from '../../hooks/useFirstRun';
 import type { PackageCategory, PackageSummary } from '../../types/Package';
 import { StoreStackParamList } from '../../navigation/types';
 
@@ -65,6 +69,8 @@ const StoreBrowseScreen = () => {
   const [error, setError] = useState<string | null>(null);
   const [nodeTools, setNodeTools] = useState<NodeToolInfo[]>([]);
   const [nodeCount, setNodeCount] = useState(0);
+
+  const firstRun = useFirstRun('pantry');
 
   const loadPackages = useCallback(
     async (pageNum: number = 1, append: boolean = false) => {
@@ -264,6 +270,12 @@ const StoreBrowseScreen = () => {
         >
           Pantry
         </Text>
+        <IconButton
+          icon="help-circle-outline"
+          size={20}
+          onPress={firstRun.showAgain}
+          accessibilityLabel="What is the Pantry?"
+        />
         <Button
           icon="flask-outline"
           mode="text"
@@ -273,6 +285,13 @@ const StoreBrowseScreen = () => {
           Test
         </Button>
       </View>
+
+      <FirstRunCard
+        visible={firstRun.visible}
+        onDismiss={firstRun.dismiss}
+        title={helpCopy.pantry.firstRunTitle}
+        body={helpCopy.pantry.firstRun}
+      />
 
       <Searchbar
         placeholder="Search packages..."

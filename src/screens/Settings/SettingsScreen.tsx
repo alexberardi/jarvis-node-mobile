@@ -24,7 +24,9 @@ import {
 
 import { useAuth } from '../../auth/AuthContext';
 import authApi from '../../api/authApi';
+import { HelpIcon } from '../../components/HelpIcon';
 import { useConfig } from '../../contexts/ConfigContext';
+import { helpCopy } from '../../copy/help';
 import { useThemePreference, ThemePreference } from '../../theme/ThemeProvider';
 import {
   getSmartHomeConfig,
@@ -509,6 +511,7 @@ const SettingsScreen = () => {
             >
               {isUsingCloud ? 'Cloud' : 'Local'}
             </Chip>
+            <HelpIcon text={helpCopy.settings.statusChip} size={16} />
           </View>
           {config.configServiceUrl && (
             <Text variant="bodySmall" style={styles.urlText}>
@@ -525,14 +528,16 @@ const SettingsScreen = () => {
               Command Center: {config.commandCenterUrl}
             </Text>
           )}
-          <Button
-            mode="outlined"
-            onPress={rediscover}
-            style={styles.rediscoverButton}
-            icon="refresh"
-          >
-            Re-discover Services
-          </Button>
+          <View style={styles.rediscoverRow}>
+            <Button
+              mode="outlined"
+              onPress={rediscover}
+              icon="refresh"
+            >
+              Re-discover Services
+            </Button>
+            <HelpIcon text={helpCopy.settings.rediscoverServices} size={16} />
+          </View>
         </Card.Content>
       </Card>
 
@@ -588,7 +593,10 @@ const SettingsScreen = () => {
                 <Divider style={{ marginVertical: 12 }} />
                 <View style={styles.switchRow}>
                   <View style={{ flex: 1 }}>
-                    <Text variant="bodyMedium">Use External Devices</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <Text variant="bodyMedium">Use External Devices</Text>
+                      <HelpIcon text={helpCopy.settings.useExternalDevices} size={16} />
+                    </View>
                     <Text variant="bodySmall" style={styles.hint}>
                       Show devices from your device manager (read-only)
                     </Text>
@@ -612,9 +620,12 @@ const SettingsScreen = () => {
       {/* Manual Config URL */}
       <Card style={styles.card}>
         <Card.Content>
-          <Text variant="titleMedium" style={styles.sectionTitle}>
-            Config Service URL
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Text variant="titleMedium" style={styles.sectionTitle}>
+              Config Service URL
+            </Text>
+            <HelpIcon text={helpCopy.settings.configServiceUrl} size={16} />
+          </View>
           <Text variant="bodySmall" style={styles.hint}>
             Override auto-discovery with a specific URL. Leave empty to
             auto-discover on the local network.
@@ -688,7 +699,12 @@ const styles = StyleSheet.create({
   },
   statusChip: {},
   urlText: { opacity: 0.5, marginBottom: 2, fontFamily: 'monospace' },
-  rediscoverButton: { marginTop: 12, alignSelf: 'flex-start' },
+  rediscoverRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    alignSelf: 'flex-start',
+  },
   switchRow: {
     flexDirection: 'row',
     alignItems: 'center',

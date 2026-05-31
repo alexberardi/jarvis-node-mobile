@@ -23,6 +23,8 @@ import {
 import Markdown from 'react-native-markdown-display';
 
 import { K2BackupCard } from '../../components/K2QRCode';
+import { HelpIcon, InfoHelperText } from '../../components/HelpIcon';
+import { helpCopy } from '../../copy/help';
 import { getK2 } from '../../services/k2Service';
 import type { K2KeyPair } from '../../services/k2Service';
 
@@ -1418,14 +1420,15 @@ const NodeSettingsScreen: React.FC = () => {
             density="small"
             buttons={[
               { value: 'commands', label: 'Commands' },
-              { value: 'agents', label: 'Agents' },
-              { value: 'integrations', label: 'Integrations' },
+              { value: 'agents', label: 'Tasks' },
+              { value: 'integrations', label: 'Services' },
             ]}
           />
         </View>
 
         {tab === 'commands' && (
           <ScrollView contentContainerStyle={styles.list}>
+            <InfoHelperText text={helpCopy.nodeSettings.commandsTab} />
             {flatCommands.length === 0 ? (
               <View style={styles.emptyTab}>
                 <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
@@ -1442,10 +1445,11 @@ const NodeSettingsScreen: React.FC = () => {
 
         {tab === 'agents' && (
           <ScrollView contentContainerStyle={styles.list}>
+            <InfoHelperText text={helpCopy.nodeSettings.tasksTab} />
             {flatAgents.length === 0 ? (
               <View style={styles.emptyTab}>
                 <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
-                  No background agents on this node.
+                  No background tasks on this node.
                 </Text>
               </View>
             ) : (
@@ -1458,6 +1462,7 @@ const NodeSettingsScreen: React.FC = () => {
 
         {tab === 'integrations' && (
           <ScrollView contentContainerStyle={styles.list}>
+            <InfoHelperText text={helpCopy.nodeSettings.servicesTab} />
             {missingRequired.length > 0 && (
               <Surface style={[styles.banner, { backgroundColor: theme.colors.errorContainer }]}>
                 <Icon source="alert-circle" size={18} color={theme.colors.error} />
@@ -1473,7 +1478,7 @@ const NodeSettingsScreen: React.FC = () => {
             {integrationServiceGroups.length === 0 && deviceFamilies.length === 0 ? (
               <View style={styles.emptyTab}>
                 <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
-                  No integrations installed.
+                  No services installed.
                 </Text>
               </View>
             ) : (
@@ -1483,13 +1488,14 @@ const NodeSettingsScreen: React.FC = () => {
                 {deviceFamilies.length > 0 && (
                   <>
                     {integrationServiceGroups.length > 0 && (
-                      <View style={styles.sectionHeader}>
+                      <View style={[styles.sectionHeader, { flexDirection: 'row', alignItems: 'center' }]}>
                         <Text
                           variant="titleSmall"
                           style={{ color: theme.colors.onSurfaceVariant, fontWeight: '600' }}
                         >
                           Device Protocols
                         </Text>
+                        <HelpIcon text={helpCopy.nodeSettings.deviceProtocols} size={16} />
                       </View>
                     )}
                     {deviceFamilies.map(renderDeviceFamilyCard)}

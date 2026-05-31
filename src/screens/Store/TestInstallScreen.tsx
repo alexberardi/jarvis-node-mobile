@@ -16,6 +16,8 @@ import {
 import { listNodes, NodeInfo } from '../../api/nodeApi';
 import { requestTestInstall } from '../../api/testInstallApi';
 import { useAuth } from '../../auth/AuthContext';
+import { InfoHelperText } from '../../components/HelpIcon';
+import { helpCopy } from '../../copy/help';
 import { StoreStackParamList } from '../../navigation/types';
 
 type Nav = NativeStackNavigationProp<StoreStackParamList>;
@@ -101,6 +103,8 @@ const TestInstallScreen = () => {
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll}>
+        <InfoHelperText text={helpCopy.pantry.testInstallTab} />
+
         {/* Share code input */}
         <View style={styles.section}>
           <Text variant="titleSmall" style={[styles.sectionTitle, { color: theme.colors.primary }]}>

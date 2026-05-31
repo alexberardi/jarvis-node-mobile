@@ -25,6 +25,7 @@ import {
   RoutineExecution,
 } from '../../api/routineHistoryApi';
 import { NodeUpdateSection } from '../../components/NodeUpdateSection';
+import { helpCopy } from '../../copy/help';
 import { HardwareTab } from './HardwareTab';
 import { NodesStackParamList } from '../../navigation/types';
 import { deleteK2, hasK2 } from '../../services/k2Service';
@@ -303,6 +304,9 @@ const PackagesTab = ({ nodeId }: { nodeId: string }) => {
         <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant, marginTop: 12 }}>
           No commands installed
         </Text>
+        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 4, textAlign: 'center', paddingHorizontal: 24 }}>
+          {helpCopy.nodeDetail.packagesEmpty}
+        </Text>
       </View>
     );
   }
@@ -377,7 +381,10 @@ const ActivityTab = ({ nodeId }: { nodeId: string }) => {
       <View style={styles.tabCenter}>
         <Icon source="history" size={48} color={theme.colors.outlineVariant} />
         <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant, marginTop: 12, textAlign: 'center' }}>
-          No activity yet.{'\n'}Routine executions will appear here.
+          No activity yet
+        </Text>
+        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 4, textAlign: 'center', paddingHorizontal: 24 }}>
+          {helpCopy.nodeDetail.activityTab}
         </Text>
       </View>
     );
