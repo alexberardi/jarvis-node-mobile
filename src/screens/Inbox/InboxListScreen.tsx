@@ -8,6 +8,8 @@ import { Button, Card, Chip, IconButton, Text, useTheme } from 'react-native-pap
 
 import { deleteInboxItem, InboxItem, listInboxItems } from '../../api/inboxApi';
 import { useAuth } from '../../auth/AuthContext';
+import { HelpIcon } from '../../components/HelpIcon';
+import { helpCopy } from '../../copy/help';
 import { InboxStackParamList } from '../../navigation/types';
 
 type Nav = NativeStackNavigationProp<InboxStackParamList>;
@@ -202,6 +204,7 @@ const InboxListScreen = () => {
         >
           Inbox
         </Text>
+        <HelpIcon text={helpCopy.inbox.categoryChips} size={18} />
         <IconButton icon="close" onPress={() => navigation.getParent()?.goBack()} />
       </View>
 

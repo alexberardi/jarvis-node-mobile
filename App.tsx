@@ -10,6 +10,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { AuthProvider } from './src/auth/AuthContext';
 import ConnectionBanner from './src/components/ConnectionBanner';
+import { HelpProvider } from './src/components/HelpProvider';
 import { DEV_MODE } from './src/config/env';
 import { ConfigProvider } from './src/contexts/ConfigContext';
 import { ConnectionProvider } from './src/contexts/ConnectionContext';
@@ -67,11 +68,13 @@ const AppContent = () => {
             <AuthProvider>
               <ToolsProvider>
                 <PushNotificationManager>
-                  <NavigationContainer theme={navTheme} ref={navigationRef}>
-                    <ConnectionBanner />
-                    <RootNavigator />
-                    <StatusBar style={isDark ? 'light' : 'dark'} />
-                  </NavigationContainer>
+                  <HelpProvider>
+                    <NavigationContainer theme={navTheme} ref={navigationRef}>
+                      <ConnectionBanner />
+                      <RootNavigator />
+                      <StatusBar style={isDark ? 'light' : 'dark'} />
+                    </NavigationContainer>
+                  </HelpProvider>
                 </PushNotificationManager>
               </ToolsProvider>
             </AuthProvider>

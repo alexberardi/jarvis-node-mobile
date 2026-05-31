@@ -29,9 +29,11 @@ import {
 import { NodeInfo } from '../../api/nodeApi';
 import { getVoiceProfileStatus } from '../../api/voiceProfileApi';
 import { BluetoothSection } from '../../components/BluetoothSection';
+import { HelpIcon, InfoHelperText } from '../../components/HelpIcon';
 import { NodeVoiceSettings } from '../../components/NodeVoiceSettings';
 import { SpeakerHATCard } from '../../components/SpeakerHATCard';
 import { useAuth } from '../../auth/AuthContext';
+import { helpCopy } from '../../copy/help';
 import { RootStackParamList } from '../../navigation/types';
 
 type RootNav = NativeStackNavigationProp<RootStackParamList>;
@@ -71,6 +73,8 @@ export const HardwareTab = ({ nodeId, node }: Props) => {
 
   return (
     <ScrollView contentContainerStyle={styles.scroll}>
+      <InfoHelperText text={helpCopy.hardware.tabIntro} />
+
       {/* Bluetooth */}
       <BluetoothSection nodeId={nodeId} />
 
@@ -110,6 +114,7 @@ export const HardwareTab = ({ nodeId, node }: Props) => {
             title="Voice Mode"
             description={node.voice_mode || 'brief'}
             left={(props) => <List.Icon {...props} icon="microphone" />}
+            right={() => <HelpIcon text={helpCopy.hardware.voiceMode} size={16} />}
           />
           {node.platform && (
             <List.Item
@@ -130,6 +135,7 @@ export const HardwareTab = ({ nodeId, node }: Props) => {
               title="Adapter"
               description={node.adapter_hash}
               left={(props) => <List.Icon {...props} icon="tune" />}
+              right={() => <HelpIcon text={helpCopy.hardware.adapterHash} size={16} />}
             />
           )}
           <List.Item

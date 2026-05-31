@@ -17,9 +17,11 @@ import {
 import apiClient from '../../api/apiClient';
 import { fetchNodeTools } from '../../api/chatApi';
 import { useAuth } from '../../auth/AuthContext';
+import { HelpIcon } from '../../components/HelpIcon';
 import { getDownloadInfo, getPackageDetail } from '../../api/pantryApi';
 import { requestCCInstall, requestInstall } from '../../api/packageInstallApi';
 import { getServiceConfig } from '../../config/serviceConfig';
+import { helpCopy } from '../../copy/help';
 import { StoreStackParamList } from '../../navigation/types';
 import type { PackageDetail } from '../../types/Package';
 
@@ -273,12 +275,18 @@ const StoreDetailScreen = () => {
           </View>
           <View style={styles.badges}>
             {detail.verified && (
-              <Icon source="check-decagram" size={24} color={theme.colors.primary} />
+              <>
+                <Icon source="check-decagram" size={24} color={theme.colors.primary} />
+                <HelpIcon text={helpCopy.pantry.verifiedBadge} size={16} />
+              </>
             )}
             {detail.package_type === 'bundle' && (
-              <Chip compact style={{ backgroundColor: theme.colors.secondaryContainer }}>
-                Bundle
-              </Chip>
+              <>
+                <Chip compact style={{ backgroundColor: theme.colors.secondaryContainer }}>
+                  Bundle
+                </Chip>
+                <HelpIcon text={helpCopy.pantry.bundleChip} size={16} />
+              </>
             )}
           </View>
         </View>
@@ -353,16 +361,16 @@ const StoreDetailScreen = () => {
             <Card.Title
               title="Security Report"
               right={() => (
-                <Chip
-                  compact
-                  textStyle={{ color: '#fff', fontSize: 11 }}
-                  style={{
-                    backgroundColor: dangerColor,
-                    marginRight: 16,
-                  }}
-                >
-                  {DANGER_LABELS[detail.danger_rating] || 'Unknown'}
-                </Chip>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 8 }}>
+                  <Chip
+                    compact
+                    textStyle={{ color: '#fff', fontSize: 11 }}
+                    style={{ backgroundColor: dangerColor }}
+                  >
+                    {DANGER_LABELS[detail.danger_rating] || 'Unknown'}
+                  </Chip>
+                  <HelpIcon text={helpCopy.pantry.riskChip} size={16} />
+                </View>
               )}
             />
             <Card.Content>
