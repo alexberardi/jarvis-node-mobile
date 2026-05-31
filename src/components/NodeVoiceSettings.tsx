@@ -43,7 +43,7 @@ const DEFAULTS: VoiceSettings = {
   silence_duration: 0.5,
   barge_in_enabled: true,
   wake_ack_audio_enabled: true,
-  follow_up_listen_seconds: 10,
+  follow_up_listen_seconds: 4,
   follow_up_silence_duration: 0.5,
   follow_up_min_record_after_onset_secs: 0.7,
   follow_up_min_speech_secs: 0.3,
