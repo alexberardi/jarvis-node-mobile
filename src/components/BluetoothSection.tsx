@@ -40,6 +40,8 @@ import {
   requestBluetoothScan,
   setBluetoothAutoConnect,
 } from '../api/bluetoothApi';
+import { helpCopy } from '../copy/help';
+import { HelpIcon } from './HelpIcon';
 
 interface Props {
   nodeId: string;
@@ -334,9 +336,12 @@ export const BluetoothSection = ({ nodeId }: Props) => {
             Each row gets the full Disconnect / Auto-reconnect / Forget controls. */}
         {status && (status.connected.length > 0 || status.paired.length > 0) && (
           <View style={styles.section}>
-            <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 4 }}>
-              Saved devices
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+              <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>
+                Saved devices
+              </Text>
+              <HelpIcon text={helpCopy.bluetooth.pairedVsConnected} size={16} />
+            </View>
             {status.connected.map(renderSavedDevice)}
             {status.paired.map(renderSavedDevice)}
             <Divider style={{ marginVertical: 8 }} />
@@ -353,23 +358,29 @@ export const BluetoothSection = ({ nodeId }: Props) => {
             >
               Scan for Devices
             </Button>
-            <Button
-              mode="outlined"
-              icon="broadcast"
-              onPress={handleMakeDiscoverable}
-              style={{ marginTop: 8 }}
-            >
-              Make Discoverable
-            </Button>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
+              <Button
+                mode="outlined"
+                icon="broadcast"
+                onPress={handleMakeDiscoverable}
+                style={{ flex: 1 }}
+              >
+                Make Discoverable
+              </Button>
+              <HelpIcon text={helpCopy.bluetooth.makeDiscoverable} size={16} />
+            </View>
           </View>
         )}
 
         {/* Phase: Role Picker */}
         {phase === 'role_picker' && (
           <View style={styles.section}>
-            <Text variant="bodyMedium" style={{ marginBottom: 12 }}>
-              What are you connecting?
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+              <Text variant="bodyMedium">
+                What are you connecting?
+              </Text>
+              <HelpIcon text={helpCopy.bluetooth.speakerRole} size={16} />
+            </View>
             <View style={styles.roleButtons}>
               <Button
                 mode="contained"

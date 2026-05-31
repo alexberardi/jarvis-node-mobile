@@ -12,6 +12,8 @@ import {
   HelperText,
 } from 'react-native-paper';
 
+import { InfoHelperText } from '../../components/HelpIcon';
+import { helpCopy } from '../../copy/help';
 import {
   parseQRCode,
   importPlainQR,
@@ -323,6 +325,8 @@ const ImportKeyScreen: React.FC<ImportKeyScreenProps> = ({
         <Appbar.BackAction onPress={onCancel} />
         <Appbar.Content title="Scan Backup QR" />
       </Appbar.Header>
+
+      <InfoHelperText text={helpCopy.k2.importKeyTitle} />
 
       <View style={styles.scannerContainer}>
         <CameraView

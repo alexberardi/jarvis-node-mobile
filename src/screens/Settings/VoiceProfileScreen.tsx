@@ -28,6 +28,8 @@ import {
 } from 'react-native-paper';
 
 import { useAuth } from '../../auth/AuthContext';
+import { HelpIcon } from '../../components/HelpIcon';
+import { helpCopy } from '../../copy/help';
 import { useThemePreference } from '../../theme/ThemeProvider';
 import {
   deleteVoiceProfile,
@@ -581,9 +583,12 @@ const VoiceProfileScreen = () => {
           size={64}
           color={matched ? paperTheme.colors.primary : paperTheme.colors.error}
         />
-        <Text variant="titleMedium" style={styles.title}>
-          {matched ? `Matched — ${confidence}% confidence` : 'No Match'}
-        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+          <Text variant="titleMedium" style={styles.title}>
+            {matched ? `Matched — ${confidence}% confidence` : 'No Match'}
+          </Text>
+          {matched && <HelpIcon text={helpCopy.voiceProfile.confidenceAnchor} size={16} />}
+        </View>
         <Text variant="bodyMedium" style={styles.body}>
           {matched
             ? 'Your voice profile is working on this node.'
@@ -634,14 +639,17 @@ const VoiceProfileScreen = () => {
             ? '1 sample enrolled. Adding more samples improves accuracy across pitch and tone variation.'
             : `${sampleCount} samples enrolled. Add more to widen recognition across pitch and tone.`}
         </Text>
-        <Button
-          mode="contained"
-          icon="microphone"
-          onPress={() => openTargetPicker('test')}
-          style={styles.button}
-        >
-          Test Match
-        </Button>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <Button
+            mode="contained"
+            icon="microphone"
+            onPress={() => openTargetPicker('test')}
+            style={[styles.button, { flex: 1 }]}
+          >
+            Test Match
+          </Button>
+          <HelpIcon text={helpCopy.voiceProfile.testMatch} size={16} />
+        </View>
         <Button
           mode="outlined"
           icon="plus"

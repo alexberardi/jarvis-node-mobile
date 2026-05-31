@@ -3,6 +3,8 @@ import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Button, Text } from 'react-native-paper';
 
+import { HelpIcon } from '../../components/HelpIcon';
+import { helpCopy } from '../../copy/help';
 import { SmartHomeSetupParamList } from '../../navigation/types';
 
 type Props = NativeStackScreenProps<SmartHomeSetupParamList, 'SmartHomeSetup'>;
@@ -20,14 +22,17 @@ const SmartHomeSetupScreen = ({ navigation }: Props) => {
       </View>
 
       <View style={styles.options}>
-        <Button
-          mode="contained"
-          onPress={() => navigation.navigate('HADiscovery')}
-          style={styles.button}
-          contentStyle={styles.buttonContent}
-        >
-          Connect Home Assistant
-        </Button>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <Button
+            mode="contained"
+            onPress={() => navigation.navigate('HADiscovery')}
+            style={[styles.button, { flex: 1 }]}
+            contentStyle={styles.buttonContent}
+          >
+            Connect Home Assistant
+          </Button>
+          <HelpIcon text={helpCopy.smartHome.connectHaCta} size={16} />
+        </View>
 
         <Button
           mode="outlined"

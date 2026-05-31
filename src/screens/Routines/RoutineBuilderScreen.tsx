@@ -30,6 +30,10 @@ import {
   testRoutine,
 } from '../../api/routineBuilderApi';
 import { useAuth } from '../../auth/AuthContext';
+import { FirstRunCard } from '../../components/FirstRunCard';
+import { HelpIcon } from '../../components/HelpIcon';
+import { helpCopy } from '../../copy/help';
+import { useFirstRun } from '../../hooks/useFirstRun';
 import { RoutinesStackParamList } from '../../navigation/types';
 
 type Nav = NativeStackNavigationProp<RoutinesStackParamList>;
@@ -77,6 +81,8 @@ const RoutineBuilderScreen = () => {
   // Step feedback state (for marking false positives)
   const [feedbackStep, setFeedbackStep] = useState<number | null>(null);
   const [feedbackText, setFeedbackText] = useState('');
+
+  const firstRun = useFirstRun('routine_builder');
 
   const nextId = () => {
     messageIdCounter.current += 1;
@@ -534,10 +540,22 @@ const RoutineBuilderScreen = () => {
           AI Routine Builder
         </Text>
         <IconButton
+          icon="help-circle-outline"
+          onPress={firstRun.showAgain}
+          accessibilityLabel="What is the routine builder?"
+        />
+        <IconButton
           icon={showProviderConfig ? 'chevron-up' : 'cog-outline'}
           onPress={() => setShowProviderConfig((p) => !p)}
         />
       </View>
+
+      <FirstRunCard
+        visible={firstRun.visible}
+        onDismiss={firstRun.dismiss}
+        title={helpCopy.routines.firstRunTitle}
+        body={helpCopy.routines.firstRun}
+      />
 
       {/* Provider config (collapsible) */}
       {showProviderConfig && (
@@ -565,16 +583,21 @@ const RoutineBuilderScreen = () => {
           </View>
 
           {/* Provider toggle */}
-          <SegmentedButtons
-            value={provider}
-            onValueChange={(v) => setProvider(v as Provider)}
-            density="small"
-            buttons={[
-              { value: 'jarvis', label: 'Jarvis' },
-              { value: 'claude', label: 'Claude' },
-              { value: 'openai', label: 'OpenAI' },
-            ]}
-          />
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <View style={{ flex: 1 }}>
+              <SegmentedButtons
+                value={provider}
+                onValueChange={(v) => setProvider(v as Provider)}
+                density="small"
+                buttons={[
+                  { value: 'jarvis', label: 'Jarvis' },
+                  { value: 'claude', label: 'Claude' },
+                  { value: 'openai', label: 'OpenAI' },
+                ]}
+              />
+            </View>
+            <HelpIcon text={helpCopy.routines.aiProvider} size={16} />
+          </View>
 
           {/* API key (only for cloud providers) */}
           {needsApiKey && (

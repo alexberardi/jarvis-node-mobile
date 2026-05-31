@@ -4,7 +4,9 @@ import { StyleSheet, View, Linking, Platform } from 'react-native';
 import { Appbar, Button, Card, HelperText, Text, TextInput, Divider } from 'react-native-paper';
 
 import { useAuth } from '../../auth/AuthContext';
+import { HelpIcon } from '../../components/HelpIcon';
 import { useProvisioningContext } from '../../contexts/ProvisioningContext';
+import { helpCopy } from '../../copy/help';
 import { ProvisioningStackParamList } from '../../navigation/types';
 import { SIMULATED_NODE_IP, NODE_PORT, DEV_MODE } from '../../config/env';
 import { useThemePreference } from '../../theme/ThemeProvider';
@@ -147,14 +149,19 @@ const ScanForNodesScreen = ({ navigation }: Props) => {
                   2. Tap "Connect to Node" below
                 </Text>
 
-                <Button
-                  mode="outlined"
-                  onPress={openWiFiSettings}
-                  style={styles.wifiButton}
-                  icon="wifi"
-                >
-                  Open Settings
-                </Button>
+                <View style={styles.wifiButtonRow}>
+                  <Button
+                    mode="outlined"
+                    onPress={openWiFiSettings}
+                    style={{ flex: 1 }}
+                    icon="wifi"
+                  >
+                    Open Settings
+                  </Button>
+                  {Platform.OS === 'ios' && (
+                    <HelpIcon text={helpCopy.provisioning.iosOpenSettings} />
+                  )}
+                </View>
 
                 <Button
                   testID="connect-button"
@@ -180,13 +187,15 @@ const ScanForNodesScreen = ({ navigation }: Props) => {
         {/* Dev/Simulator mode */}
         <Divider style={styles.divider} />
 
-        <Button
-          mode="text"
-          onPress={() => setShowDevMode(!showDevMode)}
-          style={styles.devToggle}
-        >
-          {showDevMode ? 'Hide' : 'Show'} Developer Options
-        </Button>
+        <View style={styles.devToggleRow}>
+          <Button
+            mode="text"
+            onPress={() => setShowDevMode(!showDevMode)}
+          >
+            {showDevMode ? 'Hide' : 'Show'} Developer Options
+          </Button>
+          <HelpIcon text={helpCopy.provisioning.simulatorMode} />
+        </View>
 
         {showDevMode && (
           <Card style={[styles.devCard, { backgroundColor: paperTheme.colors.surfaceVariant }]}>
@@ -261,7 +270,9 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     opacity: 0.8,
   },
-  wifiButton: {
+  wifiButtonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: 12,
   },
   button: {
@@ -270,8 +281,10 @@ const styles = StyleSheet.create({
   divider: {
     marginVertical: 16,
   },
-  devToggle: {
-    alignSelf: 'center',
+  devToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   devCard: {
     marginTop: 8,

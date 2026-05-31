@@ -4,8 +4,10 @@ import React, { useState } from 'react';
 import { StyleSheet, View, ScrollView } from 'react-native';
 import { Button, Text, useTheme } from 'react-native-paper';
 
+import { InfoHelperText } from '../../components/HelpIcon';
 import { K2BackupCard } from '../../components/K2QRCode';
 import { useProvisioningContext } from '../../contexts/ProvisioningContext';
+import { helpCopy } from '../../copy/help';
 import { ProvisioningStackParamList, RootStackParamList } from '../../navigation/types';
 
 type Props = NativeStackScreenProps<ProvisioningStackParamList, 'Success'>;
@@ -68,6 +70,7 @@ const SuccessScreen = ({ navigation }: Props) => {
       </View>
 
       <View style={styles.buttonContainer}>
+        {k2KeyPair && <InfoHelperText text={helpCopy.k2.alwaysVisible} />}
         <Button
           mode="contained"
           onPress={handleSetupSmartHome}
