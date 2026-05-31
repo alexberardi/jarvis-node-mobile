@@ -1,3 +1,4 @@
+import { CommonActions } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import React from 'react';
@@ -76,6 +77,31 @@ const MainTabNavigator = () => {
             <MaterialCommunityIcons name="raspberry-pi" color={color} size={size} />
           ),
         }}
+        listeners={({ navigation }) => ({
+          // Tapping the Nodes tab icon while already on this tab should
+          // pop back to NodeList. React Navigation's default popToTop
+          // doesn't traverse into nested navigators, so when the user
+          // ends up inside AddNode's ProvisioningNavigator (e.g. on the
+          // post-provisioning Success screen) the tab tap stays put.
+          // Navigating to ``NodeList`` directly pops both AddNode and
+          // its nested ProvisioningNavigator off in one go.
+          tabPress: (e) => {
+            const state = navigation.getState();
+            const tabRoute = state.routes.find((r) => r.name === 'NodesTab');
+            const isFocused = state.routes[state.index]?.name === 'NodesTab';
+            const drilledIn =
+              !!tabRoute?.state && (tabRoute.state.index ?? 0) > 0;
+            if (isFocused && drilledIn) {
+              e.preventDefault();
+              navigation.dispatch(
+                CommonActions.navigate({
+                  name: 'NodesTab',
+                  params: { screen: 'NodeList' },
+                }),
+              );
+            }
+          },
+        })}
       />
     </Tab.Navigator>
   );
