@@ -43,6 +43,95 @@ export const sendNodeAction = async (
   return response.data;
 };
 
+/** Renderer hint chosen by the command at element-creation time. */
+export type NavigationType = 'stack' | 'new_notification' | 'popover';
+
+/**
+ * Interactive element embedded in an inbox item's metadata.
+ *
+ * Tapping one POSTs an `InteractiveCallbackRequest` to CC, which enqueues a
+ * job and signals the node over MQTT. The node dispatches to the command's
+ * @callback-decorated method and emits a follow-up inbox item.
+ *
+ * `navigation_type` controls what happens on tap:
+ *   - "stack" — push a new screen onto the inbox stack; mobile polls the
+ *     callback status endpoint and renders the result inline.
+ *   - "new_notification" (default for back-compat) — fire-and-forget; a
+ *     fresh inbox item lands when the node completes.
+ *   - "popover" — present a modal sheet over the current screen with the
+ *     same poll/render semantics as "stack" (not implemented yet).
+ */
+export interface InteractiveElement {
+  id: string;            // unique within the inbox item (React key + tap dedup)
+  label: string;         // primary display text, e.g. "Tom Hanks"
+  sublabel?: string;     // optional secondary text, e.g. "as Forrest Gump"
+  kind?: string;         // optional visual category (actor, movie, director, ...)
+  command: string;       // target command_name
+  callback: string;      // target @callback name on that command
+  data: Record<string, any>;  // payload forwarded to the callback method
+  navigation_type?: NavigationType;
+}
+
+export interface InteractiveCallbackRequest {
+  command_name: string;
+  callback_name: string;
+  data: Record<string, any>;
+  target_node_id: string;
+  navigation_type?: NavigationType;
+}
+
+export interface InteractiveCallbackResponse {
+  id: string;
+  status: string;
+  navigation_type: NavigationType;
+  created_at: string;
+}
+
+/**
+ * Shape returned by GET /api/v0/callbacks/{job_id}/status — used by the
+ * stacked result screen to poll for completion. `context_data.inbox`
+ * carries the renderable block (title, summary, body, metadata) once the
+ * job's status leaves "pending".
+ */
+export interface InteractiveCallbackStatus {
+  id: string;
+  status: 'pending' | 'completed' | 'failed' | 'expired';
+  navigation_type: NavigationType;
+  completed_at: string | null;
+  error_message: string | null;
+  context_data: Record<string, any> | null;
+}
+
+/**
+ * Trigger a `@callback` on a command by id. Returns the job id immediately —
+ * what happens next depends on `navigation_type` in the request:
+ *   - "new_notification" (default): the node completes asynchronously and
+ *     a fresh inbox item lands; mobile doesn't need to do anything.
+ *   - "stack" / "popover": mobile should navigate to the result screen
+ *     and call `getInteractiveCallbackStatus(id)` on a polling loop.
+ */
+export const sendInteractiveCallback = async (
+  request: InteractiveCallbackRequest,
+): Promise<InteractiveCallbackResponse> => {
+  const response = await apiClient.post<InteractiveCallbackResponse>(
+    `${getCommandCenterUrl()}/api/v0/callbacks`,
+    request,
+    { timeout: 10000 },
+  );
+  return response.data;
+};
+
+/** Poll the user-JWT'd status endpoint for a callback's final result. */
+export const getInteractiveCallbackStatus = async (
+  jobId: string,
+): Promise<InteractiveCallbackStatus> => {
+  const response = await apiClient.get<InteractiveCallbackStatus>(
+    `${getCommandCenterUrl()}/api/v0/callbacks/${jobId}/status`,
+    { timeout: 5000 },
+  );
+  return response.data;
+};
+
 export const requestProvisioningToken = async (
   request: ProvisioningTokenRequest,
 ): Promise<ProvisioningTokenResponse> => {
