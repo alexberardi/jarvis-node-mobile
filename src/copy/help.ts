@@ -3,6 +3,12 @@
 // Adding new copy: keep entries ≤25 words, plain English, no marketing voice.
 
 export const helpCopy = {
+  home: {
+    firstRunTitle: 'Chat with Jarvis',
+    firstRun:
+      "Chat with Jarvis when speaking out loud isn't an option — away from a node, in a meeting, or just keeping quiet. Same brain, just typed.",
+  },
+
   // Recurring terms — use these as the canonical phrasing when explaining elsewhere.
   glossary: {
     k2: "The key on your phone that encrypts this node's settings. Without it, settings can't be viewed or changed from this device.",
@@ -115,7 +121,8 @@ export const helpCopy = {
 
   bluetooth: {
     speakerRole: 'Speaker = headphones/soundbar (Jarvis sends audio). Audio Input = mic, phone, or other source.',
-    makeDiscoverable: 'Lets your phone or laptop find this node and connect to it for two minutes.',
+    makeDiscoverable:
+      'Pair from your phone or laptop to stream audio to this node — it becomes the speaker. Stays discoverable for 2 minutes after tapping.',
     autoReconnect: 'When on, Jarvis reconnects to this device automatically when it sees it nearby.',
     forget: "Removes pairing on both sides. You'll need to put the device back in pairing mode next time.",
     pairedVsConnected: 'Paired = saved. Connected = actively streaming audio right now.',

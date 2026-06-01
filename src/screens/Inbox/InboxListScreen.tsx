@@ -198,13 +198,15 @@ const InboxListScreen = () => {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text
-          variant="headlineMedium"
-          style={[styles.title, { color: theme.colors.onBackground }]}
-        >
-          Inbox
-        </Text>
-        <HelpIcon text={helpCopy.inbox.categoryChips} size={18} />
+        <View style={styles.titleGroup}>
+          <Text
+            variant="headlineMedium"
+            style={[styles.title, { color: theme.colors.onBackground, flex: 0 }]}
+          >
+            Inbox
+          </Text>
+          <HelpIcon text={helpCopy.inbox.categoryChips} size={18} />
+        </View>
         <IconButton icon="close" onPress={() => navigation.getParent()?.goBack()} />
       </View>
 
@@ -234,6 +236,7 @@ const styles = StyleSheet.create({
   },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   title: { fontWeight: 'bold', flex: 1 },
+  titleGroup: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   list: { padding: 16, gap: 12, paddingBottom: 32 },
   emptyList: { flexGrow: 1, justifyContent: 'center', alignItems: 'center' },
   card: {},

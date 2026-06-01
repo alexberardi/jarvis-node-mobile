@@ -39,9 +39,12 @@ function cleanForTTS(text: string): string {
 }
 import { useAuth } from '../../auth/AuthContext';
 import ChatBubble from '../../components/ChatBubble';
+import { FirstRunCard } from '../../components/FirstRunCard';
 import NodeSelector from '../../components/NodeSelector';
 import QuickActions from '../../components/QuickActions';
+import { helpCopy } from '../../copy/help';
 import { useChat } from '../../hooks/useChat';
+import { useFirstRun } from '../../hooks/useFirstRun';
 import { useVoiceRecording } from '../../hooks/useVoiceRecording';
 import { RootStackParamList } from '../../navigation/types';
 import { AUTO_PLAY_TTS_KEY } from '../../config/storageKeys';
@@ -64,6 +67,7 @@ const HomeScreen = () => {
   const [nodeCount, setNodeCount] = useState<number | null>(null);
   const householdId = authState.activeHouseholdId;
   const { isRecording, startRecording, stopRecording } = useVoiceRecording();
+  const firstRun = useFirstRun('chat_intro');
 
   // Reset node selection and chat state when household changes
   useEffect(() => {
@@ -248,9 +252,19 @@ const HomeScreen = () => {
     >
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: theme.colors.outlineVariant }]}>
-        <Text variant="headlineSmall" style={styles.title}>
-          Jarvis
-        </Text>
+        <View style={styles.titleRow}>
+          <Text variant="headlineSmall" style={styles.title}>
+            Jarvis
+          </Text>
+          <IconButton
+            icon="help-circle-outline"
+            size={18}
+            onPress={firstRun.showAgain}
+            iconColor={theme.colors.onSurfaceVariant}
+            accessibilityLabel="What is the chat for?"
+            style={{ margin: 0 }}
+          />
+        </View>
         <View style={styles.headerActions}>
           <IconButton
             icon="plus-circle-outline"
@@ -313,6 +327,13 @@ const HomeScreen = () => {
       )}
 
       {/* Connection errors now handled by global ConnectionBanner in App.tsx */}
+
+      <FirstRunCard
+        visible={firstRun.visible}
+        onDismiss={firstRun.dismiss}
+        title={helpCopy.home.firstRunTitle}
+        body={helpCopy.home.firstRun}
+      />
 
       {/* Message list */}
       <FlatList
@@ -453,6 +474,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
