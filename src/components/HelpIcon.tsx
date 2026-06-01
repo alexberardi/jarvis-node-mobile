@@ -15,7 +15,7 @@ export const HelpIcon = ({ text, size = 18, style }: HelpIconProps) => {
   const theme = useTheme();
   return (
     <IconButton
-      icon="information-outline"
+      icon="help-circle-outline"
       size={size}
       iconColor={theme.colors.onSurfaceVariant}
       onPress={() => showHelp(text)}

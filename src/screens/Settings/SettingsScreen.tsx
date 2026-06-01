@@ -25,6 +25,7 @@ import {
 import { useAuth } from '../../auth/AuthContext';
 import authApi from '../../api/authApi';
 import { HelpIcon } from '../../components/HelpIcon';
+import { HelpProvider } from '../../components/HelpProvider';
 import { useConfig } from '../../contexts/ConfigContext';
 import { helpCopy } from '../../copy/help';
 import { useThemePreference, ThemePreference } from '../../theme/ThemeProvider';
@@ -258,6 +259,7 @@ const SettingsScreen = () => {
 
   return (
     <Portal.Host>
+    <HelpProvider>
     <ScrollView style={[styles.container, { backgroundColor: paperTheme.colors.background }]} contentContainerStyle={styles.content}>
       <View style={styles.header}>
         <Text variant="headlineMedium" style={styles.title}>
@@ -670,7 +672,7 @@ const SettingsScreen = () => {
       </Text>
 
     </ScrollView>
-
+    </HelpProvider>
     </Portal.Host>
   );
 };
