@@ -4,6 +4,7 @@ import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import { PaperProvider } from 'react-native-paper';
 
 import StoreDetailScreen from '../../src/screens/Store/StoreDetailScreen';
+import { HelpProvider } from '../../src/components/HelpProvider';
 import { lightTheme } from '../../src/theme';
 import type { PackageDetail, PackageDownloadInfo } from '../../src/types/Package';
 
@@ -60,7 +61,9 @@ jest.mock('../../src/api/apiClient', () => ({
 }));
 
 const wrapper = ({ children }: { children: React.ReactNode }) => (
-  <PaperProvider theme={lightTheme}>{children}</PaperProvider>
+  <PaperProvider theme={lightTheme}>
+    <HelpProvider>{children}</HelpProvider>
+  </PaperProvider>
 );
 
 const baseDetail: PackageDetail = {

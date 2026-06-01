@@ -3,6 +3,7 @@ import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import { PaperProvider } from 'react-native-paper';
 
 import NodeInfoScreen from '../../src/screens/Provisioning/NodeInfoScreen';
+import { HelpProvider } from '../../src/components/HelpProvider';
 import { lightTheme } from '../../src/theme';
 
 const mockNavigate = jest.fn();
@@ -30,7 +31,9 @@ jest.mock('../../src/contexts/ProvisioningContext', () => ({
 }));
 
 const wrapper = ({ children }: { children: React.ReactNode }) => (
-  <PaperProvider theme={lightTheme}>{children}</PaperProvider>
+  <PaperProvider theme={lightTheme}>
+    <HelpProvider>{children}</HelpProvider>
+  </PaperProvider>
 );
 
 describe('NodeInfoScreen', () => {

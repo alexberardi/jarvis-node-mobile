@@ -4,6 +4,7 @@ import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import { PaperProvider } from 'react-native-paper';
 
 import RoutineEditScreen from '../../src/screens/Routines/RoutineEditScreen';
+import { HelpProvider } from '../../src/components/HelpProvider';
 import { lightTheme } from '../../src/theme';
 import type { Routine } from '../../src/types/Routine';
 
@@ -102,7 +103,9 @@ jest.mock('../../src/components/ParameterArgRow', () => {
 const alertSpy = jest.spyOn(Alert, 'alert');
 
 const wrapper = ({ children }: { children: React.ReactNode }) => (
-  <PaperProvider theme={lightTheme}>{children}</PaperProvider>
+  <PaperProvider theme={lightTheme}>
+    <HelpProvider>{children}</HelpProvider>
+  </PaperProvider>
 );
 
 /**
