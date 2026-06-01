@@ -3,6 +3,7 @@ import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import { PaperProvider } from 'react-native-paper';
 
 import ScanForNodesScreen from '../../src/screens/Provisioning/ScanForNodesScreen';
+import { HelpProvider } from '../../src/components/HelpProvider';
 import { lightTheme } from '../../src/theme';
 
 const mockNavigate = jest.fn();
@@ -56,7 +57,9 @@ describe('ScanForNodesScreen', () => {
   it('should render prepare button initially', () => {
     const { getByTestId } = render(
       <PaperProvider theme={lightTheme}>
-        <ScanForNodesScreen navigation={mockNavigation} route={{} as any} />
+        <HelpProvider>
+          <ScanForNodesScreen navigation={mockNavigation} route={{} as any} />
+        </HelpProvider>
       </PaperProvider>
     );
 
@@ -66,7 +69,9 @@ describe('ScanForNodesScreen', () => {
   it('should display provisioning instructions', () => {
     const { getByText } = render(
       <PaperProvider theme={lightTheme}>
-        <ScanForNodesScreen navigation={mockNavigation} route={{} as any} />
+        <HelpProvider>
+          <ScanForNodesScreen navigation={mockNavigation} route={{} as any} />
+        </HelpProvider>
       </PaperProvider>
     );
 
@@ -77,7 +82,9 @@ describe('ScanForNodesScreen', () => {
   it('should show connect button after preparing', async () => {
     const { getByTestId, getByText } = render(
       <PaperProvider theme={lightTheme}>
-        <ScanForNodesScreen navigation={mockNavigation} route={{} as any} />
+        <HelpProvider>
+          <ScanForNodesScreen navigation={mockNavigation} route={{} as any} />
+        </HelpProvider>
       </PaperProvider>
     );
 
@@ -100,7 +107,9 @@ describe('ScanForNodesScreen', () => {
   it('should have developer options toggle', () => {
     const { getByText } = render(
       <PaperProvider theme={lightTheme}>
-        <ScanForNodesScreen navigation={mockNavigation} route={{} as any} />
+        <HelpProvider>
+          <ScanForNodesScreen navigation={mockNavigation} route={{} as any} />
+        </HelpProvider>
       </PaperProvider>
     );
 
@@ -110,7 +119,9 @@ describe('ScanForNodesScreen', () => {
   it('should show IP input when developer options expanded', () => {
     const { getByText, getByTestId } = render(
       <PaperProvider theme={lightTheme}>
-        <ScanForNodesScreen navigation={mockNavigation} route={{} as any} />
+        <HelpProvider>
+          <ScanForNodesScreen navigation={mockNavigation} route={{} as any} />
+        </HelpProvider>
       </PaperProvider>
     );
 
@@ -125,7 +136,9 @@ describe('ScanForNodesScreen', () => {
   it('should navigate to NodeInfo after prepare then connect', async () => {
     const { getByTestId } = render(
       <PaperProvider theme={lightTheme}>
-        <ScanForNodesScreen navigation={mockNavigation} route={{} as any} />
+        <HelpProvider>
+          <ScanForNodesScreen navigation={mockNavigation} route={{} as any} />
+        </HelpProvider>
       </PaperProvider>
     );
 
