@@ -4,6 +4,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  AppState,
   FlatList,
   KeyboardAvoidingView,
   Platform,
@@ -14,6 +15,7 @@ import {
 import { Badge, Button, Divider, IconButton, Modal, Portal, Snackbar, Text, TextInput, TouchableRipple, useTheme } from 'react-native-paper';
 
 import { Audio } from 'expo-av';
+import * as Notifications from 'expo-notifications';
 
 import { getUnreadCount } from '../../api/inboxApi';
 import { sendNodeAction } from '../../api/commandCenterApi';
@@ -112,12 +114,42 @@ const HomeScreen = () => {
   const accessTokenRef = useRef(authState.accessToken);
   accessTokenRef.current = authState.accessToken;
 
+  const refreshUnreadCount = useCallback(() => {
+    if (!accessTokenRef.current) return;
+    getUnreadCount().then(setUnreadCount).catch(() => {});
+  }, []);
+
+  // While home is the focused screen, refresh the unread count on a 15s
+  // interval in addition to the on-focus fetch. Push-driven refresh
+  // (below) only fires when an inbox item *also* requests a push, which
+  // many commands opt out of — without polling, the badge would only
+  // update when the user navigated away and back. 15s is short enough
+  // to feel near-real-time without burning round trips while idle.
   useFocusEffect(
     useCallback(() => {
-      if (!accessTokenRef.current) return;
-      getUnreadCount().then(setUnreadCount).catch(() => {});
-    }, []),
+      refreshUnreadCount();
+      const intervalId = setInterval(refreshUnreadCount, 15_000);
+      return () => clearInterval(intervalId);
+    }, [refreshUnreadCount]),
   );
+
+  // Two cases useFocusEffect alone misses:
+  //   1. A push arrives while the user is already sitting on home (the
+  //      screen is already "focused", so useFocusEffect doesn't re-fire).
+  //   2. The app returns from background with home already focused.
+  // Both need an explicit refresh to bump the badge.
+  useEffect(() => {
+    const notifSub = Notifications.addNotificationReceivedListener(() => {
+      refreshUnreadCount();
+    });
+    const appStateSub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') refreshUnreadCount();
+    });
+    return () => {
+      notifSub.remove();
+      appStateSub.remove();
+    };
+  }, [refreshUnreadCount]);
 
   const handleSend = useCallback(() => {
     const text = inputText.trim();

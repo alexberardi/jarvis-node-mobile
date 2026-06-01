@@ -80,6 +80,11 @@ export type RoutinesStackParamList = {
 export type InboxStackParamList = {
   InboxList: undefined;
   InboxDetail: { itemId: string };
+  // Pushed onto the stack when a user taps an InteractiveElement whose
+  // navigation_type is "stack". Polls the callback's status endpoint
+  // until the result lands, then renders the same body/chip layout as
+  // InboxDetail — but inline, no separate inbox row.
+  InboxCallbackResult: { jobId: string; title?: string; targetNodeId?: string };
   AdapterProposal: { itemId: string };
   AdapterProposalDetail: { proposalId: string };
   AdapterDeployed: { itemId: string };
