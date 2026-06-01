@@ -138,6 +138,9 @@ export const helpCopy = {
   },
 
   inbox: {
+    firstRunTitle: 'Your Jarvis inbox',
+    firstRun:
+      'Background tasks and Jarvis itself drop things here — alerts you missed, things to confirm, reminders, and proposed model updates. Tap any to act.',
     adapterProposal: "A proposed fine-tune of Jarvis's language model based on your usage. Apply to make Jarvis sharper.",
     adapterStats: 'How many of your past commands were used to train this update, and how it scored against them.',
     applyAdapter:

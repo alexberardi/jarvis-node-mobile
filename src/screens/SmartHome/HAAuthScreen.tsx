@@ -3,6 +3,8 @@ import React, { useState } from 'react';
 import { Alert, StyleSheet, View } from 'react-native';
 import { Button, Text, TextInput } from 'react-native-paper';
 
+import { HelpIcon } from '../../components/HelpIcon';
+import { helpCopy } from '../../copy/help';
 import {
   testConnection,
   createLongLivedToken,
@@ -96,9 +98,12 @@ const HAAuthScreen = ({ navigation, route }: Props) => {
           Log in with Home Assistant
         </Button>
 
-        <Text variant="bodySmall" style={styles.divider}>
-          or enter a long-lived access token
-        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+          <Text variant="bodySmall" style={styles.divider}>
+            or enter a long-lived access token
+          </Text>
+          <HelpIcon text={helpCopy.smartHome.haToken} size={16} />
+        </View>
 
         <TextInput
           mode="outlined"
