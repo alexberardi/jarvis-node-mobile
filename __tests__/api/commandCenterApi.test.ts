@@ -1,4 +1,9 @@
-import { requestProvisioningToken, ProvisioningTokenRequest } from '../../src/api/commandCenterApi';
+import {
+  requestProvisioningToken,
+  ProvisioningTokenRequest,
+  sendInteractiveCallback,
+  InteractiveCallbackRequest,
+} from '../../src/api/commandCenterApi';
 import apiClient from '../../src/api/apiClient';
 import * as serviceConfig from '../../src/config/serviceConfig';
 
@@ -109,6 +114,43 @@ describe('commandCenterApi', () => {
         'http://custom-host:9002/api/v0/provisioning/token',
         expect.anything(),
       );
+    });
+  });
+
+  describe('sendInteractiveCallback', () => {
+    const mockRequest: InteractiveCallbackRequest = {
+      command_name: 'movie_knowledge',
+      callback_name: 'expand_actor',
+      data: { actor_id: 'nm0000158' },
+      target_node_id: 'node-uuid-abc',
+    };
+
+    it('POSTs to /api/v0/callbacks with the full payload', async () => {
+      (serviceConfig.getCommandCenterUrl as jest.Mock).mockReturnValue(
+        'http://192.168.1.10:8002'
+      );
+      const mockResponse = {
+        data: {
+          id: 'job-xyz',
+          status: 'pending',
+          created_at: '2026-05-31T10:00:00Z',
+        },
+      };
+      (apiClient.post as jest.Mock).mockResolvedValue(mockResponse);
+
+      const result = await sendInteractiveCallback(mockRequest);
+
+      expect(apiClient.post).toHaveBeenCalledWith(
+        'http://192.168.1.10:8002/api/v0/callbacks',
+        mockRequest,
+        { timeout: 10000 },
+      );
+      expect(result).toEqual(mockResponse.data);
+    });
+
+    it('propagates API errors', async () => {
+      (apiClient.post as jest.Mock).mockRejectedValue(new Error('Network error'));
+      await expect(sendInteractiveCallback(mockRequest)).rejects.toThrow('Network error');
     });
   });
 });

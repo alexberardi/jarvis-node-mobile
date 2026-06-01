@@ -13,9 +13,10 @@ import {
 } from 'react-native-paper';
 
 import { deleteInboxItem, getInboxItem, InboxItem } from '../../api/inboxApi';
-import { sendNodeAction } from '../../api/commandCenterApi';
+import { InteractiveElement, sendNodeAction } from '../../api/commandCenterApi';
 import { useAuth } from '../../auth/AuthContext';
 import ActionButtons from '../../components/ActionButtons';
+import InteractiveElementsSection from '../../components/InteractiveElementsSection';
 import { InboxStackParamList } from '../../navigation/types';
 import { JarvisButton, normalizeButton } from '../../types/SmartHome';
 
@@ -155,6 +156,11 @@ const InboxDetailScreen = () => {
   const actions: JarvisButton[] = ((item.metadata?.actions ?? []) as unknown[]).map(normalizeButton);
   const isConfirmation = item.category === 'confirmation' && actions.length > 0;
 
+  const interactiveElements: InteractiveElement[] =
+    (item.metadata?.interactive_elements as InteractiveElement[] | undefined) ?? [];
+  const interactiveTargetNodeId: string | null =
+    typeof item.metadata?.node_id === 'string' ? item.metadata.node_id : null;
+
   const formatDate = (iso: string) => {
     const d = new Date(iso);
     return d.toLocaleString();
@@ -261,6 +267,16 @@ const InboxDetailScreen = () => {
         <Text variant="bodyMedium" style={styles.body} selectable>
           {content}
         </Text>
+      )}
+
+      {/* Tappable interactive elements (actor cards, "expand similar", etc.).
+          Hidden when metadata.interactive_elements is absent — preserves
+          back-compat for inbox items that predate this feature. */}
+      {interactiveElements.length > 0 && (
+        <InteractiveElementsSection
+          elements={interactiveElements}
+          targetNodeId={interactiveTargetNodeId}
+        />
       )}
 
       {/* Action buttons for confirmation items */}
