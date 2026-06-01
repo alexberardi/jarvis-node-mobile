@@ -3,6 +3,7 @@ import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
 import { PaperProvider } from 'react-native-paper';
 
 import NodeSettingsScreen from '../../src/screens/Nodes/NodeSettingsScreen';
+import { HelpProvider } from '../../src/components/HelpProvider';
 import { lightTheme } from '../../src/theme';
 
 // --- Navigation mocks ---
@@ -81,7 +82,9 @@ jest.mock('../../src/components/K2QRCode', () => ({
 jest.mock('../../src/components/SecretEditDialog', () => () => null);
 
 const wrapper = ({ children }: { children: React.ReactNode }) => (
-  <PaperProvider theme={lightTheme}>{children}</PaperProvider>
+  <PaperProvider theme={lightTheme}>
+    <HelpProvider>{children}</HelpProvider>
+  </PaperProvider>
 );
 
 function snapshotWithAgents() {
@@ -149,8 +152,8 @@ describe('NodeSettingsScreen — three-tab layout', () => {
 
     await waitFor(() => {
       expect(view.getByText('Commands')).toBeTruthy();
-      expect(view.getByText('Agents')).toBeTruthy();
-      expect(view.getByText('Integrations')).toBeTruthy();
+      expect(view.getByText('Tasks')).toBeTruthy();
+      expect(view.getByText('Services')).toBeTruthy();
     });
   });
 
@@ -171,7 +174,7 @@ describe('NodeSettingsScreen — three-tab layout', () => {
     await waitFor(() => expect(view.getByText('control device')).toBeTruthy());
 
     await act(async () => {
-      fireEvent.press(view.getByText('Agents'));
+      fireEvent.press(view.getByText('Tasks'));
     });
 
     await waitFor(() => {
@@ -190,7 +193,7 @@ describe('NodeSettingsScreen — three-tab layout', () => {
     await waitFor(() => expect(view.getByText('control device')).toBeTruthy());
 
     await act(async () => {
-      fireEvent.press(view.getByText('Agents'));
+      fireEvent.press(view.getByText('Tasks'));
     });
     await waitFor(() => expect(view.getByText('ha snapshot')).toBeTruthy());
 
@@ -231,11 +234,11 @@ describe('NodeSettingsScreen — three-tab layout', () => {
     const view = await renderLoaded(legacy as any);
 
     await act(async () => {
-      fireEvent.press(view.getByText('Agents'));
+      fireEvent.press(view.getByText('Tasks'));
     });
 
     await waitFor(() => {
-      expect(view.getByText('No background agents on this node.')).toBeTruthy();
+      expect(view.getByText('No background tasks on this node.')).toBeTruthy();
     });
   });
 
@@ -279,7 +282,7 @@ describe('NodeSettingsScreen — three-tab layout', () => {
     await waitFor(() => expect(view.getByText('control device')).toBeTruthy());
 
     await act(async () => {
-      fireEvent.press(view.getByText('Integrations'));
+      fireEvent.press(view.getByText('Services'));
     });
 
     await waitFor(() => {
@@ -328,11 +331,11 @@ describe('NodeSettingsScreen — three-tab layout', () => {
     const view = await renderLoaded(noIntegrations as any);
 
     await act(async () => {
-      fireEvent.press(view.getByText('Integrations'));
+      fireEvent.press(view.getByText('Services'));
     });
 
     await waitFor(() => {
-      expect(view.getByText('No integrations installed.')).toBeTruthy();
+      expect(view.getByText('No services installed.')).toBeTruthy();
     });
   });
 });
