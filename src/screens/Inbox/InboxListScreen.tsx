@@ -8,8 +8,9 @@ import { Button, Card, Chip, IconButton, Text, useTheme } from 'react-native-pap
 
 import { deleteInboxItem, InboxItem, listInboxItems } from '../../api/inboxApi';
 import { useAuth } from '../../auth/AuthContext';
-import { HelpIcon } from '../../components/HelpIcon';
+import { FirstRunCard } from '../../components/FirstRunCard';
 import { helpCopy } from '../../copy/help';
+import { useFirstRun } from '../../hooks/useFirstRun';
 import { InboxStackParamList } from '../../navigation/types';
 
 type Nav = NativeStackNavigationProp<InboxStackParamList>;
@@ -48,6 +49,8 @@ const InboxListScreen = () => {
   const [items, setItems] = useState<InboxItem[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const firstRun = useFirstRun('inbox');
 
   const loadItems = useCallback(async () => {
     if (!authState.accessToken) return;
@@ -205,10 +208,23 @@ const InboxListScreen = () => {
           >
             Inbox
           </Text>
-          <HelpIcon text={helpCopy.inbox.categoryChips} size={18} />
+          <IconButton
+            icon="help-circle-outline"
+            size={20}
+            onPress={firstRun.showAgain}
+            accessibilityLabel="What is the inbox?"
+            style={{ margin: 0 }}
+          />
         </View>
         <IconButton icon="close" onPress={() => navigation.getParent()?.goBack()} />
       </View>
+
+      <FirstRunCard
+        visible={firstRun.visible}
+        onDismiss={firstRun.dismiss}
+        title={helpCopy.inbox.firstRunTitle}
+        body={helpCopy.inbox.firstRun}
+      />
 
       <FlatList
         data={items}
