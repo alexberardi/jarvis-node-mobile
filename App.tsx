@@ -40,15 +40,27 @@ const PushNotificationManager: React.FC<{ children: React.ReactNode }> = ({ chil
           params: { nodeId: data.node_id, initialTab: 'hardware' },
         },
       });
-    } else if (data.type === 'confirmation' && data.inbox_item_id) {
-      // Deep link to inbox item
-      (navigationRef as any).navigate('Inbox', {
-        screen: 'InboxDetail',
-        params: { itemId: data.inbox_item_id },
-      });
     } else if (data.type === 'open_url' && typeof data.url === 'string') {
       Linking.openURL(data.url).catch((err) => {
         console.warn('[Push] Failed to open URL:', err);
+      });
+    } else if (data.type === 'adapter_proposal' && data.inbox_item_id) {
+      (navigationRef as any).navigate('Inbox', {
+        screen: 'AdapterProposal',
+        params: { itemId: data.inbox_item_id },
+      });
+    } else if (data.type === 'adapter_deployed' && data.inbox_item_id) {
+      (navigationRef as any).navigate('Inbox', {
+        screen: 'AdapterDeployed',
+        params: { itemId: data.inbox_item_id },
+      });
+    } else if (data.inbox_item_id) {
+      // Generic fallback: any push carrying an inbox_item_id opens that
+      // item. New inbox-backed categories deep-link by default without
+      // mobile changes; richer destinations get their own branch above.
+      (navigationRef as any).navigate('Inbox', {
+        screen: 'InboxDetail',
+        params: { itemId: data.inbox_item_id },
       });
     }
   }, []);
