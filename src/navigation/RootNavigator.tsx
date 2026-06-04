@@ -4,6 +4,7 @@ import React from 'react';
 
 import { useAuth } from '../auth/AuthContext';
 import AuthNavigator from './AuthNavigator';
+import CommandDataStackNavigator from './CommandDataStackNavigator';
 import InboxStackNavigator from './InboxStackNavigator';
 import MainTabNavigator from './MainTabNavigator';
 import RecentCommandsStackNavigator from './RecentCommandsStackNavigator';
@@ -53,6 +54,7 @@ const RootNavigator = () => {
         component={SmartHomeSetupNavigator}
         options={{ presentation: 'modal' }}
       />
+      <Stack.Screen name="CommandData" component={CommandDataStackNavigator} />
     </Stack.Navigator>
   );
 };

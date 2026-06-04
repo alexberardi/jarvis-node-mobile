@@ -29,7 +29,7 @@ import { getK2 } from '../../services/k2Service';
 import type { K2KeyPair } from '../../services/k2Service';
 
 import { useAuth } from '../../auth/AuthContext';
-import { NodesStackParamList } from '../../navigation/types';
+import { NodesStackParamList, RootStackParamList } from '../../navigation/types';
 import {
   requestSettingsSnapshot,
   pollSettingsResult,
@@ -43,6 +43,10 @@ import {
   FastPathEntry,
 } from '../../services/settingsDecryptService';
 import { listNodes, NodeInfo } from '../../api/nodeApi';
+import {
+  CommandSummary,
+  listCommands as listCommandDataCommands,
+} from '../../api/commandDataApi';
 import { hasK2, generateK2, storeK2 } from '../../services/k2Service';
 import { provisionK2ToNode } from '../../api/nodeSettingsApi';
 import SecretEditDialog from '../../components/SecretEditDialog';
@@ -53,7 +57,7 @@ import { requestUninstall, pollUninstallStatus } from '../../api/packageInstallA
 type ScreenRoute = RouteProp<NodesStackParamList, 'NodeSettings'>;
 
 type LoadState = 'loading' | 'loaded' | 'error' | 'timeout' | 'needs_k2';
-type Tab = 'commands' | 'agents' | 'integrations';
+type Tab = 'commands' | 'agents' | 'integrations' | 'stored_data';
 
 function formatInterval(seconds: number): string {
   if (seconds < 60) return `${seconds} sec`;
@@ -90,6 +94,8 @@ interface ServiceGroup {
 
 const NodeSettingsScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<NodesStackParamList>>();
+  // Separate handle for root-stack jumps (CommandData lives there).
+  const rootNavigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<ScreenRoute>();
   const theme = useTheme();
   const { state: authState } = useAuth();
@@ -135,6 +141,11 @@ const NodeSettingsScreen: React.FC = () => {
 
   // Export K2 flow
   const [exportKeyPair, setExportKeyPair] = useState<K2KeyPair | null>(null);
+
+  // Stored Data tab state
+  const [storedDataCommands, setStoredDataCommands] = useState<CommandSummary[] | null>(null);
+  const [storedDataLoading, setStoredDataLoading] = useState(false);
+  const [storedDataError, setStoredDataError] = useState<string | null>(null);
 
   // Sync flow state
   const [householdNodes, setHouseholdNodes] = useState<(NodeInfo & { hasK2: boolean })[]>([]);
@@ -393,6 +404,33 @@ const NodeSettingsScreen: React.FC = () => {
     cleanup();
     await loadSettings();
   }, [loadSettings, cleanup]);
+
+  // Fetch the Stored Data command list lazily — only when the tab is first
+  // opened. Re-fetched on a manual pull-to-refresh from the same tab.
+  const loadStoredDataCommands = useCallback(async () => {
+    setStoredDataLoading(true);
+    setStoredDataError(null);
+    try {
+      const commands = await listCommandDataCommands(nodeId);
+      setStoredDataCommands(commands);
+    } catch (err) {
+      console.error('[NodeSettings] listCommandDataCommands failed', err);
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (status === 504) {
+        setStoredDataError('Node did not respond. It may be offline.');
+      } else {
+        setStoredDataError('Could not load stored data.');
+      }
+    } finally {
+      setStoredDataLoading(false);
+    }
+  }, [nodeId]);
+
+  useEffect(() => {
+    if (tab === 'stored_data' && storedDataCommands === null && !storedDataLoading) {
+      loadStoredDataCommands();
+    }
+  }, [tab, storedDataCommands, storedDataLoading, loadStoredDataCommands]);
 
   const handleSecretPress = (secret: CommandSecretEntry) => {
     setEditingSecret({
@@ -1422,6 +1460,7 @@ const NodeSettingsScreen: React.FC = () => {
               { value: 'commands', label: 'Commands' },
               { value: 'agents', label: 'Tasks' },
               { value: 'integrations', label: 'Services' },
+              { value: 'stored_data', label: 'Data' },
             ]}
           />
         </View>
@@ -1530,6 +1569,67 @@ const NodeSettingsScreen: React.FC = () => {
             >
               Export Encryption Key
             </Button>
+          </ScrollView>
+        )}
+
+        {tab === 'stored_data' && (
+          <ScrollView contentContainerStyle={styles.list}>
+            <InfoHelperText text={helpCopy.nodeSettings.storedDataTab} />
+            {storedDataLoading && storedDataCommands === null ? (
+              <View style={styles.emptyTab}>
+                <ActivityIndicator />
+              </View>
+            ) : storedDataError ? (
+              <View style={styles.emptyTab}>
+                <Text variant="bodyMedium" style={{ color: theme.colors.error, textAlign: 'center' }}>
+                  {storedDataError}
+                </Text>
+                <Button
+                  mode="text"
+                  onPress={loadStoredDataCommands}
+                  style={{ marginTop: 8 }}
+                >
+                  Retry
+                </Button>
+              </View>
+            ) : storedDataCommands && storedDataCommands.length === 0 ? (
+              <View style={styles.emptyTab}>
+                <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
+                  No commands on this node expose stored data.
+                </Text>
+              </View>
+            ) : storedDataCommands ? (
+              <View style={styles.flatListContainer}>
+                {[...storedDataCommands]
+                  .sort((a, b) => a.command_name.localeCompare(b.command_name))
+                  .map((cmd) => (
+                    <TouchableRipple
+                      key={cmd.command_name}
+                      onPress={() =>
+                        rootNavigation.navigate('CommandData', {
+                          screen: 'DataBrowserRecords',
+                          params: { nodeId, commandName: cmd.command_name },
+                        })
+                      }
+                      style={[styles.flatCard, { backgroundColor: theme.colors.surface }]}
+                    >
+                      <View style={styles.flatRow}>
+                        <View style={{ flex: 1, paddingRight: 12 }}>
+                          <Text variant="titleSmall" style={{ fontWeight: '600' }}>
+                            {cmd.command_name.replace(/_/g, ' ')}
+                          </Text>
+                          {cmd.mode === 'readonly' ? (
+                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                              Read-only
+                            </Text>
+                          ) : null}
+                        </View>
+                        <Icon source="chevron-right" size={24} color={theme.colors.onSurfaceVariant} />
+                      </View>
+                    </TouchableRipple>
+                  ))}
+              </View>
+            ) : null}
           </ScrollView>
         )}
       </View>

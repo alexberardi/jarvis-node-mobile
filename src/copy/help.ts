@@ -23,6 +23,7 @@ export const helpCopy = {
     commandsTab: 'Voice commands installed on this node. Toggle to enable or disable without uninstalling.',
     tasksTab: 'Background tasks that run on a schedule without you asking — e.g. checking calendars or weather.',
     servicesTab: 'Services that share credentials across multiple commands (Spotify, Nest, Home Assistant).',
+    storedDataTab: 'Browse and edit records that commands have saved on this node — reminders, bluetooth pairings, OAuth state, etc.',
     deviceProtocols: 'Built-in support for talking to devices over WiFi or cloud APIs. Configure once, use everywhere.',
     perPersonSecret: 'This setting is per-person — each household member has their own value.',
     syncToOtherNodes: 'Copy the configured secrets for this service to other nodes. Targets need their encryption key imported first.',
