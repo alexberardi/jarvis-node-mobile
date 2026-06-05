@@ -24,6 +24,7 @@ import { getServiceConfig } from '../../config/serviceConfig';
 import { helpCopy } from '../../copy/help';
 import { StoreStackParamList } from '../../navigation/types';
 import type { PackageDetail } from '../../types/Package';
+import { compareSemver, isUpdateAvailable } from '../../utils/semver';
 
 type Nav = NativeStackNavigationProp<StoreStackParamList>;
 type Route = RouteProp<StoreStackParamList, 'StoreDetail'>;
@@ -69,6 +70,10 @@ const StoreDetailScreen = () => {
   const [loading, setLoading] = useState(true);
   const [installing, setInstalling] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Per-node installed version for this command. null = not installed.
+  // 'unknown' = installed but the node didn't report a version (legacy install).
+  const [nodeVersions, setNodeVersions] = useState<Record<string, string | null>>({});
+  const [nodesLoading, setNodesLoading] = useState(false);
 
   const activeHousehold = authState.households.find(
     (h) => h.id === authState.activeHouseholdId,
@@ -92,7 +97,7 @@ const StoreDetailScreen = () => {
     loadDetail();
   }, [loadDetail]);
 
-  const fetchHouseholdNodes = async (): Promise<NodeInfo[]> => {
+  const fetchHouseholdNodes = useCallback(async (): Promise<NodeInfo[]> => {
     const { commandCenterUrl } = getServiceConfig();
     const householdId = authState.activeHouseholdId;
     const params = householdId ? `?household_id=${householdId}` : '';
@@ -100,9 +105,78 @@ const StoreDetailScreen = () => {
       `${commandCenterUrl}/api/v0/admin/nodes${params}`,
     );
     return (res.data || []).filter((n: NodeInfo) => !!n.node_id);
-  };
+  }, [authState.activeHouseholdId]);
 
   const hasPromptProvider = detail?.components.some((c) => c.type === 'prompt_provider');
+
+  // Discover installed-version-per-node so the install button can label itself
+  // Install / Update to vX / Up to date. Prompt providers install to CC, not
+  // to a node — they keep the simple Install label.
+  useEffect(() => {
+    if (!detail || hasPromptProvider) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        setNodesLoading(true);
+        const nodes = await fetchHouseholdNodes();
+        const entries = await Promise.all(
+          nodes.map(async (node) => {
+            try {
+              const tools = await fetchNodeTools(node.node_id);
+              const pkg = (tools.installed_packages || []).find(
+                (p) => p.name === commandName,
+              );
+              if (pkg) return [node.node_id, pkg.version] as const;
+              // Fall back to client_tools name check for legacy installs
+              // that pre-date installed_packages reporting.
+              const toolNames = tools.client_tools
+                .map((t) => (t.function as Record<string, unknown>)?.name as string)
+                .filter(Boolean);
+              if (toolNames.includes(commandName)) {
+                return [node.node_id, 'unknown'] as const;
+              }
+              return [node.node_id, null] as const;
+            } catch {
+              return [node.node_id, null] as const;
+            }
+          }),
+        );
+        if (cancelled) return;
+        setNodeVersions(Object.fromEntries(entries));
+      } finally {
+        if (!cancelled) setNodesLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [detail, hasPromptProvider, commandName, fetchHouseholdNodes]);
+
+  // Aggregate install state across all nodes. Drives the bottom button.
+  const installSummary = (() => {
+    if (!detail || hasPromptProvider) {
+      return { state: 'install' as const, label: hasPromptProvider ? 'Install to Command Center' : 'Install' };
+    }
+    const entries = Object.values(nodeVersions);
+    if (entries.length === 0) {
+      return { state: 'install' as const, label: 'Install' };
+    }
+    const latest = detail.latest_version;
+    const installed = entries.filter((v): v is string => v !== null);
+    if (installed.length === 0) {
+      return { state: 'install' as const, label: 'Install' };
+    }
+    const anyOutdated = installed.some((v) => isUpdateAvailable(v, latest));
+    const allUpToDate = installed.length === entries.length && !anyOutdated;
+    if (allUpToDate) {
+      return { state: 'up-to-date' as const, label: `Up to date (v${latest})` };
+    }
+    if (anyOutdated && installed.length === entries.length) {
+      return { state: 'update' as const, label: `Update to v${latest}` };
+    }
+    // Mixed: some nodes have it, some don't.
+    return { state: 'install-or-update' as const, label: `Install / Update to v${latest}` };
+  })();
 
   const handleInstall = async () => {
     if (!detail) return;
@@ -156,7 +230,8 @@ const StoreDetailScreen = () => {
         }
       }
 
-      // Get household nodes
+      // Get household nodes (we already fetched versions, but refresh node
+      // list in case any joined/left since screen mount).
       const nodes = await fetchHouseholdNodes();
 
       if (nodes.length === 0) {
@@ -164,31 +239,23 @@ const StoreDetailScreen = () => {
         return;
       }
 
-      // Check which nodes already have this command installed
-      const installedNodeIds: string[] = [];
-      await Promise.all(
-        nodes.map(async (node) => {
-          try {
-            const tools = await fetchNodeTools(node.node_id);
-            const toolNames = tools.client_tools.map((t: Record<string, unknown>) => (t.function as Record<string, unknown>)?.name as string).filter(Boolean);
-            if (toolNames.includes(downloadInfo.command_name)) {
-              installedNodeIds.push(node.node_id);
-            }
-          } catch {
-            // Node offline or unreachable — don't mark as installed
-          }
-        }),
-      );
+      // Classify nodes by install state using the version map.
+      const upToDateNodeIds = nodes
+        .filter((n) => {
+          const v = nodeVersions[n.node_id];
+          return v !== undefined && v !== null && v !== 'unknown' && compareSemver(v, detail.latest_version) >= 0;
+        })
+        .map((n) => n.node_id);
+      const actionableNodes = nodes.filter((n) => !upToDateNodeIds.includes(n.node_id));
 
-      const availableNodes = nodes.filter((n) => !installedNodeIds.includes(n.node_id));
+      if (actionableNodes.length === 0) {
+        Alert.alert('Up to date', `All your nodes already have v${detail.latest_version}.`);
+        return;
+      }
 
-      if (nodes.length === 1) {
-        if (installedNodeIds.includes(nodes[0].node_id)) {
-          Alert.alert('Already Installed', 'This command is already installed on your node.');
-          return;
-        }
-        // Single node — install directly
-        const node = nodes[0];
+      if (actionableNodes.length === 1 && nodes.length === 1) {
+        // Single node — install/update directly
+        const node = actionableNodes[0];
         const result = await requestInstall(
           node.node_id,
           downloadInfo.command_name,
@@ -209,17 +276,22 @@ const StoreDetailScreen = () => {
           githubRepoUrl: downloadInfo.github_repo_url,
           gitTag: downloadInfo.git_tag,
         });
-      } else if (availableNodes.length === 0) {
-        Alert.alert('Already Installed', 'This command is already installed on all your nodes.');
       } else {
-        // Multiple nodes — show picker
+        // Multiple nodes — show picker (lets user pick which outdated nodes
+        // to update, or install on new ones).
         navigation.navigate('NodePickerSheet', {
           nodes: JSON.stringify(nodes),
           commandName: downloadInfo.command_name,
           githubRepoUrl: downloadInfo.github_repo_url,
           gitTag: downloadInfo.git_tag,
+          latestVersion: detail.latest_version,
           packageName: detail.display_name || detail.command_name,
-          installedNodeIds: JSON.stringify(installedNodeIds),
+          installedNodeIds: JSON.stringify(
+            Object.entries(nodeVersions)
+              .filter(([, v]) => v !== null)
+              .map(([id]) => id),
+          ),
+          installedVersions: JSON.stringify(nodeVersions),
         });
       }
     } catch (e: unknown) {
@@ -424,12 +496,20 @@ const StoreDetailScreen = () => {
           <Button
             mode="contained"
             onPress={handleInstall}
-            loading={installing}
-            disabled={installing}
-            icon={hasPromptProvider ? 'brain' : 'download'}
+            loading={installing || nodesLoading}
+            disabled={installing || nodesLoading || installSummary.state === 'up-to-date'}
+            icon={
+              hasPromptProvider
+                ? 'brain'
+                : installSummary.state === 'update'
+                  ? 'update'
+                  : installSummary.state === 'up-to-date'
+                    ? 'check'
+                    : 'download'
+            }
             style={{ flex: 1 }}
           >
-            {hasPromptProvider ? 'Install to Command Center' : 'Install'}
+            {installSummary.label}
           </Button>
         </View>
       )}

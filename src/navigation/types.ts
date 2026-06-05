@@ -126,8 +126,10 @@ export type StoreStackParamList = {
     commandName: string;
     githubRepoUrl: string;
     gitTag: string;
+    latestVersion: string;
     packageName: string;
     installedNodeIds: string; // JSON-serialized string[] of node IDs that already have this command
+    installedVersions: string; // JSON-serialized Record<nodeId, installedVersion | "unknown">
   };
   InstallProgress: {
     installs: string;        // JSON-serialized InstallEntry[]
