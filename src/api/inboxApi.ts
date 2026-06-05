@@ -65,3 +65,21 @@ export const deleteInboxItem = async (
 ): Promise<void> => {
   await apiClient.delete(`${getBaseUrl()}/api/v0/inbox/${itemId}`);
 };
+
+export const bulkMarkItemsRead = async (ids: string[]): Promise<number> => {
+  if (ids.length === 0) return 0;
+  const res = await apiClient.post<{ updated: number }>(
+    `${getBaseUrl()}/api/v0/inbox/bulk/read`,
+    { ids },
+  );
+  return res.data.updated;
+};
+
+export const bulkDeleteInboxItems = async (ids: string[]): Promise<number> => {
+  if (ids.length === 0) return 0;
+  const res = await apiClient.post<{ deleted: number }>(
+    `${getBaseUrl()}/api/v0/inbox/bulk/delete`,
+    { ids },
+  );
+  return res.data.deleted;
+};
