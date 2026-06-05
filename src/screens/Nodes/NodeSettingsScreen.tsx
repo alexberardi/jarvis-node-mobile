@@ -216,8 +216,16 @@ const NodeSettingsScreen: React.FC = () => {
     for (const agent of agents) {
       if (!agent.associated_service) continue;
       const group = groupMap.get(agent.associated_service);
-      if (group) {
-        group.agents.push(agent);
+      if (!group) continue;
+      group.agents.push(agent);
+      // Agent secrets (e.g. NOTIFICATION_FILTER) flow into the group's
+      // shared secret list with the same dedup-by-key rule used for commands.
+      const existingKeys = new Set(group.secrets.map((s) => s.key));
+      for (const secret of agent.secrets ?? []) {
+        if (!existingKeys.has(secret.key)) {
+          group.secrets.push(secret);
+          existingKeys.add(secret.key);
+        }
       }
     }
 
@@ -1155,69 +1163,84 @@ const NodeSettingsScreen: React.FC = () => {
     const enabled = agentStates[agent.agent_name] !== false;
     const displayName = agent.agent_name.replace(/_/g, ' ');
     const intervalLabel = formatInterval(agent.schedule.interval_seconds);
+    const agentSecrets = agent.secrets ?? [];
 
     return (
-      <Surface
-        key={agent.agent_name}
-        style={[styles.flatCard, { backgroundColor: theme.colors.surface }]}
-        elevation={1}
-      >
-        <View style={styles.flatRow}>
-          <View style={{ flex: 1, paddingRight: 12 }}>
-            <Text variant="titleSmall" style={{ fontWeight: '600' }}>
-              {displayName}
-            </Text>
-            {agent.associated_service ? (
-              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                from {agent.associated_service}
+      <View key={agent.agent_name} style={{ marginBottom: 12 }}>
+        <Surface
+          style={[styles.flatCard, { backgroundColor: theme.colors.surface }]}
+          elevation={1}
+        >
+          <View style={styles.flatRow}>
+            <View style={{ flex: 1, paddingRight: 12 }}>
+              <Text variant="titleSmall" style={{ fontWeight: '600' }}>
+                {displayName}
               </Text>
-            ) : null}
-            {agent.description ? (
-              <Text
-                variant="bodySmall"
-                style={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}
-                numberOfLines={2}
-              >
-                {agent.description}
-              </Text>
-            ) : null}
-            <Text
-              variant="bodySmall"
-              style={{ color: theme.colors.onSurfaceVariant, marginTop: 4, fontStyle: 'italic' }}
-            >
-              Runs every {intervalLabel}
-            </Text>
-            {renderConfigErrorBadge(agent._errors)}
-            {agent.auto_disabled_reason ? (
-              <View
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 6,
-                  marginTop: 6,
-                }}
-              >
-                <Icon
-                  source="electric-switch"
-                  size={14}
-                  color={theme.colors.error}
-                />
+              {agent.associated_service ? (
+                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                  from {agent.associated_service}
+                </Text>
+              ) : null}
+              {agent.description ? (
                 <Text
                   variant="bodySmall"
-                  style={{ color: theme.colors.error, flex: 1 }}
-                  numberOfLines={3}
+                  style={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}
+                  numberOfLines={2}
                 >
-                  {agent.auto_disabled_reason}
+                  {agent.description}
                 </Text>
-              </View>
-            ) : null}
+              ) : null}
+              <Text
+                variant="bodySmall"
+                style={{ color: theme.colors.onSurfaceVariant, marginTop: 4, fontStyle: 'italic' }}
+              >
+                Runs every {intervalLabel}
+              </Text>
+              {renderConfigErrorBadge(agent._errors)}
+              {agent.auto_disabled_reason ? (
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    marginTop: 6,
+                  }}
+                >
+                  <Icon
+                    source="electric-switch"
+                    size={14}
+                    color={theme.colors.error}
+                  />
+                  <Text
+                    variant="bodySmall"
+                    style={{ color: theme.colors.error, flex: 1 }}
+                    numberOfLines={3}
+                  >
+                    {agent.auto_disabled_reason}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+            <Switch
+              value={enabled}
+              onValueChange={(val) => handleToggleAgent(agent.agent_name, val)}
+            />
           </View>
-          <Switch
-            value={enabled}
-            onValueChange={(val) => handleToggleAgent(agent.agent_name, val)}
-          />
-        </View>
-      </Surface>
+        </Surface>
+
+        {agentSecrets.length > 0 && (
+          <Surface
+            style={[
+              styles.groupCard,
+              { backgroundColor: theme.colors.surfaceVariant, marginTop: 6 },
+            ]}
+          >
+            {agentSecrets.map((secret, i) =>
+              renderSecretRow(secret, i === agentSecrets.length - 1, !enabled),
+            )}
+          </Surface>
+        )}
+      </View>
     );
   };
 
