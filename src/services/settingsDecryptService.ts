@@ -65,6 +65,10 @@ export interface AgentEntry {
   enabled: boolean;
   schedule: AgentScheduleEntry;
   associated_service?: string;
+  /** Optional for back-compat with older node snapshots; newer nodes always
+   * include this (even if empty). When the agent declares preferences via
+   * required_secrets (e.g. NOTIFICATION_FILTER), they show up here. */
+  secrets?: CommandSecretEntry[];
   _errors?: string[];
   /** Set by the node scheduler when an agent throws on 3 consecutive runs.
    * `enabled` will be false; this string explains why. Cleared when the
