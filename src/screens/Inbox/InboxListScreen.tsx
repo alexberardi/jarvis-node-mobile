@@ -1,12 +1,26 @@
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { Alert, FlatList, StyleSheet, TouchableOpacity, View } from 'react-native';
 import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import type { SharedValue } from 'react-native-reanimated';
-import { Button, Card, Chip, IconButton, Text, useTheme } from 'react-native-paper';
+import {
+  Button,
+  Card,
+  Checkbox,
+  Chip,
+  IconButton,
+  Text,
+  useTheme,
+} from 'react-native-paper';
 
-import { deleteInboxItem, InboxItem, listInboxItems } from '../../api/inboxApi';
+import {
+  bulkDeleteInboxItems,
+  bulkMarkItemsRead,
+  deleteInboxItem,
+  InboxItem,
+  listInboxItems,
+} from '../../api/inboxApi';
 import { useAuth } from '../../auth/AuthContext';
 import { FirstRunCard } from '../../components/FirstRunCard';
 import { helpCopy } from '../../copy/help';
@@ -49,6 +63,9 @@ const InboxListScreen = () => {
   const [items, setItems] = useState<InboxItem[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const firstRun = useFirstRun('inbox');
 
@@ -68,6 +85,11 @@ const InboxListScreen = () => {
       loadItems();
     }, [loadItems]),
   );
+
+  const exitSelectMode = useCallback(() => {
+    setSelectMode(false);
+    setSelectedIds(new Set());
+  }, []);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -100,6 +122,78 @@ const InboxListScreen = () => {
     [],
   );
 
+  const toggleSelected = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const enterSelectModeWith = useCallback((id: string) => {
+    setSelectMode(true);
+    setSelectedIds(new Set([id]));
+  }, []);
+
+  const allSelected = useMemo(
+    () => items.length > 0 && selectedIds.size === items.length,
+    [items.length, selectedIds.size],
+  );
+
+  const toggleSelectAll = useCallback(() => {
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(items.map((i) => i.id)));
+    }
+  }, [allSelected, items]);
+
+  const handleBulkMarkRead = useCallback(async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    setBulkBusy(true);
+    try {
+      await bulkMarkItemsRead(ids);
+      setItems((prev) =>
+        prev.map((i) => (selectedIds.has(i.id) ? { ...i, is_read: true } : i)),
+      );
+      exitSelectMode();
+    } catch {
+      Alert.alert('Error', 'Failed to mark as read');
+    } finally {
+      setBulkBusy(false);
+    }
+  }, [selectedIds, exitSelectMode]);
+
+  const handleBulkDelete = useCallback(() => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    Alert.alert(
+      'Delete',
+      `Remove ${ids.length} message${ids.length === 1 ? '' : 's'}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setBulkBusy(true);
+            try {
+              await bulkDeleteInboxItems(ids);
+              setItems((prev) => prev.filter((i) => !selectedIds.has(i.id)));
+              exitSelectMode();
+            } catch {
+              Alert.alert('Error', 'Failed to delete');
+            } finally {
+              setBulkBusy(false);
+            }
+          },
+        },
+      ],
+    );
+  }, [selectedIds, exitSelectMode]);
+
   const formatDate = (iso: string) => {
     const date = new Date(iso);
     const now = new Date();
@@ -124,14 +218,22 @@ const InboxListScreen = () => {
     (_progress: SharedValue<number>, _drag: SharedValue<number>) =>
       renderRightActions(item)();
 
-  const renderItem = ({ item }: { item: InboxItem }) => (
-    <ReanimatedSwipeable
-      renderRightActions={makeRightActions(item)}
-      overshootRight={false}
-    >
+  const renderCard = (item: InboxItem) => {
+    const isSelected = selectedIds.has(item.id);
+    return (
       <Card
-        style={[styles.card, !item.is_read && styles.unreadCard]}
+        style={[
+          styles.card,
+          !item.is_read && styles.unreadCard,
+          selectMode && isSelected && {
+            backgroundColor: theme.colors.secondaryContainer,
+          },
+        ]}
         onPress={() => {
+          if (selectMode) {
+            toggleSelected(item.id);
+            return;
+          }
           const route = routeForCategory(item.category);
           if (route === 'InboxDetail') {
             navigation.navigate('InboxDetail', { itemId: item.id });
@@ -141,44 +243,69 @@ const InboxListScreen = () => {
             navigation.navigate('AdapterDeployed', { itemId: item.id });
           }
         }}
+        onLongPress={() => {
+          if (!selectMode) enterSelectModeWith(item.id);
+        }}
       >
         <Card.Content>
-          <View style={styles.cardHeader}>
-            <Chip
-              compact
-              textStyle={styles.chipText}
-              style={[
-                styles.chip,
-                { backgroundColor: CATEGORY_COLORS[item.category] ?? theme.colors.secondaryContainer },
-              ]}
-            >
-              {item.category.replace(/_/g, ' ')}
-            </Chip>
-            <Text
-              variant="labelSmall"
-              style={{ color: theme.colors.onSurfaceVariant }}
-            >
-              {formatDate(item.created_at)}
-            </Text>
+          <View style={styles.cardRow}>
+            {selectMode && (
+              <Checkbox
+                status={isSelected ? 'checked' : 'unchecked'}
+                onPress={() => toggleSelected(item.id)}
+              />
+            )}
+            <View style={{ flex: 1 }}>
+              <View style={styles.cardHeader}>
+                <Chip
+                  compact
+                  textStyle={styles.chipText}
+                  style={[
+                    styles.chip,
+                    { backgroundColor: CATEGORY_COLORS[item.category] ?? theme.colors.secondaryContainer },
+                  ]}
+                >
+                  {item.category.replace(/_/g, ' ')}
+                </Chip>
+                <Text
+                  variant="labelSmall"
+                  style={{ color: theme.colors.onSurfaceVariant }}
+                >
+                  {formatDate(item.created_at)}
+                </Text>
+              </View>
+              <Text
+                variant="titleMedium"
+                style={[!item.is_read && styles.unreadTitle]}
+                numberOfLines={2}
+              >
+                {item.title}
+              </Text>
+              <Text
+                variant="bodySmall"
+                style={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}
+                numberOfLines={2}
+              >
+                {stripThinkTags(item.summary)}
+              </Text>
+            </View>
           </View>
-          <Text
-            variant="titleMedium"
-            style={[!item.is_read && styles.unreadTitle]}
-            numberOfLines={2}
-          >
-            {item.title}
-          </Text>
-          <Text
-            variant="bodySmall"
-            style={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}
-            numberOfLines={2}
-          >
-            {stripThinkTags(item.summary)}
-          </Text>
         </Card.Content>
       </Card>
-    </ReanimatedSwipeable>
-  );
+    );
+  };
+
+  const renderItem = ({ item }: { item: InboxItem }) =>
+    selectMode ? (
+      renderCard(item)
+    ) : (
+      <ReanimatedSwipeable
+        renderRightActions={makeRightActions(item)}
+        overshootRight={false}
+      >
+        {renderCard(item)}
+      </ReanimatedSwipeable>
+    );
 
   const emptyComponent = (
     <View style={styles.center}>
@@ -206,17 +333,47 @@ const InboxListScreen = () => {
             variant="headlineMedium"
             style={[styles.title, { color: theme.colors.onBackground, flex: 0 }]}
           >
-            Inbox
+            {selectMode
+              ? selectedIds.size === 0
+                ? 'Select items'
+                : `${selectedIds.size} selected`
+              : 'Inbox'}
           </Text>
-          <IconButton
-            icon="help-circle-outline"
-            size={20}
-            onPress={firstRun.showAgain}
-            accessibilityLabel="What is the inbox?"
-            style={{ margin: 0 }}
-          />
+          {!selectMode && (
+            <IconButton
+              icon="help-circle-outline"
+              size={20}
+              onPress={firstRun.showAgain}
+              accessibilityLabel="What is the inbox?"
+              style={{ margin: 0 }}
+            />
+          )}
         </View>
-        <IconButton icon="close" onPress={() => navigation.getParent()?.goBack()} />
+        {selectMode ? (
+          <View style={styles.headerActions}>
+            <Button
+              compact
+              mode="text"
+              onPress={toggleSelectAll}
+              disabled={items.length === 0}
+            >
+              {allSelected ? 'Clear' : 'All'}
+            </Button>
+            <Button compact mode="text" onPress={exitSelectMode}>
+              Cancel
+            </Button>
+          </View>
+        ) : (
+          <View style={styles.headerActions}>
+            <IconButton
+              icon="checkbox-multiple-outline"
+              onPress={() => setSelectMode(true)}
+              accessibilityLabel="Select messages"
+              disabled={items.length === 0}
+            />
+            <IconButton icon="close" onPress={() => navigation.getParent()?.goBack()} />
+          </View>
+        )}
       </View>
 
       <FirstRunCard
@@ -237,6 +394,37 @@ const InboxListScreen = () => {
         onRefresh={onRefresh}
         ListEmptyComponent={emptyComponent}
       />
+
+      {selectMode && (
+        <View
+          style={[
+            styles.actionBar,
+            {
+              backgroundColor: theme.colors.elevation.level2,
+              borderTopColor: theme.colors.outlineVariant,
+            },
+          ]}
+        >
+          <Button
+            mode="text"
+            icon="email-open-outline"
+            onPress={handleBulkMarkRead}
+            disabled={selectedIds.size === 0 || bulkBusy}
+            loading={bulkBusy}
+          >
+            Mark read
+          </Button>
+          <Button
+            mode="text"
+            icon="delete-outline"
+            textColor={theme.colors.error}
+            onPress={handleBulkDelete}
+            disabled={selectedIds.size === 0 || bulkBusy}
+          >
+            Delete
+          </Button>
+        </View>
+      )}
     </View>
   );
 };
@@ -250,12 +438,14 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     paddingLeft: 16,
   },
+  headerActions: { flexDirection: 'row', alignItems: 'center' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   title: { fontWeight: 'bold', flex: 1 },
   titleGroup: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   list: { padding: 16, gap: 12, paddingBottom: 32 },
   emptyList: { flexGrow: 1, justifyContent: 'center', alignItems: 'center' },
   card: {},
+  cardRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 4 },
   unreadCard: { borderLeftWidth: 3, borderLeftColor: '#6366f1' },
   unreadTitle: { fontWeight: '700' },
   cardHeader: {
@@ -273,6 +463,14 @@ const styles = StyleSheet.create({
     width: 72,
     borderRadius: 12,
     marginLeft: 8,
+  },
+  actionBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
 });
 
