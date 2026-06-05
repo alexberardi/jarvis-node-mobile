@@ -76,9 +76,15 @@ export interface SendChatRequest {
   include_reasoning?: boolean;
 }
 
+export interface InstalledPackage {
+  name: string;
+  version: string;
+}
+
 export interface NodeToolsResponse {
   client_tools: Record<string, unknown>[];
   available_commands: Record<string, unknown>[];
+  installed_packages?: InstalledPackage[];
   cached: boolean;
 }
 
