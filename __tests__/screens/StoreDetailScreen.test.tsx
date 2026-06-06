@@ -147,6 +147,13 @@ describe('StoreDetailScreen — apt consent UI', () => {
     return result;
   };
 
+  // CI gives the install handler very little headroom under parallel load —
+  // 1 s default waitFor lapses before the Alert.alert / requestInstall in the
+  // consent path fires, even though it completes in <100 ms locally. Bump
+  // the three CI-flaky tests' waitFor windows to 5 s; they still finish in
+  // ~100 ms when nothing's contending.
+  const CI_WAIT = { timeout: 5000 };
+
   it('shows apt consent dialog and proceeds with install on Continue', async () => {
     mockGetDownloadInfo.mockResolvedValue(
       makeDownloadInfo({ apt_packages: ['mpv', 'alsa-utils'] }),
@@ -184,14 +191,10 @@ describe('StoreDetailScreen — apt consent UI', () => {
 
     await pressInstall('Install');
 
-    // Wait through the consent prompt AND the cancel handler's finally
-    // block so the trailing setInstalling(false) state update lands inside
-    // act(), avoiding leak into the next test (jest act-warning + flaky
-    // "no apt_packages key" failure observed in CI).
     await waitFor(() => {
       const rootCalls = alertSpy.mock.calls.filter((c) => c[0] === 'Root-privileged install');
       expect(rootCalls).toHaveLength(1);
-    });
+    }, CI_WAIT);
     expect(mockRequestInstall).not.toHaveBeenCalled();
     // NB: mockApiClientGet is expected to have been called once at mount
     // by the version-discovery useEffect that drives the Install/Update
@@ -214,7 +217,7 @@ describe('StoreDetailScreen — apt consent UI', () => {
     await waitFor(() => {
       const rootCalls = alertSpy.mock.calls.filter((c) => c[0] === 'Root-privileged install');
       expect(rootCalls).toHaveLength(1);
-    });
+    }, CI_WAIT);
     expect(mockRequestInstall).not.toHaveBeenCalled();
     // See sibling test for why mockApiClientGet is no longer asserted here.
     const installProgressNav = mockNavigate.mock.calls.find((c) => c[0] === 'InstallProgress');
@@ -228,7 +231,7 @@ describe('StoreDetailScreen — apt consent UI', () => {
 
     await waitFor(() => {
       expect(mockRequestInstall).toHaveBeenCalledTimes(1);
-    });
+    }, CI_WAIT);
     const rootCalls = alertSpy.mock.calls.filter((c) => c[0] === 'Root-privileged install');
     expect(rootCalls).toHaveLength(0);
     expect(mockNavigate).toHaveBeenCalledWith(
