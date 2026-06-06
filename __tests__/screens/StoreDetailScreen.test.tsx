@@ -1,6 +1,6 @@
 import React from 'react';
 import { Alert } from 'react-native';
-import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
 import { PaperProvider } from 'react-native-paper';
 
 import StoreDetailScreen from '../../src/screens/Store/StoreDetailScreen';
@@ -150,6 +150,16 @@ describe('StoreDetailScreen — apt consent UI', () => {
     mockGetPackageDetail.mockResolvedValue(baseDetail);
     const result = render(<StoreDetailScreen />, { wrapper });
     const button = await waitFor(() => result.getByText(label));
+    // The on-mount version-discovery effect (added in a83b975) toggles
+    // nodesLoading true → false, and the Install button is disabled while
+    // it's true. Under CI parallel load the effect occasionally hadn't
+    // settled by the time we fired the press, so the button silently
+    // swallowed it and handleInstall never ran. Flush pending React work
+    // with an explicit act(async () => {}) so nodesLoading=false has
+    // landed before the click.
+    await act(async () => {
+      await Promise.resolve();
+    });
     fireEvent.press(button);
     return result;
   };
