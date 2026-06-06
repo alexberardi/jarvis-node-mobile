@@ -113,6 +113,13 @@ const makeDownloadInfo = (
   verified: true,
 });
 
+// Under parallel CI load the apt-consent paths through fireEvent → handleInstall
+// → Alert.alert / fetchHouseholdNodes / requestInstall sometimes overrun the
+// default 5 s per-test timeout, while locally each test finishes in <200 ms.
+// Bump the file-level timeout so the slow tail doesn't time out — the fast
+// path is unaffected.
+jest.setTimeout(20000);
+
 describe('StoreDetailScreen — apt consent UI', () => {
   let alertSpy: jest.SpyInstance;
 
@@ -194,7 +201,7 @@ describe('StoreDetailScreen — apt consent UI', () => {
     await waitFor(() => {
       const rootCalls = alertSpy.mock.calls.filter((c) => c[0] === 'Root-privileged install');
       expect(rootCalls).toHaveLength(1);
-    }, CI_WAIT);
+    }, CI_WAIT);  // 5 s — fits inside jest.setTimeout(20000) above
     expect(mockRequestInstall).not.toHaveBeenCalled();
     // NB: mockApiClientGet is expected to have been called once at mount
     // by the version-discovery useEffect that drives the Install/Update
@@ -217,7 +224,7 @@ describe('StoreDetailScreen — apt consent UI', () => {
     await waitFor(() => {
       const rootCalls = alertSpy.mock.calls.filter((c) => c[0] === 'Root-privileged install');
       expect(rootCalls).toHaveLength(1);
-    }, CI_WAIT);
+    }, CI_WAIT);  // 5 s — fits inside jest.setTimeout(20000) above
     expect(mockRequestInstall).not.toHaveBeenCalled();
     // See sibling test for why mockApiClientGet is no longer asserted here.
     const installProgressNav = mockNavigate.mock.calls.find((c) => c[0] === 'InstallProgress');
@@ -231,7 +238,7 @@ describe('StoreDetailScreen — apt consent UI', () => {
 
     await waitFor(() => {
       expect(mockRequestInstall).toHaveBeenCalledTimes(1);
-    }, CI_WAIT);
+    }, CI_WAIT);  // 5 s — fits inside jest.setTimeout(20000) above
     const rootCalls = alertSpy.mock.calls.filter((c) => c[0] === 'Root-privileged install');
     expect(rootCalls).toHaveLength(0);
     expect(mockNavigate).toHaveBeenCalledWith(
