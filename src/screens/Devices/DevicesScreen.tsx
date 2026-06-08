@@ -236,8 +236,12 @@ const DevicesScreen = () => {
   }
 
   const startScan = useCallback(async () => {
+    if (!householdId) {
+      setSnackbar('No household selected');
+      return;
+    }
     try {
-      const nodes: NodeInfo[] = await listNodes();
+      const nodes: NodeInfo[] = await listNodes(householdId);
       if (nodes.length === 0) {
         setSnackbar('No nodes available. Add a node first.');
         return;
@@ -249,7 +253,7 @@ const DevicesScreen = () => {
     } catch {
       setSnackbar('Failed to fetch nodes');
     }
-  }, [navigation]);
+  }, [navigation, householdId]);
 
   if (!householdId) {
     return (
