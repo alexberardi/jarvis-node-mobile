@@ -148,18 +148,22 @@ export const NodeMaintenanceSettings = ({ nodeId }: Props) => {
 
   return (
     <Card style={styles.card}>
+      <Card.Title
+        title="Maintenance"
+        titleVariant="titleMedium"
+        left={(props) => (
+          <View
+            {...props}
+            style={[
+              styles.iconCircle,
+              { backgroundColor: theme.colors.primaryContainer },
+            ]}
+          >
+            <Text style={{ fontSize: 18 }}>{'\u{1F504}'}</Text>
+          </View>
+        )}
+      />
       <Card.Content>
-        <View style={styles.titleRow}>
-          <Icon
-            source="restart"
-            size={20}
-            color={theme.colors.primary}
-          />
-          <Text variant="titleMedium" style={styles.title}>
-            Maintenance
-          </Text>
-        </View>
-
         <Text
           variant="bodySmall"
           style={[styles.helpText, { color: theme.colors.onSurfaceVariant }]}
@@ -300,14 +304,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 24,
   },
-  titleRow: {
-    flexDirection: 'row',
+  iconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
-  },
-  title: {
-    fontWeight: '600',
+    justifyContent: 'center',
   },
   helpText: {
     marginBottom: 4,
@@ -338,6 +340,9 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   numberField: {
-    width: 96,
+    // Wide enough that a 4-digit value (1024 MB) + the "MB" affix
+    // doesn't wrap to a second line. The earlier 96 px clipped "320"
+    // into "32 / 0" stacked.
+    width: 130,
   },
 });
