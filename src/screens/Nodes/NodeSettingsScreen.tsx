@@ -545,6 +545,54 @@ const NodeSettingsScreen: React.FC = () => {
     [nodeId, cleanup, loadSettings],
   );
 
+  const handleUninstallCommand = useCallback(
+    (cmd: CommandSettingsEntry) => {
+      setOpenMenu(null);
+      const commandName = cmd.command_name;
+      const displayName = commandName.replace(/_/g, ' ');
+      Alert.alert(
+        'Uninstall Package',
+        `Remove "${displayName}" from this node?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Uninstall',
+            style: 'destructive',
+            onPress: async () => {
+              setUninstallingCommand(commandName);
+              try {
+                const { id } = await requestUninstall(nodeId, commandName, 'command');
+                let attempts = 0;
+                while (attempts < 15) {
+                  await new Promise((r) => setTimeout(r, 2000));
+                  const result = await pollUninstallStatus(nodeId, id);
+                  if (result.status === 'completed') {
+                    setUninstallingCommand(null);
+                    cleanup();
+                    loadSettings();
+                    return;
+                  }
+                  if (result.status === 'failed') {
+                    setUninstallingCommand(null);
+                    Alert.alert('Failed', result.error_message ?? 'Uninstall failed');
+                    return;
+                  }
+                  attempts++;
+                }
+                setUninstallingCommand(null);
+                Alert.alert('Timeout', 'Node did not respond in time.');
+              } catch (err) {
+                setUninstallingCommand(null);
+                Alert.alert('Error', 'Failed to request uninstall');
+              }
+            },
+          },
+        ],
+      );
+    },
+    [nodeId, cleanup, loadSettings],
+  );
+
   const handleUninstallFamily = useCallback(
     (family: DeviceFamilyEntry) => {
       setOpenMenu(null);
@@ -1121,6 +1169,23 @@ const NodeSettingsScreen: React.FC = () => {
   const renderCommandRow = (cmd: CommandSettingsEntry) => {
     const enabled = commandStates[cmd.command_name] !== false;
     const displayName = cmd.command_name.replace(/_/g, ' ');
+    const isUninstalling = uninstallingCommand === cmd.command_name;
+    const menuKey = `cmd:${cmd.command_name}`;
+
+    if (isUninstalling) {
+      return (
+        <Surface
+          key={cmd.command_name}
+          style={[styles.flatCard, { backgroundColor: theme.colors.surface, alignItems: 'center', paddingVertical: 20 }]}
+          elevation={1}
+        >
+          <ActivityIndicator size="small" style={{ marginBottom: 8 }} />
+          <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+            Uninstalling {displayName}...
+          </Text>
+        </Surface>
+      );
+    }
 
     return (
       <Surface
@@ -1153,6 +1218,24 @@ const NodeSettingsScreen: React.FC = () => {
             value={enabled}
             onValueChange={(val) => handleToggleCommand(cmd.command_name, val)}
           />
+          <Menu
+            visible={openMenu === menuKey}
+            onDismiss={() => setOpenMenu(null)}
+            anchor={
+              <TouchableRipple
+                onPress={() => setOpenMenu(menuKey)}
+                style={styles.menuAnchor}
+              >
+                <Icon source="dots-vertical" size={22} color={theme.colors.onSurfaceVariant} />
+              </TouchableRipple>
+            }
+          >
+            <Menu.Item
+              leadingIcon="delete-outline"
+              title="Uninstall"
+              onPress={() => handleUninstallCommand(cmd)}
+            />
+          </Menu>
         </View>
       </Surface>
     );
