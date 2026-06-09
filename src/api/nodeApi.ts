@@ -1,5 +1,3 @@
-import axios from 'axios';
-
 import { getCommandCenterUrl } from '../config/serviceConfig';
 import apiClient from './apiClient';
 
@@ -29,9 +27,8 @@ export interface NodeInfo {
 }
 
 export const listNodes = async (householdId?: string): Promise<NodeInfo[]> => {
-  // listNodes uses the admin endpoint which doesn't require JWT
   const params = householdId ? `?household_id=${householdId}` : '';
-  const res = await axios.get<NodeInfo[]>(
+  const res = await apiClient.get<NodeInfo[]>(
     `${getCommandCenterUrl()}/api/v0/admin/nodes${params}`,
     { timeout: 10000 },
   );
@@ -39,7 +36,7 @@ export const listNodes = async (householdId?: string): Promise<NodeInfo[]> => {
 };
 
 export const getNode = async (nodeId: string): Promise<NodeInfo> => {
-  const res = await axios.get<NodeInfo>(
+  const res = await apiClient.get<NodeInfo>(
     `${getCommandCenterUrl()}/api/v0/admin/nodes/${nodeId}`,
     { timeout: 10000 },
   );
