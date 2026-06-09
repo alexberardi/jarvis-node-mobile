@@ -31,6 +31,7 @@ import { getVoiceProfileStatus } from '../../api/voiceProfileApi';
 import { BluetoothSection } from '../../components/BluetoothSection';
 import { HelpIcon, InfoHelperText } from '../../components/HelpIcon';
 import { NodeVoiceSettings } from '../../components/NodeVoiceSettings';
+import { NodeMaintenanceSettings } from '../../components/NodeMaintenanceSettings';
 import { SpeakerHATCard } from '../../components/SpeakerHATCard';
 import { useAuth } from '../../auth/AuthContext';
 import { helpCopy } from '../../copy/help';
@@ -157,6 +158,11 @@ export const HardwareTab = ({ nodeId, node }: Props) => {
       {/* Voice Settings (sliders) */}
       <View style={styles.voiceSettingsWrapper}>
         <NodeVoiceSettings nodeId={nodeId} />
+      </View>
+
+      {/* Maintenance: daily restart + RSS ceiling */}
+      <View style={styles.voiceSettingsWrapper}>
+        <NodeMaintenanceSettings nodeId={nodeId} />
       </View>
 
       {/* Speaker HAT (only renders when node reports hat_detected).
