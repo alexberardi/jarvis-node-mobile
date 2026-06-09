@@ -124,6 +124,13 @@ export interface NodeConfigSnapshot {
   volume_percent?: number;
   led_enabled?: boolean;
   led_brightness_percent?: number;
+  // Maintenance-restart knobs. Daily restart at a quiet hour clears
+  // allocator + library-internal cache growth that no in-process GC
+  // reaches; the RSS ceiling is the emergency-stop fallback. See
+  // services/maintenance_restart_service.py on the node side.
+  maintenance_restart_enabled?: boolean;
+  maintenance_restart_at_time?: string; // "HH:MM" 24-h, node-local time
+  maintenance_restart_rss_ceiling_mb?: number; // 0 = ceiling disabled
   hardware?: NodeHardwareInfo;
 }
 
