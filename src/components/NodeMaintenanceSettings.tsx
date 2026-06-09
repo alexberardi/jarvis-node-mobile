@@ -132,13 +132,37 @@ export const NodeMaintenanceSettings = ({ nodeId }: Props) => {
     }
   }, [nodeId, settings]);
 
-  // Loading: matches the NodeVoiceSettings spinner so the tab doesn't
-  // have one card flicker while another is still resolving.
-  if (snapshotState !== 'loaded') {
+  // Loading state mirrors NodeVoiceSettings exactly: render the
+  // Card.Title even while loading so the user always sees what the
+  // card is, with a small spinner + status text in the body. Gating
+  // on ``!seededRef.current`` too prevents the form briefly showing
+  // DEFAULTS before the real snapshot lands, which would flicker the
+  // toggle/time/MB values to wrong-looking placeholders.
+  if (snapshotState !== 'loaded' || !seededRef.current) {
     return (
       <Card style={styles.card}>
-        <Card.Content style={styles.loading}>
-          <ActivityIndicator />
+        <Card.Title
+          title="Maintenance"
+          titleVariant="titleMedium"
+          left={(props) => (
+            <View
+              {...props}
+              style={[
+                styles.iconCircle,
+                { backgroundColor: theme.colors.primaryContainer },
+              ]}
+            >
+              <Text style={{ fontSize: 18 }}>{'\u{1F504}'}</Text>
+            </View>
+          )}
+        />
+        <Card.Content style={styles.loadingBody}>
+          <ActivityIndicator animating size="small" />
+          <Text variant="bodySmall" style={{ marginLeft: 12, opacity: 0.7 }}>
+            {snapshotState === 'error'
+              ? 'Could not reach the node — try again in a moment.'
+              : 'Loading current settings from the node…'}
+          </Text>
         </Card.Content>
       </Card>
     );
@@ -300,9 +324,14 @@ const styles = StyleSheet.create({
   card: {
     marginBottom: 16,
   },
-  loading: {
+  // Matches NodeVoiceSettings.loadingBody — horizontal layout with the
+  // spinner on the left, status text alongside, so the loading card has
+  // the same vertical footprint as the real one and the tab doesn't
+  // jump when the snapshot lands.
+  loadingBody: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 24,
+    paddingVertical: 12,
   },
   iconCircle: {
     width: 36,
