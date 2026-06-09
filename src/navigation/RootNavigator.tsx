@@ -7,6 +7,7 @@ import AuthNavigator from './AuthNavigator';
 import CommandDataStackNavigator from './CommandDataStackNavigator';
 import InboxStackNavigator from './InboxStackNavigator';
 import MainTabNavigator from './MainTabNavigator';
+import MemoriesStackNavigator from './MemoriesStackNavigator';
 import RecentCommandsStackNavigator from './RecentCommandsStackNavigator';
 import SmartHomeSetupNavigator from './SmartHomeSetupNavigator';
 import HouseholdEditScreen from '../screens/Settings/HouseholdEditScreen';
@@ -55,6 +56,11 @@ const RootNavigator = () => {
         options={{ presentation: 'modal' }}
       />
       <Stack.Screen name="CommandData" component={CommandDataStackNavigator} />
+      <Stack.Screen
+        name="Memories"
+        component={MemoriesStackNavigator}
+        options={{ presentation: 'modal' }}
+      />
     </Stack.Navigator>
   );
 };

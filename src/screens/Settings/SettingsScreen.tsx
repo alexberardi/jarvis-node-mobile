@@ -437,6 +437,18 @@ const SettingsScreen = () => {
                 <Icon source="chevron-right" size={24} />
               </View>
             </TouchableRipple>
+            <Divider style={{ marginVertical: 4 }} />
+            <TouchableRipple onPress={() => navigation.navigate('Memories')}>
+              <View style={styles.switchRow}>
+                <View style={{ flex: 1 }}>
+                  <Text variant="bodyMedium">Memories</Text>
+                  <Text variant="bodySmall" style={styles.hint}>
+                    What Jarvis remembers about you — review, edit, or forget
+                  </Text>
+                </View>
+                <Icon source="chevron-right" size={24} />
+              </View>
+            </TouchableRipple>
           </Card.Content>
         </Card>
       )}

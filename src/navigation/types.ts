@@ -117,6 +117,11 @@ export type RecentCommandsStackParamList = {
   RecentCommandDetail: { transcriptId: number };
 };
 
+export type MemoriesStackParamList = {
+  MemoriesList: undefined;
+  MemoryEdit: { memoryId?: number };
+};
+
 export type StoreStackParamList = {
   StoreBrowse: undefined;
   StoreDetail: { commandName: string };
@@ -159,4 +164,5 @@ export type RootStackParamList = {
   SmartHomeSetup: NavigatorScreenParams<SmartHomeSetupParamList>;
   VoiceProfile: undefined;
   CommandData: NavigatorScreenParams<CommandDataStackParamList>;
+  Memories: NavigatorScreenParams<MemoriesStackParamList> | undefined;
 };
