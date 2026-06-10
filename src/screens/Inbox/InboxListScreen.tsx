@@ -37,7 +37,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   adapter_proposal: '#10b981',
   adapter_deployed: '#0ea5e9',
   adapter_reverted: '#64748b',
-  shopping_list_export: '#f97316',
+  interactive_list: '#8b5cf6',
 };
 
 const routeForCategory = (category: string): keyof InboxStackParamList => {
@@ -46,8 +46,8 @@ const routeForCategory = (category: string): keyof InboxStackParamList => {
       return 'AdapterProposal';
     case 'adapter_deployed':
       return 'AdapterDeployed';
-    case 'shopping_list_export':
-      return 'ExportShoppingList';
+    case 'interactive_list':
+      return 'InteractiveList';
     default:
       return 'InboxDetail';
   }
@@ -244,8 +244,8 @@ const InboxListScreen = () => {
             navigation.navigate('AdapterProposal', { itemId: item.id });
           } else if (route === 'AdapterDeployed') {
             navigation.navigate('AdapterDeployed', { itemId: item.id });
-          } else if (route === 'ExportShoppingList') {
-            navigation.navigate('ExportShoppingList', { itemId: item.id });
+          } else if (route === 'InteractiveList') {
+            navigation.navigate('InteractiveList', { itemId: item.id });
           }
         }}
         onLongPress={() => {

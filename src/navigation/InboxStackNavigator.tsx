@@ -6,11 +6,11 @@ import { HelpProvider } from '../components/HelpProvider';
 import AdapterDeployedScreen from '../screens/Inbox/AdapterDeployedScreen';
 import AdapterProposalDetailScreen from '../screens/Inbox/AdapterProposalDetailScreen';
 import AdapterProposalScreen from '../screens/Inbox/AdapterProposalScreen';
-import ExportShoppingListScreen from '../screens/Inbox/ExportShoppingListScreen';
 import InboxCallbackResultScreen from '../screens/Inbox/InboxCallbackResultScreen';
 import InboxDetailScreen from '../screens/Inbox/InboxDetailScreen';
 import InboxListScreen from '../screens/Inbox/InboxListScreen';
-import WalmartIdPickerScreen from '../screens/Inbox/WalmartIdPickerScreen';
+import InteractiveListScreen from '../screens/Inbox/InteractiveListScreen';
+import WebViewPickerScreen from '../screens/Inbox/WebViewPickerScreen';
 import { InboxStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<InboxStackParamList>();
@@ -32,8 +32,8 @@ const InboxStackNavigator = () => {
             component={AdapterProposalDetailScreen}
           />
           <Stack.Screen name="AdapterDeployed" component={AdapterDeployedScreen} />
-          <Stack.Screen name="ExportShoppingList" component={ExportShoppingListScreen} />
-          <Stack.Screen name="WalmartIdPicker" component={WalmartIdPickerScreen} />
+          <Stack.Screen name="InteractiveList" component={InteractiveListScreen} />
+          <Stack.Screen name="WebViewPicker" component={WebViewPickerScreen} />
         </Stack.Navigator>
       </HelpProvider>
     </Portal.Host>

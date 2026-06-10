@@ -54,9 +54,9 @@ const PushNotificationManager: React.FC<{ children: React.ReactNode }> = ({ chil
         screen: 'AdapterDeployed',
         params: { itemId: data.inbox_item_id },
       });
-    } else if (data.type === 'shopping_list_export' && data.inbox_item_id) {
+    } else if (data.type === 'interactive_list' && data.inbox_item_id) {
       (navigationRef as any).navigate('Inbox', {
-        screen: 'ExportShoppingList',
+        screen: 'InteractiveList',
         params: { itemId: data.inbox_item_id },
       });
     } else if (data.inbox_item_id) {
