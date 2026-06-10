@@ -110,24 +110,28 @@ export type InboxStackParamList = {
   AdapterProposal: { itemId: string };
   AdapterProposalDetail: { proposalId: string };
   AdapterDeployed: { itemId: string };
-  ExportShoppingList: {
+  InteractiveList: {
     itemId: string;
-    // Roundtrip return values from WalmartIdPicker. The inbox metadata is
-    // a snapshot, so the picker navigates back here with the key/id it
-    // just saved and the screen merges them into a local overrides map —
-    // no refetch needed.
+    // Roundtrip return values from WebViewPicker. The inbox metadata is
+    // a snapshot, so the picker navigates back here with the key/field/
+    // value it just saved and the screen merges them into a local
+    // gate-override map — no refetch needed.
     pickedKey?: string;
-    pickedId?: string;
+    pickedField?: string;
+    pickedValue?: string;
   };
-  WalmartIdPicker: {
-    searchQuery: string; // seeds the walmart.com search WebView
-    recordKey: string; // shopping-list record to patch
+  WebViewPicker: {
+    itemId: string; // inbox item — needed to navigate back to InteractiveList
+    rowKey: string; // record to patch (the row's key)
     nodeId: string; // node that owns the record
-    itemId: string; // inbox item — needed to navigate back to ExportShoppingList
-    // When set ("View" on a mapped row), the WebView opens on this
-    // product's page instead of search results so the user can confirm
-    // the stored mapping — and browse away + re-pick if it's wrong.
-    productId?: string;
+    commandName: string; // record-API target (the action's save.command_name)
+    field: string; // record field to patch (the action's save.field)
+    startUrl: string; // already substituted ({label}/{value}); must be https
+    pattern: string; // JS regex source; capture group 1 = the value
+    // Stored value, when one exists. Detecting it again shows an info bar
+    // instead of the "Use this value" button — the user browses away and
+    // re-picks if the stored mapping is wrong.
+    currentValue?: string;
   };
 };
 
