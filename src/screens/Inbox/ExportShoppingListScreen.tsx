@@ -69,7 +69,11 @@ const parseQuantity = (text: string | undefined): number => {
 
 interface ExportMetadata {
   type?: string;
-  provider?: 'walmart' | 'notes'; // what this screen renders for; absent = walmart
+  // What this screen renders for; absent = walmart. Walmart is the only
+  // provider with special rendering (mapping-gated rows, ID buttons) —
+  // every other provider gets all-rows-enabled + generic url/text result,
+  // so new node-side providers need zero mobile changes.
+  provider?: string;
   sections?: {
     regulars?: ShoppingListItem[];
     one_offs?: ShoppingListItem[];
@@ -179,7 +183,7 @@ const ExportShoppingListScreen = () => {
       // "notes" that's everything; for "walmart" all mapped items,
       // including ones mapped after this inbox item was created.
       const exportable =
-        meta.provider === 'notes'
+        (meta.provider ?? 'walmart') !== 'walmart'
           ? allEntries
           : allEntries.filter((entry) => !!liveIds[entry.key] || hasWalmartId(entry));
       setSelected(new Set(exportable.map((entry) => entry.key)));
@@ -204,7 +208,7 @@ const ExportShoppingListScreen = () => {
     () => ((item?.metadata ?? {}) as ExportMetadata),
     [item],
   );
-  const provider: 'walmart' | 'notes' = meta.provider ?? 'walmart';
+  const provider: string = meta.provider ?? 'walmart';
   const sourceNodeId = meta.node_id;
   const regulars = meta.sections?.regulars ?? [];
   const oneOffs = meta.sections?.one_offs ?? [];
@@ -212,7 +216,7 @@ const ExportShoppingListScreen = () => {
   // "notes" ignores Walmart mappings entirely — every row is exportable.
   const isMapped = useCallback(
     (entry: ShoppingListItem): boolean =>
-      provider === 'notes' || !!idOverrides[entry.key] || hasWalmartId(entry),
+      provider !== 'walmart' || !!idOverrides[entry.key] || hasWalmartId(entry),
     [provider, idOverrides],
   );
 
@@ -641,7 +645,7 @@ const ExportShoppingListScreen = () => {
               variant="bodySmall"
               style={{ color: theme.colors.onSurfaceVariant, marginLeft: 8 }}
             >
-              {provider === 'notes'
+              {provider !== 'walmart'
                 ? 'Building your list…'
                 : 'Building your Walmart cart…'}
             </Text>
