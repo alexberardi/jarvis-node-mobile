@@ -54,6 +54,11 @@ const PushNotificationManager: React.FC<{ children: React.ReactNode }> = ({ chil
         screen: 'AdapterDeployed',
         params: { itemId: data.inbox_item_id },
       });
+    } else if (data.type === 'shopping_list_export' && data.inbox_item_id) {
+      (navigationRef as any).navigate('Inbox', {
+        screen: 'ExportShoppingList',
+        params: { itemId: data.inbox_item_id },
+      });
     } else if (data.inbox_item_id) {
       // Generic fallback: any push carrying an inbox_item_id opens that
       // item. New inbox-backed categories deep-link by default without
