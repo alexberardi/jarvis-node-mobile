@@ -16,14 +16,21 @@ import {
 
 import apiClient from '../../api/apiClient';
 import { fetchNodeTools } from '../../api/chatApi';
+import type { InstalledPackage } from '../../api/chatApi';
 import { useAuth } from '../../auth/AuthContext';
 import { HelpIcon } from '../../components/HelpIcon';
 import { getDownloadInfo, getPackageDetail } from '../../api/pantryApi';
-import { requestCCInstall, requestInstall } from '../../api/packageInstallApi';
+import {
+  pollRevertStatus,
+  requestCCInstall,
+  requestInstall,
+  requestRevert,
+} from '../../api/packageInstallApi';
 import { getServiceConfig } from '../../config/serviceConfig';
 import { helpCopy } from '../../copy/help';
 import { StoreStackParamList } from '../../navigation/types';
 import type { PackageDetail } from '../../types/Package';
+import { anyHealthFailed, getRevertTarget, isTerminalInstallStatus } from '../../utils/packageStatus';
 import { compareSemver, isUpdateAvailable } from '../../utils/semver';
 
 type Nav = NativeStackNavigationProp<StoreStackParamList>;
@@ -73,7 +80,13 @@ const StoreDetailScreen = () => {
   // Per-node installed version for this command. null = not installed.
   // 'unknown' = installed but the node didn't report a version (legacy install).
   const [nodeVersions, setNodeVersions] = useState<Record<string, string | null>>({});
+  // Full installed_packages entry per node (previous_version, health) for the
+  // nodes that report one. Drives the Revert action and the health dot.
+  const [nodePackages, setNodePackages] = useState<Record<string, InstalledPackage>>({});
   const [nodesLoading, setNodesLoading] = useState(false);
+  const [reverting, setReverting] = useState(false);
+  // Bumped after a revert completes so the version-discovery effect re-runs.
+  const [refreshTick, setRefreshTick] = useState(0);
 
   const activeHousehold = authState.households.find(
     (h) => h.id === authState.activeHouseholdId,
@@ -120,29 +133,34 @@ const StoreDetailScreen = () => {
         setNodesLoading(true);
         const nodes = await fetchHouseholdNodes();
         const entries = await Promise.all(
-          nodes.map(async (node) => {
+          nodes.map(async (node): Promise<readonly [string, string | null, InstalledPackage | null]> => {
             try {
               const tools = await fetchNodeTools(node.node_id);
               const pkg = (tools.installed_packages || []).find(
                 (p) => p.name === commandName,
               );
-              if (pkg) return [node.node_id, pkg.version] as const;
+              if (pkg) return [node.node_id, pkg.version, pkg] as const;
               // Fall back to client_tools name check for legacy installs
               // that pre-date installed_packages reporting.
               const toolNames = tools.client_tools
                 .map((t) => (t.function as Record<string, unknown>)?.name as string)
                 .filter(Boolean);
               if (toolNames.includes(commandName)) {
-                return [node.node_id, 'unknown'] as const;
+                return [node.node_id, 'unknown', null] as const;
               }
-              return [node.node_id, null] as const;
+              return [node.node_id, null, null] as const;
             } catch {
-              return [node.node_id, null] as const;
+              return [node.node_id, null, null] as const;
             }
           }),
         );
         if (cancelled) return;
-        setNodeVersions(Object.fromEntries(entries));
+        setNodeVersions(Object.fromEntries(entries.map(([id, version]) => [id, version])));
+        setNodePackages(
+          Object.fromEntries(
+            entries.flatMap(([id, , pkg]) => (pkg ? [[id, pkg] as const] : [])),
+          ),
+        );
       } finally {
         if (!cancelled) setNodesLoading(false);
       }
@@ -150,7 +168,7 @@ const StoreDetailScreen = () => {
     return () => {
       cancelled = true;
     };
-  }, [detail, hasPromptProvider, commandName, fetchHouseholdNodes]);
+  }, [detail, hasPromptProvider, commandName, fetchHouseholdNodes, refreshTick]);
 
   // Aggregate install state across all nodes. Drives the bottom button.
   const installSummary = (() => {
@@ -177,6 +195,67 @@ const StoreDetailScreen = () => {
     // Mixed: some nodes have it, some don't.
     return { state: 'install-or-update' as const, label: `Install / Update to v${latest}` };
   })();
+
+  // Nodes that kept a `.previous` rollback snapshot from the last update,
+  // and whether any node reports the package's components failed to load.
+  const revertTarget = hasPromptProvider ? null : getRevertTarget(nodePackages);
+  const healthFailed = !hasPromptProvider && anyHealthFailed(nodePackages);
+
+  // Mirrors the uninstall UX: confirm dialog → inline progress → done.
+  // The node restarts mid-revert, so the poll passes through 'restarting'
+  // (non-terminal) before the post-boot result lands.
+  const handleRevert = () => {
+    if (!detail || !revertTarget) return;
+    const displayName = detail.display_name || detail.command_name;
+    const nodeCount = revertTarget.nodeIds.length;
+    Alert.alert(
+      'Revert Package',
+      `Roll back "${displayName}" to v${revertTarget.previousVersion} on ${nodeCount} node${nodeCount === 1 ? '' : 's'}? The node will restart.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Revert',
+          style: 'destructive',
+          onPress: async () => {
+            setReverting(true);
+            try {
+              const failures: string[] = [];
+              await Promise.all(
+                revertTarget.nodeIds.map(async (nodeId) => {
+                  const { id } = await requestRevert(nodeId, commandName);
+                  // 60 × 2s = 120s — covers the node's restart + discovery
+                  // re-initialization before it posts the result.
+                  let attempts = 0;
+                  while (attempts < 60) {
+                    await new Promise((r) => setTimeout(r, 2000));
+                    const result = await pollRevertStatus(nodeId, id);
+                    if (isTerminalInstallStatus(result.status)) {
+                      if (result.status !== 'completed') {
+                        failures.push(result.error_message ?? 'Revert failed');
+                      }
+                      return;
+                    }
+                    attempts++;
+                  }
+                  failures.push('Node did not respond in time.');
+                }),
+              );
+              if (failures.length > 0) {
+                Alert.alert('Revert Failed', failures[0]);
+              } else {
+                Alert.alert('Reverted', `Rolled back to v${revertTarget.previousVersion}.`);
+              }
+              setRefreshTick((t) => t + 1);
+            } catch (e: unknown) {
+              Alert.alert('Error', e instanceof Error ? e.message : 'Failed to request revert');
+            } finally {
+              setReverting(false);
+            }
+          },
+        },
+      ],
+    );
+  };
 
   const handleInstall = async () => {
     if (!detail) return;
@@ -346,6 +425,14 @@ const StoreDetailScreen = () => {
             )}
           </View>
           <View style={styles.badges}>
+            {healthFailed && (
+              <View
+                accessibilityLabel="Package failed to load on a node"
+                testID="package-health-dot"
+              >
+                <Icon source="circle" size={12} color="#ef4444" />
+              </View>
+            )}
             {detail.verified && (
               <>
                 <Icon source="check-decagram" size={24} color={theme.colors.primary} />
@@ -493,11 +580,24 @@ const StoreDetailScreen = () => {
       {/* Install button */}
       {canInstall && (
         <View style={styles.installBar}>
+          {revertTarget && (
+            <Button
+              mode="outlined"
+              icon="backup-restore"
+              onPress={handleRevert}
+              loading={reverting}
+              disabled={reverting || installing || nodesLoading}
+              textColor={theme.colors.error}
+              style={{ marginBottom: 8 }}
+            >
+              Revert to v{revertTarget.previousVersion}
+            </Button>
+          )}
           <Button
             mode="contained"
             onPress={handleInstall}
             loading={installing || nodesLoading}
-            disabled={installing || nodesLoading || installSummary.state === 'up-to-date'}
+            disabled={installing || reverting || nodesLoading || installSummary.state === 'up-to-date'}
             icon={
               hasPromptProvider
                 ? 'brain'

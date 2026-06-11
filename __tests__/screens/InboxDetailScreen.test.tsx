@@ -7,11 +7,13 @@ import { lightTheme } from '../../src/theme';
 
 const mockNavigate = jest.fn();
 const mockGoBack = jest.fn();
+const mockPush = jest.fn();
 
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({
     navigate: mockNavigate,
     goBack: mockGoBack,
+    push: mockPush,
   }),
   useRoute: () => ({
     params: { itemId: 'test-id' },
@@ -47,8 +49,11 @@ jest.mock('../../src/api/inboxApi', () => ({
   deleteInboxItem: (...args: any[]) => mockDeleteInboxItem(...args),
 }));
 
+const mockSendInteractiveCallback = jest.fn();
+
 jest.mock('../../src/api/commandCenterApi', () => ({
   sendNodeAction: jest.fn(),
+  sendInteractiveCallback: (...args: any[]) => mockSendInteractiveCallback(...args),
 }));
 
 jest.mock('../../src/components/ActionButtons', () => {
@@ -113,6 +118,42 @@ const sampleConfirmationItem = {
     actions: [
       { button_text: 'Send', button_action: 'send_email', button_type: 'primary' },
       { button_text: 'Cancel', button_action: 'cancel_email', button_type: 'destructive' },
+    ],
+  },
+};
+
+// Smart-reply style item: the draft lives ONLY in metadata.editable_text;
+// the body stays From/Subject/snippet.
+const sampleSmartReplyItem = {
+  ...sampleItem,
+  category: 'smart_reply',
+  title: 'Reply ready — Sender 1',
+  body: 'From: Sender 1 <s1@example.com>\nSubject: Subject 1\n\nSnippet 1',
+  content_format: 'plain' as const,
+  metadata: {
+    node_id: 'node-1',
+    editable_text: {
+      label: 'Draft reply',
+      initial: 'Sounds good — see you then.',
+      data_key: 'body',
+    },
+    interactive_elements: [
+      {
+        id: 'send-1',
+        label: 'Send reply',
+        kind: 'send',
+        command: 'email',
+        callback: 'send_draft_reply',
+        data: { message_id: 'm1', thread_id: 't1', body: 'Sounds good — see you then.' },
+        navigation_type: 'stack',
+      },
+      {
+        id: 'ignore-1',
+        label: 'Ignore',
+        command: 'email',
+        callback: 'dismiss_draft',
+        data: { message_id: 'm1' },
+      },
     ],
   },
 };
@@ -291,5 +332,136 @@ describe('InboxDetailScreen', () => {
     // The think content should NOT be in the main body display
     // (it should only appear when "Show reasoning" is toggled)
     expect(queryByText('Let me analyze this carefully')).toBeNull();
+  });
+
+  describe('editable_text (smart-reply drafts)', () => {
+    it('renders the label and an input seeded with initial', async () => {
+      mockGetInboxItem.mockResolvedValue(sampleSmartReplyItem);
+
+      const { getByText, getByDisplayValue } = render(<InboxDetailScreen />, { wrapper });
+
+      await waitFor(() => {
+        expect(getByText('Draft reply')).toBeTruthy();
+        expect(getByDisplayValue('Sounds good — see you then.')).toBeTruthy();
+      });
+      // Interactive element chips render alongside the editor.
+      expect(getByText('Send reply')).toBeTruthy();
+      expect(getByText('Ignore')).toBeTruthy();
+    });
+
+    it('sends the edited text as data.body in the Send callback payload', async () => {
+      mockGetInboxItem.mockResolvedValue(sampleSmartReplyItem);
+      mockSendInteractiveCallback.mockResolvedValue({
+        id: 'job-1', status: 'pending', navigation_type: 'stack', created_at: 'x',
+      });
+
+      const { getByText, getByTestId } = render(<InboxDetailScreen />, { wrapper });
+
+      await waitFor(() => {
+        expect(getByTestId('editable-text-input')).toBeTruthy();
+      });
+
+      fireEvent.changeText(getByTestId('editable-text-input'), 'Edited reply text.');
+      fireEvent.press(getByText('Send reply'));
+
+      await waitFor(() => {
+        expect(mockSendInteractiveCallback).toHaveBeenCalledWith({
+          command_name: 'email',
+          callback_name: 'send_draft_reply',
+          data: { message_id: 'm1', thread_id: 't1', body: 'Edited reply text.' },
+          target_node_id: 'node-1',
+          navigation_type: 'stack',
+        });
+      });
+    });
+
+    it('leaves the Ignore payload untouched even after editing', async () => {
+      mockGetInboxItem.mockResolvedValue(sampleSmartReplyItem);
+      mockSendInteractiveCallback.mockResolvedValue({
+        id: 'job-2', status: 'pending', navigation_type: 'new_notification', created_at: 'x',
+      });
+
+      const { getByText, getByTestId } = render(<InboxDetailScreen />, { wrapper });
+
+      await waitFor(() => {
+        expect(getByTestId('editable-text-input')).toBeTruthy();
+      });
+
+      fireEvent.changeText(getByTestId('editable-text-input'), 'Edited reply text.');
+      fireEvent.press(getByText('Ignore'));
+
+      await waitFor(() => {
+        expect(mockSendInteractiveCallback).toHaveBeenCalledWith(
+          expect.objectContaining({
+            callback_name: 'dismiss_draft',
+            data: { message_id: 'm1' },
+          }),
+        );
+      });
+    });
+
+    it('blocks Send with an inline error when the editor is empty', async () => {
+      mockGetInboxItem.mockResolvedValue(sampleSmartReplyItem);
+
+      const { getByText, getByTestId } = render(<InboxDetailScreen />, { wrapper });
+
+      await waitFor(() => {
+        expect(getByTestId('editable-text-input')).toBeTruthy();
+      });
+
+      fireEvent.changeText(getByTestId('editable-text-input'), '');
+      fireEvent.press(getByText('Send reply'));
+
+      await waitFor(() => {
+        expect(getByText('Draft is empty')).toBeTruthy();
+      });
+      expect(mockSendInteractiveCallback).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['missing initial', { label: 'Draft reply', data_key: 'body' }],
+      ['missing data_key', { label: 'Draft reply', initial: 'text' }],
+      ['initial wrong type', { initial: 42, data_key: 'body' }],
+      ['data_key wrong type', { initial: 'text', data_key: 7 }],
+      ['label wrong type', { label: 9, initial: 'text', data_key: 'body' }],
+      ['not an object', 'just a string'],
+    ])('ignores malformed editable_text (%s) and keeps elements working', async (_name, editableText) => {
+      mockGetInboxItem.mockResolvedValue({
+        ...sampleSmartReplyItem,
+        metadata: { ...sampleSmartReplyItem.metadata, editable_text: editableText },
+      });
+      mockSendInteractiveCallback.mockResolvedValue({
+        id: 'job-3', status: 'pending', navigation_type: 'stack', created_at: 'x',
+      });
+
+      const { getByText, queryByTestId } = render(<InboxDetailScreen />, { wrapper });
+
+      await waitFor(() => {
+        expect(getByText('Send reply')).toBeTruthy();
+      });
+      // No editor rendered...
+      expect(queryByTestId('editable-text-input')).toBeNull();
+
+      // ...and elements behave exactly as today (original draft sent).
+      fireEvent.press(getByText('Send reply'));
+      await waitFor(() => {
+        expect(mockSendInteractiveCallback).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: { message_id: 'm1', thread_id: 't1', body: 'Sounds good — see you then.' },
+          }),
+        );
+      });
+    });
+
+    it('renders items without editable_text exactly as before', async () => {
+      mockGetInboxItem.mockResolvedValue(sampleItem);
+
+      const { getByText, queryByTestId } = render(<InboxDetailScreen />, { wrapper });
+
+      await waitFor(() => {
+        expect(getByText('Deep Research Results')).toBeTruthy();
+      });
+      expect(queryByTestId('editable-text-input')).toBeNull();
+    });
   });
 });

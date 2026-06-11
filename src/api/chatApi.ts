@@ -79,6 +79,11 @@ export interface SendChatRequest {
 export interface InstalledPackage {
   name: string;
   version: string;
+  /** Version preserved in the node's `.previous` rollback snapshot. Present
+   * only after an update — enables the "Revert to vX" action. */
+  previous_version?: string | null;
+  /** 'failed' when any of the package's components failed to import at boot. */
+  health?: 'ok' | 'failed';
 }
 
 export interface NodeToolsResponse {

@@ -74,6 +74,12 @@ export interface AgentEntry {
    * `enabled` will be false; this string explains why. Cleared when the
    * user manually re-enables. */
   auto_disabled_reason?: string;
+  /** Set by the node when the agent's required secrets aren't configured.
+   * The agent is listed (not hidden) so the user can fix it from this card;
+   * the scheduler won't run it until the secrets are set. */
+  unconfigured?: boolean;
+  /** Secret keys the node reported missing for an unconfigured agent. */
+  missing_secrets?: string[];
 }
 
 export interface DeviceFamilyEntry {
