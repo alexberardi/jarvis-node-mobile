@@ -74,12 +74,20 @@ jest.mock('../../src/api/packageInstallApi', () => ({
   pollUninstallStatus: jest.fn(),
 }));
 
+// --- Household members (user-type secret picker) ---
+const mockListHouseholdMembers = jest.fn();
+jest.mock('../../src/api/householdApi', () => ({
+  listHouseholdMembers: (...args: unknown[]) => mockListHouseholdMembers(...args),
+}));
+
 // --- Heavy child components ---
 jest.mock('../../src/components/K2QRCode', () => ({
   K2BackupCard: () => null,
 }));
 
-jest.mock('../../src/components/SecretEditDialog', () => () => null);
+// SecretEditDialog is NOT mocked — the user-type secret tests drive the real
+// picker through the dialog's save path. It stays unmounted until a secret
+// row is pressed, so the other suites are unaffected.
 
 const wrapper = ({ children }: { children: React.ReactNode }) => (
   <PaperProvider theme={lightTheme}>
@@ -336,6 +344,221 @@ describe('NodeSettingsScreen — three-tab layout', () => {
 
     await waitFor(() => {
       expect(view.getByText('No services installed.')).toBeTruthy();
+    });
+  });
+});
+
+describe('NodeSettingsScreen — agent secret values', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('shows the plain value for a non-sensitive agent secret on the Tasks tab', async () => {
+    const snapshot = snapshotWithAgents();
+    (snapshot.agents[1] as any).secrets = [
+      {
+        key: 'EMAIL_ALERT_URGENT_KEYWORDS',
+        scope: 'user',
+        description: 'Comma-separated urgent keywords',
+        value_type: 'string',
+        required: false,
+        is_sensitive: false,
+        is_set: true,
+        value: 'urgent,asap',
+        friendly_name: 'Urgent Keywords',
+      },
+      {
+        key: 'ICLOUD_PASSWORD',
+        scope: 'user',
+        description: 'iCloud app password',
+        value_type: 'string',
+        required: true,
+        is_sensitive: true,
+        is_set: true,
+        friendly_name: 'iCloud Password',
+      },
+    ];
+
+    const view = await renderLoaded(snapshot);
+    await waitFor(() => expect(view.getByText('control device')).toBeTruthy());
+
+    await act(async () => {
+      fireEvent.press(view.getByText('Tasks'));
+    });
+
+    await waitFor(() => {
+      // Non-sensitive secret with a value → the value itself is shown,
+      // exactly like the Services-tab command cards.
+      expect(view.getByText('Urgent Keywords')).toBeTruthy();
+      expect(view.getByText('urgent,asap')).toBeTruthy();
+      // Sensitive-but-set secret stays masked as "Configured".
+      expect(view.getByText('iCloud Password')).toBeTruthy();
+      expect(view.getByText('Configured')).toBeTruthy();
+    });
+  });
+});
+
+describe('NodeSettingsScreen — "user" value_type secrets', () => {
+  const members = [
+    { user_id: 7, username: 'alex', email: 'alex@example.com', role: 'admin' },
+    { user_id: 8, username: 'sam', email: 'sam@example.com', role: 'member' },
+  ];
+
+  const userSecret = {
+    key: 'EMAIL_AGENT_USER',
+    scope: 'integration',
+    description: 'Who the email agents run as and notify',
+    value_type: 'user',
+    required: false,
+    is_sensitive: false,
+    is_set: false,
+    friendly_name: 'Runs As',
+  };
+
+  function emailSnapshot(secret: Record<string, unknown>) {
+    return {
+      schema_version: 1,
+      commands_schema_version: 2,
+      commands: [
+        {
+          command_name: 'check_email',
+          description: 'Check email',
+          secrets: [secret],
+          enabled: true,
+          associated_service: 'Email',
+        },
+      ],
+      agents: [],
+      device_families: [],
+      device_managers: [],
+    };
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('previews the member name instead of the raw stored id', async () => {
+    mockListHouseholdMembers.mockResolvedValue(members);
+
+    const view = await renderLoaded(
+      emailSnapshot({ ...userSecret, is_set: true, value: '7' }) as any,
+    );
+
+    await act(async () => {
+      fireEvent.press(view.getByText('Services'));
+    });
+
+    await waitFor(() => {
+      expect(mockListHouseholdMembers).toHaveBeenCalledWith('hh-1', 'mock-token');
+      expect(view.getByText('alex')).toBeTruthy();
+      // The raw id must not leak into the row preview.
+      expect(view.queryByText('7')).toBeNull();
+    });
+  });
+
+  it('falls back to "User {id}" when the members fetch fails', async () => {
+    mockListHouseholdMembers.mockRejectedValue(new Error('auth down'));
+
+    const view = await renderLoaded(
+      emailSnapshot({ ...userSecret, is_set: true, value: '7' }) as any,
+    );
+
+    await act(async () => {
+      fireEvent.press(view.getByText('Services'));
+    });
+
+    await waitFor(() => {
+      expect(view.getByText('User 7')).toBeTruthy();
+    });
+  });
+
+  it('renders the member picker and saving sends the selected id', async () => {
+    mockListHouseholdMembers.mockResolvedValue(members);
+    mockEncryptAndPushConfig.mockResolvedValue(undefined);
+
+    const view = await renderLoaded(emailSnapshot(userSecret) as any);
+
+    await act(async () => {
+      fireEvent.press(view.getByText('Services'));
+    });
+    await waitFor(() => expect(view.getByText('Runs As')).toBeTruthy());
+    // Members must be loaded before opening the editor so the picker has options.
+    await waitFor(() => expect(mockListHouseholdMembers).toHaveBeenCalled());
+
+    // Open the editor for the user-type secret.
+    await act(async () => {
+      fireEvent.press(view.getByText('Runs As'));
+    });
+    await waitFor(() => expect(view.getByText('Select a person')).toBeTruthy());
+
+    // Pick a member by display name.
+    await act(async () => {
+      fireEvent.press(view.getByText('Select a person'));
+    });
+    await waitFor(() => expect(view.getByText('sam')).toBeTruthy());
+    await act(async () => {
+      fireEvent.press(view.getByText('sam'));
+    });
+
+    await act(async () => {
+      fireEvent.press(view.getByText('Save'));
+    });
+
+    await waitFor(() => {
+      expect(mockEncryptAndPushConfig).toHaveBeenCalledWith(
+        'node-abc',
+        'settings:secrets',
+        { EMAIL_AGENT_USER: '8' },
+      );
+    });
+  });
+});
+
+describe('NodeSettingsScreen — package health badges', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('shows an amber Needs setup badge for unconfigured agents on the Tasks tab', async () => {
+    const snapshot = snapshotWithAgents();
+    (snapshot.agents[1] as any).unconfigured = true;
+    (snapshot.agents[1] as any).missing_secrets = ['ICLOUD_PASSWORD'];
+
+    const view = await renderLoaded(snapshot);
+    await waitFor(() => expect(view.getByText('control device')).toBeTruthy());
+
+    await act(async () => {
+      fireEvent.press(view.getByText('Tasks'));
+    });
+
+    await waitFor(() => {
+      expect(view.getByText('Needs setup — missing ICLOUD_PASSWORD')).toBeTruthy();
+      // The unconfigured agent stays listed alongside the healthy one.
+      expect(view.getByText('calendar alerts')).toBeTruthy();
+      expect(view.getByText('ha snapshot')).toBeTruthy();
+    });
+  });
+
+  it('labels entries with an import_failed tag as Failed to load', async () => {
+    const snapshot = snapshotWithAgents();
+    (snapshot.commands[1] as any)._errors = ['import_failed: cannot import name JarvisInbox'];
+
+    const view = await renderLoaded(snapshot);
+
+    await waitFor(() => {
+      expect(view.getByText('Failed to load')).toBeTruthy();
+    });
+  });
+
+  it('keeps the configuration-error label for field-level _errors tags', async () => {
+    const snapshot = snapshotWithAgents();
+    (snapshot.commands[1] as any)._errors = ['required_secrets'];
+
+    const view = await renderLoaded(snapshot);
+
+    await waitFor(() => {
+      expect(view.getByText('Configuration error: required_secrets')).toBeTruthy();
     });
   });
 });

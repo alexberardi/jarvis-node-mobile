@@ -17,6 +17,7 @@ import { pollTestInstallStatus } from '../../api/testInstallApi';
 import { useToolsVersion } from '../../contexts/ToolsContext';
 import { StoreStackParamList } from '../../navigation/types';
 import type { InstallStatus, InstallStatusValue } from '../../types/Package';
+import { installStatusLabel, isTerminalInstallStatus } from '../../utils/packageStatus';
 
 type Nav = NativeStackNavigationProp<StoreStackParamList>;
 type Route = RouteProp<StoreStackParamList, 'InstallProgress'>;
@@ -29,8 +30,6 @@ interface InstallEntry {
 
 const POLL_INTERVAL_MS = 750;
 const MAX_CONSECUTIVE_FAILURES = 5;
-
-const TERMINAL_STATES: Set<InstallStatusValue> = new Set(['completed', 'failed', 'expired']);
 
 const InstallProgressScreen = () => {
   const navigation = useNavigation<Nav>();
@@ -122,7 +121,7 @@ const InstallProgressScreen = () => {
     if (statuses.size === 0) return;
     const allTerminal = installs.every((entry) => {
       const s = statuses.get(entry.requestId);
-      return s && TERMINAL_STATES.has(s.status);
+      return s && isTerminalInstallStatus(s.status);
     });
     if (allTerminal) {
       stopPolling();
@@ -178,7 +177,7 @@ const InstallProgressScreen = () => {
 
   const allDone = installs.every((entry) => {
     const s = statuses.get(entry.requestId);
-    return s && TERMINAL_STATES.has(s.status);
+    return s && isTerminalInstallStatus(s.status);
   });
 
   return (
@@ -220,18 +219,15 @@ const InstallProgressScreen = () => {
                     variant="bodySmall"
                     style={{ color: theme.colors.onSurfaceVariant }}
                   >
-                    {statusValue === 'pending' && (pollError ? 'Status unknown' : 'Installing...')}
-                    {statusValue === 'completed' && 'Installed successfully'}
-                    {statusValue === 'failed' && (status?.error_message || 'Installation failed')}
-                    {statusValue === 'expired' && 'Request timed out — node may be offline'}
+                    {installStatusLabel(statusValue, !!pollError, status?.error_message)}
                   </Text>
                 </View>
 
                 <View style={styles.statusIcon}>
-                  {statusValue === 'pending' && !pollError && (
+                  {(statusValue === 'pending' || statusValue === 'restarting') && !pollError && (
                     <ActivityIndicator size={24} />
                   )}
-                  {statusValue === 'pending' && pollError && (
+                  {(statusValue === 'pending' || statusValue === 'restarting') && pollError && (
                     <Icon source="help-circle" size={28} color={theme.colors.outline} />
                   )}
                   {statusValue === 'completed' && (

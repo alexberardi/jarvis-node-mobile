@@ -90,7 +90,9 @@ export interface InstallRequest {
   created_at: string;
 }
 
-export type InstallStatusValue = 'pending' | 'completed' | 'failed' | 'expired';
+/** `restarting` is non-terminal: the node restarts itself after a successful
+ * install/uninstall/revert and posts the real result once it boots back up. */
+export type InstallStatusValue = 'pending' | 'restarting' | 'completed' | 'failed' | 'expired';
 
 export interface InstallStatus {
   status: InstallStatusValue;

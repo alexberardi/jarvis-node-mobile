@@ -4,15 +4,20 @@ import {
   Button,
   Dialog,
   HelperText,
+  Icon,
   Menu,
   Portal,
   Switch,
   Text,
   TextInput,
+  TouchableRipple,
+  useTheme,
 } from 'react-native-paper';
 
+import type { HouseholdMember } from '../api/householdApi';
 import { useAuth } from '../auth/AuthContext';
 import { encryptAndPushConfig } from '../services/configPushService';
+import { memberDisplayName } from '../utils/userSecret';
 
 export interface SecretEditDialogProps {
   visible: boolean;
@@ -29,6 +34,9 @@ export interface SecretEditDialogProps {
   enumValues?: string[];
   presets?: Record<string, Record<string, string>>;
   onPresetsAvailable?: (presetValues: Record<string, string>) => void;
+  /** Household members for "user"-type secrets. null/undefined means the
+   * list couldn't be loaded — the picker degrades to a plain id input. */
+  householdMembers?: HouseholdMember[] | null;
 }
 
 const SecretEditDialog: React.FC<SecretEditDialogProps> = ({
@@ -46,13 +54,16 @@ const SecretEditDialog: React.FC<SecretEditDialogProps> = ({
   enumValues,
   presets,
   onPresetsAvailable,
+  householdMembers,
 }) => {
+  const theme = useTheme();
   const { state: authState } = useAuth();
   const [value, setValue] = useState(currentValue ?? '');
   const [boolValue, setBoolValue] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [enumMenuVisible, setEnumMenuVisible] = useState(false);
+  const [userMenuVisible, setUserMenuVisible] = useState(false);
 
   const handleSave = async () => {
     setSaving(true);
@@ -126,6 +137,61 @@ const SecretEditDialog: React.FC<SecretEditDialogProps> = ({
           <Text variant="bodyMedium">Enabled</Text>
           <Switch value={boolValue} onValueChange={setBoolValue} />
         </View>
+      );
+    }
+
+    if (valueType === 'user') {
+      if (householdMembers && householdMembers.length > 0) {
+        const selected = householdMembers.find((m) => String(m.user_id) === value);
+        return (
+          <Menu
+            visible={userMenuVisible}
+            onDismiss={() => setUserMenuVisible(false)}
+            anchor={
+              <TouchableRipple
+                onPress={() => setUserMenuVisible(true)}
+                style={[styles.userPickerAnchor, { borderColor: theme.colors.outline }]}
+              >
+                <View style={styles.userPickerRow}>
+                  <Text
+                    variant="bodyMedium"
+                    style={selected ? undefined : { color: theme.colors.onSurfaceVariant }}
+                  >
+                    {selected ? memberDisplayName(selected) : 'Select a person'}
+                  </Text>
+                  <Icon source="menu-down" size={24} color={theme.colors.onSurfaceVariant} />
+                </View>
+              </TouchableRipple>
+            }
+          >
+            {householdMembers.map((m) => (
+              <Menu.Item
+                key={m.user_id}
+                title={memberDisplayName(m)}
+                onPress={() => { setValue(String(m.user_id)); setUserMenuVisible(false); }}
+              />
+            ))}
+          </Menu>
+        );
+      }
+
+      // Members couldn't be loaded — degrade to a plain id input.
+      return (
+        <>
+          <TextInput
+            label={isSet ? 'New value' : 'Value'}
+            value={value}
+            onChangeText={setValue}
+            mode="outlined"
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="numeric"
+            style={styles.input}
+          />
+          <HelperText type="info" visible>
+            Enter a user id
+          </HelperText>
+        </>
       );
     }
 
@@ -227,6 +293,18 @@ const styles = StyleSheet.create({
   },
   input: {
     marginBottom: 8,
+  },
+  userPickerAnchor: {
+    borderWidth: 1,
+    borderRadius: 4,
+    marginBottom: 8,
+  },
+  userPickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 14,
   },
   spacer: {
     flex: 1,

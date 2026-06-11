@@ -64,6 +64,28 @@ export const pollUninstallStatus = async (
   return res.data;
 };
 
+/** Roll a package back to the node's `.previous` snapshot (kept from the last update). */
+export const requestRevert = async (
+  nodeId: string,
+  commandName: string,
+): Promise<InstallRequest> => {
+  const res = await apiClient.post<InstallRequest>(
+    `${getBaseUrl()}/api/v0/nodes/${nodeId}/package-revert`,
+    { command_name: commandName },
+  );
+  return res.data;
+};
+
+export const pollRevertStatus = async (
+  nodeId: string,
+  requestId: string,
+): Promise<InstallStatus> => {
+  const res = await apiClient.get<InstallStatus>(
+    `${getBaseUrl()}/api/v0/nodes/${nodeId}/package-revert/${requestId}`,
+  );
+  return res.data;
+};
+
 /** Install a prompt provider to the command center (async, returns request_id for polling). */
 export const requestCCInstall = async (
   githubRepoUrl: string,

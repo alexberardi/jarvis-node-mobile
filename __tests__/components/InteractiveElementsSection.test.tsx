@@ -178,4 +178,142 @@ describe('InteractiveElementsSection', () => {
       expect(Alert.alert).toHaveBeenCalledWith('Could not send', 'boom');
     });
   });
+
+  describe('editableText merge rule', () => {
+    const sendEl = (overrides: Partial<InteractiveElement> = {}): InteractiveElement =>
+      el({
+        id: 'send-1',
+        label: 'Send reply',
+        command: 'email',
+        callback: 'send_draft_reply',
+        data: { message_id: 'm1', thread_id: 't1', body: 'original draft' },
+        ...overrides,
+      });
+
+    it('replaces data[dataKey] with the live editor text when the key is in data', async () => {
+      (sendInteractiveCallback as jest.Mock).mockResolvedValue({
+        id: 'job-1', status: 'pending', navigation_type: 'new_notification', created_at: 'x',
+      });
+      const { getByText } = render(
+        <InteractiveElementsSection
+          elements={[sendEl()]}
+          targetNodeId="node-abc"
+          editableText={{ dataKey: 'body', value: 'edited draft text' }}
+        />,
+        { wrapper },
+      );
+
+      fireEvent.press(getByText('Send reply'));
+
+      await waitFor(() => {
+        expect(sendInteractiveCallback).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: { message_id: 'm1', thread_id: 't1', body: 'edited draft text' },
+          }),
+        );
+      });
+    });
+
+    it('leaves payload untouched when data lacks dataKey (Ignore)', async () => {
+      (sendInteractiveCallback as jest.Mock).mockResolvedValue({
+        id: 'job-1', status: 'pending', navigation_type: 'new_notification', created_at: 'x',
+      });
+      const { getByText } = render(
+        <InteractiveElementsSection
+          elements={[el({ id: 'ignore-1', label: 'Ignore', data: { message_id: 'm1' } })]}
+          targetNodeId="node-abc"
+          editableText={{ dataKey: 'body', value: 'edited draft text' }}
+        />,
+        { wrapper },
+      );
+
+      fireEvent.press(getByText('Ignore'));
+
+      await waitFor(() => {
+        expect(sendInteractiveCallback).toHaveBeenCalledWith(
+          expect.objectContaining({ data: { message_id: 'm1' } }),
+        );
+      });
+    });
+
+    it('blocks the tap with an inline error when the editor text is empty', async () => {
+      const { getByText } = render(
+        <InteractiveElementsSection
+          elements={[sendEl()]}
+          targetNodeId="node-abc"
+          editableText={{ dataKey: 'body', value: '   ' }}
+        />,
+        { wrapper },
+      );
+
+      fireEvent.press(getByText('Send reply'));
+
+      expect(getByText('Draft is empty')).toBeTruthy();
+      expect(sendInteractiveCallback).not.toHaveBeenCalled();
+    });
+
+    it('does not block elements without the key even when the editor is empty', async () => {
+      (sendInteractiveCallback as jest.Mock).mockResolvedValue({
+        id: 'job-1', status: 'pending', navigation_type: 'new_notification', created_at: 'x',
+      });
+      const { getByText, queryByText } = render(
+        <InteractiveElementsSection
+          elements={[el({ id: 'ignore-1', label: 'Ignore', data: { message_id: 'm1' } })]}
+          targetNodeId="node-abc"
+          editableText={{ dataKey: 'body', value: '' }}
+        />,
+        { wrapper },
+      );
+
+      fireEvent.press(getByText('Ignore'));
+
+      await waitFor(() => {
+        expect(sendInteractiveCallback).toHaveBeenCalledTimes(1);
+      });
+      expect(queryByText('Draft is empty')).toBeNull();
+    });
+
+    it('notifies onPendingChange around the callback round-trip', async () => {
+      (sendInteractiveCallback as jest.Mock).mockResolvedValue({
+        id: 'job-1', status: 'pending', navigation_type: 'new_notification', created_at: 'x',
+      });
+      const onPendingChange = jest.fn();
+      const { getByText } = render(
+        <InteractiveElementsSection
+          elements={[sendEl()]}
+          targetNodeId="node-abc"
+          editableText={{ dataKey: 'body', value: 'edited' }}
+          onPendingChange={onPendingChange}
+        />,
+        { wrapper },
+      );
+
+      fireEvent.press(getByText('Send reply'));
+
+      await waitFor(() => {
+        expect(onPendingChange).toHaveBeenCalledWith(false);
+      });
+      expect(onPendingChange.mock.calls.map((c) => c[0])).toEqual([true, false]);
+    });
+
+    it('behaves exactly as before when editableText is not provided', async () => {
+      (sendInteractiveCallback as jest.Mock).mockResolvedValue({
+        id: 'job-1', status: 'pending', navigation_type: 'new_notification', created_at: 'x',
+      });
+      const { getByText } = render(
+        <InteractiveElementsSection elements={[sendEl()]} targetNodeId="node-abc" />,
+        { wrapper },
+      );
+
+      fireEvent.press(getByText('Send reply'));
+
+      await waitFor(() => {
+        expect(sendInteractiveCallback).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: { message_id: 'm1', thread_id: 't1', body: 'original draft' },
+          }),
+        );
+      });
+    });
+  });
 });
