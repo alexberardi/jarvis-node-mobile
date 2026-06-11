@@ -43,6 +43,7 @@ import {
   FastPathEntry,
 } from '../../services/settingsDecryptService';
 import { listNodes, NodeInfo } from '../../api/nodeApi';
+import { HouseholdMember, listHouseholdMembers } from '../../api/householdApi';
 import {
   CommandSummary,
   listCommands as listCommandDataCommands,
@@ -53,6 +54,8 @@ import SecretEditDialog from '../../components/SecretEditDialog';
 import { encryptAndPushConfig } from '../../services/configPushService';
 import type { AuthenticationConfig } from '../../types/SmartHome';
 import { requestUninstall, pollUninstallStatus } from '../../api/packageInstallApi';
+import { configErrorBadge, needsSetupLabel } from '../../utils/packageStatus';
+import { userSecretDisplayValue } from '../../utils/userSecret';
 
 type ScreenRoute = RouteProp<NodesStackParamList, 'NodeSettings'>;
 
@@ -146,6 +149,11 @@ const NodeSettingsScreen: React.FC = () => {
   const [storedDataCommands, setStoredDataCommands] = useState<CommandSummary[] | null>(null);
   const [storedDataLoading, setStoredDataLoading] = useState(false);
   const [storedDataError, setStoredDataError] = useState<string | null>(null);
+
+  // Household members — fetched lazily when the snapshot contains a
+  // "user"-type secret. null means not loaded (or the fetch failed), in
+  // which case user-type secrets degrade to a plain id input.
+  const [householdMembers, setHouseholdMembers] = useState<HouseholdMember[] | null>(null);
 
   // Sync flow state
   const [householdNodes, setHouseholdNodes] = useState<(NodeInfo & { hasK2: boolean })[]>([]);
@@ -440,6 +448,36 @@ const NodeSettingsScreen: React.FC = () => {
     }
   }, [tab, storedDataCommands, storedDataLoading, loadStoredDataCommands]);
 
+  // Any "user"-type secret in the snapshot needs the household members list
+  // (picker options + id → name previews).
+  const hasUserTypeSecrets = useMemo(() => {
+    const allSecrets = [
+      ...commands.flatMap((c) => c.secrets),
+      ...agents.flatMap((a) => a.secrets ?? []),
+      ...deviceFamilies.flatMap((f) => f.secrets),
+    ];
+    return allSecrets.some((s) => s.value_type === 'user');
+  }, [commands, agents, deviceFamilies]);
+
+  useEffect(() => {
+    const hId = authState.activeHouseholdId;
+    const token = authState.accessToken;
+    if (!hasUserTypeSecrets || householdMembers !== null || !hId || !token) return;
+
+    let cancelled = false;
+    listHouseholdMembers(hId, token)
+      .then((members) => {
+        if (!cancelled) setHouseholdMembers(members);
+      })
+      .catch((err) => {
+        // Leave null — user-type secrets fall back to a plain id input.
+        console.error('[NodeSettings] listHouseholdMembers failed', err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [hasUserTypeSecrets, householdMembers, authState.activeHouseholdId, authState.accessToken]);
+
   const handleSecretPress = (secret: CommandSecretEntry) => {
     setEditingSecret({
       key: secret.key,
@@ -514,8 +552,12 @@ const NodeSettingsScreen: React.FC = () => {
               setUninstallingCommand(commandName);
               try {
                 const { id } = await requestUninstall(nodeId, commandName, 'command');
+                // 60 × 2s = 120s — uninstall now restarts the node
+                // (resilient installs); the result posts only after the
+                // node boots back up and discovery re-initializes. The
+                // poll returns 'restarting' (non-terminal) in between.
                 let attempts = 0;
-                while (attempts < 15) {
+                while (attempts < 60) {
                   await new Promise((r) => setTimeout(r, 2000));
                   const result = await pollUninstallStatus(nodeId, id);
                   if (result.status === 'completed') {
@@ -562,8 +604,12 @@ const NodeSettingsScreen: React.FC = () => {
               setUninstallingCommand(commandName);
               try {
                 const { id } = await requestUninstall(nodeId, commandName, 'command');
+                // 60 × 2s = 120s — uninstall now restarts the node
+                // (resilient installs); the result posts only after the
+                // node boots back up and discovery re-initializes. The
+                // poll returns 'restarting' (non-terminal) in between.
                 let attempts = 0;
-                while (attempts < 15) {
+                while (attempts < 60) {
                   await new Promise((r) => setTimeout(r, 2000));
                   const result = await pollUninstallStatus(nodeId, id);
                   if (result.status === 'completed') {
@@ -608,8 +654,12 @@ const NodeSettingsScreen: React.FC = () => {
               setUninstallingCommand(family.family_name);
               try {
                 const { id } = await requestUninstall(nodeId, family.family_name, 'device_protocol');
+                // 60 × 2s = 120s — uninstall now restarts the node
+                // (resilient installs); the result posts only after the
+                // node boots back up and discovery re-initializes. The
+                // poll returns 'restarting' (non-terminal) in between.
                 let attempts = 0;
-                while (attempts < 15) {
+                while (attempts < 60) {
                   await new Promise((r) => setTimeout(r, 2000));
                   const result = await pollUninstallStatus(nodeId, id);
                   if (result.status === 'completed') {
@@ -896,8 +946,11 @@ const NodeSettingsScreen: React.FC = () => {
         ? theme.colors.error
         : theme.colors.outlineVariant;
 
+    // "user"-type secrets store a user id — preview the member's name instead.
     const valuePreview = !secret.is_sensitive && secret.value
-      ? secret.value
+      ? secret.value_type === 'user'
+        ? userSecretDisplayValue(secret.value, householdMembers)
+        : secret.value
       : undefined;
 
     return (
@@ -1139,11 +1192,12 @@ const NodeSettingsScreen: React.FC = () => {
   /** Renders an inline warning when the node reported third-party field
    * failures while building this entry's snapshot data. The detail (which
    * fields failed) is in the node log; the badge tells the user "this
-   * package is broken, ping the author or reinstall". */
+   * package is broken, ping the author or reinstall". An `import_failed:`
+   * tag (the package's module didn't load at boot) gets the clearer
+   * "Failed to load" label. */
   const renderConfigErrorBadge = (errors?: string[]) => {
-    if (!errors || errors.length === 0) return null;
-    const shown = errors.slice(0, 3).join(', ');
-    const overflow = errors.length > 3 ? '…' : '';
+    const badge = configErrorBadge(errors);
+    if (!badge) return null;
     return (
       <View
         style={{
@@ -1159,7 +1213,7 @@ const NodeSettingsScreen: React.FC = () => {
           style={{ color: theme.colors.error, flex: 1 }}
           numberOfLines={2}
         >
-          Configuration error: {shown}{overflow}
+          {badge.label}
         </Text>
       </View>
     );
@@ -1280,6 +1334,25 @@ const NodeSettingsScreen: React.FC = () => {
                 Runs every {intervalLabel}
               </Text>
               {renderConfigErrorBadge(agent._errors)}
+              {agent.unconfigured ? (
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    marginTop: 6,
+                  }}
+                >
+                  <Icon source="alert-circle-outline" size={14} color="#f59e0b" />
+                  <Text
+                    variant="bodySmall"
+                    style={{ color: '#f59e0b', flex: 1 }}
+                    numberOfLines={2}
+                  >
+                    {needsSetupLabel(agent.missing_secrets)}
+                  </Text>
+                </View>
+              ) : null}
               {agent.auto_disabled_reason ? (
                 <View
                   style={{
@@ -1767,6 +1840,7 @@ const NodeSettingsScreen: React.FC = () => {
           enumValues={editingSecret.enumValues}
           presets={editingSecret.presets}
           onPresetsAvailable={handlePresetsAvailable}
+          householdMembers={householdMembers}
         />
       )}
 

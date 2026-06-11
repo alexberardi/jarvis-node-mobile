@@ -9,6 +9,7 @@ import {
   Divider,
   Icon,
   Text,
+  TextInput,
   useTheme,
 } from 'react-native-paper';
 
@@ -21,6 +22,31 @@ import { InboxStackParamList } from '../../navigation/types';
 import { JarvisButton, normalizeButton } from '../../types/SmartHome';
 
 type DetailRoute = RouteProp<InboxStackParamList, 'InboxDetail'>;
+
+/**
+ * Generic editable-text affordance. Producers attach
+ * `metadata.editable_text = { label?, initial, data_key }` and the screen
+ * renders a multiline editor seeded with `initial` below the body. When an
+ * interactive element whose data contains `data_key` is tapped, the live
+ * editor text replaces data[data_key] in the callback payload (the merge
+ * lives in InteractiveElementsSection). First producer: smart-reply drafts —
+ * the draft lives ONLY here; the item body stays From/Subject/snippet.
+ *
+ * Malformed shapes (missing initial/data_key, wrong types) are ignored
+ * entirely: no editor renders and elements behave exactly as before.
+ */
+type EditableText = { label?: string; initial: string; data_key: string };
+
+const parseEditableText = (
+  metadata: Record<string, any> | null | undefined,
+): EditableText | null => {
+  const et = metadata?.editable_text;
+  if (!et || typeof et !== 'object' || Array.isArray(et)) return null;
+  if (typeof et.initial !== 'string') return null;
+  if (typeof et.data_key !== 'string' || et.data_key.length === 0) return null;
+  if (et.label != null && typeof et.label !== 'string') return null;
+  return { label: et.label ?? undefined, initial: et.initial, data_key: et.data_key };
+};
 
 const parseThinkBlock = (body: string): { thinking: string | null; content: string } => {
   const match = body.match(/<think>([\s\S]*?)<\/think>/);
@@ -43,6 +69,10 @@ const InboxDetailScreen = () => {
   const [showThinking, setShowThinking] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [actionComplete, setActionComplete] = useState(false);
+  // Live text of the metadata.editable_text editor (seeded on load) and
+  // whether an interactive callback is in flight (editor disabled meanwhile).
+  const [editorText, setEditorText] = useState('');
+  const [callbackPending, setCallbackPending] = useState(false);
 
   const loadItem = useCallback(async () => {
     if (!authState.accessToken) return;
@@ -51,6 +81,7 @@ const InboxDetailScreen = () => {
       setLoading(true);
       const data = await getInboxItem(route.params.itemId);
       setItem(data);
+      setEditorText(parseEditableText(data.metadata)?.initial ?? '');
     } catch {
       setError('Could not load item');
     } finally {
@@ -160,6 +191,7 @@ const InboxDetailScreen = () => {
     (item.metadata?.interactive_elements as InteractiveElement[] | undefined) ?? [];
   const interactiveTargetNodeId: string | null =
     typeof item.metadata?.node_id === 'string' ? item.metadata.node_id : null;
+  const editableText = parseEditableText(item.metadata);
 
   const formatDate = (iso: string) => {
     const d = new Date(iso);
@@ -269,6 +301,31 @@ const InboxDetailScreen = () => {
         </Text>
       )}
 
+      {/* Editable text block (metadata.editable_text — e.g. a smart-reply
+          draft). The editor holds the live text that InteractiveElementsSection
+          merges into tapped elements whose data carries data_key. Back-compat:
+          items without editable_text render exactly as before; older app
+          builds ignore this metadata and the Send chip still carries the
+          producer's original draft. */}
+      {editableText && (
+        <View style={styles.editableSection}>
+          {editableText.label ? (
+            <Text variant="titleSmall" style={styles.editableLabel}>
+              {editableText.label}
+            </Text>
+          ) : null}
+          <TextInput
+            mode="outlined"
+            multiline
+            value={editorText}
+            onChangeText={setEditorText}
+            disabled={callbackPending}
+            style={styles.editableInput}
+            testID="editable-text-input"
+          />
+        </View>
+      )}
+
       {/* Tappable interactive elements (actor cards, "expand similar", etc.).
           Hidden when metadata.interactive_elements is absent — preserves
           back-compat for inbox items that predate this feature. */}
@@ -276,6 +333,12 @@ const InboxDetailScreen = () => {
         <InteractiveElementsSection
           elements={interactiveElements}
           targetNodeId={interactiveTargetNodeId}
+          editableText={
+            editableText
+              ? { dataKey: editableText.data_key, value: editorText }
+              : undefined
+          }
+          onPendingChange={setCallbackPending}
         />
       )}
 
@@ -391,6 +454,11 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 8,
   },
+  editableSection: { marginTop: 16 },
+  editableLabel: { marginBottom: 8 },
+  // multiline Paper TextInput grows with content; minHeight gives the empty
+  // editor a sensible starting size.
+  editableInput: { minHeight: 100 },
 });
 
 export default InboxDetailScreen;
