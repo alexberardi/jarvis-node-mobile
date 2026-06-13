@@ -234,7 +234,12 @@ const scanLocalNetwork = async (): Promise<string | null> => {
 export const discoverConfigService = async (
   skipNetworkScan = false,
 ): Promise<DiscoveryResult> => {
-  // Tier 0: Try manual URL override
+  // Tier 0: Manual URL override — authoritative. If the user has pinned a
+  // server URL we resolve ONLY against it and never fall through to
+  // auto-discovery. Falling through (the old behavior) could silently connect
+  // to a different LAN server when the pinned URL was briefly unreachable,
+  // while the UI kept showing the pinned URL — a confusing mismatch between
+  // the displayed and the actual server.
   const manualUrl = await loadManualConfigUrl();
   if (manualUrl) {
     const config = await fetchServiceUrls(manualUrl);
@@ -242,6 +247,21 @@ export const discoverConfigService = async (
       setServiceConfig(config);
       return { config, isCloud: false, fallbackMessage: null };
     }
+    // Pinned but unreachable: report the error against the pinned URL itself
+    // instead of auto-discovering a different server behind the same label.
+    const unreachableConfig: ServiceConfig = {
+      authBaseUrl: '',
+      commandCenterUrl: '',
+      configServiceUrl: manualUrl,
+      notificationsUrl: '',
+      pantryUrl: '',
+    };
+    setServiceConfig(unreachableConfig);
+    return {
+      config: unreachableConfig,
+      isCloud: false,
+      fallbackMessage: `Can't reach the server at ${manualUrl}. Check the URL or your connection, or clear it to search your local network.`,
+    };
   }
 
   // Tier 1: Try cached config
