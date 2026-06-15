@@ -26,6 +26,8 @@ export const THEME_KEY = '@jarvis/theme';
 
 /** Auto-play TTS responses: 'true' | 'false' */
 export const AUTO_PLAY_TTS_KEY = '@jarvis/auto_play_tts';
+/** Last voice node selected on the chat screen (restored on launch / quick-open) */
+export const LAST_NODE_KEY = '@jarvis/last_node_id';
 /** Push notifications enabled: 'true' | 'false' */
 export const PUSH_NOTIFICATIONS_KEY = '@jarvis/push_notifications_enabled';
 
