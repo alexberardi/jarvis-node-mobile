@@ -1,7 +1,8 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import React, { useCallback, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import React, { useCallback, useState } from 'react';
 import { Alert, FlatList, StyleSheet, TouchableOpacity, View } from 'react-native';
 import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import type { SharedValue } from 'react-native-reanimated';
@@ -13,136 +14,86 @@ import {
   FAB,
   IconButton,
   Menu,
-  SegmentedButtons,
   Text,
   useTheme,
 } from 'react-native-paper';
 
+import { getSmartHomeConfig } from '../../api/smartHomeApi';
+import { deleteRoutine, listRoutines, runRoutineNow } from '../../api/routineApi';
+import { useAuth } from '../../auth/AuthContext';
 import { RoutinesStackParamList } from '../../navigation/types';
-import {
-  deleteRoutine,
-  loadRoutines,
-  saveRoutine,
-} from '../../services/routineStorageService';
-import { shareRoutine, parseImportedRoutine } from '../../services/routineExportService';
-import type { Routine } from '../../types/Routine';
+import type { Routine, RoutineSchedule } from '../../types/Routine';
 
 type Nav = NativeStackNavigationProp<RoutinesStackParamList>;
-type Filter = 'all' | 'on_demand' | 'background';
-
 type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
 
-const getRoutineIcon = (routine: Routine): { name: IconName; color?: string } => {
-  if (!routine.background) return { name: 'microphone-outline' };
-  if (!routine.background.enabled) return { name: 'pause-circle-outline' };
-  if (routine.background.schedule_type === 'cron') return { name: 'calendar-clock' };
-  return { name: 'timer-sand' };
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+const scheduleIcon = (s: RoutineSchedule | null | undefined): IconName => {
+  if (!s) return 'microphone-outline';
+  return s.type === 'cron' ? 'calendar-clock' : 'timer-sand';
 };
 
-const formatSchedule = (routine: Routine): string | null => {
-  const bg = routine.background;
-  if (!bg) return null;
-
-  if (bg.schedule_type === 'cron') {
-    const dayLabel =
-      bg.days.length === 7
-        ? 'Every day'
-        : bg.days.length === 5 &&
-            ['mon', 'tue', 'wed', 'thu', 'fri'].every((d) => bg.days.includes(d as typeof bg.days[number]))
-          ? 'Weekdays'
-          : bg.days.length === 2 &&
-              bg.days.includes('sat') &&
-              bg.days.includes('sun')
-            ? 'Weekends'
-            : bg.days.map((d) => d.charAt(0).toUpperCase() + d.slice(1)).join(', ');
-    const [h, m] = bg.time.split(':').map(Number);
-    const ampm = h >= 12 ? 'PM' : 'AM';
-    const h12 = h % 12 || 12;
-    return `${dayLabel} · ${h12}:${String(m).padStart(2, '0')} ${ampm}`;
+const formatSchedule = (s: RoutineSchedule | null | undefined): string | null => {
+  if (!s) return null;
+  if (s.type === 'interval') {
+    const mins = Math.round((s.interval_seconds ?? 0) / 60);
+    return `Every ${mins >= 60 ? `${mins / 60}h` : `${mins}m`}`;
   }
-
-  const mins = bg.interval_minutes;
-  const label = mins >= 60 ? `${mins / 60}h` : `${mins}m`;
-  return `Every ${label}`;
+  const parts = (s.cron ?? '').trim().split(/\s+/);
+  if (parts.length < 5) return 'Scheduled';
+  const minute = parseInt(parts[0], 10);
+  const hour = parseInt(parts[1], 10);
+  const df = parts[4];
+  const ampm = hour >= 12 ? 'PM' : 'AM';
+  const h12 = hour % 12 || 12;
+  const tlabel = `${h12}:${String(Number.isNaN(minute) ? 0 : minute).padStart(2, '0')} ${ampm}`;
+  let dlabel = 'Daily';
+  if (df !== '*') {
+    const nums = df.split(',').map((n) => parseInt(n, 10)).filter((n) => !Number.isNaN(n));
+    const set = new Set(nums);
+    if (set.size === 5 && [1, 2, 3, 4, 5].every((d) => set.has(d))) dlabel = 'Weekdays';
+    else if (set.size === 2 && set.has(0) && set.has(6)) dlabel = 'Weekends';
+    else dlabel = nums.map((n) => DAY_NAMES[n % 7]).join(', ');
+  }
+  return `${dlabel} · ${tlabel}`;
 };
 
 const RoutineListScreen = () => {
   const navigation = useNavigation<Nav>();
   const theme = useTheme();
-  const [routines, setRoutines] = useState<Routine[]>([]);
-  const [refreshing, setRefreshing] = useState(false);
-  const [initialLoading, setInitialLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<Filter>('all');
-  const [fabOpen, setFabOpen] = useState(false);
-  const [menuOpen, setMenuOpen] = useState<string | null>(null);
+  const { state: authState } = useAuth();
+  const householdId = authState.activeHouseholdId;
 
-  const load = useCallback(async () => {
-    try {
-      setLoadError(null);
-      const data = await loadRoutines();
-      setRoutines(data);
-    } catch (error) {
-      console.error('[RoutineListScreen] Failed to load routines', error);
-      setLoadError('Could not load routines.');
-    } finally {
-      setInitialLoading(false);
-    }
-  }, []);
+  const {
+    data: routines = [],
+    isLoading,
+    error,
+    refetch,
+    isRefetching,
+  } = useQuery({
+    queryKey: ['routines', householdId],
+    queryFn: () => listRoutines(householdId!),
+    enabled: !!householdId,
+  });
+
+  const { data: smartHomeConfig } = useQuery({
+    queryKey: ['smartHomeConfig', householdId],
+    queryFn: () => getSmartHomeConfig(householdId!),
+    enabled: !!householdId,
+  });
+  const nodes = smartHomeConfig?.nodes ?? [];
+  const primaryNodeId = smartHomeConfig?.primary_node_id || null;
+
+  const [menuOpen, setMenuOpen] = useState<string | null>(null);
+  const [runMenuOpen, setRunMenuOpen] = useState<string | null>(null);
+  const [running, setRunning] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
-      load();
-    }, [load]),
+      if (householdId) refetch();
+    }, [householdId, refetch]),
   );
-
-  const handleImportFromClipboard = useCallback(async () => {
-    try {
-      const ExpoClipboard = await import('expo-clipboard');
-      const text = await ExpoClipboard.getStringAsync();
-      if (!text.trim()) {
-        Alert.alert('Empty clipboard', 'Copy a routine JSON to your clipboard first, then tap Import.');
-        return;
-      }
-      const routine = parseImportedRoutine(text);
-      if (!routine) {
-        Alert.alert('Invalid routine', 'The clipboard does not contain a valid routine JSON.');
-        return;
-      }
-      // Check for name conflict
-      const existing = routines.find((r) => r.id === routine.id);
-      if (existing) {
-        Alert.alert(
-          'Routine exists',
-          `A routine named "${routine.name}" already exists. Overwrite it?`,
-          [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Overwrite',
-              style: 'destructive',
-              onPress: async () => {
-                await saveRoutine(routine);
-                load();
-                Alert.alert('Imported', `"${routine.name}" has been imported.`);
-              },
-            },
-          ],
-        );
-      } else {
-        await saveRoutine(routine);
-        load();
-        Alert.alert('Imported', `"${routine.name}" has been imported.`);
-      }
-    } catch {
-      Alert.alert('Import failed', 'Could not read from clipboard.');
-    }
-  }, [routines, load]);
-
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await load();
-    setRefreshing(false);
-  }, [load]);
 
   const handleDelete = useCallback(
     (routine: Routine) => {
@@ -153,100 +104,113 @@ const RoutineListScreen = () => {
           style: 'destructive',
           onPress: async () => {
             try {
-              await deleteRoutine(routine.id);
-              load();
-            } catch (error) {
-              console.error('[RoutineListScreen] Failed to delete routine', error);
-              Alert.alert('Error', 'Could not delete routine. Please try again.');
+              await deleteRoutine(householdId!, routine.id);
+              refetch();
+            } catch (e) {
+              console.error('[RoutineListScreen] delete failed', e);
+              Alert.alert('Error', 'Could not delete routine.');
             }
           },
         },
       ]);
     },
-    [load],
+    [householdId, refetch],
   );
 
-  const filtered = useMemo(() => {
-    if (filter === 'on_demand') return routines.filter((r) => !r.background);
-    if (filter === 'background') return routines.filter((r) => r.background !== null);
-    return routines;
-  }, [routines, filter]);
+  const runOnNode = useCallback(
+    async (routine: Routine, nodeId: string) => {
+      setRunMenuOpen(null);
+      setRunning(routine.id);
+      try {
+        const result = await runRoutineNow(householdId!, routine.id, nodeId);
+        if (result.status === 'timeout') {
+          Alert.alert('No response', 'The node did not respond. Is it online?');
+        } else if (result.message) {
+          Alert.alert(routine.name, result.message);
+        } else {
+          Alert.alert(routine.name, result.success ? 'Done.' : 'The routine reported an error.');
+        }
+      } catch (e) {
+        console.error('[RoutineListScreen] run-now failed', e);
+        Alert.alert('Error', 'Could not run the routine.');
+      } finally {
+        setRunning(null);
+      }
+    },
+    [householdId],
+  );
+
+  const handleRun = useCallback(
+    (routine: Routine) => {
+      setMenuOpen(null);
+      if (nodes.length === 0) {
+        // No known nodes — let the server fall back to the primary node.
+        runOnNode(routine, primaryNodeId ?? '');
+        return;
+      }
+      if (nodes.length === 1) {
+        runOnNode(routine, nodes[0].node_id);
+        return;
+      }
+      setRunMenuOpen(routine.id);
+    },
+    [nodes, primaryNodeId, runOnNode],
+  );
 
   const renderRightActions = (routine: Routine) => () => (
     <TouchableOpacity style={styles.deleteAction} onPress={() => handleDelete(routine)} activeOpacity={0.7}>
       <IconButton icon="delete-outline" iconColor="#fff" size={24} />
     </TouchableOpacity>
   );
-
   const makeRightActions = (routine: Routine) =>
-    (_progress: SharedValue<number>, _drag: SharedValue<number>) =>
-      renderRightActions(routine)();
+    (_p: SharedValue<number>, _d: SharedValue<number>) => renderRightActions(routine)();
 
   const renderRoutine = ({ item }: { item: Routine }) => {
-    const schedule = formatSchedule(item);
-    const icon = getRoutineIcon(item);
-    const bgEnabled = item.background?.enabled ?? true;
-
+    const schedule = formatSchedule(item.schedule);
     return (
-      <ReanimatedSwipeable
-        renderRightActions={makeRightActions(item)}
-        overshootRight={false}
-      >
-        <Card
-          style={styles.card}
-          onPress={() => navigation.navigate('RoutineEdit', { routineId: item.id })}
-        >
+      <ReanimatedSwipeable renderRightActions={makeRightActions(item)} overshootRight={false}>
+        <Card style={styles.card} onPress={() => navigation.navigate('RoutineEdit', { routineId: item.id })}>
           <Card.Content>
             <View style={styles.cardHeader}>
               <MaterialCommunityIcons
-                name={icon.name}
+                name={scheduleIcon(item.schedule)}
                 size={20}
-                color={bgEnabled ? theme.colors.primary : theme.colors.onSurfaceVariant}
+                color={theme.colors.primary}
                 style={{ marginRight: 8 }}
               />
-              <Text variant="titleMedium" style={[{ flex: 1 }, !bgEnabled && { opacity: 0.5 }]}>
-                {item.name}
-              </Text>
+              <Text variant="titleMedium" style={{ flex: 1 }}>{item.name}</Text>
+              {running === item.id ? (
+                <ActivityIndicator size={20} style={{ marginRight: 8 }} />
+              ) : (
+                <Menu
+                  visible={runMenuOpen === item.id}
+                  onDismiss={() => setRunMenuOpen(null)}
+                  anchor={
+                    <IconButton icon="play-circle-outline" size={22} onPress={() => handleRun(item)} style={{ margin: -4 }} />
+                  }
+                >
+                  {nodes.map((n) => (
+                    <Menu.Item key={n.node_id}
+                      title={n.room ? `${n.room}` : n.node_id}
+                      leadingIcon="play"
+                      onPress={() => runOnNode(item, n.node_id)} />
+                  ))}
+                </Menu>
+              )}
               <Menu
                 visible={menuOpen === item.id}
                 onDismiss={() => setMenuOpen(null)}
-                anchor={
-                  <IconButton
-                    icon="dots-vertical"
-                    size={20}
-                    onPress={() => setMenuOpen(item.id)}
-                    style={{ margin: -4 }}
-                  />
-                }
+                anchor={<IconButton icon="dots-vertical" size={20} onPress={() => setMenuOpen(item.id)} style={{ margin: -4 }} />}
               >
-                <Menu.Item
-                  leadingIcon="history"
-                  title="View History"
-                  onPress={() => {
-                    setMenuOpen(null);
-                    navigation.navigate('RoutineHistory', {
-                      routineId: item.id,
-                      routineName: item.name,
-                    });
-                  }}
-                />
-                <Menu.Item
-                  leadingIcon="export-variant"
-                  title="Export"
-                  onPress={() => {
-                    setMenuOpen(null);
-                    shareRoutine(item).catch(() =>
-                      Alert.alert('Error', 'Failed to export routine'),
-                    );
-                  }}
-                />
+                <Menu.Item leadingIcon="pencil-outline" title="Edit"
+                  onPress={() => { setMenuOpen(null); navigation.navigate('RoutineEdit', { routineId: item.id }); }} />
+                <Menu.Item leadingIcon="delete-outline" title="Delete"
+                  onPress={() => { setMenuOpen(null); handleDelete(item); }} />
               </Menu>
             </View>
             <View style={styles.chips}>
               {item.trigger_phrases.slice(0, 3).map((phrase) => (
-                <Chip key={phrase} compact style={styles.chip} textStyle={styles.chipText}>
-                  {phrase}
-                </Chip>
+                <Chip key={phrase} compact style={styles.chip} textStyle={styles.chipText}>{phrase}</Chip>
               ))}
             </View>
             <View style={styles.metaRow}>
@@ -254,26 +218,8 @@ const RoutineListScreen = () => {
                 {item.steps.length} step{item.steps.length !== 1 ? 's' : ''}
               </Text>
               {schedule && (
-                <Chip
-                  compact
-                  style={[styles.scheduleBadge, !bgEnabled && { opacity: 0.5 }]}
-                  textStyle={[styles.chipText, { color: theme.colors.primary }]}
-                >
+                <Chip compact style={styles.scheduleBadge} textStyle={[styles.chipText, { color: theme.colors.primary }]}>
                   {schedule}
-                </Chip>
-              )}
-              {item.placeholders && Object.keys(item.placeholders).length > 0 && (
-                <Chip
-                  compact
-                  icon="wrench"
-                  style={[styles.scheduleBadge, { borderColor: theme.colors.tertiary }]}
-                  textStyle={[styles.chipText, { color: theme.colors.tertiary }]}
-                  onPress={() => {
-                    // Navigate to placeholder resolver (needs a node — use first available)
-                    // TODO: proper node selection
-                  }}
-                >
-                  Configure devices
                 </Chip>
               )}
             </View>
@@ -283,91 +229,46 @@ const RoutineListScreen = () => {
     );
   };
 
-  const emptyComponent = loadError ? (
+  const emptyComponent = error ? (
     <View style={styles.center}>
-      <Text variant="bodyLarge" style={{ color: theme.colors.error, marginBottom: 12 }}>
-        {loadError}
-      </Text>
-      <Button mode="outlined" onPress={load}>Retry</Button>
+      <Text variant="bodyLarge" style={{ color: theme.colors.error, marginBottom: 12 }}>Could not load routines.</Text>
+      <Button mode="outlined" onPress={() => refetch()}>Retry</Button>
     </View>
   ) : (
     <View style={styles.center}>
-      <Text variant="bodyLarge" style={{ color: theme.colors.onSurfaceVariant }}>
-        {filter !== 'all'
-          ? `No ${filter === 'background' ? 'background' : 'on-demand'} routines.`
-          : 'No routines yet. Tap + to create your first routine.'}
+      <Text variant="bodyLarge" style={{ color: theme.colors.onSurfaceVariant, textAlign: 'center' }}>
+        No routines yet. Tap + to create one — a phrase that runs a group of commands.
       </Text>
     </View>
   );
 
-  if (initialLoading) {
+  if (isLoading) {
     return (
       <View style={styles.container}>
-        <Text variant="headlineMedium" style={[styles.title, { color: theme.colors.onBackground }]}>
-          Routines
-        </Text>
-        <View style={styles.center}>
-          <ActivityIndicator size="large" />
-        </View>
+        <Text variant="headlineMedium" style={[styles.title, { color: theme.colors.onBackground }]}>Routines</Text>
+        <View style={styles.center}><ActivityIndicator size="large" /></View>
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      <Text variant="headlineMedium" style={[styles.title, { color: theme.colors.onBackground }]}>
-        Routines
-      </Text>
-
-      <View style={styles.filterRow}>
-        <SegmentedButtons
-          value={filter}
-          onValueChange={(v) => setFilter(v as Filter)}
-          density="small"
-          buttons={[
-            { value: 'all', label: 'All' },
-            { value: 'on_demand', label: 'On-demand' },
-            { value: 'background', label: 'Background' },
-          ]}
-        />
-      </View>
-
+      <Text variant="headlineMedium" style={[styles.title, { color: theme.colors.onBackground }]}>Routines</Text>
       <FlatList
-        data={filtered}
+        data={routines}
         keyExtractor={(r) => r.id}
         renderItem={renderRoutine}
-        contentContainerStyle={filtered.length === 0 ? styles.emptyList : styles.list}
-        refreshing={refreshing}
-        onRefresh={onRefresh}
+        contentContainerStyle={routines.length === 0 ? styles.emptyList : styles.list}
+        refreshing={isRefetching}
+        onRefresh={() => refetch()}
         ListEmptyComponent={emptyComponent}
       />
-
-      <FAB.Group
-        open={fabOpen}
-        visible
-        icon={fabOpen ? 'close' : 'plus'}
-        actions={[
-          {
-            icon: 'pencil-plus-outline',
-            label: 'New Routine',
-            onPress: () => navigation.navigate('RoutineEdit', {}),
-          },
-          {
-            icon: 'auto-fix',
-            label: 'AI Builder',
-            onPress: () => navigation.navigate('RoutineBuilder'),
-          },
-          {
-            icon: 'import',
-            label: 'Import from Clipboard',
-            onPress: handleImportFromClipboard,
-          },
-        ]}
-        onStateChange={({ open }) => setFabOpen(open)}
-        fabStyle={{ backgroundColor: theme.colors.primary }}
+      <FAB
+        icon="plus"
+        style={styles.fab}
+        onPress={() => navigation.navigate('RoutineEdit', {})}
         color={theme.colors.onPrimary}
       />
-
     </View>
   );
 };
@@ -376,7 +277,6 @@ const styles = StyleSheet.create({
   container: { flex: 1, paddingTop: 64 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 },
   title: { fontWeight: 'bold', paddingHorizontal: 16, marginBottom: 12 },
-  filterRow: { paddingHorizontal: 16, marginBottom: 12 },
   list: { padding: 16, gap: 12, paddingBottom: 96 },
   emptyList: { flexGrow: 1, justifyContent: 'center', alignItems: 'center' },
   card: {},
@@ -386,13 +286,10 @@ const styles = StyleSheet.create({
   chipText: { fontSize: 11 },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
   scheduleBadge: { height: 26 },
+  fab: { position: 'absolute', right: 16, bottom: 24 },
   deleteAction: {
-    backgroundColor: '#ef4444',
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: 72,
-    borderRadius: 12,
-    marginLeft: 8,
+    backgroundColor: '#ef4444', justifyContent: 'center', alignItems: 'center',
+    width: 72, borderRadius: 12, marginLeft: 8,
   },
 });
 
