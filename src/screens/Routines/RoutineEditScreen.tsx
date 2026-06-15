@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
+  Dimensions,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -117,6 +118,10 @@ const PARAM_META_OVERRIDES: Record<string, Record<string, Partial<CommandParamet
     action: { enum_values: CONTROL_DEVICE_ACTIONS },
   },
 };
+
+// Cap dropdown height so long lists (many commands / devices) scroll instead of
+// running off-screen — react-native-paper's Menu doesn't scroll on its own.
+const MENU_MAX_HEIGHT = Math.round(Dimensions.get('window').height * 0.45);
 
 type DayPreset = 'every_day' | 'weekdays' | 'weekends' | 'custom';
 const dayPresetFor = (days: DayOfWeek[]): DayPreset => {
@@ -450,10 +455,12 @@ const RoutineEditScreen = () => {
                     {item.command || 'Select command…'}
                   </Button>
                 }>
-                {availableCommands.map((cmd) => (
-                  <Menu.Item key={cmd} title={cmd}
-                    onPress={() => { updateStep(index, { command: cmd, label: item.label || cmd }); setCommandMenuStep(null); }} />
-                ))}
+                <ScrollView style={{ maxHeight: MENU_MAX_HEIGHT }} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
+                  {availableCommands.map((cmd) => (
+                    <Menu.Item key={cmd} title={cmd}
+                      onPress={() => { updateStep(index, { command: cmd, label: item.label || cmd }); setCommandMenuStep(null); }} />
+                  ))}
+                </ScrollView>
               </Menu>
             ) : (
               <TextInput mode="flat" label={commandsLoading ? 'Command (loading…)' : 'Command'}
@@ -489,11 +496,13 @@ const RoutineEditScreen = () => {
                     Parameter
                   </Button>
                 }>
-                {optionalParams.map((p) => (
-                  <Menu.Item key={p.name}
-                    title={p.description ? `${p.name} — ${p.description}` : p.name}
-                    onPress={() => { addNamedArg(index, p); setParamMenuStep(null); }} />
-                ))}
+                <ScrollView style={{ maxHeight: MENU_MAX_HEIGHT }} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
+                  {optionalParams.map((p) => (
+                    <Menu.Item key={p.name}
+                      title={p.description ? `${p.name} — ${p.description}` : p.name}
+                      onPress={() => { addNamedArg(index, p); setParamMenuStep(null); }} />
+                  ))}
+                </ScrollView>
               </Menu>
             )}
             <Button mode="text" icon="plus" compact onPress={() => addArg(index)} labelStyle={{ fontSize: 12 }}>
