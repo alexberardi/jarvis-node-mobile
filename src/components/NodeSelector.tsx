@@ -1,8 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Button, Menu, Text, useTheme } from 'react-native-paper';
 
 import { getSmartHomeConfig, NodeOption } from '../api/smartHomeApi';
+import { LAST_NODE_KEY } from '../config/storageKeys';
 
 interface NodeSelectorProps {
   householdId: string;
@@ -21,33 +23,56 @@ const NodeSelector: React.FC<NodeSelectorProps> = ({
   const [nodes, setNodes] = useState<NodeOption[]>([]);
   const [menuVisible, setMenuVisible] = useState(false);
 
+  // Read the selection through a ref so it doesn't drive the fetch effect —
+  // the effect itself sets the selection, and keeping selectedNodeId in the
+  // deps would fire a redundant getSmartHomeConfig on every selection.
+  const selectedNodeIdRef = useRef(selectedNodeId);
+  selectedNodeIdRef.current = selectedNodeId;
+
   useEffect(() => {
     if (!householdId) return;
+    let cancelled = false;
 
     getSmartHomeConfig(householdId)
-      .then((config) => {
+      .then(async (config) => {
+        if (cancelled) return;
         const nodeList = config.nodes || [];
         setNodes(nodeList);
         onNodesLoaded?.(nodeList.length);
-        if (!selectedNodeId) {
-          // Prefer primary node if online, otherwise first online node
-          const primary = config.nodes.find(
-            (n) => n.node_id === config.primary_node_id,
-          );
-          if (primary?.online) {
-            onSelectNode(config.primary_node_id);
-          } else {
-            const firstOnline = config.nodes.find((n) => n.online);
-            onSelectNode(
-              firstOnline?.node_id ?? config.primary_node_id,
-            );
-          }
+
+        // Keep the current selection only if it still belongs to this
+        // household (it may be stale after a node was removed or the
+        // household changed).
+        const current = selectedNodeIdRef.current;
+        const stillValid = current && nodeList.some((n) => n.node_id === current);
+        if (stillValid) return;
+
+        // Prefer the last-used node if it still exists in this household —
+        // this is what makes a quick-open land on the node you used last.
+        const stored = await AsyncStorage.getItem(LAST_NODE_KEY);
+        if (cancelled) return;
+        if (stored && nodeList.some((n) => n.node_id === stored)) {
+          onSelectNode(stored);
+          return;
+        }
+
+        // Otherwise primary node if online, then first online, then primary.
+        const primary = nodeList.find((n) => n.node_id === config.primary_node_id);
+        if (primary?.online) {
+          onSelectNode(config.primary_node_id);
+        } else {
+          const firstOnline = nodeList.find((n) => n.online);
+          onSelectNode(firstOnline?.node_id ?? config.primary_node_id);
         }
       })
       .catch((err) => {
         console.warn('[NodeSelector] Failed to load nodes', err.message ?? err);
       });
-  }, [householdId, selectedNodeId, onSelectNode]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [householdId, onSelectNode]);
 
   const selectedNode = nodes.find((n) => n.node_id === selectedNodeId);
   const selectedOffline = selectedNode && !selectedNode.online;

@@ -91,12 +91,7 @@ export type CommandDataStackParamList = {
 
 export type RoutinesStackParamList = {
   RoutineList: undefined;
-  RoutineSuggest: undefined;
-  RoutineBuilder: undefined;
-  RoutineEdit: { routineId?: string; routineData?: string };
-  RoutineNodePicker: { routineId: string };
-  RoutineHistory: { routineId: string; routineName: string };
-  PlaceholderResolver: { routineId: string; nodeId: string };
+  RoutineEdit: { routineId?: string };
 };
 
 export type InboxStackParamList = {

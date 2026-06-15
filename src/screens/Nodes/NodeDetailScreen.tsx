@@ -20,10 +20,6 @@ import {
 
 import { fetchNodeTools } from '../../api/chatApi';
 import { deleteNode, getNode, NodeInfo } from '../../api/nodeApi';
-import {
-  fetchRoutineHistory,
-  RoutineExecution,
-} from '../../api/routineHistoryApi';
 import { NodeUpdateSection } from '../../components/NodeUpdateSection';
 import { helpCopy } from '../../copy/help';
 import { HardwareTab } from './HardwareTab';
@@ -332,95 +328,20 @@ const PackagesTab = ({ nodeId }: { nodeId: string }) => {
 // Activity Tab
 // =============================================================================
 
-const STATUS_ICON: Record<string, { icon: string; color: string }> = {
-  success: { icon: 'check-circle', color: '#22c55e' },
-  partial: { icon: 'alert-circle', color: '#f59e0b' },
-  failure: { icon: 'close-circle', color: '#ef4444' },
-};
-
-const ActivityTab = ({ nodeId }: { nodeId: string }) => {
+const ActivityTab = (_props: { nodeId: string }) => {
   const theme = useTheme();
-  const [executions, setExecutions] = useState<RoutineExecution[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    setError(null);
-    try {
-      // Fetch recent executions for this node (all routines)
-      const data = await fetchRoutineHistory('', { limit: 30, offset: 0 });
-      // Filter client-side by node_id until the API supports node filtering
-      setExecutions(data.executions.filter((e) => e.node_id === nodeId));
-    } catch {
-      // API may not exist yet — show empty state rather than error
-      setExecutions([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [nodeId]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  if (loading) {
-    return <View style={styles.tabCenter}><ActivityIndicator size="large" /></View>;
-  }
-
-  if (error) {
-    return (
-      <View style={styles.tabCenter}>
-        <Text variant="bodyMedium" style={{ color: theme.colors.error, marginBottom: 12 }}>{error}</Text>
-        <Button mode="outlined" onPress={load}>Retry</Button>
-      </View>
-    );
-  }
-
-  if (executions.length === 0) {
-    return (
-      <View style={styles.tabCenter}>
-        <Icon source="history" size={48} color={theme.colors.outlineVariant} />
-        <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant, marginTop: 12, textAlign: 'center' }}>
-          No activity yet
-        </Text>
-        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 4, textAlign: 'center', paddingHorizontal: 24 }}>
-          {helpCopy.nodeDetail.activityTab}
-        </Text>
-      </View>
-    );
-  }
-
   return (
-    <FlatList
-      data={executions}
-      keyExtractor={(e) => e.id}
-      contentContainerStyle={{ padding: 12, gap: 8 }}
-      renderItem={({ item }) => {
-        const cfg = STATUS_ICON[item.status] || STATUS_ICON.failure;
-        return (
-          <Card style={styles.activityCard}>
-            <Card.Content style={styles.activityRow}>
-              <Icon source={cfg.icon} size={22} color={cfg.color} />
-              <View style={{ flex: 1, marginLeft: 10 }}>
-                <Text variant="bodyMedium" style={{ fontWeight: '500' }}>
-                  {item.routine_name}
-                </Text>
-                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                  {formatTimestamp(item.executed_at)}
-                  {item.duration_ms != null ? ` \u00B7 ${item.duration_ms < 1000 ? `${item.duration_ms}ms` : `${(item.duration_ms / 1000).toFixed(1)}s`}` : ''}
-                </Text>
-              </View>
-              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                {item.steps_passed}/{item.step_count}
-              </Text>
-            </Card.Content>
-          </Card>
-        );
-      }}
-    />
+    <View style={styles.tabCenter}>
+      <Icon source="history" size={48} color={theme.colors.outlineVariant} />
+      <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant, marginTop: 12, textAlign: 'center' }}>
+        No activity yet
+      </Text>
+      <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 4, textAlign: 'center', paddingHorizontal: 24 }}>
+        {helpCopy.nodeDetail.activityTab}
+      </Text>
+    </View>
   );
 };
-
 // =============================================================================
 // Main Screen
 // =============================================================================
