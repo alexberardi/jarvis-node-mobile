@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useIsFocused, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -49,12 +49,18 @@ import { useChat } from '../../hooks/useChat';
 import { useFirstRun } from '../../hooks/useFirstRun';
 import { useVoiceRecording } from '../../hooks/useVoiceRecording';
 import { RootStackParamList } from '../../navigation/types';
-import { AUTO_PLAY_TTS_KEY } from '../../config/storageKeys';
+import {
+  consumePendingIntent,
+  peekPendingIntent,
+  subscribePendingIntent,
+} from '../../navigation/deepLinks';
+import { AUTO_PLAY_TTS_KEY, LAST_NODE_KEY } from '../../config/storageKeys';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 const HomeScreen = () => {
   const navigation = useNavigation<Nav>();
+  const isFocused = useIsFocused();
   const theme = useTheme();
   const { state: authState } = useAuth();
   const [unreadCount, setUnreadCount] = useState(0);
@@ -71,11 +77,58 @@ const HomeScreen = () => {
   const { isRecording, startRecording, stopRecording } = useVoiceRecording();
   const firstRun = useFirstRun('chat_intro');
 
+  // Quick-open (com.jarvis.app://stt) auto-listen state.
+  const [pendingAutoListen, setPendingAutoListen] = useState(false);
+  const isFocusedRef = useRef(isFocused);
+  isFocusedRef.current = isFocused;
+
+  // iOS can't activate the audio session while the app is backgrounded. When a
+  // Shortcut/Action Button launches us, the app briefly isn't foreground yet,
+  // so auto-listen must wait until AppState is 'active'.
+  const [isAppActive, setIsAppActive] = useState(AppState.currentState === 'active');
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      setIsAppActive(state === 'active');
+    });
+    return () => sub.remove();
+  }, []);
+
+  // Drain a stashed quick-open intent. HomeScreen is the authoritative
+  // consumer: 'stt' arms auto-listen, 'chat' just means "you're here now".
+  const drainPendingIntent = useCallback(() => {
+    if (!peekPendingIntent()) return;
+    const intent = consumePendingIntent();
+    if (intent === 'stt') setPendingAutoListen(true);
+  }, []);
+
+  // Drain when the screen gains focus — covers login -> Home, cross-tab, and
+  // cold start (independent of the Auth->Main navigator swap timing).
+  useFocusEffect(
+    useCallback(() => {
+      drainPendingIntent();
+    }, [drainPendingIntent]),
+  );
+
+  // Drain when a new intent is stashed while Home is already focused (the
+  // deep link arrives with the chat screen already open).
+  useEffect(() => {
+    return subscribePendingIntent(() => {
+      if (isFocusedRef.current) drainPendingIntent();
+    });
+  }, [drainPendingIntent]);
+
   // Reset node selection and chat state when household changes
   useEffect(() => {
     setSelectedNodeId(null);
     setNodeCount(null);
   }, [householdId]);
+
+  // Persist the selected node so the next launch / quick-open lands on it.
+  useEffect(() => {
+    if (selectedNodeId) {
+      AsyncStorage.setItem(LAST_NODE_KEY, selectedNodeId).catch(() => {});
+    }
+  }, [selectedNodeId]);
 
   // Load auto-play preference
   useEffect(() => {
@@ -108,6 +161,45 @@ const HomeScreen = () => {
     accessToken: authState.accessToken,
     onAssistantDone: handleAutoPlay,
   });
+
+  // Start recording for a pending quick-open once the app is foreground and a
+  // node is selected. Node auto-selection is async (NodeSelector), so we wait
+  // for it; bail with a hint if the household has no nodes at all.
+  useEffect(() => {
+    if (!pendingAutoListen || isLoading) return;
+    if (isRecording) {
+      setPendingAutoListen(false);
+      return;
+    }
+    if (!isAppActive) return; // wait for foreground — see isAppActive above
+    if (!selectedNodeId) {
+      if (nodeCount === 0) {
+        setPendingAutoListen(false);
+        setSnackbar('Add a node before using the quick command.');
+      }
+      return; // wait for NodeSelector to auto-select a node
+    }
+
+    // Small settle delay: right after a Shortcut foregrounds the app, the iOS
+    // audio session can need a beat before it will activate even once 'active'.
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      if (cancelled) return;
+      setPendingAutoListen(false);
+      startRecording().then((ok) => {
+        if (cancelled) return;
+        setSnackbar(
+          ok
+            ? 'Listening… tap the mic to send.'
+            : 'Couldn’t start listening. Tap the mic to try again.',
+        );
+      });
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [pendingAutoListen, selectedNodeId, isLoading, isRecording, isAppActive, nodeCount, startRecording]);
 
   // Refresh unread count on focus (but NOT tools — those persist across tabs
   // and only re-warmup when toolsVersion changes via ToolsContext).
@@ -419,6 +511,15 @@ const HomeScreen = () => {
         </View>
       )}
 
+      {/* Listening banner — shown while recording (incl. quick-open auto-listen) */}
+      {isRecording && (
+        <View style={[styles.listeningBar, { backgroundColor: theme.colors.errorContainer }]}>
+          <Text variant="labelLarge" style={{ color: theme.colors.onErrorContainer }}>
+            Listening… tap the mic to send
+          </Text>
+        </View>
+      )}
+
       {/* Input bar */}
       <View style={[styles.inputBar, { borderTopColor: theme.colors.outlineVariant }]}>
         <TextInput
@@ -547,6 +648,11 @@ const styles = StyleSheet.create({
   typingRow: {
     paddingHorizontal: 24,
     paddingBottom: 4,
+  },
+  listeningBar: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    alignItems: 'center',
   },
   inputBar: {
     flexDirection: 'row',

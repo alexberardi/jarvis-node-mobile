@@ -16,10 +16,25 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.jarvis.nodemobile",
       "buildNumber": "10",
+      "appleTeamId": "8H5GA7SX77",
+      "associatedDomains": [
+        "applinks:docs.jarvisautomation.dev"
+      ],
       "infoPlist": {
         "NSCameraUsageDescription": "Camera access is required to scan QR codes for node pairing",
+        "NSMicrophoneUsageDescription": "Microphone access is required to send voice commands to Jarvis.",
         "NSLocalNetworkUsageDescription": "Jarvis needs local network access to discover your self-hosted server.",
-        "NSBonjourServices": ["_jarvis-config._tcp"],
+        "NSBonjourServices": [
+          "_jarvis-config._tcp"
+        ],
+        "INAlternativeAppNames": [
+          {
+            "INAlternativeAppName": "Jarvis"
+          },
+          {
+            "INAlternativeAppName": "Jarvis app"
+          }
+        ],
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": true,
           "NSAllowsLocalNetworking": true
@@ -70,7 +85,9 @@
             "usesCleartextTraffic": true
           }
         }
-      ]
+      ],
+      "./plugins/withJarvisAppIntents.js",
+      "@bacons/apple-targets"
     ],
     "extra": {
       "eas": {
