@@ -1,0 +1,11 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "8H5GA7SX77.com.jarvis.nodemobile",
+        "paths": ["/app/*"]
+      }
+    ]
+  }
+}

@@ -1,8 +1,10 @@
 import React from 'react';
+import { AppState } from 'react-native';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import { PaperProvider } from 'react-native-paper';
 
 import HomeScreen from '../../src/screens/Home/HomeScreen';
+import { setPendingIntent } from '../../src/navigation/deepLinks';
 import { lightTheme } from '../../src/theme';
 
 const mockNavigate = jest.fn();
@@ -13,6 +15,7 @@ jest.mock('@react-navigation/native', () => ({
     navigate: mockNavigate,
     goBack: mockGoBack,
   }),
+  useIsFocused: () => true,
   useFocusEffect: (cb: () => void) => {
     const { useEffect } = require('react');
     useEffect(() => {
@@ -40,11 +43,13 @@ jest.mock('../../src/hooks/useChat', () => ({
   }),
 }));
 
+const mockStartRecording = jest.fn().mockResolvedValue(true);
+const mockStopRecording = jest.fn().mockResolvedValue(null);
 jest.mock('../../src/hooks/useVoiceRecording', () => ({
   useVoiceRecording: () => ({
     isRecording: false,
-    startRecording: jest.fn(),
-    stopRecording: jest.fn(),
+    startRecording: mockStartRecording,
+    stopRecording: mockStopRecording,
   }),
 }));
 
@@ -125,7 +130,12 @@ describe('HomeScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockGetUnreadCount.mockResolvedValue(0);
+    mockStartRecording.mockResolvedValue(true);
+    setPendingIntent(null);
+    // Auto-listen only starts when the app is foreground-active.
+    (AppState as unknown as { currentState: string }).currentState = 'active';
   });
+  afterEach(() => setPendingIntent(null));
 
   it('should render the Jarvis header', () => {
     const { getByText } = render(<HomeScreen />, { wrapper });
@@ -152,6 +162,36 @@ describe('HomeScreen', () => {
     const { getByTestId } = render(<HomeScreen />, { wrapper });
     fireEvent.press(getByTestId('inbox-button'));
     expect(mockNavigate).toHaveBeenCalledWith('Inbox', { screen: 'InboxList' });
+  });
+
+  it('arms voice capture for a pending stt quick-open once a node is selected', async () => {
+    // Intent stashed before the screen exists — e.g. a link that arrived
+    // while logged out, now replayed after auth lands the user on Home.
+    setPendingIntent('stt');
+
+    const { getByTestId } = render(<HomeScreen />, { wrapper });
+
+    // Drained on focus, but no node yet -> waits, does not record.
+    expect(mockStartRecording).not.toHaveBeenCalled();
+
+    // Node auto-select (simulated) resolves -> recording starts.
+    fireEvent.press(getByTestId('node-selector'));
+    await waitFor(() => {
+      expect(mockStartRecording).toHaveBeenCalled();
+    });
+  });
+
+  it('does not arm voice capture for a chat-only quick-open', async () => {
+    setPendingIntent('chat');
+
+    const { getByTestId } = render(<HomeScreen />, { wrapper });
+    fireEvent.press(getByTestId('node-selector'));
+
+    // Give the effects a chance to run, then confirm no recording started.
+    await waitFor(() => {
+      expect(getByTestId('node-selector')).toBeTruthy();
+    });
+    expect(mockStartRecording).not.toHaveBeenCalled();
   });
 
   it('should show badge when unread count > 0', async () => {
