@@ -11,57 +11,42 @@ export interface RoutineStep {
 
 export type ResponseLength = 'short' | 'medium' | 'long';
 export type ScheduleType = 'interval' | 'cron';
-export type SummaryStyle = 'compact' | 'detailed';
 export type DayOfWeek = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
 
 export const ALL_DAYS: DayOfWeek[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 export const WEEKDAYS: DayOfWeek[] = ['mon', 'tue', 'wed', 'thu', 'fri'];
 export const WEEKENDS: DayOfWeek[] = ['sat', 'sun'];
 
-export const INTERVAL_PRESETS = [5, 15, 30, 60, 120, 240] as const;
-export const TTL_PRESETS = [15, 30, 60, 240, 480, 1440] as const;
+/** Minutes-based presets for the interval schedule picker. */
+export const INTERVAL_PRESETS = [15, 30, 60, 120, 240, 360, 720] as const;
 
-export interface RoutineBackground {
+/**
+ * A routine schedule. `null` on a Routine means voice / run-now only.
+ *  - interval: fire every `interval_seconds`.
+ *  - cron: fire on a 5-field crontab string, evaluated in `timezone`.
+ * `target_node_id` is which node a scheduled run fires on (defaults to the
+ * household primary node, resolved server-side when omitted).
+ */
+export interface RoutineSchedule {
+  type: ScheduleType;
+  cron?: string | null;
+  interval_seconds?: number | null;
+  timezone: string;
+  target_node_id?: string | null;
   enabled: boolean;
-  schedule_type: ScheduleType;
-  interval_minutes: number;
-  run_on_startup: boolean;
-  days: DayOfWeek[];
-  time: string;
-  summary_style: SummaryStyle;
-  alert_priority: 1 | 2 | 3;
-  alert_ttl_minutes: number;
+  last_fired_at?: string | null;
 }
-
-export interface RoutinePlaceholder {
-  type: 'device';
-  domain: string;
-  label: string;
-  required: boolean;
-}
-
-export type RoutineStatus = 'ready' | 'needs_config' | 'missing_commands';
 
 export interface Routine {
   id: string;
+  slug?: string;
   name: string;
   trigger_phrases: string[];
   steps: RoutineStep[];
   response_instruction: string;
   response_length: ResponseLength;
-  background: RoutineBackground | null;
-  placeholders?: Record<string, RoutinePlaceholder>;
-  required_commands?: string[];
+  schedule: RoutineSchedule | null;
+  enabled?: boolean;
+  created_at?: string | null;
+  updated_at?: string | null;
 }
-
-export const DEFAULT_BACKGROUND: RoutineBackground = {
-  enabled: true,
-  schedule_type: 'interval',
-  interval_minutes: 30,
-  run_on_startup: true,
-  days: [...ALL_DAYS],
-  time: '08:00',
-  summary_style: 'compact',
-  alert_priority: 2,
-  alert_ttl_minutes: 240,
-};

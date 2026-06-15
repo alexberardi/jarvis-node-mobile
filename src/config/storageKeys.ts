@@ -31,12 +31,4 @@ export const LAST_NODE_KEY = '@jarvis/last_node_id';
 /** Push notifications enabled: 'true' | 'false' */
 export const PUSH_NOTIFICATIONS_KEY = '@jarvis/push_notifications_enabled';
 
-/** Serialized routine definitions */
-export const ROUTINES_KEY = '@jarvis/routines';
-/** Routine seed version marker */
-export const ROUTINES_SEEDED_KEY = '@jarvis/routines_seeded_v2';
-
-// ── SecureStore keys ─────────────────────────────────────────────────────
-
-/** Cached LLM API key for routine builder / suggest */
-export const ROUTINE_API_KEY = 'jarvis_routine_api_key';
+// Routines are server-owned (command-center) — no local routine storage keys.
