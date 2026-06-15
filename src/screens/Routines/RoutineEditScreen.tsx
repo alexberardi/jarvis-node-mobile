@@ -1,6 +1,7 @@
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import React, { useCallback, useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -25,38 +26,29 @@ import {
   useTheme,
 } from 'react-native-paper';
 
+import { getSmartHomeConfig } from '../../api/smartHomeApi';
+import {
+  createRoutine,
+  deleteRoutine,
+  getRoutine,
+  updateRoutine,
+} from '../../api/routineApi';
 import { useAuth } from '../../auth/AuthContext';
 import { HelpIcon } from '../../components/HelpIcon';
 import ParameterArgRow from '../../components/ParameterArgRow';
 import { helpCopy } from '../../copy/help';
 import { useSettingsSnapshot } from '../../hooks/useSettingsSnapshot';
 import { RoutinesStackParamList } from '../../navigation/types';
-import {
-  deleteRoutine,
-  getRoutine,
-  loadRoutines,
-  saveRoutine,
-  slugify,
-} from '../../services/routineStorageService';
 import type { CommandParameterEntry } from '../../services/settingsDecryptService';
 import type {
   DayOfWeek,
   ResponseLength,
-  Routine,
-  RoutineBackground,
+  RoutineSchedule,
   RoutineStep,
   RoutineStepArg,
   ScheduleType,
-  SummaryStyle,
 } from '../../types/Routine';
-import {
-  ALL_DAYS,
-  DEFAULT_BACKGROUND,
-  INTERVAL_PRESETS,
-  TTL_PRESETS,
-  WEEKDAYS,
-  WEEKENDS,
-} from '../../types/Routine';
+import { ALL_DAYS, INTERVAL_PRESETS, WEEKDAYS, WEEKENDS } from '../../types/Routine';
 
 type Nav = NativeStackNavigationProp<RoutinesStackParamList>;
 type Route = RouteProp<RoutinesStackParamList, 'RoutineEdit'>;
@@ -64,14 +56,15 @@ type Route = RouteProp<RoutinesStackParamList, 'RoutineEdit'>;
 const DAY_LABELS: Record<DayOfWeek, string> = {
   mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun',
 };
+const DAY_TO_CRON: Record<DayOfWeek, number> = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
+const CRON_TO_DAY: Record<number, DayOfWeek> = { 0: 'sun', 1: 'mon', 2: 'tue', 3: 'wed', 4: 'thu', 5: 'fri', 6: 'sat' };
 
-type DayPreset = 'every_day' | 'weekdays' | 'weekends' | 'custom';
-
-const getDayPreset = (days: DayOfWeek[]): DayPreset => {
-  if (days.length === 7) return 'every_day';
-  if (days.length === 5 && WEEKDAYS.every((d) => days.includes(d))) return 'weekdays';
-  if (days.length === 2 && days.includes('sat') && days.includes('sun')) return 'weekends';
-  return 'custom';
+const deviceTimezone = (): string => {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  } catch {
+    return 'UTC';
+  }
 };
 
 const formatMinutes = (mins: number): string => {
@@ -80,12 +73,67 @@ const formatMinutes = (mins: number): string => {
   return `${mins}m`;
 };
 
+const buildCron = (time: string, days: DayOfWeek[]): string => {
+  const [h, m] = time.split(':');
+  const hour = parseInt(h ?? '8', 10);
+  const minute = parseInt(m ?? '0', 10);
+  const dayField =
+    days.length === 0 || days.length === 7
+      ? '*'
+      : days.map((d) => DAY_TO_CRON[d]).sort((a, b) => a - b).join(',');
+  return `${Number.isNaN(minute) ? 0 : minute} ${Number.isNaN(hour) ? 8 : hour} * * ${dayField}`;
+};
+
+const parseCron = (cron: string | null | undefined): { time: string; days: DayOfWeek[] } => {
+  const def = { time: '08:00', days: [...ALL_DAYS] };
+  if (!cron) return def;
+  const parts = cron.trim().split(/\s+/);
+  if (parts.length < 5) return def;
+  const minute = parseInt(parts[0], 10);
+  const hour = parseInt(parts[1], 10);
+  const time = `${String(Number.isNaN(hour) ? 8 : hour).padStart(2, '0')}:${String(
+    Number.isNaN(minute) ? 0 : minute,
+  ).padStart(2, '0')}`;
+  const dayField = parts[4];
+  const days: DayOfWeek[] =
+    dayField === '*'
+      ? [...ALL_DAYS]
+      : (dayField.split(',').map((n) => CRON_TO_DAY[parseInt(n, 10) % 7]).filter(Boolean) as DayOfWeek[]);
+  return { time, days };
+};
+
+// Client-side metadata bridge for core commands, so their params render as live
+// dropdowns even when a node's reported catalog predates these hints. The node's
+// own catalog always takes precedence (we only fill in what it didn't provide).
+const CONTROL_DEVICE_ACTIONS = [
+  'turn_on', 'turn_off', 'play', 'pause', 'volume_up', 'volume_down',
+  'next', 'previous', 'lock', 'unlock', 'set_temperature', 'set_mode',
+  'set_brightness', 'set_color',
+];
+const PARAM_META_OVERRIDES: Record<string, Record<string, Partial<CommandParameterEntry>>> = {
+  control_device: {
+    device_name: { options_source: 'devices' },
+    entity_id: { options_source: 'entities' },
+    action: { enum_values: CONTROL_DEVICE_ACTIONS },
+  },
+};
+
+type DayPreset = 'every_day' | 'weekdays' | 'weekends' | 'custom';
+const dayPresetFor = (days: DayOfWeek[]): DayPreset => {
+  if (days.length === 7) return 'every_day';
+  if (days.length === 5 && WEEKDAYS.every((d) => days.includes(d))) return 'weekdays';
+  if (days.length === 2 && days.includes('sat') && days.includes('sun')) return 'weekends';
+  return 'custom';
+};
+
 const RoutineEditScreen = () => {
   const navigation = useNavigation<Nav>();
   const route = useRoute<Route>();
   const theme = useTheme();
   const { state: authState } = useAuth();
-  const isEditing = !!route.params?.routineId;
+  const householdId = authState.activeHouseholdId;
+  const routineId = route.params?.routineId;
+  const isEditing = !!routineId;
 
   // Form state
   const [name, setName] = useState('');
@@ -94,25 +142,72 @@ const RoutineEditScreen = () => {
   const [steps, setSteps] = useState<RoutineStep[]>([]);
   const [responseInstruction, setResponseInstruction] = useState('');
   const [responseLength, setResponseLength] = useState<ResponseLength>('short');
-  const [background, setBackground] = useState<RoutineBackground | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [loaded, setLoaded] = useState(!isEditing);
 
-  // Command metadata from node settings snapshot
+  // Schedule state
+  const [schedEnabled, setSchedEnabled] = useState(false);
+  const [schedType, setSchedType] = useState<ScheduleType>('cron');
+  const [intervalMinutes, setIntervalMinutes] = useState(60);
+  const [cronTime, setCronTime] = useState('08:00');
+  const [cronDays, setCronDays] = useState<DayOfWeek[]>([...ALL_DAYS]);
+  const [targetNodeId, setTargetNodeId] = useState<string | null>(null);
+
+  // Household nodes (catalog source + scheduled target dropdowns)
+  const { data: smartHomeConfig } = useQuery({
+    queryKey: ['smartHomeConfig', householdId],
+    queryFn: () => getSmartHomeConfig(householdId!),
+    enabled: !!householdId,
+  });
+  const nodes = smartHomeConfig?.nodes ?? [];
+  const primaryNodeId = smartHomeConfig?.primary_node_id || null;
+  const [nodeMenuVisible, setNodeMenuVisible] = useState(false);
+
+  // Which node provides the command catalog. Default to the primary node (the
+  // reliable one) or the first ONLINE node — never just nodes[0], which may be
+  // an offline/stale node and would time out the snapshot request.
+  const [catalogNodeId, setCatalogNodeId] = useState<string | null>(null);
+  const [catalogMenuVisible, setCatalogMenuVisible] = useState(false);
+  useEffect(() => {
+    if (catalogNodeId || nodes.length === 0) return;
+    const primaryOnline = nodes.find((n) => n.node_id === primaryNodeId && n.online);
+    const firstOnline = nodes.find((n) => n.online);
+    const primaryAny = nodes.find((n) => n.node_id === primaryNodeId);
+    setCatalogNodeId((primaryOnline ?? firstOnline ?? primaryAny ?? nodes[0]).node_id);
+  }, [catalogNodeId, nodes, primaryNodeId]);
+
+  // Command catalog (live, from the chosen catalog node's installed commands)
   interface CommandMeta {
     command_name: string;
     description: string;
     parameters?: CommandParameterEntry[];
   }
   const { snapshot: cmdSnapshot, state: cmdState, error: commandsError } = useSettingsSnapshot({
-    enabled: !!authState.accessToken,
+    nodeId: catalogNodeId ?? undefined,
+    enabled: !!authState.accessToken && !!catalogNodeId,
   });
   const commandsLoading = cmdState === 'loading';
   const commandMap: Record<string, CommandMeta> = {};
   if (cmdSnapshot) {
     for (const c of cmdSnapshot.commands.filter((cmd) => cmd.enabled !== false)) {
+      // Bridge: fill in dropdown hints for core-command params that an older
+      // node catalog didn't report. The node's own values always win.
+      const overrides = PARAM_META_OVERRIDES[c.command_name];
+      const parameters = overrides
+        ? (c.parameters ?? []).map((p) => {
+            const ov = overrides[p.name];
+            if (!ov) return p;
+            return {
+              ...p,
+              options_source: p.options_source ?? ov.options_source ?? null,
+              enum_values: p.enum_values && p.enum_values.length ? p.enum_values : (ov.enum_values ?? p.enum_values),
+            };
+          })
+        : c.parameters;
       commandMap[c.command_name] = {
         command_name: c.command_name,
         description: c.description,
-        parameters: c.parameters,
+        parameters,
       };
     }
   }
@@ -120,39 +215,44 @@ const RoutineEditScreen = () => {
   const [commandMenuStep, setCommandMenuStep] = useState<number | null>(null);
   const [paramMenuStep, setParamMenuStep] = useState<number | null>(null);
 
-  // Load existing routine if editing, or pre-populate from AI suggestion
+  // Load existing routine when editing
   useEffect(() => {
-    if (route.params?.routineData) {
-      try {
-        const r: Routine = JSON.parse(route.params.routineData);
+    if (!isEditing || !householdId) return;
+    getRoutine(householdId, routineId!)
+      .then((r) => {
         setName(r.name);
         setTriggerPhrases(r.trigger_phrases);
         setSteps(r.steps);
         setResponseInstruction(r.response_instruction);
         setResponseLength(r.response_length);
-        setBackground(r.background);
-      } catch {
-        // Invalid routineData — ignore, start blank
-      }
-    } else if (route.params?.routineId) {
-      getRoutine(route.params.routineId).then((r) => {
-        if (r) {
-          setName(r.name);
-          setTriggerPhrases(r.trigger_phrases);
-          setSteps(r.steps);
-          setResponseInstruction(r.response_instruction);
-          setResponseLength(r.response_length);
-          setBackground(r.background);
+        const s = r.schedule;
+        if (s) {
+          setSchedEnabled(true);
+          setSchedType(s.type);
+          if (s.type === 'interval') {
+            setIntervalMinutes(Math.max(1, Math.round((s.interval_seconds ?? 3600) / 60)));
+          } else {
+            const { time, days } = parseCron(s.cron);
+            setCronTime(time);
+            setCronDays(days);
+          }
+          setTargetNodeId(s.target_node_id ?? null);
         }
-      }).catch((error) => {
+        setLoaded(true);
+      })
+      .catch((error) => {
         console.error('[RoutineEditScreen] Failed to load routine', error);
         Alert.alert('Error', 'Could not load routine.');
+        navigation.goBack();
       });
+  }, [isEditing, householdId, routineId, navigation]);
+
+  // Default the schedule target node to the household primary node.
+  useEffect(() => {
+    if (schedEnabled && !targetNodeId && primaryNodeId) {
+      setTargetNodeId(primaryNodeId);
     }
-  }, [route.params?.routineId, route.params?.routineData]);
-
-
-  const slug = slugify(name);
+  }, [schedEnabled, targetNodeId, primaryNodeId]);
 
   // --- Trigger phrases ---
   const addTriggerPhrase = useCallback(() => {
@@ -176,8 +276,7 @@ const RoutineEditScreen = () => {
     setSteps((prev) => {
       const n = [...prev];
       const updated = { ...n[index], ...updates };
-
-      // When command changes, auto-add required parameters that aren't already present
+      // When the command changes, auto-add its required parameters.
       if (updates.command && updates.command !== n[index].command) {
         const meta = commandMap[updates.command];
         if (meta?.parameters) {
@@ -185,12 +284,9 @@ const RoutineEditScreen = () => {
           const requiredArgs: RoutineStepArg[] = meta.parameters
             .filter((p) => p.required && !existingKeys.has(p.name))
             .map((p) => ({ key: p.name, value: p.default_value ?? '' }));
-          if (requiredArgs.length > 0) {
-            updated.args = [...updated.args, ...requiredArgs];
-          }
+          if (requiredArgs.length > 0) updated.args = [...updated.args, ...requiredArgs];
         }
       }
-
       n[index] = updated;
       return n;
     });
@@ -218,8 +314,10 @@ const RoutineEditScreen = () => {
 
   const updateArg = useCallback((si: number, ai: number, u: Partial<RoutineStepArg>) => {
     setSteps((prev) => {
-      const n = [...prev]; const args = [...n[si].args];
-      args[ai] = { ...args[ai], ...u }; n[si] = { ...n[si], args };
+      const n = [...prev];
+      const args = [...n[si].args];
+      args[ai] = { ...args[ai], ...u };
+      n[si] = { ...n[si], args };
       return n;
     });
   }, []);
@@ -232,77 +330,59 @@ const RoutineEditScreen = () => {
     });
   }, []);
 
-  // --- Background helpers ---
-  const updateBg = useCallback((updates: Partial<RoutineBackground>) => {
-    setBackground((prev) => prev ? { ...prev, ...updates } : null);
-  }, []);
-
-  const toggleBackground = useCallback(() => {
-    setBackground((prev) => prev ? null : { ...DEFAULT_BACKGROUND });
-  }, []);
-
-  const dayPreset = background ? getDayPreset(background.days) : 'every_day';
-  const [showCustomDays, setShowCustomDays] = useState(false);
-
   const setDayPreset = useCallback((preset: DayPreset) => {
-    if (preset === 'every_day') { updateBg({ days: [...ALL_DAYS] }); setShowCustomDays(false); }
-    else if (preset === 'weekdays') { updateBg({ days: [...WEEKDAYS] }); setShowCustomDays(false); }
-    else if (preset === 'weekends') { updateBg({ days: [...WEEKENDS] }); setShowCustomDays(false); }
-    else { setShowCustomDays(true); }
-  }, [updateBg]);
+    if (preset === 'every_day') setCronDays([...ALL_DAYS]);
+    else if (preset === 'weekdays') setCronDays([...WEEKDAYS]);
+    else if (preset === 'weekends') setCronDays([...WEEKENDS]);
+  }, []);
 
   const toggleDay = useCallback((day: DayOfWeek) => {
-    if (!background) return;
-    const days = background.days.includes(day)
-      ? background.days.filter((d) => d !== day)
-      : [...background.days, day];
-    if (days.length > 0) updateBg({ days });
-  }, [background, updateBg]);
+    setCronDays((prev) => (prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]));
+  }, []);
 
-  // --- Validation ---
-  const validate = async (): Promise<string | null> => {
-    if (!name.trim()) return 'Name is required.';
-    if (!slug) return 'Name must contain at least one alphanumeric character.';
-
-    if (!isEditing || route.params?.routineId !== slug) {
-      try {
-        const existing = await loadRoutines();
-        if (existing.some((r) => r.id === slug && r.id !== route.params?.routineId)) {
-          return `A routine with the ID "${slug}" already exists.`;
-        }
-      } catch (error) {
-        console.error('[RoutineEditScreen] Failed to check existing routines', error);
-        return 'Could not verify routine name. Please try again.';
-      }
-    }
-
-    if (triggerPhrases.length === 0) return 'At least one trigger phrase is required.';
-    if (steps.length === 0) return 'At least one step is required.';
+  // --- Validation gate (makes broken steps impossible to save) ---
+  const validationError = useMemo<string | null>(() => {
+    if (!name.trim()) return 'Add a routine name';
+    if (triggerPhrases.length === 0) return 'Add at least one trigger phrase';
+    if (steps.length === 0) return 'Add at least one step';
     for (let i = 0; i < steps.length; i++) {
-      if (!steps[i].command) return `Step ${i + 1}: command is required.`;
+      const s = steps[i];
+      if (!s.command) return `Step ${i + 1}: choose a command`;
+      const required = commandMap[s.command]?.parameters?.filter((p) => p.required) ?? [];
+      for (const p of required) {
+        const a = s.args.find((x) => x.key === p.name);
+        if (!a || a.value.trim() === '') return `Step ${i + 1}: "${p.name}" is required`;
+      }
     }
     const labels = steps.map((s) => s.label || s.command);
-    if (new Set(labels).size !== labels.length) return 'Step labels must be unique.';
-
-    if (background) {
-      if (background.schedule_type === 'cron' && background.days.length === 0) {
-        return 'Background: at least one day must be selected.';
-      }
+    if (new Set(labels).size !== labels.length) return 'Step labels must be unique';
+    if (schedEnabled) {
+      if (!targetNodeId) return 'Schedule: choose a node to run on';
+      if (schedType === 'cron' && cronDays.length === 0) return 'Schedule: pick at least one day';
+      if (schedType === 'interval' && intervalMinutes <= 0) return 'Schedule: pick an interval';
     }
-
     return null;
+  }, [name, triggerPhrases, steps, commandMap, schedEnabled, targetNodeId, schedType, cronDays, intervalMinutes]);
+
+  const buildSchedule = (): RoutineSchedule | null => {
+    if (!schedEnabled) return null;
+    const tz = deviceTimezone();
+    if (schedType === 'interval') {
+      return { type: 'interval', interval_seconds: intervalMinutes * 60, timezone: tz, target_node_id: targetNodeId, enabled: true };
+    }
+    return { type: 'cron', cron: buildCron(cronTime, cronDays), timezone: tz, target_node_id: targetNodeId, enabled: true };
   };
 
   const handleDelete = useCallback(() => {
-    if (!isEditing || !route.params?.routineId) return;
-    Alert.alert('Delete', `Remove "${name || route.params.routineId}"?`, [
+    if (!isEditing || !householdId || !routineId) return;
+    Alert.alert('Delete', `Remove "${name || 'this routine'}"?`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
         style: 'destructive',
         onPress: async () => {
           try {
-            await deleteRoutine(route.params!.routineId!);
+            await deleteRoutine(householdId, routineId);
             navigation.goBack();
           } catch (error) {
             console.error('[RoutineEditScreen] Failed to delete routine', error);
@@ -311,37 +391,43 @@ const RoutineEditScreen = () => {
         },
       },
     ]);
-  }, [isEditing, route.params, name, navigation]);
+  }, [isEditing, householdId, routineId, name, navigation]);
 
   const handleSave = async () => {
-    const validationError = await validate();
-    if (validationError) { Alert.alert('Validation Error', validationError); return; }
-
-    const routine: Routine = {
-      id: isEditing ? route.params!.routineId! : slug,
+    if (validationError || !householdId) {
+      if (validationError) Alert.alert('Not ready', validationError);
+      return;
+    }
+    const body = {
       name: name.trim(),
       trigger_phrases: triggerPhrases,
       steps: steps.map((s) => ({ ...s, label: s.label || s.command })),
       response_instruction: responseInstruction.trim(),
       response_length: responseLength,
-      background,
+      schedule: buildSchedule(),
     };
-
+    setSaving(true);
     try {
-      await saveRoutine(routine);
-      navigation.navigate('RoutineNodePicker', { routineId: routine.id });
+      if (isEditing) await updateRoutine(householdId, routineId!, body);
+      else await createRoutine(householdId, body);
+      navigation.goBack();
     } catch (error) {
       console.error('[RoutineEditScreen] Failed to save routine', error);
       Alert.alert('Error', 'Could not save routine. Please try again.');
+    } finally {
+      setSaving(false);
     }
   };
 
-  // --- Step card styling ---
+  // --- Step card ---
   const cardBg = theme.dark ? `${theme.colors.primary}14` : `${theme.colors.primary}08`;
   const cardBorder = theme.dark ? `${theme.colors.primary}30` : `${theme.colors.outline}40`;
 
   const renderStep = ({ item, drag, getIndex }: RenderItemParams<RoutineStep>) => {
     const index = getIndex() ?? 0;
+    const meta = commandMap[item.command];
+    const existingKeys = new Set(item.args.map((a) => a.key));
+    const optionalParams = meta?.parameters?.filter((p) => !existingKeys.has(p.name)) ?? [];
     return (
       <ScaleDecorator>
         <View style={[styles.stepCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
@@ -361,7 +447,7 @@ const RoutineEditScreen = () => {
                   <Button mode="outlined" onPress={() => setCommandMenuStep(index)} compact
                     style={styles.commandButton} labelStyle={styles.commandButtonLabel}
                     contentStyle={{ justifyContent: 'flex-start' }}>
-                    {item.command || 'Select command...'}
+                    {item.command || 'Select command…'}
                   </Button>
                 }>
                 {availableCommands.map((cmd) => (
@@ -370,7 +456,7 @@ const RoutineEditScreen = () => {
                 ))}
               </Menu>
             ) : (
-              <TextInput mode="flat" label={commandsLoading ? 'Command (loading...)' : 'Command'}
+              <TextInput mode="flat" label={commandsLoading ? 'Command (loading…)' : 'Command'}
                 value={item.command} onChangeText={(v) => updateStep(index, { command: v, label: item.label || v })}
                 dense style={styles.stepInput} placeholder="e.g. get_weather" />
             )}
@@ -380,7 +466,6 @@ const RoutineEditScreen = () => {
           {item.args.length > 0 && (
             <View style={styles.argsContainer}>
               {item.args.map((arg, ai) => {
-                const meta = commandMap[item.command];
                 const paramMeta = meta?.parameters?.find((p) => p.name === arg.key) ?? null;
                 return (
                   <ParameterArgRow
@@ -394,57 +479,49 @@ const RoutineEditScreen = () => {
               })}
             </View>
           )}
-          {(() => {
-            const meta = commandMap[item.command];
-            const hasParams = meta?.parameters && meta.parameters.length > 0;
-            if (!hasParams) {
-              return (
-                <Button mode="text" icon="plus" compact onPress={() => addArg(index)} labelStyle={{ fontSize: 12 }}>
-                  Arg
-                </Button>
-              );
-            }
-            const existingKeys = new Set(item.args.map((a) => a.key));
-            const optionalParams = meta.parameters!.filter((p) => !existingKeys.has(p.name));
-            return (
-              <View style={{ flexDirection: 'row', gap: 4 }}>
-                {optionalParams.length > 0 && (
-                  <Menu
-                    visible={paramMenuStep === index}
-                    onDismiss={() => setParamMenuStep(null)}
-                    anchor={
-                      <Button mode="text" icon="plus" compact onPress={() => setParamMenuStep(index)} labelStyle={{ fontSize: 12 }}>
-                        Parameter
-                      </Button>
-                    }
-                  >
-                    {optionalParams.map((p) => (
-                      <Menu.Item
-                        key={p.name}
-                        title={p.description ? `${p.name} — ${p.description}` : p.name}
-                        onPress={() => { addNamedArg(index, p); setParamMenuStep(null); }}
-                      />
-                    ))}
-                  </Menu>
-                )}
-                <Button mode="text" icon="plus" compact onPress={() => addArg(index)} labelStyle={{ fontSize: 12 }}>
-                  Custom
-                </Button>
-              </View>
-            );
-          })()}
+          <View style={{ flexDirection: 'row', gap: 4 }}>
+            {optionalParams.length > 0 && (
+              <Menu
+                visible={paramMenuStep === index}
+                onDismiss={() => setParamMenuStep(null)}
+                anchor={
+                  <Button mode="text" icon="plus" compact onPress={() => setParamMenuStep(index)} labelStyle={{ fontSize: 12 }}>
+                    Parameter
+                  </Button>
+                }>
+                {optionalParams.map((p) => (
+                  <Menu.Item key={p.name}
+                    title={p.description ? `${p.name} — ${p.description}` : p.name}
+                    onPress={() => { addNamedArg(index, p); setParamMenuStep(null); }} />
+                ))}
+              </Menu>
+            )}
+            <Button mode="text" icon="plus" compact onPress={() => addArg(index)} labelStyle={{ fontSize: 12 }}>
+              Custom
+            </Button>
+          </View>
         </View>
       </ScaleDecorator>
     );
   };
 
-  // --- Picker menu helpers ---
   const [intervalMenuVisible, setIntervalMenuVisible] = useState(false);
-  const [ttlMenuVisible, setTtlMenuVisible] = useState(false);
+  const targetNodeLabel =
+    nodes.find((n) => n.node_id === targetNodeId)?.room
+      ? `${nodes.find((n) => n.node_id === targetNodeId)?.room} (${targetNodeId})`
+      : targetNodeId || 'Select node…';
+  const dayPreset = dayPresetFor(cronDays);
+
+  if (!loaded) {
+    return (
+      <View style={[styles.container, { alignItems: 'center', justifyContent: 'center' }]}>
+        <Text>Loading…</Text>
+      </View>
+    );
+  }
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      {/* Fixed header */}
       <View style={[styles.fixedHeader, { backgroundColor: theme.colors.background, borderBottomColor: theme.colors.outlineVariant }]}>
         <IconButton icon="arrow-left" onPress={() => navigation.goBack()} />
         <Text variant="headlineSmall" style={{ fontWeight: 'bold', flex: 1 }}>
@@ -459,11 +536,6 @@ const RoutineEditScreen = () => {
         {/* Name */}
         <View style={styles.section}>
           <TextInput mode="flat" label="Routine Name" value={name} onChangeText={setName} style={styles.topInput} />
-          {slug ? (
-            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, paddingHorizontal: 4, marginTop: 2 }}>
-              ID: {slug}
-            </Text>
-          ) : null}
         </View>
 
         {/* Trigger Phrases */}
@@ -489,10 +561,34 @@ const RoutineEditScreen = () => {
         {/* Steps */}
         <View style={styles.section}>
           <Text variant="titleSmall" style={[styles.sectionTitle, { color: theme.colors.primary }]}>Steps</Text>
+          {nodes.length > 0 && (
+            <View style={styles.catalogRow}>
+              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Commands from</Text>
+              <Menu
+                visible={catalogMenuVisible}
+                onDismiss={() => setCatalogMenuVisible(false)}
+                anchor={
+                  <Button mode="outlined" compact icon="cellphone-link" onPress={() => setCatalogMenuVisible(true)} labelStyle={{ fontSize: 12 }}>
+                    {commandsLoading
+                      ? 'Loading…'
+                      : (nodes.find((n) => n.node_id === catalogNodeId)?.room || 'Select node')}
+                  </Button>
+                }>
+                {nodes.map((n) => (
+                  <Menu.Item key={n.node_id}
+                    leadingIcon={n.online ? 'circle' : 'circle-outline'}
+                    title={n.room ? `${n.room}${n.online ? '' : ' (offline)'}` : n.node_id}
+                    onPress={() => { setCatalogNodeId(n.node_id); setCatalogMenuVisible(false); }} />
+                ))}
+              </Menu>
+            </View>
+          )}
           {commandsError && (
-            <Text variant="bodySmall" style={{ color: theme.colors.error, marginBottom: 8 }}>
-              {commandsError}
-            </Text>
+            <View style={{ marginBottom: 8 }}>
+              <Text variant="bodySmall" style={{ color: theme.colors.error }}>
+                {commandsError} Pick a different node with “Commands from” above.
+              </Text>
+            </View>
           )}
           <DraggableFlatList data={steps} keyExtractor={(_, i) => `step-${i}`} renderItem={renderStep}
             onDragEnd={({ data }) => setSteps(data)} scrollEnabled={false} />
@@ -522,151 +618,86 @@ const RoutineEditScreen = () => {
           />
         </View>
 
-        {/* Background Section */}
+        {/* Schedule */}
         <View style={styles.section}>
           <View style={styles.bgToggleRow}>
-            <Text variant="titleSmall" style={[styles.sectionTitle, { color: theme.colors.primary, marginBottom: 0 }]}>
-              Run in Background
-            </Text>
-            <HelpIcon text={helpCopy.routines.runInBackground} size={16} />
+            <Text variant="titleSmall" style={[styles.sectionTitle, { color: theme.colors.primary, marginBottom: 0 }]}>Schedule</Text>
             <View style={{ flex: 1 }} />
-            <Switch value={background !== null} onValueChange={toggleBackground} />
+            <Switch value={schedEnabled} onValueChange={setSchedEnabled} />
           </View>
 
-          {background && (
+          {schedEnabled && (
             <View style={styles.bgContent}>
-              {/* Schedule Type */}
               <SegmentedButtons
-                value={background.schedule_type}
-                onValueChange={(v) => updateBg({ schedule_type: v as ScheduleType })}
+                value={schedType}
+                onValueChange={(v) => setSchedType(v as ScheduleType)}
                 density="small"
                 buttons={[
+                  { value: 'cron', label: 'At a time' },
                   { value: 'interval', label: 'Repeating' },
-                  { value: 'cron', label: 'Scheduled' },
                 ]}
               />
 
-              {background.schedule_type === 'interval' ? (
-                <>
-                  {/* Interval picker */}
-                  <View style={styles.bgRow}>
-                    <Text variant="bodyMedium" style={styles.bgLabel}>Check every</Text>
-                    <Menu
-                      visible={intervalMenuVisible}
-                      onDismiss={() => setIntervalMenuVisible(false)}
-                      anchor={
-                        <Button mode="outlined" compact onPress={() => setIntervalMenuVisible(true)}>
-                          {formatMinutes(background.interval_minutes)}
-                        </Button>
-                      }>
-                      {INTERVAL_PRESETS.map((mins) => (
-                        <Menu.Item key={mins} title={formatMinutes(mins)}
-                          onPress={() => { updateBg({ interval_minutes: mins }); setIntervalMenuVisible(false); }} />
-                      ))}
-                    </Menu>
-                  </View>
-                  {/* Run on startup */}
-                  <View style={styles.bgRow}>
-                    <Text variant="bodyMedium" style={styles.bgLabel}>Run on startup</Text>
-                    <Switch value={background.run_on_startup} onValueChange={(v) => updateBg({ run_on_startup: v })} />
-                  </View>
-                </>
+              {schedType === 'interval' ? (
+                <View style={styles.bgRow}>
+                  <Text variant="bodyMedium" style={styles.bgLabel}>Every</Text>
+                  <Menu
+                    visible={intervalMenuVisible}
+                    onDismiss={() => setIntervalMenuVisible(false)}
+                    anchor={
+                      <Button mode="outlined" compact onPress={() => setIntervalMenuVisible(true)}>
+                        {formatMinutes(intervalMinutes)}
+                      </Button>
+                    }>
+                    {INTERVAL_PRESETS.map((mins) => (
+                      <Menu.Item key={mins} title={formatMinutes(mins)}
+                        onPress={() => { setIntervalMinutes(mins); setIntervalMenuVisible(false); }} />
+                    ))}
+                  </Menu>
+                </View>
               ) : (
                 <>
-                  {/* Day presets */}
                   <View style={styles.bgRow}>
-                    <Text variant="bodyMedium" style={styles.bgLabel}>Days</Text>
+                    <Text variant="bodyMedium" style={styles.bgLabel}>Time</Text>
+                    <TextInput mode="outlined" value={cronTime} onChangeText={setCronTime} dense
+                      style={{ width: 100 }} placeholder="08:00" />
                   </View>
                   <SegmentedButtons
-                    value={showCustomDays ? 'custom' : dayPreset}
-                    onValueChange={(v) => setDayPreset(v as DayPreset)}
+                    value={dayPreset === 'custom' ? 'custom' : dayPreset}
+                    onValueChange={(v) => { if (v !== 'custom') setDayPreset(v as DayPreset); }}
                     density="small"
                     buttons={[
-                      { value: 'every_day', label: 'Every day' },
+                      { value: 'every_day', label: 'Daily' },
                       { value: 'weekdays', label: 'Weekdays' },
                       { value: 'weekends', label: 'Weekends' },
                       { value: 'custom', label: 'Custom' },
                     ]}
                   />
-                  {(showCustomDays || dayPreset === 'custom') && (
-                    <View style={styles.dayChips}>
-                      {ALL_DAYS.map((day) => (
-                        <Chip
-                          key={day}
-                          selected={background.days.includes(day)}
-                          onPress={() => toggleDay(day)}
-                          compact
-                          showSelectedOverlay
-                        >
-                          {DAY_LABELS[day]}
-                        </Chip>
-                      ))}
-                    </View>
-                  )}
-                  {/* Time */}
-                  <View style={styles.bgRow}>
-                    <Text variant="bodyMedium" style={styles.bgLabel}>Time</Text>
-                    <TextInput
-                      mode="outlined"
-                      value={background.time}
-                      onChangeText={(v) => updateBg({ time: v })}
-                      dense
-                      style={{ width: 100 }}
-                      placeholder="08:00"
-                    />
+                  <View style={styles.dayChips}>
+                    {ALL_DAYS.map((day) => (
+                      <Chip key={day} selected={cronDays.includes(day)} onPress={() => toggleDay(day)} compact showSelectedOverlay>
+                        {DAY_LABELS[day]}
+                      </Chip>
+                    ))}
                   </View>
                 </>
               )}
 
-              {/* Summary style */}
-              <View style={{ marginTop: 8 }}>
-                <Text variant="bodyMedium" style={styles.bgLabel}>Summary style</Text>
-                <SegmentedButtons
-                  value={background.summary_style}
-                  onValueChange={(v) => updateBg({ summary_style: v as SummaryStyle })}
-                  density="small"
-                  buttons={[
-                    { value: 'compact', label: 'Compact' },
-                    { value: 'detailed', label: 'Detailed' },
-                  ]}
-                />
-                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 2 }}>
-                  Controls how alerts sound when you ask "what's up"
-                </Text>
-              </View>
-
-              {/* Priority */}
-              <View style={{ marginTop: 12 }}>
-                <Text variant="bodyMedium" style={styles.bgLabel}>Priority</Text>
-                <SegmentedButtons
-                  value={String(background.alert_priority)}
-                  onValueChange={(v) => updateBg({ alert_priority: Number(v) as 1 | 2 | 3 })}
-                  density="small"
-                  buttons={[
-                    { value: '1', label: 'Low' },
-                    { value: '2', label: 'Medium' },
-                    { value: '3', label: 'High' },
-                  ]}
-                />
-                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 2 }}>
-                  Higher priority alerts are delivered first
-                </Text>
-              </View>
-
-              {/* TTL */}
-              <View style={[styles.bgRow, { marginTop: 12 }]}>
-                <Text variant="bodyMedium" style={styles.bgLabel}>Alert expires after</Text>
+              {/* Target node */}
+              <View style={[styles.bgRow, { marginTop: 8 }]}>
+                <Text variant="bodyMedium" style={styles.bgLabel}>Run on</Text>
                 <Menu
-                  visible={ttlMenuVisible}
-                  onDismiss={() => setTtlMenuVisible(false)}
+                  visible={nodeMenuVisible}
+                  onDismiss={() => setNodeMenuVisible(false)}
                   anchor={
-                    <Button mode="outlined" compact onPress={() => setTtlMenuVisible(true)}>
-                      {formatMinutes(background.alert_ttl_minutes)}
+                    <Button mode="outlined" compact onPress={() => setNodeMenuVisible(true)} style={{ maxWidth: 220 }}>
+                      {targetNodeLabel}
                     </Button>
                   }>
-                  {TTL_PRESETS.map((mins) => (
-                    <Menu.Item key={mins} title={formatMinutes(mins)}
-                      onPress={() => { updateBg({ alert_ttl_minutes: mins }); setTtlMenuVisible(false); }} />
+                  {nodes.map((n) => (
+                    <Menu.Item key={n.node_id}
+                      title={n.room ? `${n.room} (${n.node_id})` : n.node_id}
+                      onPress={() => { setTargetNodeId(n.node_id); setNodeMenuVisible(false); }} />
                   ))}
                 </Menu>
               </View>
@@ -676,7 +707,14 @@ const RoutineEditScreen = () => {
 
         {/* Save */}
         <View style={styles.section}>
-          <Button mode="contained" onPress={handleSave}>Save & Choose Nodes</Button>
+          {validationError && (
+            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 6 }}>
+              {validationError}
+            </Text>
+          )}
+          <Button mode="contained" onPress={handleSave} disabled={!!validationError || saving} loading={saving}>
+            {isEditing ? 'Save Changes' : 'Create Routine'}
+          </Button>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -686,20 +724,16 @@ const RoutineEditScreen = () => {
 const styles = StyleSheet.create({
   container: { flex: 1, paddingTop: 48 },
   fixedHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingBottom: 4,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    zIndex: 1,
+    flexDirection: 'row', alignItems: 'center', paddingBottom: 4,
+    borderBottomWidth: StyleSheet.hairlineWidth, zIndex: 1,
   },
   scroll: { paddingBottom: 48, paddingTop: 8 },
   section: { paddingHorizontal: 16, marginBottom: 20 },
   sectionTitle: { fontWeight: '600', marginBottom: 8 },
   topInput: { marginBottom: 4 },
   triggerRow: { flexDirection: 'row', alignItems: 'flex-end' },
+  catalogRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
-
-  // Step cards
   stepCard: { borderRadius: 10, borderWidth: 1, padding: 10, marginBottom: 10 },
   stepHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
   dragHandle: { margin: 0, marginRight: 4 },
@@ -710,10 +744,6 @@ const styles = StyleSheet.create({
   commandButton: { alignSelf: 'flex-start' },
   commandButtonLabel: { fontSize: 13 },
   argsContainer: { gap: 2, marginLeft: 4 },
-  argRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  argInput: { flex: 1 },
-
-  // Background section
   bgToggleRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
   bgContent: { gap: 8 },
   bgRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

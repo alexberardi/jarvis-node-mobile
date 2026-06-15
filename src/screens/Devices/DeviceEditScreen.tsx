@@ -80,7 +80,10 @@ const DeviceEditScreen = ({ navigation, route }: Props) => {
       queryClient.invalidateQueries({ queryKey: ['devices', householdId] });
       navigation.goBack();
     } catch (e) {
-      Alert.alert('Error', e instanceof Error ? e.message : 'Failed to save');
+      // Surface the server's reason (e.g. duplicate-name 409) instead of the
+      // generic axios "Request failed with status code 409".
+      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      Alert.alert('Error', detail || (e instanceof Error ? e.message : 'Failed to save'));
     } finally {
       setSaving(false);
     }
