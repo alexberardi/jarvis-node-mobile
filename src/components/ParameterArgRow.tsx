@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import React, { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Dimensions, ScrollView, StyleSheet, View } from 'react-native';
 import {
   ActivityIndicator,
   Checkbox,
@@ -23,6 +23,10 @@ interface Props {
   onUpdate: (updates: Partial<RoutineStepArg>) => void;
   onRemove: () => void;
 }
+
+// Cap dropdown height so long option lists (e.g. all household devices) scroll
+// instead of running off-screen — paper's Menu doesn't scroll on its own.
+const MENU_MAX_HEIGHT = Math.round(Dimensions.get('window').height * 0.4);
 
 /** Relative date keywords the date parameters accept (today/tomorrow/…). */
 const DATE_KEYS = [
@@ -148,9 +152,11 @@ const ConstrainedSelect: React.FC<{
         />
       }
     >
-      {options.map((o, idx) => (
-        <Menu.Item key={`${o}-${idx}`} title={o} onPress={() => { onChange(o); setVisible(false); }} />
-      ))}
+      <ScrollView style={{ maxHeight: MENU_MAX_HEIGHT }} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
+        {options.map((o, idx) => (
+          <Menu.Item key={`${o}-${idx}`} title={o} onPress={() => { onChange(o); setVisible(false); }} />
+        ))}
+      </ScrollView>
       <Menu.Item
         leadingIcon="pencil-outline"
         title="Other…"
