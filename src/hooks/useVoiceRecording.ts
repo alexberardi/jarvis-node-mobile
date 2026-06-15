@@ -9,7 +9,9 @@ import { Audio } from 'expo-av';
 
 interface UseVoiceRecordingReturn {
   isRecording: boolean;
-  startRecording: () => Promise<void>;
+  /** Resolves true if recording started, false if permission was denied or
+   *  setup failed (lets callers distinguish "listening" from "blocked"). */
+  startRecording: () => Promise<boolean>;
   stopRecording: () => Promise<string | null>;
 }
 
@@ -44,12 +46,12 @@ export function useVoiceRecording(): UseVoiceRecordingReturn {
   const [isRecording, setIsRecording] = useState(false);
   const recordingRef = useRef<Audio.Recording | null>(null);
 
-  const startRecording = useCallback(async () => {
+  const startRecording = useCallback(async (): Promise<boolean> => {
     try {
       const { status } = await Audio.requestPermissionsAsync();
       if (status !== 'granted') {
         console.warn('[Voice] Microphone permission denied');
-        return;
+        return false;
       }
 
       await Audio.setAudioModeAsync({
@@ -62,9 +64,11 @@ export function useVoiceRecording(): UseVoiceRecordingReturn {
       await recording.startAsync();
       recordingRef.current = recording;
       setIsRecording(true);
+      return true;
     } catch (err) {
       console.error('[Voice] Failed to start recording:', err);
       setIsRecording(false);
+      return false;
     }
   }, []);
 
