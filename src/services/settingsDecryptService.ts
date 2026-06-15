@@ -24,6 +24,9 @@ export interface CommandParameterEntry {
   required: boolean;
   default_value: string | null;
   enum_values: string[] | null;
+  // Hint to pre-populate this param from a live source instead of free text:
+  // 'devices', 'devices:<domain>', 'rooms', 'news_categories'. Null = none.
+  options_source?: string | null;
 }
 
 /**
