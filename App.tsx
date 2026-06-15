@@ -1,5 +1,5 @@
 import 'react-native-gesture-handler';
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Linking } from 'react-native';
 import { createNavigationContainerRef, NavigationContainer } from '@react-navigation/native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -8,7 +8,7 @@ import { PaperProvider } from 'react-native-paper';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
-import { AuthProvider } from './src/auth/AuthContext';
+import { AuthProvider, useAuth } from './src/auth/AuthContext';
 import ConnectionBanner from './src/components/ConnectionBanner';
 import { HelpProvider } from './src/components/HelpProvider';
 import { DEV_MODE } from './src/config/env';
@@ -16,6 +16,11 @@ import { ConfigProvider } from './src/contexts/ConfigContext';
 import { ConnectionProvider } from './src/contexts/ConnectionContext';
 import { ToolsProvider } from './src/contexts/ToolsContext';
 import { usePushNotifications } from './src/hooks/usePushNotifications';
+import {
+  parseQuickOpenUrl,
+  peekPendingIntent,
+  setPendingIntent,
+} from './src/navigation/deepLinks';
 import RootNavigator from './src/navigation/RootNavigator';
 import { RootStackParamList } from './src/navigation/types';
 import { ThemeProvider, useThemePreference } from './src/theme/ThemeProvider';
@@ -74,8 +79,67 @@ const PushNotificationManager: React.FC<{ children: React.ReactNode }> = ({ chil
   return <>{children}</>;
 };
 
+/**
+ * Routes quick-open deep links (com.jarvis.app://stt | ://chat) to the chat
+ * screen. These back every iOS instant-trigger surface (Action Button,
+ * Control Center, Lock Screen, Back Tap, Shortcuts).
+ *
+ * This manager only *stashes* the intent and brings the chat screen into
+ * focus. HomeScreen is the authoritative consumer (it drains the stash on
+ * focus / via subscription) — so a link that arrives before login is still
+ * honored once HomeScreen mounts after auth, with no dependence on the exact
+ * timing of the Auth->Main navigator swap. Lives inside AuthProvider so it
+ * can observe auth state.
+ */
+const DeepLinkManager: React.FC<{ navReady: boolean }> = ({ navReady }) => {
+  const {
+    state: { isAuthenticated, isLoading },
+  } = useAuth();
+
+  // Ref so the URL event callback (registered once) always sees current state.
+  const canRouteRef = useRef(false);
+  canRouteRef.current = navReady && isAuthenticated && !isLoading;
+
+  // Bring the chat screen into focus for a pending quick-open. HomeScreen
+  // consumes the stashed intent, so this only navigates — if it can't yet
+  // (e.g. still logged out), the intent stays stashed and HomeScreen drains
+  // it when it mounts/focuses after auth.
+  const focusChat = useCallback(() => {
+    if (!canRouteRef.current) return;
+    if (!navigationRef.isReady()) return;
+    if (!peekPendingIntent()) return;
+    (navigationRef as any).navigate('Main', { screen: 'HomeTab' });
+  }, []);
+
+  // Capture incoming URLs: getInitialURL for cold start, the listener for
+  // warm/foreground opens.
+  useEffect(() => {
+    const handle = (url: string | null) => {
+      const intent = parseQuickOpenUrl(url);
+      if (!intent) return;
+      setPendingIntent(intent);
+      focusChat();
+    };
+    Linking.getInitialURL()
+      .then(handle)
+      .catch(() => {});
+    const sub = Linking.addEventListener('url', ({ url }) => handle(url));
+    return () => sub.remove();
+  }, [focusChat]);
+
+  // When nav becomes ready / the user logs in, focus chat for any stashed
+  // intent (covers cross-tab + cold-start-authed; the login race is handled
+  // by HomeScreen draining on focus regardless).
+  useEffect(() => {
+    focusChat();
+  }, [navReady, isAuthenticated, isLoading, focusChat]);
+
+  return null;
+};
+
 const AppContent = () => {
   const { paperTheme, navTheme, isDark } = useThemePreference();
+  const [navReady, setNavReady] = useState(false);
 
   return (
     <PaperProvider theme={paperTheme}>
@@ -85,8 +149,13 @@ const AppContent = () => {
             <AuthProvider>
               <ToolsProvider>
                 <PushNotificationManager>
+                  <DeepLinkManager navReady={navReady} />
                   <HelpProvider>
-                    <NavigationContainer theme={navTheme} ref={navigationRef}>
+                    <NavigationContainer
+                      theme={navTheme}
+                      ref={navigationRef}
+                      onReady={() => setNavReady(true)}
+                    >
                       <ConnectionBanner />
                       <RootNavigator />
                       <StatusBar style={isDark ? 'light' : 'dark'} />
