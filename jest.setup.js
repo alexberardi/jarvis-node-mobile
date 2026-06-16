@@ -5,6 +5,13 @@ jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
 );
 
+// Mock expo-secure-store (OS keychain) — used for JWT auth tokens and K2 keys.
+jest.mock('expo-secure-store', () => ({
+  setItemAsync: jest.fn().mockResolvedValue(undefined),
+  getItemAsync: jest.fn().mockResolvedValue(null),
+  deleteItemAsync: jest.fn().mockResolvedValue(undefined),
+}));
+
 // Mock jarvis-crypto native module
 jest.mock('./modules/jarvis-crypto', () => ({
   argon2id: jest.fn().mockResolvedValue('mock-argon2-hash'),
