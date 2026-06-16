@@ -12,6 +12,7 @@ import {
 
 import type { ExternalDeviceItem } from '../../types/SmartHome';
 import type { DevicesStackParamList } from '../../navigation/types';
+import { safeJsonParse } from '../../utils/safeJson';
 
 type Props = NativeStackScreenProps<DevicesStackParamList, 'ExternalDeviceDetail'>;
 
@@ -31,7 +32,21 @@ const DOMAIN_ICONS: Record<string, string> = {
 
 const ExternalDeviceDetailScreen = ({ navigation, route }: Props) => {
   const theme = useTheme();
-  const device: ExternalDeviceItem = JSON.parse(route.params.device);
+  const device = safeJsonParse<ExternalDeviceItem | null>(route.params.device, null);
+
+  if (!device) {
+    return (
+      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+        <Appbar.Header>
+          <Appbar.BackAction onPress={() => navigation.goBack()} />
+          <Appbar.Content title="Device" />
+        </Appbar.Header>
+        <View style={{ padding: 24 }}>
+          <Text>Couldn't load this device.</Text>
+        </View>
+      </View>
+    );
+  }
 
   const icon = DOMAIN_ICONS[device.domain] || 'devices';
 

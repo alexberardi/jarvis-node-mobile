@@ -24,6 +24,7 @@ import {
   Room,
 } from '../../types/SmartHome';
 import { SmartHomeSetupParamList } from '../../navigation/types';
+import { safeJsonParse } from '../../utils/safeJson';
 
 type Props = NativeStackScreenProps<
   SmartHomeSetupParamList,
@@ -42,8 +43,8 @@ const DeviceRoomAssignmentScreen = ({ navigation, route }: Props) => {
     local_ip?: string;
     mac_address?: string;
     cloud_id?: string;
-  })[] = JSON.parse(route.params.selectedDevices);
-  const haAreas: HAArea[] = JSON.parse(route.params.areas);
+  })[] = safeJsonParse(route.params.selectedDevices, []);
+  const haAreas: HAArea[] = safeJsonParse(route.params.areas, []);
 
   const { state: authState } = useAuth();
   const householdId = authState.activeHouseholdId!;
