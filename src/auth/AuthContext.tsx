@@ -15,6 +15,7 @@ import { useConfig } from '../contexts/ConfigContext';
 
 import { configureApiClient } from '../api/apiClient';
 import authApi from '../api/authApi';
+import { deleteAccount as deleteAccountApi } from '../api/accountApi';
 
 export interface AuthUser {
   id: number;
@@ -76,6 +77,7 @@ type AuthContextValue = {
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, username?: string, inviteCode?: string) => Promise<void>;
   logout: () => Promise<void>;
+  deleteAccount: (password: string) => Promise<void>;
   refreshAccessToken: () => Promise<string | null>;
   bootstrapAuth: () => Promise<void>;
   fetchHouseholds: () => Promise<Household[]>;
@@ -177,6 +179,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       isLoading: false,
     });
   }, [queryClient, rediscover]);
+
+  const deleteAccount = useCallback(
+    async (password: string) => {
+      // jarvis-auth orchestrates the full deletion (guards + downstream
+      // purge to CC/notifications). We only call it once. A successful
+      // 204 means the account is gone server-side, so we MUST wipe local
+      // state — anything short of 204 throws and leaves the user logged in.
+      await deleteAccountApi(password, stateRef.current.accessToken ?? '');
+
+      // Mirror logout(): wipe per-user / per-environment caches, then drop
+      // to the unauthenticated state (RootNavigator routes to AuthNavigator).
+      // If clearUserData throws, still force the unauthenticated state in a
+      // finally — never leave the user authenticated against a deleted account.
+      try {
+        await clearUserData({ queryClient, rediscover });
+      } finally {
+        setState({
+          ...initialState,
+          isLoading: false,
+        });
+      }
+    },
+    [queryClient, rediscover],
+  );
 
   // Wire up the API client interceptor so all apiClient requests
   // automatically attach the current token and retry on 401.
@@ -324,13 +350,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       login,
       register,
       logout,
+      deleteAccount,
       refreshAccessToken,
       bootstrapAuth,
       fetchHouseholds,
       setActiveHousehold,
       switchHousehold,
     }),
-    [bootstrapAuth, fetchHouseholds, login, logout, refreshAccessToken, register, setActiveHousehold, switchHousehold, state],
+    [bootstrapAuth, deleteAccount, fetchHouseholds, login, logout, refreshAccessToken, register, setActiveHousehold, switchHousehold, state],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

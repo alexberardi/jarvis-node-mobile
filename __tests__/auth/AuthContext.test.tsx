@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { AuthProvider, useAuth } from '../../src/auth/AuthContext';
 import authApi from '../../src/api/authApi';
+import { deleteAccount as deleteAccountApi } from '../../src/api/accountApi';
 
 // Mock authApi
 jest.mock('../../src/api/authApi', () => ({
@@ -12,8 +13,15 @@ jest.mock('../../src/api/authApi', () => ({
   default: {
     post: jest.fn(),
     get: jest.fn(),
+    delete: jest.fn(),
     defaults: { baseURL: '' },
   },
+}));
+
+// Mock accountApi — deleteAccount is exercised directly via useAuth().deleteAccount
+jest.mock('../../src/api/accountApi', () => ({
+  __esModule: true,
+  deleteAccount: jest.fn(),
 }));
 
 // AuthProvider depends on ConfigContext for `rediscover`. Mock it so we don't
@@ -229,6 +237,113 @@ describe('AuthContext', () => {
       expect(result.current.state.user).toBeNull();
       expect(result.current.state.accessToken).toBeNull();
       expect(AsyncStorage.multiRemove).toHaveBeenCalled();
+    });
+  });
+
+  describe('deleteAccount', () => {
+    const authedStorage = () => {
+      const storedUser = { id: 1, email: 'test@example.com' };
+      (AsyncStorage.multiGet as jest.Mock).mockResolvedValue([
+        ['@jarvis/access_token', 'access-token'],
+        ['@jarvis/refresh_token', 'refresh-token'],
+        ['@jarvis/user', JSON.stringify(storedUser)],
+        ['@jarvis/active_household_id', null],
+      ]);
+      (authApi.get as jest.Mock).mockResolvedValue({ data: [] });
+    };
+
+    it('calls the API with the current token, then wipes local state on success (204)', async () => {
+      authedStorage();
+      (deleteAccountApi as jest.Mock).mockResolvedValue(undefined);
+
+      const { result } = renderHook(() => useAuth(), { wrapper });
+
+      await waitFor(() => {
+        expect(result.current.state.isAuthenticated).toBe(true);
+      });
+
+      await act(async () => {
+        await result.current.deleteAccount('my-password');
+      });
+
+      // API called with password + the in-context access token
+      expect(deleteAccountApi).toHaveBeenCalledWith('my-password', 'access-token');
+      // clearUserData ran (it always enumerates storage via getAllKeys)
+      expect(AsyncStorage.getAllKeys).toHaveBeenCalled();
+      // Auth state reset to unauthenticated → RootNavigator drops to AuthNavigator
+      expect(result.current.state.isAuthenticated).toBe(false);
+      expect(result.current.state.user).toBeNull();
+      expect(result.current.state.accessToken).toBeNull();
+      expect(result.current.state.isLoading).toBe(false);
+    });
+
+    it('surfaces "Incorrect password" on 401 and does NOT wipe (still authenticated)', async () => {
+      authedStorage();
+      (deleteAccountApi as jest.Mock).mockRejectedValue(new Error('Incorrect password'));
+
+      const { result } = renderHook(() => useAuth(), { wrapper });
+
+      await waitFor(() => {
+        expect(result.current.state.isAuthenticated).toBe(true);
+      });
+
+      (AsyncStorage.getAllKeys as jest.Mock).mockClear();
+
+      await expect(
+        act(async () => {
+          await result.current.deleteAccount('wrong-password');
+        }),
+      ).rejects.toThrow('Incorrect password');
+
+      // No local wipe — only a 204 wipes; a 401 leaves the user logged in
+      expect(AsyncStorage.getAllKeys).not.toHaveBeenCalled();
+      expect(result.current.state.isAuthenticated).toBe(true);
+      expect(result.current.state.accessToken).toBe('access-token');
+    });
+
+    it('surfaces the server detail on 409 and does NOT wipe (still authenticated)', async () => {
+      authedStorage();
+      (deleteAccountApi as jest.Mock).mockRejectedValue(
+        new Error('Cannot delete account with nodes registered to it'),
+      );
+
+      const { result } = renderHook(() => useAuth(), { wrapper });
+
+      await waitFor(() => {
+        expect(result.current.state.isAuthenticated).toBe(true);
+      });
+
+      (AsyncStorage.getAllKeys as jest.Mock).mockClear();
+
+      await expect(
+        act(async () => {
+          await result.current.deleteAccount('my-password');
+        }),
+      ).rejects.toThrow('Cannot delete account with nodes registered to it');
+
+      expect(AsyncStorage.getAllKeys).not.toHaveBeenCalled();
+      expect(result.current.state.isAuthenticated).toBe(true);
+    });
+
+    it('forces unauthenticated state even if clearUserData throws after a successful 204', async () => {
+      authedStorage();
+      (deleteAccountApi as jest.Mock).mockResolvedValue(undefined);
+      // Make the local wipe blow up; deleteAccount must still drop auth state.
+      (AsyncStorage.getAllKeys as jest.Mock).mockRejectedValueOnce(new Error('storage offline'));
+
+      const { result } = renderHook(() => useAuth(), { wrapper });
+
+      await waitFor(() => {
+        expect(result.current.state.isAuthenticated).toBe(true);
+      });
+
+      await act(async () => {
+        // clearUserData's failure is swallowed by the finally; deleteAccount resolves
+        await result.current.deleteAccount('my-password').catch(() => {});
+      });
+
+      expect(result.current.state.isAuthenticated).toBe(false);
+      expect(result.current.state.accessToken).toBeNull();
     });
   });
 
