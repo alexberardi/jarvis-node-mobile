@@ -54,11 +54,10 @@ type RegisterResponse = AuthResponse & {
 };
 
 import {
-  ACCESS_TOKEN_KEY,
-  REFRESH_TOKEN_KEY,
   USER_KEY,
   ACTIVE_HOUSEHOLD_KEY,
 } from '../config/storageKeys';
+import { getTokens, setTokens, setAccessToken } from '../services/tokenStorage';
 
 const initialState: AuthState = {
   user: null,
@@ -119,10 +118,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Scope K2 storage to current user so different users on the
       // same device cannot read each other's node encryption keys.
       setK2UserId(String(user.id));
-      await AsyncStorage.multiSet([
-        [ACCESS_TOKEN_KEY, accessToken],
-        [REFRESH_TOKEN_KEY, refreshToken],
-        [USER_KEY, JSON.stringify(user)],
+      // Tokens go to the OS keychain; the (non-secret) user blob to AsyncStorage.
+      await Promise.all([
+        setTokens(accessToken, refreshToken),
+        AsyncStorage.setItem(USER_KEY, JSON.stringify(user)),
       ]);
     },
     [],
@@ -212,10 +211,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       getRefreshToken: () => stateRef.current.refreshToken,
       updateTokens: (access: string, refresh: string) => {
         setState((prev) => ({ ...prev, accessToken: access, refreshToken: refresh, isAuthenticated: true }));
-        AsyncStorage.multiSet([
-          [ACCESS_TOKEN_KEY, access],
-          [REFRESH_TOKEN_KEY, refresh],
-        ]);
+        void setTokens(access, refresh);
       },
       onForceLogout: () => {
         logout();
@@ -238,10 +234,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         refreshToken: newRefresh,
         isAuthenticated: true,
       }));
-      await AsyncStorage.multiSet([
-        [ACCESS_TOKEN_KEY, newAccess],
-        [REFRESH_TOKEN_KEY, newRefresh],
-      ]);
+      await setTokens(newAccess, newRefresh);
       return newAccess;
     } catch (error) {
       console.debug('[AuthContext] Token refresh failed:', error instanceof Error ? error.message : error);
@@ -272,7 +265,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         { headers: { Authorization: `Bearer ${stateRef.current.accessToken}` } },
       );
       setState((prev) => ({ ...prev, accessToken: res.data.access_token }));
-      await AsyncStorage.setItem(ACCESS_TOKEN_KEY, res.data.access_token);
+      await setAccessToken(res.data.access_token);
       await setActiveHousehold(res.data.household_id);
     },
     [setActiveHousehold],
@@ -280,14 +273,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const bootstrapAuth = useCallback(async () => {
     try {
-      const [storedAccess, storedRefresh, storedUser, storedHouseholdId] = await AsyncStorage.multiGet([
-        ACCESS_TOKEN_KEY,
-        REFRESH_TOKEN_KEY,
+      // Tokens come from the keychain (migrating any legacy AsyncStorage copy);
+      // the user blob and active household id stay in AsyncStorage.
+      const { accessToken, refreshToken } = await getTokens();
+      const [storedUser, storedHouseholdId] = await AsyncStorage.multiGet([
         USER_KEY,
         ACTIVE_HOUSEHOLD_KEY,
       ]);
-      const accessToken = storedAccess[1];
-      const refreshToken = storedRefresh[1];
       const user = parseUser(storedUser[1]);
       const activeHouseholdId = storedHouseholdId[1] || null;
 

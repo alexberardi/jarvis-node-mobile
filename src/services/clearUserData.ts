@@ -12,16 +12,19 @@
  * userId — is wiped. Triggers a fresh service discovery so the app
  * immediately reconnects against the new environment.
  *
- * SecureStore K2 keys (`jarvis_k2_u{userId}_{nodeId}`) are intentionally
- * NOT deleted: they are scoped by userId and unreachable to any other
- * user. Deleting them would force re-provisioning of the current user's
- * own nodes if they log back in on the same device.
+ * SecureStore holds two kinds of secret: the JWT auth tokens (cleared here
+ * via clearTokens) and the K2 node-encryption keys
+ * (`jarvis_k2_u{userId}_{nodeId}`). The K2 keys are intentionally NOT deleted:
+ * they are scoped by userId and unreachable to any other user. Deleting them
+ * would force re-provisioning of the current user's own nodes if they log back
+ * in on the same device.
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { QueryClient } from '@tanstack/react-query';
 
 import { setK2UserId } from './k2Service';
+import { clearTokens } from './tokenStorage';
 
 const PRESERVE_KEYS = new Set<string>([
   '@jarvis/theme',
@@ -49,6 +52,11 @@ export async function clearUserData(
   if (keysToRemove.length > 0) {
     await AsyncStorage.multiRemove(keysToRemove);
   }
+
+  // Auth tokens live in the OS keychain (SecureStore), not AsyncStorage, so
+  // the wipe above doesn't reach them — clear them explicitly. K2 keys are
+  // left intact (see below).
+  await clearTokens();
 
   setK2UserId(null);
 

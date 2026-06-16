@@ -7,9 +7,12 @@
 
 // ── AsyncStorage keys ────────────────────────────────────────────────────
 
-/** JWT access token */
+/**
+ * Legacy JWT token keys. Tokens now live in the OS keychain (see
+ * services/tokenStorage.ts); these remain only so older AsyncStorage-stored
+ * tokens can be migrated into the keychain on first launch after upgrade.
+ */
 export const ACCESS_TOKEN_KEY = '@jarvis/access_token';
-/** JWT refresh token */
 export const REFRESH_TOKEN_KEY = '@jarvis/refresh_token';
 /** Serialized user object */
 export const USER_KEY = '@jarvis/user';
