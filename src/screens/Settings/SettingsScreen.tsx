@@ -9,6 +9,7 @@ import {
   Button,
   Card,
   Chip,
+  Dialog,
   Divider,
   HelperText,
   Icon,
@@ -24,6 +25,7 @@ import {
 
 import { useAuth } from '../../auth/AuthContext';
 import authApi from '../../api/authApi';
+import SafeButton from '../../components/SafeButton';
 import { HelpIcon } from '../../components/HelpIcon';
 import { HelpProvider } from '../../components/HelpProvider';
 import { useConfig } from '../../contexts/ConfigContext';
@@ -53,7 +55,7 @@ const THEME_BUTTONS = [
 const SettingsScreen = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const theme = useTheme();
-  const { state: authState, logout, switchHousehold, fetchHouseholds } = useAuth();
+  const { state: authState, logout, deleteAccount, switchHousehold, fetchHouseholds } = useAuth();
   const { config, isUsingCloud, manualUrl, rediscover, setManualUrl } =
     useConfig();
   const queryClient = useQueryClient();
@@ -72,6 +74,35 @@ const SettingsScreen = () => {
   // Household create flow
   const [newHouseholdName, setNewHouseholdName] = useState('');
   const [creatingHousehold, setCreatingHousehold] = useState(false);
+
+  // Delete account flow
+  const [showDeleteAccount, setShowDeleteAccount] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+
+  const closeDeleteDialog = useCallback(() => {
+    if (deletingAccount) return;
+    setShowDeleteAccount(false);
+    setDeletePassword('');
+    setDeleteConfirmText('');
+    setDeleteError('');
+  }, [deletingAccount]);
+
+  const handleDeleteAccount = useCallback(async () => {
+    setDeletingAccount(true);
+    setDeleteError('');
+    try {
+      // On success (204) the auth-state reset inside deleteAccount drops the
+      // app to the AuthNavigator, so there's nothing to clean up here.
+      await deleteAccount(deletePassword);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Could not complete deletion. Please try again.';
+      setDeleteError(msg);
+      setDeletingAccount(false);
+    }
+  }, [deleteAccount, deletePassword]);
 
   const handleValidateJoin = useCallback(async () => {
     const code = joinCode.trim();
@@ -286,6 +317,26 @@ const SettingsScreen = () => {
           >
             Log Out
           </Button>
+
+          {/* Danger Zone — Delete Account */}
+          <View style={[styles.dangerZone, { borderColor: theme.colors.error }]}>
+            <Text variant="titleSmall" style={{ color: theme.colors.error, marginBottom: 8 }}>
+              Danger Zone
+            </Text>
+            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 12 }}>
+              Permanently delete your account and all associated data. This cannot be undone.
+            </Text>
+            <Button
+              mode="outlined"
+              textColor={theme.colors.error}
+              style={{ borderColor: theme.colors.error, alignSelf: 'flex-start' }}
+              onPress={() => setShowDeleteAccount(true)}
+              icon="trash-can-outline"
+              testID="delete-account-button"
+            >
+              Delete Account
+            </Button>
+          </View>
         </Card.Content>
       </Card>
 
@@ -684,6 +735,67 @@ const SettingsScreen = () => {
       </Text>
 
     </ScrollView>
+
+    {/* Delete Account confirmation dialog */}
+    <Portal>
+      <Dialog visible={showDeleteAccount} onDismiss={closeDeleteDialog} testID="delete-account-dialog">
+        <Dialog.Title>Delete Account</Dialog.Title>
+        <Dialog.Content>
+          <Text variant="bodyMedium" style={{ marginBottom: 16, color: theme.colors.onSurfaceVariant }}>
+            This permanently deletes your account and all associated data. This action cannot be undone.
+          </Text>
+
+          <TextInput
+            mode="outlined"
+            label="Password"
+            value={deletePassword}
+            onChangeText={(t) => { setDeletePassword(t); setDeleteError(''); }}
+            secureTextEntry
+            autoCapitalize="none"
+            autoCorrect={false}
+            disabled={deletingAccount}
+            style={{ marginBottom: 12 }}
+            testID="delete-account-password"
+          />
+
+          <Text variant="bodySmall" style={{ marginBottom: 4, color: theme.colors.onSurfaceVariant }}>
+            Type DELETE to confirm.
+          </Text>
+          <TextInput
+            mode="outlined"
+            label="Confirm"
+            value={deleteConfirmText}
+            onChangeText={(t) => { setDeleteConfirmText(t); setDeleteError(''); }}
+            autoCapitalize="characters"
+            autoCorrect={false}
+            disabled={deletingAccount}
+            placeholder="DELETE"
+            testID="delete-account-confirm"
+          />
+
+          {deleteError ? (
+            <HelperText type="error" visible style={{ marginTop: 4 }}>
+              {deleteError}
+            </HelperText>
+          ) : null}
+
+          {deletingAccount && (
+            <ActivityIndicator size="small" style={{ marginTop: 12 }} testID="delete-account-spinner" />
+          )}
+        </Dialog.Content>
+        <Dialog.Actions>
+          <Button onPress={closeDeleteDialog} disabled={deletingAccount}>Cancel</Button>
+          <SafeButton
+            onPress={handleDeleteAccount}
+            disabled={deletingAccount || deletePassword.length === 0 || deleteConfirmText !== 'DELETE'}
+            textColor={theme.colors.error}
+            testID="delete-account-confirm-button"
+          >
+            Delete Account
+          </SafeButton>
+        </Dialog.Actions>
+      </Dialog>
+    </Portal>
     </HelpProvider>
     </Portal.Host>
   );
@@ -705,6 +817,11 @@ const styles = StyleSheet.create({
   sectionTitle: { fontWeight: '600', marginBottom: 8 },
   label: { opacity: 0.7, marginBottom: 8 },
   logoutButton: { alignSelf: 'flex-start', marginTop: 4 },
+  dangerZone: {
+    marginTop: 20,
+    paddingTop: 12,
+    borderTopWidth: 1,
+  },
   statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
