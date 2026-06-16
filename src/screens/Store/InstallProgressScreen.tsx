@@ -18,6 +18,7 @@ import { useToolsVersion } from '../../contexts/ToolsContext';
 import { StoreStackParamList } from '../../navigation/types';
 import type { InstallStatus, InstallStatusValue } from '../../types/Package';
 import { installStatusLabel, isTerminalInstallStatus } from '../../utils/packageStatus';
+import { safeJsonParse } from '../../utils/safeJson';
 
 type Nav = NativeStackNavigationProp<StoreStackParamList>;
 type Route = RouteProp<StoreStackParamList, 'InstallProgress'>;
@@ -41,9 +42,12 @@ const InstallProgressScreen = () => {
   const isTestInstall = mode === 'test';
   const isCCProvider = mode === 'cc-provider';
 
+  const parsedInstalls = safeJsonParse<any[]>(route.params.installs, []);
   const initialInstalls: InstallEntry[] = isCCProvider
-    ? [{ requestId: JSON.parse(route.params.installs)[0], nodeId: 'cc', nodeName: 'Command Center' }]
-    : JSON.parse(route.params.installs);
+    ? parsedInstalls.length > 0
+      ? [{ requestId: parsedInstalls[0], nodeId: 'cc', nodeName: 'Command Center' }]
+      : []
+    : parsedInstalls;
 
   const [installs, setInstalls] = useState<InstallEntry[]>(initialInstalls);
   const [statuses, setStatuses] = useState<Map<string, InstallStatus>>(new Map());

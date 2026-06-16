@@ -7,6 +7,7 @@ import { Button, Checkbox, Icon, List, Text, useTheme } from 'react-native-paper
 import { requestInstall } from '../../api/packageInstallApi';
 import { StoreStackParamList } from '../../navigation/types';
 import { compareSemver } from '../../utils/semver';
+import { safeJsonParse } from '../../utils/safeJson';
 
 type Nav = NativeStackNavigationProp<StoreStackParamList>;
 type Route = RouteProp<StoreStackParamList, 'NodePickerSheet'>;
@@ -23,9 +24,10 @@ const NodePickerSheet = () => {
   const route = useRoute<Route>();
   const theme = useTheme();
 
-  const nodes: NodeInfo[] = JSON.parse(route.params.nodes);
-  const installedVersions: Record<string, string | null> = JSON.parse(
+  const nodes: NodeInfo[] = safeJsonParse(route.params.nodes, []);
+  const installedVersions: Record<string, string | null> = safeJsonParse(
     route.params.installedVersions,
+    {},
   );
   const { commandName, githubRepoUrl, gitTag, latestVersion, packageName } = route.params;
 

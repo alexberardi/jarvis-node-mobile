@@ -10,6 +10,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { AuthProvider, useAuth } from './src/auth/AuthContext';
 import ConnectionBanner from './src/components/ConnectionBanner';
+import ErrorBoundary from './src/components/ErrorBoundary';
 import { HelpProvider } from './src/components/HelpProvider';
 import { DEV_MODE } from './src/config/env';
 import { ConfigProvider } from './src/contexts/ConfigContext';
@@ -25,7 +26,18 @@ import RootNavigator from './src/navigation/RootNavigator';
 import { RootStackParamList } from './src/navigation/types';
 import { ThemeProvider, useThemePreference } from './src/theme/ThemeProvider';
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // A down self-hosted server should fail fast, not retry 3x (~30s of
+      // hanging) on every screen. One retry rides out a transient blip;
+      // disabling refetch-on-focus avoids a thundering re-fetch each time
+      // the app returns to the foreground.
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
 if (__DEV__) {
@@ -175,9 +187,11 @@ export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <ThemeProvider>
-          <AppContent />
-        </ThemeProvider>
+        <ErrorBoundary>
+          <ThemeProvider>
+            <AppContent />
+          </ThemeProvider>
+        </ErrorBoundary>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
