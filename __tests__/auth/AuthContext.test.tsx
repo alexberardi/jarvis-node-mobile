@@ -1,6 +1,7 @@
 import React from 'react';
 import { renderHook, act, waitFor } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { AuthProvider, useAuth } from '../../src/auth/AuthContext';
@@ -52,12 +53,30 @@ const wrapper = ({ children }: { children: React.ReactNode }) => {
   );
 };
 
+// Tokens live in the OS keychain (SecureStore). Make getItemAsync return the
+// given access/refresh for the keychain keys tokenStorage uses.
+const setSecureTokens = (
+  access = 'access-token',
+  refresh = 'refresh-token',
+): void => {
+  (SecureStore.getItemAsync as jest.Mock).mockImplementation((key: string) =>
+    Promise.resolve(
+      key === 'jarvis_access_token'
+        ? access
+        : key === 'jarvis_refresh_token'
+          ? refresh
+          : null,
+    ),
+  );
+};
+
 describe('AuthContext', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // Default: keychain empty (unauthenticated). User blob + active household
+    // stay in AsyncStorage and bootstrap reads them via multiGet([USER, HH]).
+    (SecureStore.getItemAsync as jest.Mock).mockResolvedValue(null);
     (AsyncStorage.multiGet as jest.Mock).mockResolvedValue([
-      ['@jarvis/access_token', null],
-      ['@jarvis/refresh_token', null],
       ['@jarvis/user', null],
       ['@jarvis/active_household_id', null],
     ]);
@@ -98,9 +117,8 @@ describe('AuthContext', () => {
     it('should restore auth state from storage', async () => {
       const storedUser = { id: 1, email: 'test@example.com', username: 'testuser' };
 
+      setSecureTokens('stored-access-token', 'stored-refresh-token');
       (AsyncStorage.multiGet as jest.Mock).mockResolvedValue([
-        ['@jarvis/access_token', 'stored-access-token'],
-        ['@jarvis/refresh_token', 'stored-refresh-token'],
         ['@jarvis/user', JSON.stringify(storedUser)],
         ['@jarvis/active_household_id', 'household-1'],
       ]);
@@ -158,7 +176,15 @@ describe('AuthContext', () => {
       expect(result.current.state.isAuthenticated).toBe(true);
       expect(result.current.state.user).toEqual({ id: 1, email: 'user@example.com' });
       expect(result.current.state.accessToken).toBe('new-access-token');
-      expect(AsyncStorage.multiSet).toHaveBeenCalled();
+      // Tokens are persisted to the OS keychain (not AsyncStorage).
+      expect(SecureStore.setItemAsync).toHaveBeenCalledWith(
+        'jarvis_access_token',
+        'new-access-token',
+      );
+      expect(SecureStore.setItemAsync).toHaveBeenCalledWith(
+        'jarvis_refresh_token',
+        'new-refresh-token',
+      );
     });
 
     it('should propagate error on failed login', async () => {
@@ -215,9 +241,8 @@ describe('AuthContext', () => {
     it('should clear auth state and storage', async () => {
       // First, set up authenticated state
       const storedUser = { id: 1, email: 'test@example.com' };
+      setSecureTokens('access-token', 'refresh-token');
       (AsyncStorage.multiGet as jest.Mock).mockResolvedValue([
-        ['@jarvis/access_token', 'access-token'],
-        ['@jarvis/refresh_token', 'refresh-token'],
         ['@jarvis/user', JSON.stringify(storedUser)],
         ['@jarvis/active_household_id', null],
       ]);
@@ -237,15 +262,17 @@ describe('AuthContext', () => {
       expect(result.current.state.user).toBeNull();
       expect(result.current.state.accessToken).toBeNull();
       expect(AsyncStorage.multiRemove).toHaveBeenCalled();
+      // Keychain tokens cleared too.
+      expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('jarvis_access_token');
+      expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('jarvis_refresh_token');
     });
   });
 
   describe('deleteAccount', () => {
     const authedStorage = () => {
       const storedUser = { id: 1, email: 'test@example.com' };
+      setSecureTokens('access-token', 'refresh-token');
       (AsyncStorage.multiGet as jest.Mock).mockResolvedValue([
-        ['@jarvis/access_token', 'access-token'],
-        ['@jarvis/refresh_token', 'refresh-token'],
         ['@jarvis/user', JSON.stringify(storedUser)],
         ['@jarvis/active_household_id', null],
       ]);
@@ -270,6 +297,8 @@ describe('AuthContext', () => {
       expect(deleteAccountApi).toHaveBeenCalledWith('my-password', 'access-token');
       // clearUserData ran (it always enumerates storage via getAllKeys)
       expect(AsyncStorage.getAllKeys).toHaveBeenCalled();
+      // ...and cleared the keychain tokens too.
+      expect(SecureStore.deleteItemAsync).toHaveBeenCalled();
       // Auth state reset to unauthenticated → RootNavigator drops to AuthNavigator
       expect(result.current.state.isAuthenticated).toBe(false);
       expect(result.current.state.user).toBeNull();
