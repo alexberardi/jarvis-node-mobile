@@ -63,7 +63,7 @@ jarvis-node-mobile/
 - **React Native Paper** (Material Design UI)
 - **React Query 5** (data fetching)
 - **expo-camera** (QR scanning)
-- **expo-secure-store** (token storage)
+- **expo-secure-store** (K2 node-encryption keys only)
 
 ## Key Features
 
@@ -71,7 +71,7 @@ jarvis-node-mobile/
 - **WiFi Configuration**: Push WiFi credentials to headless nodes
 - **Home Assistant**: Device discovery and control
 - **Config Discovery**: Auto-find jarvis-config-service on local network
-- **Secure Storage**: Tokens stored in platform keychain
+- **Secure Storage**: JWTs (access + refresh) live in AsyncStorage (`src/config/storageKeys.ts`) and are cleared by `src/services/clearUserData.ts`; only K2 node-encryption keys use SecureStore (platform keychain)
 
 ## Environment
 
