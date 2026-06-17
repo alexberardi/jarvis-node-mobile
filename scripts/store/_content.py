@@ -2,7 +2,13 @@
 
 Edit this file to update store listings; both push scripts will pick up the
 changes on the next run. Keep `STORE-LISTING.md` aligned with this content.
+
+The demo-account password for store review is read from the
+``DEMO_ACCOUNT_PASSWORD`` env var so it is never committed. Export it before
+running the review-submission scripts (``push_asc.py``).
 """
+
+import os
 
 # ── Shared across stores ─────────────────────────────────────────────────────
 SUBTITLE = "Voice and home, fully private"
@@ -69,7 +75,10 @@ Email alex@alexberardi.net or open an issue on GitHub."""
 # ── App Store Review ─────────────────────────────────────────────────────────
 DEMO_CONFIG_URL = "https://config.jarvisautomation.io"
 DEMO_ACCOUNT_EMAIL = "demo@jarvisautomation.io"
-DEMO_ACCOUNT_PASSWORD = "Demo1234"
+# Read from env so the live demo credential is never committed. Unrelated
+# imports (e.g. SHOTS) still resolve; the review-push scripts that actually
+# submit this value require the env var to be set.
+DEMO_ACCOUNT_PASSWORD = os.environ.get("DEMO_ACCOUNT_PASSWORD", "")
 
 REVIEW_NOTES = f"""Jarvis Automation is the mobile client for a self-hosted home voice assistant. It pairs Raspberry Pi voice nodes, controls smart-home devices, and provides a chat-style interface to a backend running on the user's own server.
 
