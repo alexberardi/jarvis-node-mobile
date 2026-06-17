@@ -3,11 +3,16 @@
 Credential paths default to ~/Downloads but can be overridden with env vars:
 
     JARVIS_ASC_KEY_PATH      Path to AuthKey_<id>.p8 (App Store Connect API key)
-    JARVIS_ASC_KEY_ID        Key ID matching the .p8 (default: 3BN4298AK5)
-    JARVIS_ASC_ISSUER_ID     Issuer ID from ASC → Users and Access → Integrations
     JARVIS_PLAY_SA_PATH      Path to the Play service account JSON
 
-The App ID, package name, and asset paths are static identifiers and stay in code.
+App Store Connect identifiers are required env vars (no defaults — these are
+account-specific and must not be committed):
+
+    JARVIS_ASC_APP_ID        Numeric app ID (ASC → App → App Information)
+    JARVIS_ASC_KEY_ID        Key ID matching the .p8
+    JARVIS_ASC_ISSUER_ID     Issuer ID from ASC → Users and Access → Integrations
+
+The package name and asset paths are static identifiers and stay in code.
 """
 from __future__ import annotations
 
@@ -26,18 +31,29 @@ SHOTS_DIR = REPO / "screenshots" / "output"
 STORE_DIR = ASSETS_DIR / "store"
 
 # ── App Store Connect ────────────────────────────────────────────────────────
-ASC_APP_ID = "6760924901"
+def _require_env(name: str) -> str:
+    """Return a required env var or raise a clear, actionable error."""
+    value = os.environ.get(name)
+    if not value:
+        raise RuntimeError(
+            f"{name} is required but not set. Export it before running the "
+            f"store-publish scripts (these identifiers are account-specific "
+            f"and are not committed)."
+        )
+    return value
+
+
 ASC_API_BASE = "https://api.appstoreconnect.apple.com/v1"
+
+ASC_APP_ID = _require_env("JARVIS_ASC_APP_ID")
+ASC_KEY_ID = _require_env("JARVIS_ASC_KEY_ID")
+ASC_ISSUER_ID = _require_env("JARVIS_ASC_ISSUER_ID")
 
 ASC_KEY_PATH = Path(
     os.environ.get(
         "JARVIS_ASC_KEY_PATH",
-        str(Path.home() / "Downloads" / "AuthKey_3BN4298AK5.p8"),
+        str(Path.home() / "Downloads" / f"AuthKey_{ASC_KEY_ID}.p8"),
     )
-)
-ASC_KEY_ID = os.environ.get("JARVIS_ASC_KEY_ID", "3BN4298AK5")
-ASC_ISSUER_ID = os.environ.get(
-    "JARVIS_ASC_ISSUER_ID", "69a6de97-6aaf-47e3-e053-5b8c7c11a4d1"
 )
 
 # ── Google Play ──────────────────────────────────────────────────────────────

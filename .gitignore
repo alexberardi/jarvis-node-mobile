@@ -32,7 +32,13 @@ yarn-error.*
 *.pem
 
 # local env files
+.env
 .env*.local
+
+# internal ops docs (not part of the public tree)
+/STORE-LISTING.md
+/TODO-AUTH-PASSTHROUGH.md
+/prds/
 
 # typescript
 *.tsbuildinfo
