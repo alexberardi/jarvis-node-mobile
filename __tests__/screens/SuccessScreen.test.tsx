@@ -25,15 +25,26 @@ const mockNavigation = {
 
 const mockResetContext = jest.fn();
 
+// Mutable so a test can exercise the "no node_id" guard.
+let mockProvisioningResult: any;
 jest.mock('../../src/contexts/ProvisioningContext', () => ({
   useProvisioningContext: () => ({
-    provisioningResult: {
-      success: true,
-      node_id: 'jarvis-mock-1234',
-      room_name: 'kitchen',
-      message: 'Node provisioned successfully',
-    },
+    provisioningResult: mockProvisioningResult,
     reset: mockResetContext,
+  }),
+}));
+
+jest.mock('../../src/auth/AuthContext', () => ({
+  useAuth: () => ({ state: { activeHouseholdId: 'hh-1' } }),
+}));
+
+const mockMarkPending = jest.fn();
+jest.mock('../../src/contexts/PendingNodeContext', () => ({
+  usePendingNode: () => ({
+    pendingNodeId: null,
+    pendingHouseholdId: null,
+    markPending: mockMarkPending,
+    clearPending: jest.fn(),
   }),
 }));
 
@@ -44,6 +55,12 @@ const wrapper = ({ children }: { children: React.ReactNode }) => (
 describe('SuccessScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockProvisioningResult = {
+      success: true,
+      node_id: 'jarvis-mock-1234',
+      room_name: 'kitchen',
+      message: 'Node provisioned successfully',
+    };
   });
 
   it('should display success message', () => {
@@ -116,5 +133,39 @@ describe('SuccessScreen', () => {
     expect(action.payload?.routes?.[0]?.name).toBe('NodeList');
     // Fallback navigation.reset must NOT fire when parent handled it
     expect(mockReset).not.toHaveBeenCalled();
+  });
+
+  it('lands on the Home (chat) tab on done so the node reveal is visible', () => {
+    mockGetParent.mockReturnValueOnce({ dispatch: mockParentDispatch });
+
+    const { getByTestId } = render(
+      <SuccessScreen navigation={mockNavigation} route={{} as any} />,
+      { wrapper }
+    );
+
+    fireEvent.press(getByTestId('done-button'));
+
+    expect(mockNavigate).toHaveBeenCalledWith('Main', { screen: 'HomeTab' });
+  });
+
+  it('marks the provisioned node pending (scoped to the household) on mount', () => {
+    render(
+      <SuccessScreen navigation={mockNavigation} route={{} as any} />,
+      { wrapper }
+    );
+
+    expect(mockMarkPending).toHaveBeenCalledTimes(1);
+    expect(mockMarkPending).toHaveBeenCalledWith('jarvis-mock-1234', 'hh-1');
+  });
+
+  it('does not mark pending when there is no node_id', () => {
+    mockProvisioningResult = { success: true, room_name: 'kitchen' };
+
+    render(
+      <SuccessScreen navigation={mockNavigation} route={{} as any} />,
+      { wrapper }
+    );
+
+    expect(mockMarkPending).not.toHaveBeenCalled();
   });
 });
