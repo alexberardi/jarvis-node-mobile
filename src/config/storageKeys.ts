@@ -31,6 +31,12 @@ export const THEME_KEY = '@jarvis/theme';
 export const AUTO_PLAY_TTS_KEY = '@jarvis/auto_play_tts';
 /** Last voice node selected on the chat screen (restored on launch / quick-open) */
 export const LAST_NODE_KEY = '@jarvis/last_node_id';
+/**
+ * A node that was just provisioned and is booting up. Serialized as
+ * `{ nodeId, ts }`. While set, the chat screen polls for the node to come
+ * online so it appears without an app restart. See PendingNodeContext.
+ */
+export const PENDING_NODE_KEY = '@jarvis/pending_node';
 /** Push notifications enabled: 'true' | 'false' */
 export const PUSH_NOTIFICATIONS_KEY = '@jarvis/push_notifications_enabled';
 

@@ -1,11 +1,13 @@
 import { CommonActions, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { StyleSheet, View, ScrollView } from 'react-native';
 import { Button, Text, useTheme } from 'react-native-paper';
 
+import { useAuth } from '../../auth/AuthContext';
 import { InfoHelperText } from '../../components/HelpIcon';
 import { K2BackupCard } from '../../components/K2QRCode';
+import { usePendingNode } from '../../contexts/PendingNodeContext';
 import { useProvisioningContext } from '../../contexts/ProvisioningContext';
 import { helpCopy } from '../../copy/help';
 import { ProvisioningStackParamList, RootStackParamList } from '../../navigation/types';
@@ -15,16 +17,29 @@ type Props = NativeStackScreenProps<ProvisioningStackParamList, 'Success'>;
 const SuccessScreen = ({ navigation }: Props) => {
   const rootNav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { provisioningResult, k2KeyPair, reset } = useProvisioningContext();
+  const { markPending } = usePendingNode();
+  const { state: authState } = useAuth();
   const theme = useTheme();
   const [showBackup, setShowBackup] = useState(false);
+
+  // The node is now booting and will register with the command center once it
+  // joins WiFi. Flag it as pending so the chat screen polls for it and selects
+  // it the moment it comes online — no app restart needed. Marking it here (not
+  // on "Done") lets polling run in the background while the user sets up the
+  // smart home or backs up their key. Scope it to the active household so a
+  // later household switch doesn't strand the chat screen polling for it.
+  const newNodeId = provisioningResult?.node_id;
+  const householdId = authState.activeHouseholdId;
+  useEffect(() => {
+    if (newNodeId) markPending(newNodeId, householdId);
+  }, [newNodeId, householdId, markPending]);
 
   const handleDone = () => {
     reset();
     // navigation.reset() here only resets the inner ProvisioningNavigator
     // (would send the user back to ScanForNodes inside AddNode), not
-    // OUT of the provisioning flow. Reset the parent NodesStack so the
-    // user lands back on NodeList, where they expected "Done" to take
-    // them.
+    // OUT of the provisioning flow. Reset the parent NodesStack back to
+    // NodeList so the provisioning flow isn't left on-screen behind us.
     const parent = navigation.getParent();
     if (parent) {
       parent.dispatch(
@@ -39,6 +54,10 @@ const SuccessScreen = ({ navigation }: Props) => {
         routes: [{ name: 'ScanForNodes' }],
       });
     }
+    // Land on the chat tab so the new node's "Setting up… → ready" reveal
+    // happens where the user can watch it: the chat screen is already polling
+    // and will auto-select the node the moment it comes online.
+    rootNav.navigate('Main', { screen: 'HomeTab' });
   };
 
   const handleSetupSmartHome = () => {
