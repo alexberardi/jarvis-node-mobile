@@ -15,6 +15,7 @@ import { HelpProvider } from './src/components/HelpProvider';
 import { DEV_MODE } from './src/config/env';
 import { ConfigProvider } from './src/contexts/ConfigContext';
 import { ConnectionProvider } from './src/contexts/ConnectionContext';
+import { PendingNodeProvider } from './src/contexts/PendingNodeContext';
 import { ToolsProvider } from './src/contexts/ToolsContext';
 import { usePushNotifications } from './src/hooks/usePushNotifications';
 import {
@@ -159,22 +160,24 @@ const AppContent = () => {
         <ConfigProvider>
           <ConnectionProvider>
             <AuthProvider>
-              <ToolsProvider>
-                <PushNotificationManager>
-                  <DeepLinkManager navReady={navReady} />
-                  <HelpProvider>
-                    <NavigationContainer
-                      theme={navTheme}
-                      ref={navigationRef}
-                      onReady={() => setNavReady(true)}
-                    >
-                      <ConnectionBanner />
-                      <RootNavigator />
-                      <StatusBar style={isDark ? 'light' : 'dark'} />
-                    </NavigationContainer>
-                  </HelpProvider>
-                </PushNotificationManager>
-              </ToolsProvider>
+              <PendingNodeProvider>
+                <ToolsProvider>
+                  <PushNotificationManager>
+                    <DeepLinkManager navReady={navReady} />
+                    <HelpProvider>
+                      <NavigationContainer
+                        theme={navTheme}
+                        ref={navigationRef}
+                        onReady={() => setNavReady(true)}
+                      >
+                        <ConnectionBanner />
+                        <RootNavigator />
+                        <StatusBar style={isDark ? 'light' : 'dark'} />
+                      </NavigationContainer>
+                    </HelpProvider>
+                  </PushNotificationManager>
+                </ToolsProvider>
+              </PendingNodeProvider>
             </AuthProvider>
           </ConnectionProvider>
         </ConfigProvider>

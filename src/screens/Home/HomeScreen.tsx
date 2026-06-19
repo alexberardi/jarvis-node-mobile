@@ -8,6 +8,7 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Platform,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   View,
@@ -42,8 +43,10 @@ function cleanForTTS(text: string): string {
 import { useAuth } from '../../auth/AuthContext';
 import ChatBubble from '../../components/ChatBubble';
 import { FirstRunCard } from '../../components/FirstRunCard';
-import NodeSelector from '../../components/NodeSelector';
+import NodeSelector, { NodeSelectorHandle } from '../../components/NodeSelector';
 import QuickActions from '../../components/QuickActions';
+import type { NodeOption } from '../../api/smartHomeApi';
+import { usePendingNode } from '../../contexts/PendingNodeContext';
 import { helpCopy } from '../../copy/help';
 import { useChat } from '../../hooks/useChat';
 import { useFirstRun } from '../../hooks/useFirstRun';
@@ -70,10 +73,17 @@ const HomeScreen = () => {
   const [autoPlayTTS, setAutoPlayTTS] = useState(false);
   const flatListRef = useRef<FlatList<ChatMessage>>(null);
   const soundRef = useRef<Audio.Sound | null>(null);
+  const nodeSelectorRef = useRef<NodeSelectorHandle>(null);
 
   const [snackbar, setSnackbar] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
   const [nodeCount, setNodeCount] = useState<number | null>(null);
   const householdId = authState.activeHouseholdId;
+  const { pendingNodeId, pendingHouseholdId } = usePendingNode();
+  // A node was just provisioned for this household and is still booting — used
+  // to show a "starting up" state instead of the "add your first node" card.
+  const awaitingNewNode =
+    !!pendingNodeId && (!pendingHouseholdId || pendingHouseholdId === householdId);
   const { isRecording, startRecording, stopRecording } = useVoiceRecording();
   const firstRun = useFirstRun('chat_intro');
 
@@ -209,6 +219,28 @@ const HomeScreen = () => {
   const refreshUnreadCount = useCallback(() => {
     if (!accessTokenRef.current) return;
     getUnreadCount().then(setUnreadCount).catch(() => {});
+  }, []);
+
+  // Pull-to-refresh: re-fetch the node list (and unread badge). Lets the user
+  // manually surface a just-provisioned node if they don't want to wait for the
+  // automatic poll.
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await nodeSelectorRef.current?.refresh();
+      refreshUnreadCount();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refreshUnreadCount]);
+
+  // A just-provisioned node finished booting and was auto-selected — celebrate
+  // it so the chat screen visibly "comes alive" without an app restart.
+  const handlePendingNodeReady = useCallback((node: NodeOption) => {
+    const where = node.room
+      ? node.room.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())
+      : 'Your new node';
+    setSnackbar(`${where} is ready — say hi to Jarvis!`);
   }, []);
 
   // While home is the focused screen, refresh the unread count on a 15s
@@ -424,10 +456,12 @@ const HomeScreen = () => {
       {householdId && (
         <View style={styles.nodeRow}>
           <NodeSelector
+            ref={nodeSelectorRef}
             householdId={householdId}
             selectedNodeId={selectedNodeId}
             onSelectNode={setSelectedNodeId}
             onNodesLoaded={setNodeCount}
+            onPendingNodeReady={handlePendingNodeReady}
           />
           {selectedNodeId && warmupState !== 'idle' && (
             <View style={styles.warmupIndicator}>
@@ -461,6 +495,7 @@ const HomeScreen = () => {
 
       {/* Message list */}
       <FlatList
+        testID="chat-list"
         ref={flatListRef}
         data={messages}
         keyExtractor={(item) => item.id}
@@ -468,31 +503,46 @@ const HomeScreen = () => {
         style={styles.messageList}
         contentContainerStyle={styles.messageContent}
         inverted={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
         onContentSizeChange={() => {
           flatListRef.current?.scrollToEnd({ animated: true });
         }}
         ListEmptyComponent={
           nodeCount === 0 ? (
-            <View style={styles.onboarding}>
-              <Text variant="headlineSmall" style={{ fontWeight: 'bold', marginBottom: 8 }}>
-                Welcome to Jarvis
-              </Text>
-              <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant, textAlign: 'center', marginBottom: 20 }}>
-                Pair a voice node to get started. You can use a Pi Zero or this device as a node.
-              </Text>
-              <Button
-                mode="contained"
-                icon="plus"
-                onPress={() =>
-                  navigation.navigate('Main', {
-                    screen: 'NodesTab',
-                    params: { screen: 'AddNode' },
-                  })
-                }
-              >
-                Add Your First Node
-              </Button>
-            </View>
+            awaitingNewNode ? (
+              <View style={styles.onboarding}>
+                <ActivityIndicator size="large" color={theme.colors.primary} style={{ marginBottom: 20 }} />
+                <Text variant="headlineSmall" style={{ fontWeight: 'bold', marginBottom: 8 }}>
+                  Setting up your new node
+                </Text>
+                <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant, textAlign: 'center' }}>
+                  This usually takes about a minute while it powers on and connects. It’ll appear here automatically — no need to restart.
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.onboarding}>
+                <Text variant="headlineSmall" style={{ fontWeight: 'bold', marginBottom: 8 }}>
+                  Welcome to Jarvis
+                </Text>
+                <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant, textAlign: 'center', marginBottom: 20 }}>
+                  Pair a voice node to get started. You can use a Pi Zero or this device as a node.
+                </Text>
+                <Button
+                  mode="contained"
+                  icon="plus"
+                  onPress={() =>
+                    navigation.navigate('Main', {
+                      screen: 'NodesTab',
+                      params: { screen: 'AddNode' },
+                    })
+                  }
+                >
+                  Add Your First Node
+                </Button>
+              </View>
+            )
           ) : (
             <QuickActions
               availableTools={toolNames}

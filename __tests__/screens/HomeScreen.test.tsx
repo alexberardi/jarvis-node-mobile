@@ -1,6 +1,6 @@
 import React from 'react';
 import { AppState } from 'react-native';
-import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { act, render, fireEvent, waitFor } from '@testing-library/react-native';
 import { PaperProvider } from 'react-native-paper';
 
 import HomeScreen from '../../src/screens/Home/HomeScreen';
@@ -91,17 +91,23 @@ jest.mock('../../src/auth/AuthContext', () => ({
   }),
 }));
 
+const mockNodeSelectorRefresh = jest.fn().mockResolvedValue(undefined);
+let mockTriggerPendingReady: ((node: any) => void) | null = null;
 jest.mock('../../src/components/NodeSelector', () => {
+  const React = require('react');
   const { Text } = require('react-native');
   return {
     __esModule: true,
-    default: ({ selectedNodeId, onSelectNode }: any) => (
-      <Text
-        testID="node-selector"
-        onPress={() => onSelectNode('node-1')}
-      >
-        {selectedNodeId ? `Selected: ${selectedNodeId}` : 'No node selected'}
-      </Text>
+    default: React.forwardRef(
+      ({ selectedNodeId, onSelectNode, onPendingNodeReady }: any, ref: any) => {
+        React.useImperativeHandle(ref, () => ({ refresh: mockNodeSelectorRefresh }), []);
+        mockTriggerPendingReady = onPendingNodeReady ?? null;
+        return (
+          <Text testID="node-selector" onPress={() => onSelectNode('node-1')}>
+            {selectedNodeId ? `Selected: ${selectedNodeId}` : 'No node selected'}
+          </Text>
+        );
+      },
     ),
   };
 });
@@ -266,5 +272,32 @@ describe('HomeScreen', () => {
 
     const input = getByPlaceholderText('Message Jarvis...');
     expect(input.props.editable).toBe(true);
+  });
+
+  it('pull-to-refresh re-fetches the node list via the NodeSelector ref', async () => {
+    const { getByTestId } = render(<HomeScreen />, { wrapper });
+
+    const list = getByTestId('chat-list');
+    await act(async () => {
+      await list.props.refreshControl.props.onRefresh();
+    });
+
+    expect(mockNodeSelectorRefresh).toHaveBeenCalled();
+  });
+
+  it('shows a ready snackbar when a provisioned node comes online', async () => {
+    const { findByText } = render(<HomeScreen />, { wrapper });
+
+    expect(mockTriggerPendingReady).toBeTruthy();
+    act(() => {
+      mockTriggerPendingReady!({
+        node_id: 'node-new',
+        room: 'living_room',
+        online: true,
+        last_seen: null,
+      });
+    });
+
+    expect(await findByText('Living Room is ready — say hi to Jarvis!')).toBeTruthy();
   });
 });
