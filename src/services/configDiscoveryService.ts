@@ -69,7 +69,16 @@ const fetchServiceUrls = async (
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_SERVICES_TIMEOUT_MS);
   try {
-    const res = await fetch(`${configBaseUrl}/services`, { signal: controller.signal });
+    // Ask for the external (off-docker) URL style: config-service returns each
+    // service's published coords (e.g. localhost:7701) instead of the internal
+    // container coords (jarvis-auth:8000) the phone can't reach. We still run
+    // the localhost→config-host rewrite below, which lands it on the reachable
+    // host. Fall back to the plain endpoint for older config-service builds
+    // that don't support the style (they 422 on the unknown enum).
+    let res = await fetch(`${configBaseUrl}/services?style=external`, { signal: controller.signal });
+    if (!res.ok) {
+      res = await fetch(`${configBaseUrl}/services`, { signal: controller.signal });
+    }
     if (!res.ok) return null;
     const data: ServicesResponse = await res.json();
 
