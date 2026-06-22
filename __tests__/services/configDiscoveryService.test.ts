@@ -73,3 +73,36 @@ describe('discoverConfigService — pinned manual URL is authoritative', () => {
     expect(result.fallbackMessage).toBeNull();
   });
 });
+
+describe('discoverConfigService — external URL style (mobile reachability)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    global.fetch = mockFetch as unknown as typeof global.fetch;
+  });
+
+  it('requests ?style=external and rewrites the localhost sentinel to the config host', async () => {
+    mockedSC.loadManualConfigUrl.mockResolvedValue(MANUAL);
+    // config-service (external style) returns published coords with a localhost
+    // sentinel — what the proper fix registers.
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        services: [
+          { name: 'jarvis-auth', url: 'http://localhost:7701', host: 'localhost', port: 7701 },
+          { name: 'jarvis-command-center', url: 'http://localhost:7703', host: 'localhost', port: 7703 },
+        ],
+      }),
+    });
+
+    const result = await discoverConfigService(false);
+
+    // must ask for the external (off-docker) style, or the phone gets container coords
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining('/services?style=external'),
+      expect.anything(),
+    );
+    // and the localhost sentinel must be rewritten to the reachable config host
+    expect(result.config.authBaseUrl).toBe('http://config.jarvisautomation.io:7701');
+    expect(result.config.commandCenterUrl).toBe('http://config.jarvisautomation.io:7703');
+  });
+});
