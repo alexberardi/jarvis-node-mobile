@@ -1,0 +1,115 @@
+appId: com.jarvis.nodemobile
+name: Provisioning happy-path (DEV_MODE / simulated node)
+# L2 device-e2e — drives the REAL provisioning flow against the dockerized fake
+# node (jarvis-node-setup run_provisioning.py + SimulatedWiFi), via the app's
+# DEV_MODE "Simulator Mode" manual-IP path. This collapses the two phone-side
+# WiFi switches (join node AP, rejoin home WiFi) that NO in-app e2e tool can
+# automate — everything else is the exact production provisioning code path.
+#
+# Requires:
+#   * a dev-client build with EXPO_PUBLIC_DEV_MODE=true baked in (the
+#     `development-e2e` eas profile) so the "Simulator Mode" panel exists;
+#   * config discovery resolved to a CC/config URL reachable from BOTH the
+#     simulator AND the fake-node container (the runner's HOST LAN IP — see
+#     jarvis-integration-tests/docs/mobile-e2e.md "networking");
+#   * the core stack (auth/config/CC) + fake node up, seeded with the EMAIL user.
+#
+# The Success screen is NOT the source of truth (it reports success even on a
+# node-side error). The CI lane asserts node-online VIA command-center after this
+# flow — see the runbook.
+#
+# Run:  maestro test -e NODE_HOST=<fake-node-host> -e EMAIL=... .maestro/provisioning-devmode-happy-path.yaml
+tags:
+  - provisioning
+  - e2e
+env:
+  EMAIL: "ci-node-test@example.com"
+  PASSWORD: "ci-node-test-password"
+  # Where the fake-node provisioning server is reachable from the simulator.
+  # localhost:8080 works when the docker stack runs on the same host as the sim
+  # (the single-host topology); use the published host:port otherwise.
+  NODE_HOST: "127.0.0.1"
+  NODE_PORT: "8080"
+  # A network from SimulatedWiFi's fixed scan list (HomeNetwork / Neighbor_5G /
+  # CoffeeShop_Free / IoT_Network).
+  WIFI_SSID: "HomeNetwork"
+  WIFI_PASSWORD: "sim-wifi-password"
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+
+# --- Auth: an unauthenticated app launches at the Login screen. ---
+- runFlow: login.yaml
+
+# --- Main tabs -> Nodes -> Add Node -> the provisioning entry (ScanForNodes). ---
+# SHAKEOUT: confirm the "Nodes" bottom-tab label and the "Add Node" FAB label on
+# the simulator (MainTabNavigator / NodeListScreen) — add testIDs if text proves
+# flaky.
+- tapOn: "Nodes"
+- tapOn: "Add Node"
+- assertVisible:
+    id: "prepare-button"
+
+# --- DEV_MODE "Simulator Mode": point the app at the dockerized fake node. ---
+- tapOn:
+    id: "dev-mode-toggle"
+- assertVisible:
+    id: "ip-input"
+- tapOn:
+    id: "ip-input"
+- eraseText
+- inputText: "${NODE_HOST}"
+- tapOn:
+    id: "port-input"
+- eraseText
+- inputText: "${NODE_PORT}"
+- hideKeyboard
+
+# Fetch a provisioning token from CC (the app does this "on home WiFi", caching
+# the CC URL) and connect to the fake node over HTTP.
+- tapOn:
+    id: "connect-simulator-button"
+
+# --- NodeInfo: the app pulled the fake node's identity (GET /api/v1/info). ---
+- extendedWaitUntil:
+    visible:
+      id: "continue-button"
+    timeout: 20000
+- tapOn:
+    id: "continue-button"
+
+# --- SelectNetwork: pick the simulated home WiFi (GET /api/v1/scan-networks). ---
+- extendedWaitUntil:
+    visible:
+      id: "network-item-${WIFI_SSID}"
+    timeout: 15000
+- tapOn:
+    id: "network-item-${WIFI_SSID}"
+
+# --- EnterPassword: room defaults to "Living Room"; type the WiFi password. ---
+- tapOn:
+    id: "password-input"
+- inputText: "${WIFI_PASSWORD}"
+- hideKeyboard
+- tapOn:
+    id: "provision-button"
+
+# --- ProvisioningProgress: SimulatedWiFi accepts the creds and the flow reaches
+#     awaiting_wifi_switch (no real radio drops). Confirm the (no-op) reconnect. ---
+- extendedWaitUntil:
+    visible:
+      id: "wifi-reconnected-button"
+    timeout: 30000
+- tapOn:
+    id: "wifi-reconnected-button"
+
+# --- Success: the app reports completion. The AUTHORITATIVE check (node-online
+#     via CC) is the CI lane's job — the app's Success screen lies on node error. ---
+- extendedWaitUntil:
+    visible: "Success!"
+    timeout: 30000
+- assertVisible:
+    id: "done-button"
+- tapOn:
+    id: "done-button"

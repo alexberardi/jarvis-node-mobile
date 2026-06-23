@@ -26,6 +26,7 @@ const SelectNetworkScreen = ({ navigation }: Props) => {
 
   const renderNetwork = ({ item }: { item: Network }) => (
     <List.Item
+      testID={`network-item-${item.ssid}`}
       title={item.ssid}
       description={item.security}
       left={(props) => (
