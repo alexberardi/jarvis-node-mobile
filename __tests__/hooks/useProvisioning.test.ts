@@ -93,16 +93,28 @@ describe('useProvisioning', () => {
       expect(result.current.state).toBe('fetching_info');
     });
 
-    it('should set error on connection failure', async () => {
-      // This test would need to mock a failure case
-      // For now, we verify the hook handles the happy path
-      const { result } = renderHook(() => useProvisioning());
+    it('sets error state and returns false after exhausting connect retries', async () => {
+      // connect() retries getNodeInfo MAX_RETRIES (3) times with a 2000ms backoff
+      // between attempts; use fake timers so the test doesn't wait ~4s of real time.
+      (provisioningApi.getNodeInfo as jest.Mock).mockRejectedValue(new Error('ECONNREFUSED'));
+      jest.useFakeTimers();
+      try {
+        const { result } = renderHook(() => useProvisioning());
 
-      await act(async () => {
-        await result.current.connect('192.168.4.1');
-      });
+        let connectResult: boolean | undefined;
+        await act(async () => {
+          const pending = result.current.connect('192.168.4.1');
+          await jest.advanceTimersByTimeAsync(5000); // flush both 2000ms backoffs
+          connectResult = await pending;
+        });
 
-      expect(result.current.error).toBeNull();
+        expect(connectResult).toBe(false);
+        expect(result.current.state).toBe('error');
+        expect(result.current.error).toContain('Could not reach node');
+        expect(provisioningApi.getNodeInfo).toHaveBeenCalledTimes(3);
+      } finally {
+        jest.useRealTimers();
+      }
     });
   });
 
@@ -255,6 +267,133 @@ describe('useProvisioning', () => {
       });
 
       expect(result.current.error).toBeNull();
+    });
+  });
+
+  describe('failure + invariant branches', () => {
+    // Drive the hook to where startProvisioning() can run:
+    // connected → token fetched → networks scanned → network selected.
+    const arrangeReadyToProvision = async (
+      result: { current: ReturnType<typeof useProvisioning> },
+      householdId = 'hh-1',
+    ) => {
+      await act(async () => {
+        await result.current.connect('192.168.4.1');
+      });
+      await act(async () => {
+        await result.current.fetchProvisioningToken(householdId, 'kitchen');
+      });
+      await act(async () => {
+        await result.current.fetchNetworks();
+      });
+      act(() => {
+        result.current.selectNetwork(MOCK_NETWORKS[0]);
+      });
+    };
+
+    it('treats a provision() network error as SUCCESS (node drops AP after accepting creds)', async () => {
+      // The load-bearing invariant (useProvisioning.ts:291-299): a thrown provision()
+      // is EXPECTED — the node tears down its AP the instant it accepts the creds,
+      // killing the socket — so it must resolve to success, NOT error.
+      (provisioningApi.provision as jest.Mock).mockRejectedValue(new Error('Network Error'));
+      const { result } = renderHook(() => useProvisioning());
+      await arrangeReadyToProvision(result);
+
+      await act(async () => {
+        await result.current.startProvisioning('password123', 'kitchen', 'hh-1');
+      });
+
+      expect(result.current.state).toBe('awaiting_wifi_switch');
+      expect(result.current.error).toBeNull();
+      expect(result.current.provisioningResult?.success).toBe(true);
+    });
+
+    it('surfaces a K2 provisioning failure as an error and does NOT send WiFi creds', async () => {
+      (provisioningApi.provisionK2 as jest.Mock).mockResolvedValue({
+        success: false,
+        error: 'k2 rejected by node',
+      });
+      const { result } = renderHook(() => useProvisioning());
+      await arrangeReadyToProvision(result);
+
+      await act(async () => {
+        await result.current.startProvisioning('password123', 'kitchen', 'hh-1');
+      });
+
+      expect(result.current.state).toBe('error');
+      expect(result.current.error).toContain('k2 rejected by node');
+      expect(provisioningApi.provision).not.toHaveBeenCalled();
+    });
+
+    it('refuses to provision without a provisioning token', async () => {
+      const { result } = renderHook(() => useProvisioning());
+      // Intentionally skip fetchProvisioningToken → provisioningToken stays null.
+      await act(async () => {
+        await result.current.connect('192.168.4.1');
+      });
+      await act(async () => {
+        await result.current.fetchNetworks();
+      });
+      act(() => {
+        result.current.selectNetwork(MOCK_NETWORKS[0]);
+      });
+
+      await act(async () => {
+        await result.current.startProvisioning('password123', 'kitchen', 'hh-1');
+      });
+
+      expect(result.current.error).toContain('Provisioning token not available');
+      expect(provisioningApi.provision).not.toHaveBeenCalled();
+    });
+
+    it('refuses to provision with an expired token', async () => {
+      (commandCenterApi.requestProvisioningToken as jest.Mock).mockResolvedValue({
+        token: 'expired-token',
+        node_id: 'cc-assigned-node-id',
+        expires_at: new Date(Date.now() - 1000).toISOString(),
+        expires_in: 0,
+      });
+      const { result } = renderHook(() => useProvisioning());
+      await arrangeReadyToProvision(result);
+
+      await act(async () => {
+        await result.current.startProvisioning('password123', 'kitchen', 'hh-1');
+      });
+
+      expect(result.current.error).toContain('expired');
+      expect(provisioningApi.provision).not.toHaveBeenCalled();
+    });
+
+    it('sets error state when the network scan fails', async () => {
+      (provisioningApi.scanNetworks as jest.Mock).mockRejectedValue(new Error('scan failed'));
+      const { result } = renderHook(() => useProvisioning());
+      await act(async () => {
+        await result.current.connect('192.168.4.1');
+      });
+
+      let ok: boolean | undefined;
+      await act(async () => {
+        ok = await result.current.fetchNetworks();
+      });
+
+      expect(ok).toBe(false);
+      expect(result.current.state).toBe('error');
+      expect(result.current.error).toContain('scan failed');
+    });
+
+    it('returns false and sets error when the provisioning token request fails', async () => {
+      (commandCenterApi.requestProvisioningToken as jest.Mock).mockRejectedValue(
+        new Error('token denied'),
+      );
+      const { result } = renderHook(() => useProvisioning());
+
+      let ok: boolean | undefined;
+      await act(async () => {
+        ok = await result.current.fetchProvisioningToken('hh-1', 'kitchen');
+      });
+
+      expect(ok).toBe(false);
+      expect(result.current.error).toContain('token denied');
     });
   });
 });

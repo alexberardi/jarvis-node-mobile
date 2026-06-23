@@ -12,15 +12,20 @@ jest.mock('expo-secure-store', () => ({
   deleteItemAsync: jest.fn().mockResolvedValue(undefined),
 }));
 
-// Mock jarvis-crypto native module
+// Mock jarvis-crypto native module.
+// IMPORTANT: keep these method names in sync with modules/jarvis-crypto/index.ts.
+// The real module exports AES-256-GCM (aesGcmEncrypt/aesGcmDecrypt) + argon2id +
+// randomBytes — NOT chacha20poly1305. A prior version of this mock named chacha*
+// methods the module never exports, so any test exercising the AEAD path
+// (config-push / QR import / settings-decrypt) got `undefined` and silently
+// passed. EncryptResult is { ciphertext, tag } (the IV is an input, not returned).
 jest.mock('./modules/jarvis-crypto', () => ({
   argon2id: jest.fn().mockResolvedValue('mock-argon2-hash'),
-  chacha20poly1305Encrypt: jest.fn().mockResolvedValue({
+  aesGcmEncrypt: jest.fn().mockResolvedValue({
     ciphertext: 'mock-ciphertext',
     tag: 'mock-tag',
-    nonce: 'mock-nonce',
   }),
-  chacha20poly1305Decrypt: jest.fn().mockResolvedValue('mock-plaintext'),
+  aesGcmDecrypt: jest.fn().mockResolvedValue('mock-plaintext'),
   randomBytes: jest.fn().mockResolvedValue('mock-random-bytes-base64'),
 }));
 
