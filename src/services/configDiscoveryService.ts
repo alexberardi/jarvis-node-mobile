@@ -8,6 +8,7 @@ import {
   cacheConfig,
   setServiceConfig,
 } from '../config/serviceConfig';
+import { DEV_MODE, MANUAL_CONFIG_URL } from '../config/env';
 
 const PROBE_TIMEOUT_MS = 1500;
 const DISCOVERY_TIMEOUT_MS = 15000;
@@ -249,7 +250,14 @@ export const discoverConfigService = async (
   // to a different LAN server when the pinned URL was briefly unreachable,
   // while the UI kept showing the pinned URL — a confusing mismatch between
   // the displayed and the actual server.
-  const manualUrl = await loadManualConfigUrl();
+  // A user's UI-pinned URL is authoritative. In DEV_MODE only, if none is pinned
+  // (e.g. a fresh clearState e2e build that can't mDNS/sweep a CI stack), fall
+  // back to the baked config-service URL from the development-e2e EAS profile so
+  // the app can still reach config-service to fetch a provisioning token.
+  // Production builds never set EXPO_PUBLIC_MANUAL_CONFIG_URL, so this is inert.
+  const manualUrl =
+    (await loadManualConfigUrl()) ||
+    (DEV_MODE && MANUAL_CONFIG_URL ? MANUAL_CONFIG_URL : null);
   if (manualUrl) {
     const config = await fetchServiceUrls(manualUrl);
     if (config) {
