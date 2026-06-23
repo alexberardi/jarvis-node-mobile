@@ -58,6 +58,7 @@ const ProvisioningProgressScreen = ({ navigation }: Props) => {
                 Please reconnect your phone to your home WiFi network, then tap the button below.
               </Text>
               <Button
+                testID="wifi-reconnected-button"
                 mode="contained"
                 onPress={confirmWifiSwitched}
                 style={styles.wifiSwitchButton}

@@ -42,6 +42,7 @@ const LoginScreen = ({ navigation }: Props) => {
       </Appbar.Header>
       <View style={styles.container}>
         <TextInput
+          testID="email-input"
           label="Email"
           autoCapitalize="none"
           keyboardType="email-address"
@@ -50,6 +51,7 @@ const LoginScreen = ({ navigation }: Props) => {
           autoCorrect={false}
         />
         <TextInput
+          testID="password-input"
           label="Password"
           secureTextEntry
           value={password}
@@ -62,6 +64,7 @@ const LoginScreen = ({ navigation }: Props) => {
         ) : null}
 
         <Button
+          testID="login-button"
           mode="contained"
           onPress={handleLogin}
           loading={loading}

@@ -189,6 +189,7 @@ const ScanForNodesScreen = ({ navigation }: Props) => {
 
         <View style={styles.devToggleRow}>
           <Button
+            testID="dev-mode-toggle"
             mode="text"
             onPress={() => setShowDevMode(!showDevMode)}
           >
@@ -237,6 +238,7 @@ const ScanForNodesScreen = ({ navigation }: Props) => {
               )}
 
               <Button
+                testID="connect-simulator-button"
                 mode="contained-tonal"
                 onPress={handleConnectDevMode}
                 loading={isLoading && showDevMode}

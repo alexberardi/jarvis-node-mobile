@@ -1,0 +1,18 @@
+appId: com.jarvis.nodemobile
+name: login
+# Reusable auth subflow. Drives the Login screen (src/screens/Auth/LoginScreen.tsx)
+# with EMAIL/PASSWORD from the parent flow's env (override per-run with
+# `maestro test -e EMAIL=... -e PASSWORD=...`). The email-input / password-input /
+# login-button testIDs were added alongside this flow.
+---
+- assertVisible:
+    id: "email-input"
+- tapOn:
+    id: "email-input"
+- inputText: "${EMAIL}"
+- tapOn:
+    id: "password-input"
+- inputText: "${PASSWORD}"
+- hideKeyboard
+- tapOn:
+    id: "login-button"
