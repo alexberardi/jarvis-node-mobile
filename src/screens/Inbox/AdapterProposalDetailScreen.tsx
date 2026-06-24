@@ -89,7 +89,7 @@ const AdapterProposalDetailScreen = () => {
         <Text variant="bodyLarge" style={{ color: theme.colors.error }}>
           {error || 'Proposal not found'}
         </Text>
-        <Button mode="text" onPress={load} style={{ marginTop: 8 }}>
+        <Button testID="adapter-detail-retry" mode="text" onPress={load} style={{ marginTop: 8 }}>
           Retry
         </Button>
       </View>
@@ -179,6 +179,7 @@ const AdapterProposalDetailScreen = () => {
         {proposal.status === 'pending' && (
           <View style={styles.actions}>
             <Button
+              testID="adapter-detail-apply"
               mode="contained"
               onPress={onApply}
               loading={applying}
