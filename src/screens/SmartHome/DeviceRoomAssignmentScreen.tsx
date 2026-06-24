@@ -230,6 +230,7 @@ const DeviceRoomAssignmentScreen = ({ navigation, route }: Props) => {
           <Button
             mode="outlined"
             compact
+            testID={`device-room-assignment-device-room-button-${item.entity_id}`}
             onPress={() => showRoomPicker(item.entity_id)}
           >
             {currentRoom?.name || 'No room'}
@@ -257,9 +258,15 @@ const DeviceRoomAssignmentScreen = ({ navigation, route }: Props) => {
           value={newRoomName}
           onChangeText={setNewRoomName}
           style={styles.addRoomInput}
+          testID="device-room-assignment-add-room-input"
           dense
         />
-        <Button mode="outlined" onPress={addRoom} disabled={!newRoomName.trim()}>
+        <Button
+          mode="outlined"
+          onPress={addRoom}
+          disabled={!newRoomName.trim()}
+          testID="device-room-assignment-add-room-button"
+        >
           Add
         </Button>
       </View>
@@ -272,6 +279,7 @@ const DeviceRoomAssignmentScreen = ({ navigation, route }: Props) => {
           value={nodeId}
           onChangeText={setNodeId}
           style={styles.nodeInput}
+          testID="device-room-assignment-node-id-input"
           dense
         />
       )}
@@ -279,7 +287,10 @@ const DeviceRoomAssignmentScreen = ({ navigation, route }: Props) => {
       {/* Device list */}
       <View style={styles.list}>
         {selectedDevices.map((item) => (
-          <View key={item.entity_id}>
+          <View
+            key={item.entity_id}
+            testID={`device-room-assignment-device-row-${item.entity_id}`}
+          >
             {renderDevice({ item } as any)}
           </View>
         ))}
@@ -291,10 +302,15 @@ const DeviceRoomAssignmentScreen = ({ navigation, route }: Props) => {
           onPress={handleSave}
           loading={saving}
           disabled={saving}
+          testID="device-room-assignment-save-button"
         >
           Save
         </Button>
-        <Button mode="text" onPress={() => navigation.goBack()}>
+        <Button
+          mode="text"
+          onPress={() => navigation.goBack()}
+          testID="device-room-assignment-back-button"
+        >
           Back
         </Button>
       </View>

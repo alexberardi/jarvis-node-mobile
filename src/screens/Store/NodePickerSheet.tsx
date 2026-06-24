@@ -137,7 +137,11 @@ const NodePickerSheet = () => {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Button icon="arrow-left" onPress={() => navigation.goBack()}>
+        <Button
+          testID="node-picker-back-button"
+          icon="arrow-left"
+          onPress={() => navigation.goBack()}
+        >
           Back
         </Button>
       </View>
@@ -163,6 +167,7 @@ const NodePickerSheet = () => {
           return (
             <List.Item
               key={node.node_id}
+              testID={`node-picker-list-item-${node.node_id}`}
               title={node.room || node.node_id.slice(0, 8)}
               description={desc.text}
               descriptionStyle={desc.color ? { color: desc.color } : undefined}
@@ -175,6 +180,7 @@ const NodePickerSheet = () => {
                 ) : (
                   <Checkbox
                     {...props}
+                    testID={`node-picker-checkbox-${node.node_id}`}
                     status={selected.has(node.node_id) ? 'checked' : 'unchecked'}
                     onPress={() => toggle(node.node_id)}
                   />
@@ -188,6 +194,7 @@ const NodePickerSheet = () => {
 
       <View style={styles.footer}>
         <Button
+          testID="node-picker-install-button"
           mode="contained"
           onPress={handleInstall}
           loading={installing}
