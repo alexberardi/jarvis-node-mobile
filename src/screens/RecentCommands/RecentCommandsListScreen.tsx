@@ -96,6 +96,7 @@ const RecentCommandsListScreen = () => {
     const inFlight = ratingInFlight.has(item.id);
     return (
       <Card
+        testID={`recent-card-${item.id}`}
         style={styles.card}
         onPress={() => navigation.navigate('RecentCommandDetail', { transcriptId: item.id })}
       >
@@ -104,6 +105,7 @@ const RecentCommandsListScreen = () => {
             <Text style={styles.timestamp}>{formatRelative(item.created_at)}</Text>
             <View style={styles.ratingRow}>
               <IconButton
+                testID={`recent-up-${item.id}`}
                 icon={upActive ? 'thumb-up' : 'thumb-up-outline'}
                 size={20}
                 iconColor={upActive ? theme.colors.primary : theme.colors.onSurfaceVariant}
@@ -111,6 +113,7 @@ const RecentCommandsListScreen = () => {
                 onPress={() => handleRate(item, 1)}
               />
               <IconButton
+                testID={`recent-down-${item.id}`}
                 icon={downActive ? 'thumb-down' : 'thumb-down-outline'}
                 size={20}
                 iconColor={downActive ? theme.colors.error : theme.colors.onSurfaceVariant}
