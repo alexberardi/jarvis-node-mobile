@@ -13,6 +13,10 @@ name: login
 - tapOn:
     id: "password-input"
 - inputText: "${PASSWORD}"
-- hideKeyboard
+# Dismiss the keyboard via a neutral tap (hideKeyboard is unreliable on RN Paper
+# inputs and a live keyboard swallows the login tap). Same pattern as the
+# provisioning flow.
+- tapOn:
+    point: "50%,12%"
 - tapOn:
     id: "login-button"
