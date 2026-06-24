@@ -236,6 +236,7 @@ const RoomManagementScreen = () => {
           value={newRoomName}
           onChangeText={setNewRoomName}
           style={styles.addInput}
+          testID="room-add-input"
           dense
         />
         <Button
@@ -244,6 +245,7 @@ const RoomManagementScreen = () => {
           loading={adding}
           disabled={adding || !newRoomName.trim()}
           style={styles.addButton}
+          testID="room-add-button"
         >
           Add
         </Button>
@@ -260,6 +262,7 @@ const RoomManagementScreen = () => {
               <Chip
                 onPress={() => setParentMenuVisible(true)}
                 compact
+                testID="parent-menu-trigger"
                 icon={newRoomParentId ? 'folder-outline' : 'home-outline'}
               >
                 {getParentName(newRoomParentId, rooms)}
@@ -310,6 +313,7 @@ const RoomManagementScreen = () => {
               <List.Item
                 title={room.name}
                 description={desc}
+                testID={`room-item-${room.id}`}
                 style={{ paddingLeft: 16 + depth * 24 }}
                 left={() => depth > 0 ? (
                   <List.Icon icon="subdirectory-arrow-right" style={{ opacity: 0.4 }} />
@@ -324,6 +328,7 @@ const RoomManagementScreen = () => {
                     icon="delete-outline"
                     onPress={() => handleDelete(room)}
                     iconColor={theme.colors.error}
+                    testID={`room-delete-${room.id}`}
                   />
                 )}
               />
@@ -337,6 +342,7 @@ const RoomManagementScreen = () => {
         <Dialog
           visible={!!editRoom}
           onDismiss={() => setEditRoom(null)}
+          testID="room-edit-dialog"
         >
           <Dialog.Title>Edit Room</Dialog.Title>
           <Dialog.Content>
@@ -357,6 +363,7 @@ const RoomManagementScreen = () => {
               anchor={
                 <Chip
                   onPress={() => setEditParentMenuVisible(true)}
+                  testID="edit-parent-menu-trigger"
                   icon={editParentId ? 'folder-outline' : 'home-outline'}
                 >
                   {getParentName(editParentId, rooms ?? [])}
@@ -380,11 +387,12 @@ const RoomManagementScreen = () => {
             </Menu>
           </Dialog.Content>
           <Dialog.Actions>
-            <Button onPress={() => setEditRoom(null)}>Cancel</Button>
+            <Button onPress={() => setEditRoom(null)} testID="room-edit-cancel">Cancel</Button>
             <Button
               onPress={handleEdit}
               loading={editing}
               disabled={editing || !editName.trim()}
+              testID="room-edit-save"
             >
               Save
             </Button>

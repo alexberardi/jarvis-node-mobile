@@ -95,7 +95,10 @@ const FastPathInspectScreen: React.FC = () => {
   return (
     <View style={[styles.root, { backgroundColor: theme.colors.background }]}>
       <Appbar.Header>
-        <Appbar.BackAction onPress={() => navigation.goBack()} />
+        <Appbar.BackAction
+          testID="appbar-back"
+          onPress={() => navigation.goBack()}
+        />
         <Appbar.Content title={`Fast-path patterns — ${groupName}`} />
       </Appbar.Header>
 
@@ -107,7 +110,11 @@ const FastPathInspectScreen: React.FC = () => {
         </Text>
 
         {initialCommands.map((cmd) => (
-          <View key={cmd.command_name} style={styles.commandSection}>
+          <View
+            key={cmd.command_name}
+            testID={`cmd-${cmd.command_name}`}
+            style={styles.commandSection}
+          >
             <Text variant="titleSmall" style={styles.commandHeader}>
               {cmd.command_name.replace(/_/g, ' ')}
             </Text>
@@ -139,6 +146,7 @@ const FastPathInspectScreen: React.FC = () => {
                         </Text>
                       </View>
                       <Switch
+                        testID={`switch-${cmd.command_name}::${p.id}`}
                         value={isEnabled}
                         disabled={isPending}
                         onValueChange={(val) =>
@@ -156,6 +164,7 @@ const FastPathInspectScreen: React.FC = () => {
       </ScrollView>
 
       <Snackbar
+        testID="snackbar-error"
         visible={snackbarMessage !== null}
         onDismiss={() => setSnackbarMessage(null)}
         duration={4000}
