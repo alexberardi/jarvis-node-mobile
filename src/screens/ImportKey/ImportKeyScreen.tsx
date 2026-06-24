@@ -18,7 +18,6 @@ import {
   parseQRCode,
   importPlainQR,
   importEncryptedQR,
-  importFromQR,
   ImportResult,
 } from '../../services/qrImportService';
 import { QRPayload, EncryptedQRPayload } from '../../services/qrPayloadService';
@@ -48,19 +47,34 @@ const ImportKeyScreen: React.FC<ImportKeyScreenProps> = ({
 
     setIsProcessing(true);
     setError(null);
-    setScanState('importing');
 
-    const result = await importFromQR(pasteText.trim());
+    // Mirror the camera scanner (handleBarCodeScanned): parse first, then route.
+    // An ENCRYPTED payload goes to the password screen, where handlePasswordSubmit
+    // runs the real importEncryptedQR (Argon2id + AES-GCM decrypt) — exactly as a
+    // scanned QR would. The DEV paste box (the only entry below) is the sole
+    // affordance, so a simulator (no camera) can still exercise the full import +
+    // decrypt path. Plain payloads import directly.
+    const result = parseQRCode(pasteText.trim());
 
-    if (result.requiresPassword && !result.success) {
-      // Encrypted payload — not supported via paste (use QR)
-      setError('Encrypted keys must be scanned via QR code');
+    if (!result.success) {
+      setError(result.error || 'Invalid key data');
       setScanState('scanning');
       setIsProcessing(false);
       return;
     }
 
-    handleImportResult(result);
+    if (result.requiresPassword && result.payload) {
+      setScannedPayload(result.payload);
+      setScanState('password');
+      setIsProcessing(false);
+      return;
+    }
+
+    if (result.payload) {
+      setScanState('importing');
+      const importResult = await importPlainQR(result.payload);
+      handleImportResult(importResult);
+    }
     setIsProcessing(false);
   }, [pasteText, isProcessing]);
 
@@ -135,6 +149,50 @@ const ImportKeyScreen: React.FC<ImportKeyScreenProps> = ({
     setError(null);
   };
 
+  // DEV-only paste affordance for importing a key without a camera (e.g. an iOS
+  // simulator). Rendered identically on the permission + scanner screens; the
+  // testIDs let the e2e crypto round-trip drive it. Production builds (no __DEV__)
+  // never render it.
+  const devPasteBlock = __DEV__ ? (
+    <View style={styles.devPasteContainer}>
+      <Text variant="labelSmall" style={styles.devLabel}>
+        DEV: Paste key data
+      </Text>
+      <TextInput
+        testID="qr-paste-input"
+        mode="outlined"
+        placeholder="Paste base64url payload"
+        value={pasteText}
+        onChangeText={setPasteText}
+        style={styles.devInput}
+        dense
+      />
+      <View style={styles.devButtonRow}>
+        <Button
+          testID="qr-paste-clipboard-button"
+          mode="outlined"
+          onPress={async () => {
+            const text = await Clipboard.getStringAsync();
+            if (text) setPasteText(text);
+          }}
+          compact
+          icon="clipboard-text"
+        >
+          Paste from Clipboard
+        </Button>
+        <Button
+          testID="qr-paste-import-button"
+          mode="contained-tonal"
+          onPress={handlePasteImport}
+          disabled={!pasteText.trim() || isProcessing}
+          compact
+        >
+          Import
+        </Button>
+      </View>
+    </View>
+  ) : null;
+
   // Permission not granted yet
   if (!permission) {
     return (
@@ -162,42 +220,7 @@ const ImportKeyScreen: React.FC<ImportKeyScreenProps> = ({
             Grant Permission
           </Button>
         </View>
-        {__DEV__ && (
-          <View style={styles.devPasteContainer}>
-            <Text variant="labelSmall" style={styles.devLabel}>
-              DEV: Paste key data
-            </Text>
-            <TextInput
-              mode="outlined"
-              placeholder="Paste base64url payload"
-              value={pasteText}
-              onChangeText={setPasteText}
-              style={styles.devInput}
-              dense
-            />
-            <View style={styles.devButtonRow}>
-              <Button
-                mode="outlined"
-                onPress={async () => {
-                  const text = await Clipboard.getStringAsync();
-                  if (text) setPasteText(text);
-                }}
-                compact
-                icon="clipboard-text"
-              >
-                Paste from Clipboard
-              </Button>
-              <Button
-                mode="contained-tonal"
-                onPress={handlePasteImport}
-                disabled={!pasteText.trim() || isProcessing}
-                compact
-              >
-                Import
-              </Button>
-            </View>
-          </View>
-        )}
+        {devPasteBlock}
       </View>
     );
   }
@@ -221,6 +244,7 @@ const ImportKeyScreen: React.FC<ImportKeyScreenProps> = ({
               </Text>
 
               <TextInput
+                testID="qr-import-password-input"
                 label="Password"
                 value={password}
                 onChangeText={setPassword}
@@ -237,6 +261,7 @@ const ImportKeyScreen: React.FC<ImportKeyScreenProps> = ({
               )}
 
               <Button
+                testID="qr-import-submit-button"
                 mode="contained"
                 onPress={handlePasswordSubmit}
                 disabled={!password}
@@ -284,6 +309,7 @@ const ImportKeyScreen: React.FC<ImportKeyScreenProps> = ({
             Encryption key for {importedNodeId} has been imported.
           </Text>
           <Button
+            testID="qr-import-done-button"
             mode="contained"
             onPress={() => onComplete?.(importedNodeId || '')}
             style={styles.button}
@@ -352,42 +378,7 @@ const ImportKeyScreen: React.FC<ImportKeyScreenProps> = ({
         </View>
       </View>
 
-      {__DEV__ && (
-        <View style={styles.devPasteContainer}>
-          <Text variant="labelSmall" style={styles.devLabel}>
-            DEV: Paste key data
-          </Text>
-          <TextInput
-            mode="outlined"
-            placeholder="Paste base64url payload"
-            value={pasteText}
-            onChangeText={setPasteText}
-            style={styles.devInput}
-            dense
-          />
-          <View style={styles.devButtonRow}>
-            <Button
-              mode="outlined"
-              onPress={async () => {
-                const text = await Clipboard.getStringAsync();
-                if (text) setPasteText(text);
-              }}
-              compact
-              icon="clipboard-text"
-            >
-              Paste from Clipboard
-            </Button>
-            <Button
-              mode="contained-tonal"
-              onPress={handlePasteImport}
-              disabled={!pasteText.trim() || isProcessing}
-              compact
-            >
-              Import
-            </Button>
-          </View>
-        </View>
-      )}
+      {devPasteBlock}
     </View>
   );
 };
