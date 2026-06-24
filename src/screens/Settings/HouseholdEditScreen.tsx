@@ -251,6 +251,7 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
             <Text variant="titleMedium" style={styles.sectionTitle}>Name</Text>
             <View style={styles.nameRow}>
               <TextInput
+                testID="household-name-input"
                 mode="outlined"
                 value={name}
                 onChangeText={setName}
@@ -260,6 +261,7 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
               />
               {isAdmin && (
                 <Button
+                  testID="household-save-name"
                   mode="contained-tonal"
                   onPress={handleSaveName}
                   loading={savingName}
@@ -304,16 +306,17 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
                       visible={roleMenuUser === m.user_id}
                       onDismiss={() => setRoleMenuUser(null)}
                       anchor={
-                        <Chip compact onPress={() => setRoleMenuUser(m.user_id)}>
+                        <Chip testID={`member-role-chip-${m.user_id}`} compact onPress={() => setRoleMenuUser(m.user_id)}>
                           {ROLE_LABELS[m.role] || m.role}
                         </Chip>
                       }
                     >
-                      <Menu.Item title="Admin" onPress={() => handleChangeRole(m.user_id, 'admin')} />
-                      <Menu.Item title="Power User" onPress={() => handleChangeRole(m.user_id, 'power_user')} />
-                      <Menu.Item title="Member" onPress={() => handleChangeRole(m.user_id, 'member')} />
+                      <Menu.Item testID={`role-opt-${m.user_id}-admin`} title="Admin" onPress={() => handleChangeRole(m.user_id, 'admin')} />
+                      <Menu.Item testID={`role-opt-${m.user_id}-power_user`} title="Power User" onPress={() => handleChangeRole(m.user_id, 'power_user')} />
+                      <Menu.Item testID={`role-opt-${m.user_id}-member`} title="Member" onPress={() => handleChangeRole(m.user_id, 'member')} />
                     </Menu>
                     <IconButton
+                      testID={`member-remove-${m.user_id}`}
                       icon="close"
                       size={18}
                       onPress={() => handleRemoveMember(m.user_id, m.email)}
@@ -336,6 +339,7 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
                   Invite Codes
                 </Text>
                 <Button
+                  testID="invite-create-open"
                   mode="contained-tonal"
                   compact
                   icon="plus"
@@ -371,6 +375,7 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
                   </View>
                   {!invite.revoked && (
                     <IconButton
+                      testID={`invite-revoke-${invite.id}`}
                       icon="close"
                       size={18}
                       onPress={() => handleRevokeInvite(invite)}
@@ -394,6 +399,7 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
                 {members.length === 1 && ' This household will be deleted since you\'re the only member.'}
               </Text>
               <Button
+                testID="household-leave"
                 mode="outlined"
                 textColor={theme.colors.error}
                 style={{ borderColor: theme.colors.error }}
@@ -454,7 +460,7 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
           </Dialog.Content>
           <Dialog.Actions>
             <Button onPress={() => setShowCreateInvite(false)}>Cancel</Button>
-            <Button onPress={handleCreateInvite} loading={creatingInvite} disabled={creatingInvite}>
+            <Button testID="invite-create-submit" onPress={handleCreateInvite} loading={creatingInvite} disabled={creatingInvite}>
               Create
             </Button>
           </Dialog.Actions>
