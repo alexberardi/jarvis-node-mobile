@@ -131,6 +131,13 @@ export interface NodeConfigSnapshot {
   follow_up_min_record_after_onset_secs?: number;
   follow_up_min_speech_secs?: number;
   volume_percent?: number;
+  // Operator-tunable node knobs read by the node runtime (jarvis-node-setup
+  // #24/#34/#35) but previously unsurfaced in the app. Optional for back-compat
+  // with snapshots from nodes that predate these keys.
+  wake_word_model?: string;
+  not_for_me_quiet_seconds?: number;
+  audio_output_device?: string;
+  mic_sample_rate?: number;
   led_enabled?: boolean;
   led_brightness_percent?: number;
   // Maintenance-restart knobs. Daily restart at a quiet hour clears
