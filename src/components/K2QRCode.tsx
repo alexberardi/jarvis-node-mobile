@@ -111,6 +111,7 @@ const K2QRCode: React.FC<K2QRCodeProps> = ({
         {mode === 'plain' ? 'Plain (no password)' : 'Password protected'}
       </Text>
       <Button
+        testID="qr-copy-clipboard-button"
         mode="text"
         icon="content-copy"
         compact
@@ -177,6 +178,7 @@ export const K2BackupCard: React.FC<K2BackupCardProps> = ({
 
           <View style={styles.buttonContainer}>
             <Button
+              testID="backup-plain-button"
               mode="contained"
               onPress={() => setMode('plain')}
               style={styles.button}
@@ -189,6 +191,7 @@ export const K2BackupCard: React.FC<K2BackupCardProps> = ({
             </Text>
 
             <Button
+              testID="backup-encrypted-button"
               mode="contained-tonal"
               onPress={() => setMode('encrypted')}
               style={styles.button}
@@ -218,6 +221,7 @@ export const K2BackupCard: React.FC<K2BackupCardProps> = ({
 
           <View style={styles.passwordContainer}>
             <TextInput
+              testID="backup-password-input"
               mode="outlined"
               label="Password"
               value={inputPassword}
@@ -229,6 +233,7 @@ export const K2BackupCard: React.FC<K2BackupCardProps> = ({
               style={styles.input}
             />
             <TextInput
+              testID="backup-confirm-password-input"
               mode="outlined"
               label="Confirm Password"
               value={confirmPassword}
@@ -252,6 +257,7 @@ export const K2BackupCard: React.FC<K2BackupCardProps> = ({
               Back
             </Button>
             <SafeButton
+              testID="backup-generate-qr-button"
               mode="contained"
               onPress={handleGenerateEncrypted}
               style={styles.button}
@@ -295,7 +301,7 @@ export const K2BackupCard: React.FC<K2BackupCardProps> = ({
             Generate Different QR
           </Button>
           {onDone && (
-            <Button mode="contained" onPress={onDone} style={styles.button}>
+            <Button testID="backup-done-button" mode="contained" onPress={onDone} style={styles.button}>
               Done
             </Button>
           )}
