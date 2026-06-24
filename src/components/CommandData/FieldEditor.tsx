@@ -216,35 +216,65 @@ const FieldEditor: React.FC<Props> = ({
           {label}
         </Text>
         {times.map((t, idx) => (
-          <View key={`${idx}-${t}`} style={styles.timeRow}>
-            <TouchableRipple
-              style={[styles.timeChip, { borderColor: theme.colors.outline }]}
-              onPress={() => setOpenTimeIdx(idx)}
-              accessibilityLabel={`Edit ${label} ${idx + 1}`}
-            >
-              <Text variant="bodyLarge">{t}</Text>
-            </TouchableRipple>
-            <IconButton
-              icon="close"
-              size={20}
-              onPress={() => setTimes(times.filter((_, i) => i !== idx))}
-              accessibilityLabel={`Remove ${label} ${idx + 1}`}
-            />
-            {openTimeIdx === idx && (
-              <DateTimePicker
-                value={parseTimeToDate(t)}
-                mode="time"
-                is24Hour={false}
-                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                onChange={(_event, picked) => {
-                  setOpenTimeIdx(null);
-                  if (picked) {
-                    const next = [...times];
-                    next[idx] = formatTime(picked);
-                    setTimes(next);
-                  }
+          // Stable key (NOT including the time) so the open picker doesn't
+          // remount on every spinner tick while the user is scrolling.
+          <View key={`time-${idx}`}>
+            <View style={styles.timeRow}>
+              <TouchableRipple
+                style={[styles.timeChip, { borderColor: theme.colors.outline }]}
+                onPress={() => setOpenTimeIdx(openTimeIdx === idx ? null : idx)}
+                accessibilityLabel={`Edit ${label} ${idx + 1}`}
+              >
+                <Text variant="bodyLarge">{t}</Text>
+              </TouchableRipple>
+              <IconButton
+                icon="close"
+                size={20}
+                onPress={() => {
+                  if (openTimeIdx === idx) setOpenTimeIdx(null);
+                  setTimes(times.filter((_, i) => i !== idx));
                 }}
+                accessibilityLabel={`Remove ${label} ${idx + 1}`}
               />
+            </View>
+            {openTimeIdx === idx && (
+              <View style={styles.timePickerWrap}>
+                <DateTimePicker
+                  value={parseTimeToDate(t)}
+                  mode="time"
+                  is24Hour={false}
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={(event, picked) => {
+                    // Android: a one-shot dialog — 'set' confirms, 'dismissed'
+                    // cancels. Close either way.
+                    if (Platform.OS === 'android') {
+                      setOpenTimeIdx(null);
+                      if (event.type === 'set' && picked) {
+                        const next = [...times];
+                        next[idx] = formatTime(picked);
+                        setTimes(next);
+                      }
+                      return;
+                    }
+                    // iOS: the spinner fires on every tick — update live and
+                    // KEEP it open; the user dismisses it with Done.
+                    if (picked) {
+                      const next = [...times];
+                      next[idx] = formatTime(picked);
+                      setTimes(next);
+                    }
+                  }}
+                />
+                {Platform.OS === 'ios' && (
+                  <Button
+                    compact
+                    onPress={() => setOpenTimeIdx(null)}
+                    style={styles.timeDone}
+                  >
+                    Done
+                  </Button>
+                )}
+              </View>
             )}
           </View>
         ))}
@@ -338,6 +368,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderWidth: 1,
     borderRadius: 4,
+  },
+  timePickerWrap: {
+    marginBottom: 8,
+  },
+  timeDone: {
+    alignSelf: 'flex-end',
   },
 });
 
