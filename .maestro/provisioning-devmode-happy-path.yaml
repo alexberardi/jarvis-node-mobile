@@ -43,17 +43,20 @@ env:
 - runFlow: login.yaml
 
 # --- Main tabs -> Nodes -> Add Node -> the provisioning entry (ScanForNodes). ---
-# SHAKEOUT: confirm the "Nodes" bottom-tab label and the "Add Node" FAB label on
-# the simulator (MainTabNavigator / NodeListScreen) — add testIDs if text proves
-# flaky.
-- tapOn: "Nodes"
-- tapOn: "Add Node"
+# Maestro text selectors are FULL-STRING regex matches, not "contains": the tab's
+# accessibility text is "Nodes, tab, N of M" and the FAB's is "Add Node", so a
+# bare "Nodes" never matches. Use a regex. (Validated on a real device 2026-06-23.)
+- tapOn:
+    text: "Nodes, tab.*"
+- tapOn:
+    text: "Add Node.*"
 - assertVisible:
     id: "prepare-button"
 
 # --- DEV_MODE "Simulator Mode": point the app at the dockerized fake node. ---
-- tapOn:
-    id: "dev-mode-toggle"
+# The panel is OPEN BY DEFAULT on a DEV_MODE build (showDevMode initializes to
+# EXPO_PUBLIC_DEV_MODE=true), so do NOT tap dev-mode-toggle — that would CLOSE it.
+# The ip/port inputs are already present.
 - assertVisible:
     id: "ip-input"
 - tapOn:
@@ -64,7 +67,12 @@ env:
     id: "port-input"
 - eraseText
 - inputText: "${NODE_PORT}"
-- hideKeyboard
+# Dismiss the numeric keyboard by tapping the (inert) appbar title — hideKeyboard
+# is unreliable on RN Paper's custom inputs, and a live keyboard SWALLOWS the next
+# button tap (the connect/provision tap silently no-ops). Tapping a neutral point
+# is a no-op when no keyboard is up, so it is always safe.
+- tapOn:
+    point: "50%,12%"
 
 # Fetch a provisioning token from CC (the app does this "on home WiFi", caching
 # the CC URL) and connect to the fake node over HTTP.
@@ -91,7 +99,9 @@ env:
 - tapOn:
     id: "password-input"
 - inputText: "${WIFI_PASSWORD}"
-- hideKeyboard
+# Dismiss the keyboard (see the note above) so it can't swallow the provision tap.
+- tapOn:
+    point: "50%,12%"
 - tapOn:
     id: "provision-button"
 
@@ -107,7 +117,8 @@ env:
 # --- Success: the app reports completion. The AUTHORITATIVE check (node-online
 #     via CC) is the CI lane's job — the app's Success screen lies on node error. ---
 - extendedWaitUntil:
-    visible: "Success!"
+    visible:
+      text: "Success.*"
     timeout: 30000
 - assertVisible:
     id: "done-button"
