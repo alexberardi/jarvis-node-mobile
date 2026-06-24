@@ -12,6 +12,19 @@ tool can automate.
 | `provisioning-devmode-happy-path.yaml` | DEV_MODE "Simulator Mode" → connect to the fake node → NodeInfo → SelectNetwork → EnterPassword → provision → Success |
 | `login.yaml` | reusable auth subflow (email/password → household) |
 
+**Validated end-to-end on a real device (2026-06-23):** the full provisioning
+flow ran on an iOS simulator against a live command-center + the fake node — the
+app fetched a provisioning token, drove `/info` → `/scan-networks` →
+`/provision/k2` → `/provision`, the fake node registered the node with CC, and the
+node appeared **Online** in the app's CC-backed Nodes list. Three gotchas the run
+surfaced are baked into the flows:
+- **Text selectors are full-string regex, not "contains"** — the Nodes tab is
+  `"Nodes, tab, N of M"`, so use `text: "Nodes, tab.*"`, not `"Nodes"`.
+- **The "Simulator Mode" panel is open by default** on a DEV_MODE build
+  (`showDevMode` inits to `EXPO_PUBLIC_DEV_MODE`) — do NOT tap the toggle.
+- **`hideKeyboard` is unreliable** on RN Paper inputs and a live keyboard swallows
+  the next button tap — dismiss with a neutral `tapOn: {point: "50%,12%"}` first.
+
 **Prerequisites** (build + harness): a `development-e2e` dev-client build
 (`EXPO_PUBLIC_DEV_MODE=true` baked — see `eas.json`), the core stack + fake node
 up, and config discovery pointed at a CC URL reachable from both the simulator
