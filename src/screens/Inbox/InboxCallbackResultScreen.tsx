@@ -83,7 +83,7 @@ const InboxCallbackResultScreen = () => {
 
   const header = (
     <View style={[styles.header, { backgroundColor: theme.colors.background }]}>
-      <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+      <TouchableOpacity testID="back-button" onPress={() => navigation.goBack()} style={styles.backButton}>
         <Icon source="arrow-left" size={24} color={theme.colors.onSurface} />
         <Text variant="bodyLarge" style={{ color: theme.colors.onSurface, marginLeft: 8 }}>
           Back
@@ -97,8 +97,8 @@ const InboxCallbackResultScreen = () => {
       <View style={styles.container}>
         {header}
         <View style={styles.center}>
-          <Text variant="bodyLarge" style={{ color: theme.colors.error }}>{error}</Text>
-          <Button mode="text" onPress={() => { setError(null); startedAt.current = Date.now(); poll(); }} style={{ marginTop: 8 }}>
+          <Text testID="error-message" variant="bodyLarge" style={{ color: theme.colors.error }}>{error}</Text>
+          <Button testID="retry-button" mode="text" onPress={() => { setError(null); startedAt.current = Date.now(); poll(); }} style={{ marginTop: 8 }}>
             Retry
           </Button>
         </View>
@@ -111,7 +111,7 @@ const InboxCallbackResultScreen = () => {
       <View style={styles.container}>
         {header}
         <View style={styles.center}>
-          <ActivityIndicator size="large" />
+          <ActivityIndicator testID="pending-indicator" size="large" />
           <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant, marginTop: 12 }}>
             {route.params.title ? `Loading ${route.params.title}…` : 'Loading…'}
           </Text>
@@ -125,7 +125,7 @@ const InboxCallbackResultScreen = () => {
       <View style={styles.container}>
         {header}
         <View style={styles.center}>
-          <Text variant="bodyLarge" style={{ color: theme.colors.error }}>
+          <Text testID="error-message" variant="bodyLarge" style={{ color: theme.colors.error }}>
             {status.status === 'expired' ? 'This request expired.' : (status.error_message || 'Something went wrong.')}
           </Text>
         </View>
@@ -152,10 +152,10 @@ const InboxCallbackResultScreen = () => {
     <View style={styles.container}>
       {header}
       <ScrollView contentContainerStyle={styles.content}>
-        <Chip compact style={styles.chip} textStyle={styles.chipText}>
+        <Chip testID="status-chip" compact style={styles.chip} textStyle={styles.chipText}>
           drill-down
         </Chip>
-        <Text variant="headlineSmall" style={styles.heading}>
+        <Text testID="result-heading" variant="headlineSmall" style={styles.heading}>
           {inbox.title || route.params.title || 'Result'}
         </Text>
         {inbox.summary ? (
@@ -166,8 +166,8 @@ const InboxCallbackResultScreen = () => {
         <Divider style={{ marginBottom: 16 }} />
         {inbox.body
           ? (useMarkdown
-              ? <Markdown style={markdownStyles}>{inbox.body}</Markdown>
-              : <Text variant="bodyMedium" selectable>{inbox.body}</Text>)
+              ? <View testID="result-body"><Markdown style={markdownStyles}>{inbox.body}</Markdown></View>
+              : <Text testID="result-body" variant="bodyMedium" selectable>{inbox.body}</Text>)
           : null}
         {elements.length > 0 ? (
           <InteractiveElementsSection

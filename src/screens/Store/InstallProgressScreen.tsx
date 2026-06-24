@@ -191,6 +191,7 @@ const InstallProgressScreen = () => {
           icon="arrow-left"
           onPress={() => navigation.goBack()}
           style={styles.backButton}
+          testID="install-progress-back-button"
         />
         <Text
           variant="headlineSmall"
@@ -215,13 +216,14 @@ const InstallProgressScreen = () => {
           const statusValue: InstallStatusValue = status?.status || 'pending';
 
           return (
-            <Card key={entry.requestId} style={styles.card}>
+            <Card key={entry.requestId} style={styles.card} testID={`install-progress-card-${entry.requestId}`}>
               <Card.Content style={styles.cardContent}>
                 <View style={{ flex: 1 }}>
                   <Text variant="titleMedium">{entry.nodeName}</Text>
                   <Text
                     variant="bodySmall"
                     style={{ color: theme.colors.onSurfaceVariant }}
+                    testID={`install-progress-status-label-${entry.requestId}`}
                   >
                     {installStatusLabel(statusValue, !!pollError, status?.error_message)}
                   </Text>
@@ -250,6 +252,7 @@ const InstallProgressScreen = () => {
                     onPress={() => handleRetry(entry)}
                     loading={retrying.has(entry.nodeId)}
                     disabled={retrying.has(entry.nodeId)}
+                    testID={`install-progress-retry-button-${entry.requestId}`}
                   >
                     Retry
                   </Button>
@@ -267,6 +270,7 @@ const InstallProgressScreen = () => {
               mode="outlined"
               onPress={handleCheckStatus}
               style={{ flex: 1, marginRight: 8 }}
+              testID="install-progress-check-status-button"
             >
               Retry
             </Button>
@@ -275,6 +279,7 @@ const InstallProgressScreen = () => {
             mode="contained"
             onPress={() => navigation.popToTop()}
             style={{ flex: 1 }}
+            testID="install-progress-done-button"
           >
             {allDone ? 'Done' : 'Back'}
           </Button>

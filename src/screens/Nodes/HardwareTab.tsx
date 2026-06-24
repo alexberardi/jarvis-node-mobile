@@ -94,6 +94,7 @@ export const HardwareTab = ({ nodeId, node }: Props) => {
                 : 'No voice profile yet. Enroll so Jarvis can identify you.'}
           </Text>
           <Button
+            testID="voice-recognition-enroll-btn"
             mode={hasVoiceProfile ? 'outlined' : 'contained'}
             icon={hasVoiceProfile ? 'account-check' : 'account-plus'}
             onPress={() => navigation.navigate('VoiceProfile')}
@@ -146,6 +147,7 @@ export const HardwareTab = ({ nodeId, node }: Props) => {
             left={(props) => <List.Icon {...props} icon="identifier" />}
             right={() => (
               <IconButton
+                testID="node-id-copy-btn"
                 icon={copied ? 'check' : 'content-copy'}
                 size={18}
                 onPress={handleCopyId}
