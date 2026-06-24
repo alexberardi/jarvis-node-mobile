@@ -122,14 +122,19 @@ const FieldEditor: React.FC<Props> = ({
           onDismiss={() => setEnumMenuVisible(false)}
           anchor={
             <TouchableRipple onPress={() => setEnumMenuVisible(true)}>
-              <TextInput
-                mode="outlined"
-                value={value === null || value === undefined ? '' : String(value)}
-                editable={false}
-                right={<TextInput.Icon icon="menu-down" />}
-                placeholder={spec.placeholder ?? 'Select...'}
-                error={Boolean(error)}
-              />
+              {/* pointerEvents="none" so the non-editable TextInput doesn't
+                  swallow the tap — it falls through to TouchableRipple, which
+                  opens the Menu. Without this the dropdown renders but never opens. */}
+              <View pointerEvents="none">
+                <TextInput
+                  mode="outlined"
+                  value={value === null || value === undefined ? '' : String(value)}
+                  editable={false}
+                  right={<TextInput.Icon icon="menu-down" />}
+                  placeholder={spec.placeholder ?? 'Select...'}
+                  error={Boolean(error)}
+                />
+              </View>
             </TouchableRipple>
           }
         >
