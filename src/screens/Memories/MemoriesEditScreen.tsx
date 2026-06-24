@@ -149,7 +149,7 @@ const MemoriesEditScreen = ({ navigation, route }: Props) => {
         <Appbar.BackAction onPress={() => navigation.goBack()} />
         <Appbar.Content title={isNew ? 'New Memory' : 'Edit Memory'} />
         {!isNew && !readOnly && (
-          <Appbar.Action icon="delete-outline" onPress={handleDelete} />
+          <Appbar.Action testID="memory-delete-button" icon="delete-outline" onPress={handleDelete} />
         )}
       </Appbar.Header>
 
@@ -170,6 +170,7 @@ const MemoriesEditScreen = ({ navigation, route }: Props) => {
           Content
         </Text>
         <TextInput
+          testID="memory-content-input"
           mode="outlined"
           multiline
           numberOfLines={4}
@@ -222,7 +223,7 @@ const MemoriesEditScreen = ({ navigation, route }: Props) => {
               Pinned memories are always included in Jarvis's context.
             </Text>
           </View>
-          <Switch value={isPinned} onValueChange={setIsPinned} disabled={readOnly || saving} />
+          <Switch testID="memory-pin-switch" value={isPinned} onValueChange={setIsPinned} disabled={readOnly || saving} />
         </View>
 
         {existing && (
@@ -238,6 +239,7 @@ const MemoriesEditScreen = ({ navigation, route }: Props) => {
 
         {!readOnly && (
           <Button
+            testID="memory-save-button"
             mode="contained"
             onPress={handleSave}
             loading={saving}
