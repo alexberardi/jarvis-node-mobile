@@ -18,7 +18,14 @@ import {
 } from 'react-native-paper';
 
 import FieldEditor from '../../components/CommandData/FieldEditor';
-import { CommandSchema, getRecord, updateRecord } from '../../api/commandDataApi';
+import {
+  CommandSchema,
+  createRecord,
+  getRecord,
+  getSchema,
+  updateRecord,
+} from '../../api/commandDataApi';
+import { creatableFields, seedDefaults } from '../../utils/commandDataForm';
 import type { CommandDataStackParamList } from '../../navigation/types';
 
 type Nav = NativeStackNavigationProp<CommandDataStackParamList, 'DataBrowserEdit'>;
@@ -29,6 +36,7 @@ const RecordEditScreen = () => {
   const route = useRoute<Route>();
   const theme = useTheme();
   const { nodeId, commandName, recordKey } = route.params;
+  const isCreate = recordKey === undefined;
 
   const [schema, setSchema] = useState<CommandSchema | null>(null);
   const [values, setValues] = useState<Record<string, unknown>>({});
@@ -40,17 +48,24 @@ const RecordEditScreen = () => {
 
   useEffect(() => {
     let mounted = true;
-    getRecord(nodeId, commandName, recordKey)
-      .then((result) => {
-        if (!mounted) return;
-        setSchema(result.schema);
-        setOriginal(result.record);
-        setValues({ ...result.record });
-      })
+    const loaded = isCreate
+      ? getSchema(nodeId, commandName).then((result) => {
+          if (!mounted) return;
+          setSchema(result);
+          setOriginal({});
+          setValues(seedDefaults(result.fields));
+        })
+      : getRecord(nodeId, commandName, recordKey as string).then((result) => {
+          if (!mounted) return;
+          setSchema(result.schema);
+          setOriginal(result.record);
+          setValues({ ...result.record });
+        });
+    loaded
       .catch((err) => {
         if (!mounted) return;
         console.error('[RecordEdit] load failed', err);
-        setError('Could not load record.');
+        setError(isCreate ? 'Could not load the form.' : 'Could not load record.');
       })
       .finally(() => {
         if (mounted) setLoading(false);
@@ -58,7 +73,7 @@ const RecordEditScreen = () => {
     return () => {
       mounted = false;
     };
-  }, [nodeId, commandName, recordKey]);
+  }, [nodeId, commandName, recordKey, isCreate]);
 
   const buildPatch = useCallback((): Record<string, unknown> => {
     if (!schema) return {};
@@ -73,17 +88,32 @@ const RecordEditScreen = () => {
     return patch;
   }, [schema, values, original]);
 
+  const buildCreatePayload = useCallback((): Record<string, unknown> => {
+    if (!schema) return {};
+    const payload: Record<string, unknown> = {};
+    for (const field of creatableFields(schema.fields)) {
+      const next = values[field.name];
+      if (next !== undefined) payload[field.name] = next;
+    }
+    return payload;
+  }, [schema, values]);
+
   const handleSave = useCallback(async () => {
     setSaving(true);
     setError(null);
     setFieldErrors({});
     try {
+      if (isCreate) {
+        await createRecord(nodeId, commandName, buildCreatePayload());
+        navigation.goBack();
+        return;
+      }
       const patch = buildPatch();
       if (Object.keys(patch).length === 0) {
         navigation.goBack();
         return;
       }
-      await updateRecord(nodeId, commandName, recordKey, patch);
+      await updateRecord(nodeId, commandName, recordKey as string, patch);
       navigation.goBack();
     } catch (err) {
       console.error('[RecordEdit] save failed', err);
@@ -107,13 +137,22 @@ const RecordEditScreen = () => {
     } finally {
       setSaving(false);
     }
-  }, [nodeId, commandName, recordKey, schema, buildPatch, navigation]);
+  }, [
+    nodeId,
+    commandName,
+    recordKey,
+    isCreate,
+    schema,
+    buildPatch,
+    buildCreatePayload,
+    navigation,
+  ]);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <Appbar.Header>
         <Appbar.BackAction onPress={() => navigation.goBack()} />
-        <Appbar.Content title="Edit Record" />
+        <Appbar.Content title={isCreate ? 'Add Record' : 'Edit Record'} />
       </Appbar.Header>
       {loading ? (
         <ActivityIndicator style={styles.spinner} />
@@ -124,7 +163,7 @@ const RecordEditScreen = () => {
           )}
           <Card style={styles.card}>
             <Card.Content>
-              {schema.fields.map((spec) => (
+              {(isCreate ? creatableFields(schema.fields) : schema.fields).map((spec) => (
                 <FieldEditor
                   key={spec.name}
                   spec={spec}
@@ -149,7 +188,7 @@ const RecordEditScreen = () => {
             disabled={saving}
             style={styles.saveBtn}
           >
-            Save
+            {isCreate ? 'Add' : 'Save'}
           </Button>
         </ScrollView>
       ) : (
