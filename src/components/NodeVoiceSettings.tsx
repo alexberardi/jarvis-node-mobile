@@ -9,6 +9,7 @@ import {
   Icon,
   Switch,
   Text,
+  TextInput,
   useTheme,
 } from 'react-native-paper';
 
@@ -35,6 +36,10 @@ interface VoiceSettings {
   follow_up_min_speech_secs: number;
   volume_percent: number;
   is_muted: boolean;
+  wake_word_model: string;
+  not_for_me_quiet_seconds: number;
+  audio_output_device: string;
+  mic_sample_rate: number;
 }
 
 const DEFAULTS: VoiceSettings = {
@@ -49,7 +54,16 @@ const DEFAULTS: VoiceSettings = {
   follow_up_min_speech_secs: 0.3,
   volume_percent: 100,
   is_muted: false,
+  wake_word_model: 'hey_jarvis',
+  not_for_me_quiet_seconds: 20.0,
+  audio_output_device: '',
+  mic_sample_rate: 48000,
 };
+
+// mic_sample_rate is constrained to these two rates; the slider's step spans
+// exactly the gap so only the two stops are reachable.
+const MIC_SAMPLE_RATE_MIN = 44100;
+const MIC_SAMPLE_RATE_MAX = 48000;
 
 interface SliderRowProps {
   label: string;
@@ -59,9 +73,10 @@ interface SliderRowProps {
   max: number;
   step: number;
   onChange: (v: number) => void;
+  testID?: string;
 }
 
-const SliderRow = ({ label, value, displayValue, min, max, step, onChange }: SliderRowProps) => {
+const SliderRow = ({ label, value, displayValue, min, max, step, onChange, testID }: SliderRowProps) => {
   const theme = useTheme();
   return (
     <View style={styles.settingRow}>
@@ -72,6 +87,7 @@ const SliderRow = ({ label, value, displayValue, min, max, step, onChange }: Sli
         </Text>
       </View>
       <Slider
+        testID={testID}
         style={styles.slider}
         minimumValue={min}
         maximumValue={max}
@@ -85,6 +101,28 @@ const SliderRow = ({ label, value, displayValue, min, max, step, onChange }: Sli
     </View>
   );
 };
+
+interface TextInputRowProps {
+  label: string;
+  value: string;
+  placeholder?: string;
+  onChange: (v: string) => void;
+}
+
+const TextInputRow = ({ label, value, placeholder, onChange }: TextInputRowProps) => (
+  <View style={styles.settingRow}>
+    <Text variant="bodyMedium" style={styles.textInputLabel}>{label}</Text>
+    <TextInput
+      mode="outlined"
+      dense
+      value={value}
+      placeholder={placeholder}
+      onChangeText={onChange}
+      autoCapitalize="none"
+      autoCorrect={false}
+    />
+  </View>
+);
 
 export const NodeVoiceSettings = ({ nodeId }: Props) => {
   const theme = useTheme();
@@ -117,11 +155,15 @@ export const NodeVoiceSettings = ({ nodeId }: Props) => {
       follow_up_min_speech_secs: nc.follow_up_min_speech_secs ?? DEFAULTS.follow_up_min_speech_secs,
       volume_percent: nc.volume_percent ?? DEFAULTS.volume_percent,
       is_muted: nc.hardware?.is_muted ?? DEFAULTS.is_muted,
+      wake_word_model: nc.wake_word_model ?? DEFAULTS.wake_word_model,
+      not_for_me_quiet_seconds: nc.not_for_me_quiet_seconds ?? DEFAULTS.not_for_me_quiet_seconds,
+      audio_output_device: nc.audio_output_device ?? DEFAULTS.audio_output_device,
+      mic_sample_rate: nc.mic_sample_rate ?? DEFAULTS.mic_sample_rate,
     });
     seededRef.current = true;
   }, [snapshot, snapshotState]);
 
-  const update = useCallback((key: keyof VoiceSettings, value: number | boolean) => {
+  const update = useCallback((key: keyof VoiceSettings, value: number | string | boolean) => {
     setSettings((prev) => ({ ...prev, [key]: value }));
     setDirty(true);
   }, []);
@@ -178,6 +220,10 @@ export const NodeVoiceSettings = ({ nodeId }: Props) => {
         follow_up_min_speech_secs: settings.follow_up_min_speech_secs,
         volume_percent: settings.volume_percent,
         is_muted: settings.is_muted,
+        wake_word_model: settings.wake_word_model,
+        not_for_me_quiet_seconds: settings.not_for_me_quiet_seconds,
+        audio_output_device: settings.audio_output_device,
+        mic_sample_rate: settings.mic_sample_rate,
       };
       await updateNodeConfig(nodeId, payload, false);
       setDirty(false);
@@ -449,6 +495,65 @@ export const NodeVoiceSettings = ({ nodeId }: Props) => {
           LED is the only "I heard you" cue — feels snappier for fast-path
           queries that respond in well under a second.
         </Text>
+
+        <Divider style={styles.divider} />
+
+        <TextInputRow
+          label="Wake Word Model"
+          value={settings.wake_word_model}
+          placeholder="hey_jarvis"
+          onChange={(v) => update('wake_word_model', v)}
+        />
+        <Text variant="labelSmall" style={styles.hint}>
+          openWakeWord model name. Change for a custom or non-English wake word.
+        </Text>
+
+        <Divider style={styles.divider} />
+
+        <SliderRow
+          testID="slider-not_for_me_quiet_seconds"
+          label="Not-For-Me Quiet Time"
+          value={settings.not_for_me_quiet_seconds}
+          displayValue={`${Math.round(settings.not_for_me_quiet_seconds)}s`}
+          min={5}
+          max={60}
+          step={5}
+          onChange={(v) => update('not_for_me_quiet_seconds', v)}
+        />
+        <Text variant="labelSmall" style={styles.hint}>
+          How long to suppress wakes after a wake is classified as not meant
+          for this node (ambient false-wake).
+        </Text>
+
+        <Divider style={styles.divider} />
+
+        <TextInputRow
+          label="Audio Output Device"
+          value={settings.audio_output_device}
+          placeholder="auto-detect"
+          onChange={(v) => update('audio_output_device', v)}
+        />
+        <Text variant="labelSmall" style={styles.hint}>
+          ALSA playback device for TTS (e.g. plughw:1,0). Leave blank to
+          auto-detect.
+        </Text>
+
+        <Divider style={styles.divider} />
+
+        <SliderRow
+          testID="slider-mic_sample_rate"
+          label="Mic Sample Rate"
+          value={settings.mic_sample_rate}
+          displayValue={String(Math.round(settings.mic_sample_rate))}
+          min={MIC_SAMPLE_RATE_MIN}
+          max={MIC_SAMPLE_RATE_MAX}
+          step={MIC_SAMPLE_RATE_MAX - MIC_SAMPLE_RATE_MIN}
+          onChange={(v) => update('mic_sample_rate', v)}
+        />
+        <Text variant="labelSmall" style={styles.hint}>
+          Mic capture rate in Hz. Use the lower rate only for USB mics that
+          reject the higher one; audio is resampled to 16 kHz either way.
+        </Text>
       </Card.Content>
 
       {dirty && (
@@ -487,6 +592,9 @@ const styles = StyleSheet.create({
     opacity: 0.6,
     marginBottom: 4,
     marginTop: -2,
+  },
+  textInputLabel: {
+    marginBottom: 4,
   },
   divider: {
     marginVertical: 8,
