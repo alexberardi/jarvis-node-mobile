@@ -440,6 +440,7 @@ const SettingsScreen = () => {
               dense
               style={{ flex: 1 }}
               onSubmitEditing={handleCreateHousehold}
+              testID="create-household-name"
             />
             <Button
               mode="contained"

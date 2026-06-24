@@ -424,6 +424,7 @@ const InteractiveListScreen = () => {
           <View style={styles.resultActions}>
             {typeof result.url === 'string' && result.url ? (
               <Button
+                testID="open-link-button"
                 mode="contained"
                 icon="open-in-new"
                 onPress={() => openUrl(result.url!)}
@@ -433,6 +434,7 @@ const InteractiveListScreen = () => {
             ) : null}
             {typeof result.text === 'string' && result.text ? (
               <Button
+                testID="copy-to-clipboard-button"
                 mode="contained"
                 icon={copied ? 'check' : 'content-copy'}
                 onPress={onCopyText}
@@ -501,6 +503,7 @@ const InteractiveListScreen = () => {
     return (
       <React.Fragment key={row.key}>
         <TouchableOpacity
+          testID={`interactive-row-${row.key}`}
           style={styles.itemRow}
           onPress={() => toggleSelected(row.key)}
           disabled={!state.selectable || busy}
@@ -539,12 +542,14 @@ const InteractiveListScreen = () => {
           {row.control === 'checkbox_stepper' && state.enabled && (
             <View style={styles.stepper}>
               <IconButton
+                testID={`quantity-minus-${row.key}`}
                 icon="minus"
                 size={16}
                 disabled={busy || parseQuantity(quantities[row.key]) <= 1}
                 onPress={() => bumpQuantity(row.key, -1)}
               />
               <TextInput
+                testID={`quantity-input-${row.key}`}
                 mode="outlined"
                 dense
                 value={quantities[row.key] ?? '1'}
@@ -561,6 +566,7 @@ const InteractiveListScreen = () => {
                 contentStyle={styles.quantityInputContent}
               />
               <IconButton
+                testID={`quantity-plus-${row.key}`}
                 icon="plus"
                 size={16}
                 disabled={busy || parseQuantity(quantities[row.key]) >= MAX_QUANTITY}
@@ -661,6 +667,7 @@ const InteractiveListScreen = () => {
               {selected.size} of {selectableKeys.length} selected
             </Text>
             <Button
+              testID="select-all-toggle"
               compact
               mode="text"
               onPress={toggleSelectAll}

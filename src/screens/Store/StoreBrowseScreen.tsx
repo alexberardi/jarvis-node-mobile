@@ -171,6 +171,7 @@ const StoreBrowseScreen = () => {
     <Card
       style={styles.card}
       onPress={() => navigation.navigate('StoreDetail', { commandName: item.command_name })}
+      testID={`package-card-${item.command_name}`}
     >
       <Card.Content>
         <View style={styles.cardHeader}>
@@ -298,6 +299,7 @@ const StoreBrowseScreen = () => {
         value={query}
         onChangeText={setQuery}
         style={styles.searchbar}
+        testID="searchbar-input"
       />
 
       {categories.length > 0 && (
@@ -312,6 +314,7 @@ const StoreBrowseScreen = () => {
             showSelectedCheck={false}
             onPress={() => setSelectedCategory(null)}
             compact
+            testID="category-chip-All"
           >
             All
           </Chip>
@@ -324,6 +327,7 @@ const StoreBrowseScreen = () => {
                 setSelectedCategory(selectedCategory === cat.name ? null : cat.name)
               }
               compact
+              testID={`category-chip-${cat.name}`}
             >
               {cat.name} ({cat.count})
             </Chip>
@@ -346,6 +350,7 @@ const StoreBrowseScreen = () => {
             mode="outlined"
             onPress={() => setSort(opt.value)}
             compact
+            testID={`sort-chip-${opt.value}`}
           >
             {opt.label}
           </Chip>
