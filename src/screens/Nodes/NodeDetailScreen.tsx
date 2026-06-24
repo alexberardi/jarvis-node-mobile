@@ -84,7 +84,9 @@ type DeleteStep =
   | { kind: 'running' }
   | { kind: 'error'; message: string };
 
-const OverviewTab = ({
+// Exported for L1 flow-integration testing of the delete state machine
+// (__tests__/flows/nodeDeleteFlow.test.tsx) without the full screen's route/tabs.
+export const OverviewTab = ({
   node,
   canDelete,
 }: {
@@ -168,6 +170,7 @@ const OverviewTab = ({
               even if the node has already been reset or reflashed.
             </Text>
             <Button
+              testID="node-delete-button"
               mode="outlined"
               icon="delete-alert-outline"
               textColor={theme.colors.error}
@@ -205,8 +208,9 @@ const OverviewTab = ({
                 This action cannot be undone.
               </Text>
               <View style={styles.modalActions}>
-                <Button onPress={() => setDeleteStep({ kind: 'closed' })}>Cancel</Button>
+                <Button testID="node-delete-cancel" onPress={() => setDeleteStep({ kind: 'closed' })}>Cancel</Button>
                 <Button
+                  testID="node-delete-confirm"
                   mode="contained"
                   buttonColor={theme.colors.error}
                   textColor={theme.colors.onError}
@@ -234,7 +238,7 @@ const OverviewTab = ({
                 {deleteStep.message}
               </Text>
               <View style={styles.modalActions}>
-                <Button onPress={() => setDeleteStep({ kind: 'closed' })}>Close</Button>
+                <Button testID="node-delete-error-close" onPress={() => setDeleteStep({ kind: 'closed' })}>Close</Button>
               </View>
             </>
           )}
