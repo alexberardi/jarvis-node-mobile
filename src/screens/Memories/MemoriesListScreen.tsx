@@ -115,6 +115,7 @@ const MemoriesListScreen = () => {
     const isAgent = memory.source === 'agent' || memory.category === 'agent_context';
     return (
       <Card
+        testID={`memory-card-${memory.id}`}
         style={[styles.card, !memory.editable && styles.readOnlyCard]}
         onPress={() =>
           navigation.navigate('MemoryEdit', { memoryId: memory.id })
@@ -182,7 +183,11 @@ const MemoriesListScreen = () => {
     }
     const renderRight =
       (_progress: SharedValue<number>, _drag: SharedValue<number>) => (
-        <TouchableRipple style={styles.deleteAction} onPress={() => handleDelete(item)}>
+        <TouchableRipple
+          testID={`memory-delete-${item.id}`}
+          style={styles.deleteAction}
+          onPress={() => handleDelete(item)}
+        >
           <IconButton icon="delete-outline" iconColor="#fff" size={24} />
         </TouchableRipple>
       );
@@ -257,6 +262,7 @@ const MemoriesListScreen = () => {
 
       {householdId && (
         <FAB
+          testID="memory-add-fab"
           icon="plus"
           style={styles.fab}
           onPress={() => navigation.navigate('MemoryEdit', {})}
