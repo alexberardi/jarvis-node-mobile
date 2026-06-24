@@ -67,12 +67,15 @@ env:
     id: "port-input"
 - eraseText
 - inputText: "${NODE_PORT}"
-# Dismiss the numeric keyboard by tapping the (inert) appbar title — hideKeyboard
-# is unreliable on RN Paper's custom inputs, and a live keyboard SWALLOWS the next
-# button tap (the connect/provision tap silently no-ops). Tapping a neutral point
-# is a no-op when no keyboard is up, so it is always safe.
+# Dismiss the keyboard before the connect tap. hideKeyboard is unreliable on RN
+# Paper inputs, and a LIVE keyboard SWALLOWS the next button tap (the tap just
+# dismisses the keyboard instead of pressing the button — a silent no-op). Tapping
+# an INERT on-screen label reliably dismisses it (an appbar-title point tap does
+# NOT — it's outside the scroll view); waitForAnimationToEnd lets it settle first.
 - tapOn:
-    point: "50%,12%"
+    text: "Simulator Mode"
+- waitForAnimationToEnd:
+    timeout: 3000
 
 # Fetch a provisioning token from CC (the app does this "on home WiFi", caching
 # the CC URL) and connect to the fake node over HTTP.
@@ -99,9 +102,12 @@ env:
 - tapOn:
     id: "password-input"
 - inputText: "${WIFI_PASSWORD}"
-# Dismiss the keyboard (see the note above) so it can't swallow the provision tap.
+# Dismiss the keyboard before the provision tap (see the note above): tap the inert
+# "Connecting to: <ssid>" label, then let the dismiss animation settle.
 - tapOn:
-    point: "50%,12%"
+    text: "Connecting to.*"
+- waitForAnimationToEnd:
+    timeout: 3000
 - tapOn:
     id: "provision-button"
 
