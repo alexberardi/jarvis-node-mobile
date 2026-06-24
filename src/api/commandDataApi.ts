@@ -23,6 +23,9 @@ export interface FieldSpec {
   label?: string;
   description?: string;
   editable?: boolean;
+  /** Settable while creating a new record, read-only when editing an existing
+   *  one (e.g. a record's scope/ownership). */
+  create_only?: boolean;
   required?: boolean;
   enum_values?: string[];
   item_type?: string;
@@ -32,6 +35,8 @@ export interface FieldSpec {
 
 export interface CommandSchema {
   mode: 'enabled' | 'disabled' | 'readonly' | string;
+  /** When true the command supports creating new records (mobile shows "+"). */
+  supports_create?: boolean;
   fields: FieldSpec[];
 }
 
@@ -128,6 +133,18 @@ export const updateRecord = async (
   const res = await apiClient.patch<{ record: Record<string, unknown> }>(
     `${base()}/nodes/${encodeURIComponent(nodeId)}/commands/${encodeURIComponent(commandName)}/records/${encodeURIComponent(key)}`,
     { patch },
+  );
+  return res.data;
+};
+
+export const createRecord = async (
+  nodeId: string,
+  commandName: string,
+  data: Record<string, unknown>,
+): Promise<{ record: Record<string, unknown>; key: string }> => {
+  const res = await apiClient.post<{ record: Record<string, unknown>; key: string }>(
+    `${base()}/nodes/${encodeURIComponent(nodeId)}/commands/${encodeURIComponent(commandName)}/records`,
+    { data },
   );
   return res.data;
 };

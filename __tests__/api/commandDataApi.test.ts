@@ -1,4 +1,5 @@
 import {
+  createRecord,
   deleteRecord,
   getRecord,
   getSchema,
@@ -13,6 +14,7 @@ jest.mock('../../src/api/apiClient', () => ({
   __esModule: true,
   default: {
     get: jest.fn(),
+    post: jest.fn(),
     patch: jest.fn(),
     delete: jest.fn(),
   },
@@ -83,6 +85,30 @@ describe('commandDataApi', () => {
     await getRecord('n1', 'reminder', 'rem with space');
     expect(apiClient.get).toHaveBeenCalledWith(
       `${BASE}/nodes/n1/commands/reminder/records/rem%20with%20space`,
+    );
+  });
+
+  it('createRecord POSTs to the collection with {data: ...}', async () => {
+    (apiClient.post as jest.Mock).mockResolvedValueOnce({
+      data: { record: { id: 'med-1', name: 'Vitamin D' }, key: 'med-1' },
+    });
+    const result = await createRecord('n1', 'medication', {
+      name: 'Vitamin D',
+      scope: 'personal',
+    });
+    expect(apiClient.post).toHaveBeenCalledWith(
+      `${BASE}/nodes/n1/commands/medication/records`,
+      { data: { name: 'Vitamin D', scope: 'personal' } },
+    );
+    expect(result.key).toBe('med-1');
+  });
+
+  it('createRecord URL-encodes node + command', async () => {
+    (apiClient.post as jest.Mock).mockResolvedValueOnce({ data: { record: {}, key: 'k' } });
+    await createRecord('n 1', 'med tracker', { name: 'x' });
+    expect(apiClient.post).toHaveBeenCalledWith(
+      `${BASE}/nodes/n%201/commands/med%20tracker/records`,
+      { data: { name: 'x' } },
     );
   });
 

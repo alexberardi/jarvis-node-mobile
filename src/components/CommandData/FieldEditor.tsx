@@ -10,10 +10,13 @@
  * `editable=false` on a FieldSpec also forces read-only regardless of
  * the screen mode (see RecordEditScreen).
  */
+import DateTimePicker from '@react-native-community/datetimepicker';
 import React, { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import {
+  Button,
   HelperText,
+  IconButton,
   Menu,
   Switch,
   Text,
@@ -23,6 +26,7 @@ import {
 } from 'react-native-paper';
 
 import type { FieldSpec } from '../../api/commandDataApi';
+import { coerceTimeList, formatTime, parseTimeToDate } from '../../utils/time';
 
 interface Props {
   spec: FieldSpec;
@@ -46,6 +50,7 @@ const formatDisplayValue = (
   if (spec.type === 'user_ref' && displayName) {
     return `${displayName} (${value})`;
   }
+  if (Array.isArray(value)) return value.map(String).join(', ');
   if (typeof value === 'object') return JSON.stringify(value);
   return String(value);
 };
@@ -60,6 +65,7 @@ const FieldEditor: React.FC<Props> = ({
 }) => {
   const theme = useTheme();
   const [enumMenuVisible, setEnumMenuVisible] = useState(false);
+  const [openTimeIdx, setOpenTimeIdx] = useState<number | null>(null);
 
   const label = spec.label ?? spec.name;
   const helper = spec.description;
@@ -197,9 +203,67 @@ const FieldEditor: React.FC<Props> = ({
     );
   }
 
-  // Datetime / date / time — text input with format hint until a native
-  // picker dep lands. `@react-native-community/datetimepicker` is
-  // declared in package.json; wiring it here is a v1.1 task.
+  // Array of times (e.g. medication dose_times): editable rows of HH:MM with
+  // add/remove, each backed by the native time picker. Emits a real string[]
+  // (the node's coerce_dose_times also accepts a CSV string, so reads are
+  // tolerant of a value that previously round-tripped as text).
+  if (spec.type === 'array' && spec.item_type === 'time') {
+    const times = coerceTimeList(value);
+    const setTimes = (next: string[]) => onChange(next);
+    return (
+      <View style={styles.row}>
+        <Text variant="labelMedium" style={[styles.label, { color: theme.colors.onSurfaceVariant }]}>
+          {label}
+        </Text>
+        {times.map((t, idx) => (
+          <View key={`${idx}-${t}`} style={styles.timeRow}>
+            <TouchableRipple
+              style={[styles.timeChip, { borderColor: theme.colors.outline }]}
+              onPress={() => setOpenTimeIdx(idx)}
+              accessibilityLabel={`Edit ${label} ${idx + 1}`}
+            >
+              <Text variant="bodyLarge">{t}</Text>
+            </TouchableRipple>
+            <IconButton
+              icon="close"
+              size={20}
+              onPress={() => setTimes(times.filter((_, i) => i !== idx))}
+              accessibilityLabel={`Remove ${label} ${idx + 1}`}
+            />
+            {openTimeIdx === idx && (
+              <DateTimePicker
+                value={parseTimeToDate(t)}
+                mode="time"
+                is24Hour={false}
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={(_event, picked) => {
+                  setOpenTimeIdx(null);
+                  if (picked) {
+                    const next = [...times];
+                    next[idx] = formatTime(picked);
+                    setTimes(next);
+                  }
+                }}
+              />
+            )}
+          </View>
+        ))}
+        <Button
+          mode="text"
+          icon="plus"
+          onPress={() => setTimes([...times, '08:00'])}
+          accessibilityLabel={`Add ${label}`}
+        >
+          Add time
+        </Button>
+        {helper && <HelperText type="info">{helper}</HelperText>}
+        {error && <HelperText type="error">{error}</HelperText>}
+      </View>
+    );
+  }
+
+  // Datetime / date / time — text input with format hint. A native picker is
+  // used for arrays of times above; single date/time fields stay text for now.
   if (spec.type === 'datetime' || spec.type === 'date' || spec.type === 'time') {
     const placeholderByType: Record<string, string> = {
       datetime: 'YYYY-MM-DDTHH:MM:SS',
@@ -262,6 +326,18 @@ const styles = StyleSheet.create({
   boolLabel: {
     flex: 1,
     paddingRight: 12,
+  },
+  timeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  timeChip: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderRadius: 4,
   },
 });
 
