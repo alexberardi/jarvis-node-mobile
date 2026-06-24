@@ -22,8 +22,11 @@ surfaced are baked into the flows:
   `"Nodes, tab, N of M"`, so use `text: "Nodes, tab.*"`, not `"Nodes"`.
 - **The "Simulator Mode" panel is open by default** on a DEV_MODE build
   (`showDevMode` inits to `EXPO_PUBLIC_DEV_MODE`) — do NOT tap the toggle.
-- **`hideKeyboard` is unreliable** on RN Paper inputs and a live keyboard swallows
-  the next button tap — dismiss with a neutral `tapOn: {point: "50%,12%"}` first.
+- **`hideKeyboard` is unreliable** on RN Paper inputs, and a live keyboard swallows
+  the next button tap (it just dismisses the keyboard instead of pressing). Dismiss
+  by tapping an **inert on-screen label** (e.g. "Simulator Mode" / "Connecting to:")
+  then `waitForAnimationToEnd` — an appbar-title **point** tap does NOT dismiss it
+  (the appbar is outside the scroll view).
 
 **Prerequisites** (build + harness): a `development-e2e` dev-client build
 (`EXPO_PUBLIC_DEV_MODE=true` baked — see `eas.json`), the core stack + fake node

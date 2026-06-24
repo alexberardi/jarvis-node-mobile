@@ -13,10 +13,15 @@ name: login
 - tapOn:
     id: "password-input"
 - inputText: "${PASSWORD}"
-# Dismiss the keyboard via a neutral tap (hideKeyboard is unreliable on RN Paper
-# inputs and a live keyboard swallows the login tap). Same pattern as the
-# provisioning flow.
+# Dismiss the keyboard before the login tap (a live keyboard swallows it).
+# The login screen has no inert label to target, so tap an empty content point
+# (NOT the appbar at the top — that's outside the scroll view and won't dismiss)
+# and let it settle. UNTESTED — the real-device shakeout used a pre-authed session
+# so this subflow wasn't exercised; verify during the CI shakeout (a stable inert
+# label or a testID dismiss target is preferable if this proves flaky).
 - tapOn:
-    point: "50%,12%"
+    point: "50%,22%"
+- waitForAnimationToEnd:
+    timeout: 3000
 - tapOn:
     id: "login-button"
