@@ -225,6 +225,7 @@ const InboxListScreen = () => {
     const isSelected = selectedIds.has(item.id);
     return (
       <Card
+        testID={`inbox-item-${item.id}`}
         style={[
           styles.card,
           !item.is_read && styles.unreadCard,
@@ -256,6 +257,7 @@ const InboxListScreen = () => {
           <View style={styles.cardRow}>
             {selectMode && (
               <Checkbox
+                testID={`inbox-checkbox-${item.id}`}
                 status={isSelected ? 'checked' : 'unchecked'}
                 onPress={() => toggleSelected(item.id)}
               />
@@ -357,6 +359,7 @@ const InboxListScreen = () => {
         {selectMode ? (
           <View style={styles.headerActions}>
             <Button
+              testID="inbox-select-all"
               compact
               mode="text"
               onPress={toggleSelectAll}
@@ -364,7 +367,7 @@ const InboxListScreen = () => {
             >
               {allSelected ? 'Clear' : 'All'}
             </Button>
-            <Button compact mode="text" onPress={exitSelectMode}>
+            <Button testID="inbox-select-cancel" compact mode="text" onPress={exitSelectMode}>
               Cancel
             </Button>
           </View>
@@ -411,6 +414,7 @@ const InboxListScreen = () => {
           ]}
         >
           <Button
+            testID="inbox-bulk-mark-read"
             mode="text"
             icon="email-open-outline"
             onPress={handleBulkMarkRead}
@@ -420,6 +424,7 @@ const InboxListScreen = () => {
             Mark read
           </Button>
           <Button
+            testID="inbox-bulk-delete"
             mode="text"
             icon="delete-outline"
             textColor={theme.colors.error}
