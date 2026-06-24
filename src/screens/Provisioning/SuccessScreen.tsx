@@ -114,6 +114,7 @@ const SuccessScreen = ({ navigation }: Props) => {
         </Button>
         {k2KeyPair && (
           <Button
+            testID="backup-encryption-key-button"
             mode="outlined"
             onPress={() => setShowBackup(true)}
             style={styles.button}

@@ -1,0 +1,148 @@
+appId: com.jarvis.nodemobile
+name: K2 crypto round-trip (backup -> import)
+# The ONLY e2e that runs the REAL jarvis-crypto native module (Argon2id KDF +
+# AES-256-GCM) on BOTH encrypt AND decrypt — jest mocks the module, so nothing
+# else exercises it. It provisions a node (stores K2), generates a
+# PASSWORD-PROTECTED backup (Argon2id + AES-GCM ENCRYPT), copies the encrypted
+# payload to the clipboard, then imports it back via the DEV paste path
+# (Argon2id + AES-GCM DECRYPT) and asserts the key imported. No camera needed —
+# the clipboard carries the payload from backup to import.
+#
+# >>> This test paid for itself on its FIRST real run: it crashed the app with a
+#     SIGABRT (__stack_chk_fail) — an 8-byte stack overflow in the vendored
+#     argon2.c initialize() that fired on EVERY Argon2id hash (encrypted backup
+#     had been broken since it shipped). Fixed in the same change set
+#     (modules/jarvis-crypto/ios/Argon2/src/argon2.c). jest never saw it.
+#
+# Requires: a development-e2e dev-client (EXPO_PUBLIC_DEV_MODE=true), the core
+# stack + fake node. Self-contained (provisions first — the backup needs a
+# freshly-stored K2, available on the Success screen). See
+# jarvis-integration-tests/docs/mobile-e2e.md.
+#
+# Keyboard note: post-input button taps are wrapped in retry() because a live
+# keyboard non-deterministically swallows the first tap (it dismisses instead of
+# pressing); the retry re-taps with the keyboard down. Argon2id (19 MiB, t=2)
+# takes a few seconds even compiled, so the QR/import waits are generous.
+tags:
+  - crypto
+  - e2e
+env:
+  EMAIL: "ci-node-test@example.com"
+  PASSWORD: "ci-node-test-password"
+  NODE_HOST: "127.0.0.1"
+  NODE_PORT: "8080"
+  WIFI_SSID: "HomeNetwork"
+  WIFI_PASSWORD: "sim-wifi-password"
+  BACKUP_PASSWORD: "backup-pass-1234"
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- runFlow: login.yaml
+
+# --- Provision a node (stores K2 on the device; lands on Success). ---
+- tapOn:
+    text: "Nodes, tab.*"
+- tapOn:
+    text: "Add Node.*"
+- assertVisible:
+    id: "ip-input"
+- tapOn:
+    id: "ip-input"
+- eraseText
+- inputText: "${NODE_HOST}"
+- tapOn:
+    id: "port-input"
+- eraseText
+- inputText: "${NODE_PORT}"
+- retry:
+    maxRetries: 3
+    commands:
+      - tapOn:
+          id: "connect-simulator-button"
+      - extendedWaitUntil:
+          visible: { id: "continue-button" }
+          timeout: 15000
+- tapOn:
+    id: "continue-button"
+- extendedWaitUntil:
+    visible: { id: "network-item-${WIFI_SSID}" }
+    timeout: 15000
+- tapOn:
+    id: "network-item-${WIFI_SSID}"
+- tapOn:
+    id: "password-input"
+- inputText: "${WIFI_PASSWORD}"
+- retry:
+    maxRetries: 3
+    commands:
+      - tapOn:
+          id: "provision-button"
+      - extendedWaitUntil:
+          visible: { id: "wifi-reconnected-button" }
+          timeout: 15000
+- tapOn:
+    id: "wifi-reconnected-button"
+- extendedWaitUntil:
+    visible: { id: "backup-encryption-key-button" }
+    timeout: 30000
+
+# --- BACKUP: Argon2id + AES-GCM ENCRYPT -> clipboard. ---
+- tapOn:
+    id: "backup-encryption-key-button"
+- tapOn:
+    id: "backup-encrypted-button"
+- assertVisible:
+    id: "backup-password-input"
+- tapOn:
+    id: "backup-password-input"
+- inputText: "${BACKUP_PASSWORD}"
+- tapOn:
+    id: "backup-confirm-password-input"
+- inputText: "${BACKUP_PASSWORD}"
+- retry:
+    maxRetries: 3
+    commands:
+      - tapOn:
+          id: "backup-generate-qr-button"
+      - assertNotVisible:
+          id: "backup-generate-qr-button"
+- extendedWaitUntil:
+    visible: { id: "qr-copy-clipboard-button" }
+    timeout: 45000
+- tapOn:
+    id: "qr-copy-clipboard-button"
+- tapOn:
+    id: "backup-done-button"
+
+# --- IMPORT: paste from clipboard -> Argon2id + AES-GCM DECRYPT. ---
+- tapOn:
+    text: "Nodes, tab.*"
+- tapOn:
+    id: "node-import-key-button"
+- extendedWaitUntil:
+    visible: { id: "qr-paste-clipboard-button" }
+    timeout: 15000
+- tapOn:
+    id: "qr-paste-clipboard-button"
+- retry:
+    maxRetries: 3
+    commands:
+      - tapOn:
+          id: "qr-paste-import-button"
+      - extendedWaitUntil:
+          visible: { id: "qr-import-password-input" }
+          timeout: 12000
+- tapOn:
+    id: "qr-import-password-input"
+- inputText: "${BACKUP_PASSWORD}"
+- retry:
+    maxRetries: 3
+    commands:
+      - tapOn:
+          id: "qr-import-submit-button"
+      - extendedWaitUntil:
+          visible: { text: "Key Imported.*" }
+          timeout: 45000
+- assertVisible:
+    id: "qr-import-done-button"

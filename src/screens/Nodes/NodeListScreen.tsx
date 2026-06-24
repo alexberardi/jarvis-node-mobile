@@ -121,6 +121,7 @@ const NodeListScreen = () => {
           Nodes
         </Text>
         <Button
+          testID="node-import-key-button"
           icon="key-plus"
           mode="text"
           compact

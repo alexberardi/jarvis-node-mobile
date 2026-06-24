@@ -10,6 +10,7 @@ tool can automate.
 | Flow | Proves |
 |---|---|
 | `provisioning-devmode-happy-path.yaml` | DEV_MODE "Simulator Mode" → connect to the fake node → NodeInfo → SelectNetwork → EnterPassword → provision → Success |
+| `k2-crypto-roundtrip.yaml` | the REAL `jarvis-crypto` native module (Argon2id + AES-GCM) on **both encrypt and decrypt** — password-protected backup → clipboard → import. jest mocks the module; this is the only test that runs it. **It caught a real native crash on its first run** (an 8-byte stack overflow in `argon2.c`, SIGABRT on every Argon2id hash). |
 | `login.yaml` | reusable auth subflow (email/password → household) |
 
 **Validated end-to-end on a real device (2026-06-23):** the full provisioning

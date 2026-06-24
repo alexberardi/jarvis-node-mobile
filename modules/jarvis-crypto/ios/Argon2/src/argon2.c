@@ -421,7 +421,13 @@ static void fill_segment(const argon2_instance_t *instance, argon2_position_t po
 
 static int initialize(argon2_instance_t *instance, const void *pwd, size_t pwdlen,
                       const void *salt, size_t saltlen) {
-    uint8_t blockhash[BLAKE2B_OUTBYTES];
+    /* +8: the prehash seed appends a 4-byte block index + 4-byte lane (written at
+     * offsets BLAKE2B_OUTBYTES and +4 below) before blake2b_long reads
+     * BLAKE2B_OUTBYTES + 8 bytes. Declaring only BLAKE2B_OUTBYTES overflows this
+     * stack buffer by 8 bytes -> SIGABRT (__stack_chk_fail) on EVERY Argon2id hash
+     * (e.g. password-protected K2 backup/import). Matches the reference
+     * ARGON2_PREHASH_SEED_LENGTH (= ARGON2_PREHASH_DIGEST_LENGTH + 8). */
+    uint8_t blockhash[BLAKE2B_OUTBYTES + 8];
     uint8_t value[4];
 
     blake2b_state BlakeHash;
