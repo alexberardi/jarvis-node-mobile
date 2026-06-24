@@ -135,7 +135,7 @@ const AdapterProposalScreen = () => {
         <Text variant="bodyLarge" style={{ color: theme.colors.error }}>
           {error || 'Proposal not found'}
         </Text>
-        <Button mode="text" onPress={load} style={{ marginTop: 8 }}>
+        <Button testID="adapter-retry" mode="text" onPress={load} style={{ marginTop: 8 }}>
           Retry
         </Button>
       </View>
@@ -194,6 +194,7 @@ const AdapterProposalScreen = () => {
           <View style={styles.actions}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
               <Button
+                testID="adapter-apply"
                 mode="contained"
                 onPress={onApply}
                 loading={acting === 'apply'}
@@ -206,6 +207,7 @@ const AdapterProposalScreen = () => {
               <HelpIcon text={helpCopy.inbox.applyAdapter} size={16} />
             </View>
             <Button
+              testID="adapter-preview"
               mode="outlined"
               onPress={onPreview}
               disabled={acting !== null}
@@ -214,6 +216,7 @@ const AdapterProposalScreen = () => {
               Preview
             </Button>
             <Button
+              testID="adapter-dismiss"
               mode="text"
               onPress={onDismiss}
               loading={acting === 'dismiss'}
