@@ -172,11 +172,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Without this, dev-environment node IDs, K2 keys, cached service URLs,
     // and react-query data (devices/rooms/smartHomeConfig keyed by
     // householdId) bleed into the next environment the user logs into.
-    await clearUserData({ queryClient, rediscover });
-    setState({
-      ...initialState,
-      isLoading: false,
-    });
+    // A "Log Out" tap must ALWAYS log the user out: swallow any cache-wipe
+    // error (e.g. a storage failure) and still force the unauthenticated state.
+    // logout() never rejects — the user is logged out regardless.
+    try {
+      await clearUserData({ queryClient, rediscover });
+    } catch (e) {
+      console.warn('[AuthContext] logout cache wipe failed; logging out anyway:', e);
+    } finally {
+      setState({
+        ...initialState,
+        isLoading: false,
+      });
+    }
   }, [queryClient, rediscover]);
 
   const deleteAccount = useCallback(
