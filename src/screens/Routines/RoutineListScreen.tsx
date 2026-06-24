@@ -158,7 +158,7 @@ const RoutineListScreen = () => {
   );
 
   const renderRightActions = (routine: Routine) => () => (
-    <TouchableOpacity style={styles.deleteAction} onPress={() => handleDelete(routine)} activeOpacity={0.7}>
+    <TouchableOpacity testID={`routine-delete-${routine.id}`} style={styles.deleteAction} onPress={() => handleDelete(routine)} activeOpacity={0.7}>
       <IconButton icon="delete-outline" iconColor="#fff" size={24} />
     </TouchableOpacity>
   );
@@ -169,7 +169,7 @@ const RoutineListScreen = () => {
     const schedule = formatSchedule(item.schedule);
     return (
       <ReanimatedSwipeable renderRightActions={makeRightActions(item)} overshootRight={false}>
-        <Card style={styles.card} onPress={() => navigation.navigate('RoutineEdit', { routineId: item.id })}>
+        <Card testID={`routine-card-${item.id}`} style={styles.card} onPress={() => navigation.navigate('RoutineEdit', { routineId: item.id })}>
           <Card.Content>
             <View style={styles.cardHeader}>
               <MaterialCommunityIcons
@@ -186,7 +186,7 @@ const RoutineListScreen = () => {
                   visible={runMenuOpen === item.id}
                   onDismiss={() => setRunMenuOpen(null)}
                   anchor={
-                    <IconButton icon="play-circle-outline" size={22} onPress={() => handleRun(item)} style={{ margin: -4 }} />
+                    <IconButton testID={`routine-run-${item.id}`} icon="play-circle-outline" size={22} onPress={() => handleRun(item)} style={{ margin: -4 }} />
                   }
                 >
                   {nodes.map((n) => (
@@ -264,6 +264,7 @@ const RoutineListScreen = () => {
         ListEmptyComponent={emptyComponent}
       />
       <FAB
+        testID="routine-add-fab"
         icon="plus"
         style={styles.fab}
         onPress={() => navigation.navigate('RoutineEdit', {})}
