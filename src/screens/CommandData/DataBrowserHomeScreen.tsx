@@ -103,7 +103,7 @@ const DataBrowserHomeScreen = () => {
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <Appbar.Header>
-        <Appbar.BackAction onPress={() => navigation.goBack()} />
+        <Appbar.BackAction testID="data-browser-back" onPress={() => navigation.goBack()} />
         <Appbar.Content title="Stored Data" />
       </Appbar.Header>
       <ScrollView contentContainerStyle={styles.scroll}>
@@ -111,7 +111,9 @@ const DataBrowserHomeScreen = () => {
         {pinnedNodeId ? null : loadingNodes ? (
           <ActivityIndicator style={styles.spinner} />
         ) : nodes.length === 0 ? (
-          <Text style={styles.empty}>No nodes available.</Text>
+          <Text testID="data-browser-empty-nodes" style={styles.empty}>
+            No nodes available.
+          </Text>
         ) : nodes.length === 1 ? (
           <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
             {nodes[0].room || nodes[0].node_id}
@@ -124,6 +126,7 @@ const DataBrowserHomeScreen = () => {
                 {nodes.map((n) => (
                   <Chip
                     key={n.node_id}
+                    testID={`data-browser-node-${n.node_id}-chip`}
                     selected={selectedNodeId === n.node_id}
                     onPress={() => setSelectedNodeId(n.node_id)}
                     style={styles.chip}
@@ -138,7 +141,12 @@ const DataBrowserHomeScreen = () => {
 
         {/* Commands list */}
         {error && (
-          <Text style={[styles.error, { color: theme.colors.error }]}>{error}</Text>
+          <Text
+            testID="data-browser-error-banner"
+            style={[styles.error, { color: theme.colors.error }]}
+          >
+            {error}
+          </Text>
         )}
         {selectedNodeId && (
           <Card style={styles.section}>
@@ -155,6 +163,7 @@ const DataBrowserHomeScreen = () => {
                   <React.Fragment key={cmd.command_name}>
                     {idx > 0 && <Divider />}
                     <List.Item
+                      testID={`data-browser-command-${cmd.command_name}-item`}
                       title={cmd.command_name}
                       description={cmd.mode === 'readonly' ? 'Read-only' : undefined}
                       right={(props) => <List.Icon {...props} icon="chevron-right" />}
