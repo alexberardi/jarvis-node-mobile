@@ -120,7 +120,7 @@ const AdapterDeployedScreen = () => {
         <Text variant="bodyLarge" style={{ color: theme.colors.error }}>
           {error || 'Item not found'}
         </Text>
-        <Button mode="text" onPress={load} style={{ marginTop: 8 }}>
+        <Button testID="adapter-deployed-retry" mode="text" onPress={load} style={{ marginTop: 8 }}>
           Retry
         </Button>
       </View>
@@ -181,6 +181,7 @@ const AdapterDeployedScreen = () => {
 
         <View style={styles.actions}>
           <Button
+            testID="adapter-revert"
             mode="contained"
             onPress={onRevert}
             loading={reverting}
