@@ -239,6 +239,7 @@ const IntegrationAuthScreen = () => {
             Enter the IP address manually:
           </Text>
           <TextInput
+            testID="integration-auth-manual-url-input"
             mode="outlined"
             placeholder="192.168.1.100"
             value={manualUrl}
@@ -248,6 +249,7 @@ const IntegrationAuthScreen = () => {
             style={styles.input}
           />
           <Button
+            testID="integration-auth-connect-button"
             mode="contained"
             onPress={handleManualConnect}
             disabled={!manualUrl.trim()}
@@ -255,7 +257,12 @@ const IntegrationAuthScreen = () => {
           >
             Connect
           </Button>
-          <Button mode="text" onPress={startDiscovery} style={styles.button}>
+          <Button
+            testID="integration-auth-scan-again-button"
+            mode="text"
+            onPress={startDiscovery}
+            style={styles.button}
+          >
             Scan again
           </Button>
         </View>
@@ -302,6 +309,7 @@ const IntegrationAuthScreen = () => {
             {providerLabel} authentication complete. Your node will receive credentials shortly.
           </Text>
           <Button
+            testID="integration-auth-done-button"
             mode="contained"
             onPress={() => navigation.goBack()}
             style={styles.button}
@@ -312,13 +320,22 @@ const IntegrationAuthScreen = () => {
       )}
 
       {error && (
-        <Text variant="bodySmall" style={styles.errorText}>
+        <Text
+          testID="integration-auth-error-text"
+          variant="bodySmall"
+          style={styles.errorText}
+        >
           {error}
         </Text>
       )}
 
       {phase !== 'done' && phase !== 'confirming' && phase !== 'creating_session' && (
-        <Button mode="text" onPress={() => navigation.goBack()} style={styles.backButton}>
+        <Button
+          testID="integration-auth-back-button"
+          mode="text"
+          onPress={() => navigation.goBack()}
+          style={styles.backButton}
+        >
           Back
         </Button>
       )}

@@ -263,10 +263,15 @@ const DeviceDiscoveryScreen = ({ navigation, route }: Props) => {
         >
           {error}
         </Text>
-        <Button mode="contained" onPress={startScan}>
+        <Button mode="contained" onPress={startScan} testID="retry-scan-button">
           Retry
         </Button>
-        <Button mode="text" onPress={() => navigation.goBack()} style={{ marginTop: 8 }}>
+        <Button
+          mode="text"
+          onPress={() => navigation.goBack()}
+          style={{ marginTop: 8 }}
+          testID="error-back-button"
+        >
           Back
         </Button>
       </View>
@@ -300,6 +305,7 @@ const DeviceDiscoveryScreen = ({ navigation, route }: Props) => {
                 setFilterDomain(filterDomain === domain ? null : domain)
               }
               style={styles.chip}
+              testID={`domain-chip-${domain}`}
             >
               {DOMAIN_LABELS[domain] || domain} ({count})
             </Chip>
@@ -312,6 +318,7 @@ const DeviceDiscoveryScreen = ({ navigation, route }: Props) => {
         <TouchableOpacity
           style={styles.selectAllRow}
           onPress={() => toggleAll(filterDomain)}
+          testID="select-all-button"
         >
           <Text variant="bodyMedium">Select/Deselect All</Text>
         </TouchableOpacity>
@@ -329,6 +336,7 @@ const DeviceDiscoveryScreen = ({ navigation, route }: Props) => {
               style={[styles.entityRow, isRegistered && styles.registeredRow]}
               onPress={() => !isRegistered && toggleDevice(item.entity_id)}
               disabled={isRegistered}
+              testID={`device-row-${item.entity_id}`}
             >
               <Checkbox
                 status={
@@ -340,6 +348,7 @@ const DeviceDiscoveryScreen = ({ navigation, route }: Props) => {
                 }
                 onPress={() => !isRegistered && toggleDevice(item.entity_id)}
                 disabled={isRegistered}
+                testID={`device-checkbox-${item.entity_id}`}
               />
               <View style={styles.entityInfo}>
                 <Text
@@ -377,13 +386,14 @@ const DeviceDiscoveryScreen = ({ navigation, route }: Props) => {
           onPress={handleImport}
           disabled={selectedCount === 0 || importing}
           loading={importing}
+          testID="import-devices-button"
         >
           Import {selectedCount} Device{selectedCount !== 1 ? 's' : ''}
         </Button>
-        <Button mode="outlined" onPress={startScan}>
+        <Button mode="outlined" onPress={startScan} testID="rescan-button">
           Re-scan
         </Button>
-        <Button mode="text" onPress={() => navigation.goBack()}>
+        <Button mode="text" onPress={() => navigation.goBack()} testID="back-button">
           Back
         </Button>
       </View>
