@@ -96,7 +96,7 @@ const TestInstallScreen = () => {
   return (
     <View style={styles.container}>
       <View style={[styles.header, { borderBottomColor: theme.colors.outlineVariant }]}>
-        <IconButton icon="arrow-left" onPress={() => navigation.goBack()} />
+        <IconButton testID="back-button" icon="arrow-left" onPress={() => navigation.goBack()} />
         <Text variant="headlineSmall" style={{ fontWeight: 'bold', flex: 1 }}>
           Test Install
         </Text>
@@ -114,6 +114,7 @@ const TestInstallScreen = () => {
             Enter the 6-character code from the Forge to test a package on your node.
           </Text>
           <TextInput
+            testID="code-input"
             mode="outlined"
             value={shareCode}
             onChangeText={(v) => setShareCode(v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6))}
@@ -132,9 +133,9 @@ const TestInstallScreen = () => {
           </Text>
 
           {loadingNodes ? (
-            <ActivityIndicator style={{ marginTop: 12 }} />
+            <ActivityIndicator testID="loading-indicator" style={{ marginTop: 12 }} />
           ) : nodes.length === 0 ? (
-            <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
+            <Text testID="no-nodes-text" variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
               No nodes found.
             </Text>
           ) : (
@@ -144,6 +145,7 @@ const TestInstallScreen = () => {
                 return (
                   <Card
                     key={node.node_id}
+                    testID={`node-card-${node.node_id}`}
                     style={[
                       styles.nodeCard,
                       selected && { borderColor: theme.colors.primary, borderWidth: 2 },
@@ -181,6 +183,7 @@ const TestInstallScreen = () => {
 
         {/* Install button */}
         <Button
+          testID="install-button"
           mode="contained"
           onPress={handleInstall}
           disabled={!codeValid || !selectedNodeId || installing}

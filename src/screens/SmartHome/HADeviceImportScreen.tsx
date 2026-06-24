@@ -103,7 +103,7 @@ const HADeviceImportScreen = ({ navigation, route }: Props) => {
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" />
+        <ActivityIndicator size="large" testID="loading-spinner" />
         <Text variant="bodyLarge" style={styles.loadingText}>
           Fetching devices from Home Assistant...
         </Text>
@@ -117,7 +117,7 @@ const HADeviceImportScreen = ({ navigation, route }: Props) => {
         <Text variant="bodyLarge" style={styles.errorText}>
           {error}
         </Text>
-        <Button mode="contained" onPress={loadDevices}>
+        <Button mode="contained" onPress={loadDevices} testID="retry-button">
           Retry
         </Button>
       </View>
@@ -145,6 +145,7 @@ const HADeviceImportScreen = ({ navigation, route }: Props) => {
           const count = entities.filter((e) => e.domain === domain).length;
           return (
             <Chip
+              testID={`chip-${domain}`}
               selected={filterDomain === domain}
               onPress={() =>
                 setFilterDomain(filterDomain === domain ? null : domain)
@@ -160,6 +161,7 @@ const HADeviceImportScreen = ({ navigation, route }: Props) => {
       {/* Select all for current filter */}
       {filterDomain && (
         <TouchableOpacity
+          testID="select-all-toggle"
           style={styles.selectAllRow}
           onPress={() => toggleAll(filterDomain)}
         >
@@ -174,10 +176,12 @@ const HADeviceImportScreen = ({ navigation, route }: Props) => {
         style={styles.list}
         renderItem={({ item }) => (
           <TouchableOpacity
+            testID={`entity-row-${item.entity_id}`}
             style={styles.entityRow}
             onPress={() => toggleEntity(item.entity_id)}
           >
             <Checkbox
+              testID={`checkbox-${item.entity_id}`}
               status={item.selected ? 'checked' : 'unchecked'}
               onPress={() => toggleEntity(item.entity_id)}
             />
@@ -202,10 +206,11 @@ const HADeviceImportScreen = ({ navigation, route }: Props) => {
           mode="contained"
           onPress={handleImport}
           disabled={selectedCount === 0}
+          testID="import-button"
         >
           Import {selectedCount} Devices
         </Button>
-        <Button mode="text" onPress={() => navigation.goBack()}>
+        <Button mode="text" onPress={() => navigation.goBack()} testID="back-button">
           Back
         </Button>
       </View>
