@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
   Appbar,
   Divider,
+  FAB,
   HelperText,
   IconButton,
   List,
@@ -20,8 +21,10 @@ import {
 } from 'react-native-paper';
 
 import {
+  CommandSchema,
   DataRecord,
   deleteRecord,
+  getSchema,
   listRecords,
 } from '../../api/commandDataApi';
 import type { CommandDataStackParamList } from '../../navigation/types';
@@ -36,6 +39,7 @@ const RecordsListScreen = () => {
   const { nodeId, commandName } = route.params;
 
   const [records, setRecords] = useState<DataRecord[]>([]);
+  const [schema, setSchema] = useState<CommandSchema | null>(null);
   const [loading, setLoading] = useState(true);
   const [truncated, setTruncated] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,6 +47,11 @@ const RecordsListScreen = () => {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
+    // Schema drives the "+" button; a failure here just hides it, so it's
+    // fetched best-effort and never blocks the list.
+    getSchema(nodeId, commandName)
+      .then(setSchema)
+      .catch(() => setSchema(null));
     try {
       const result = await listRecords(nodeId, commandName);
       setRecords(result.records);
@@ -148,6 +157,18 @@ const RecordsListScreen = () => {
           )}
         />
       )}
+      {schema?.supports_create && (
+        <FAB
+          testID="command-data-add-fab"
+          icon="plus"
+          style={styles.fab}
+          color={theme.colors.onPrimary}
+          onPress={() =>
+            navigation.navigate('DataBrowserEdit', { nodeId, commandName })
+          }
+          accessibilityLabel="Add record"
+        />
+      )}
     </View>
   );
 };
@@ -158,6 +179,7 @@ const styles = StyleSheet.create({
   empty: { marginTop: 24, textAlign: 'center' },
   error: { marginTop: 24, marginHorizontal: 16, textAlign: 'center' },
   truncated: { textAlign: 'center', padding: 16 },
+  fab: { position: 'absolute', right: 16, bottom: 24 },
 });
 
 export default RecordsListScreen;

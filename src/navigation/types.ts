@@ -81,11 +81,11 @@ export type CommandDataStackParamList = {
     commandName: string;
     recordKey: string;
   };
-  /** Editable form for one record. */
+  /** Editable form for one record. Omit `recordKey` to create a new one. */
   DataBrowserEdit: {
     nodeId: string;
     commandName: string;
-    recordKey: string;
+    recordKey?: string;
   };
 };
 
