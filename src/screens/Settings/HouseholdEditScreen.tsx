@@ -12,12 +12,14 @@ import {
   Menu,
   Portal,
   SegmentedButtons,
+  Switch,
   Text,
   TextInput,
   useTheme,
 } from 'react-native-paper';
 
 import authApi from '../../api/authApi';
+import { getHouseholdSettings, setHouseholdSetting } from '../../api/householdSettingsApi';
 import { useAuth } from '../../auth/AuthContext';
 import type { RootStackParamList } from '../../navigation/types';
 
@@ -55,6 +57,11 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
   // Household name
   const [name, setName] = useState(householdName);
   const [savingName, setSavingName] = useState(false);
+
+  // Web search (household-scoped feature toggle, default off)
+  const [webSearchEnabled, setWebSearchEnabled] = useState(false);
+  const [webSearchLoading, setWebSearchLoading] = useState(true);
+  const [savingWebSearch, setSavingWebSearch] = useState(false);
 
   // Members
   const [members, setMembers] = useState<Member[]>([]);
@@ -104,6 +111,39 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
   useEffect(() => {
     loadMembersAndInvites();
   }, [loadMembersAndInvites]);
+
+  // Load household-scoped feature settings (web search toggle)
+  const loadHouseholdSettings = useCallback(async () => {
+    setWebSearchLoading(true);
+    try {
+      const settings = await getHouseholdSettings(householdId);
+      setWebSearchEnabled(!!settings['web_search.enabled']);
+    } catch (error) {
+      console.error('[HouseholdEditScreen] Failed to load household settings', error);
+    } finally {
+      setWebSearchLoading(false);
+    }
+  }, [householdId]);
+
+  useEffect(() => {
+    loadHouseholdSettings();
+  }, [loadHouseholdSettings]);
+
+  // Toggle web search (optimistic; revert on failure)
+  const handleToggleWebSearch = useCallback(async (next: boolean) => {
+    setWebSearchEnabled(next);
+    setSavingWebSearch(true);
+    try {
+      await setHouseholdSetting(householdId, 'web_search.enabled', next);
+    } catch (err: unknown) {
+      setWebSearchEnabled(!next);
+      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+        ?? 'Failed to update web search setting';
+      Alert.alert('Error', msg);
+    } finally {
+      setSavingWebSearch(false);
+    }
+  }, [householdId]);
 
   // Save name
   const handleSaveName = useCallback(async () => {
@@ -273,6 +313,38 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
                 </Button>
               )}
             </View>
+          </Card.Content>
+        </Card>
+
+        {/* Web Search */}
+        <Card style={styles.card}>
+          <Card.Content>
+            <Text variant="titleMedium" style={styles.sectionTitle}>Web Search</Text>
+            <View style={styles.toggleRow}>
+              <View style={{ flex: 1, paddingRight: 12 }}>
+                <Text variant="bodyMedium">Use web search</Text>
+                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 2 }}>
+                  Let Jarvis search the internet to answer questions about current
+                  events, prices, and recent news. When off, Jarvis answers only from
+                  what it already knows — nothing leaves your network.
+                </Text>
+              </View>
+              {webSearchLoading ? (
+                <ActivityIndicator size="small" />
+              ) : (
+                <Switch
+                  testID="household-web-search-toggle"
+                  value={webSearchEnabled}
+                  onValueChange={handleToggleWebSearch}
+                  disabled={!isAdmin || savingWebSearch}
+                />
+              )}
+            </View>
+            {!isAdmin && !webSearchLoading && (
+              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 8 }}>
+                Only a household admin can change this.
+              </Text>
+            )}
           </Card.Content>
         </Card>
 
@@ -477,6 +549,7 @@ const styles = StyleSheet.create({
   card: { marginBottom: 16 },
   sectionTitle: { fontWeight: '600', marginBottom: 12 },
   nameRow: { flexDirection: 'row', alignItems: 'center' },
+  toggleRow: { flexDirection: 'row', alignItems: 'center' },
   memberRow: {
     flexDirection: 'row',
     alignItems: 'center',
