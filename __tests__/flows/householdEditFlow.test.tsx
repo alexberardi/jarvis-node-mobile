@@ -6,6 +6,7 @@ import { PaperProvider } from 'react-native-paper';
 import HouseholdEditScreen from '../../src/screens/Settings/HouseholdEditScreen';
 import { lightTheme } from '../../src/theme';
 import authApi from '../../src/api/authApi';
+import { setHouseholdSetting } from '../../src/api/householdSettingsApi';
 
 // L1 FLOW INTEGRATION — the Household admin surface (no prior coverage): the
 // member/invite load, admin-gated rename (PATCH + household refresh), change-role
@@ -18,6 +19,12 @@ import authApi from '../../src/api/authApi';
 jest.mock('../../src/api/authApi', () => ({
   __esModule: true,
   default: { get: jest.fn(), patch: jest.fn(), post: jest.fn(), delete: jest.fn() },
+}));
+
+jest.mock('../../src/api/householdSettingsApi', () => ({
+  __esModule: true,
+  getHouseholdSettings: jest.fn(() => Promise.resolve({ 'web_search.enabled': false })),
+  setHouseholdSetting: jest.fn(() => Promise.resolve()),
 }));
 
 const mockFetchHouseholds = jest.fn();
@@ -185,5 +192,17 @@ describe('Household edit — flow integration (rename, roles, members, invites, 
     expect(mockFetchHouseholds).toHaveBeenCalled();
     expect(utils.nav.goBack).toHaveBeenCalled();
     alertSpy.mockRestore();
+  });
+
+  it('admin toggles web search on → PUT household setting', async () => {
+    const setSetting = setHouseholdSetting as jest.Mock;
+    const utils = renderScreen();
+    const toggle = await utils.findByTestId('household-web-search-toggle');
+
+    await act(async () => {
+      fireEvent(toggle, 'valueChange', true);
+    });
+
+    expect(setSetting).toHaveBeenCalledWith('hh-1', 'web_search.enabled', true);
   });
 });
