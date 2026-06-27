@@ -6,9 +6,8 @@
  * - Voice Recognition: enrollment status + link to VoiceProfileScreen
  * - Device Info: metadata rows moved from Overview (voice mode, platform, etc.)
  * - Voice Settings: NodeVoiceSettings component moved from Overview
- * - Speaker HAT: ReSpeaker LED + button controls (only shown when
- *   detected; kept last so its async pop-in doesn't shift the cards
- *   above it).
+ * - Speaker HAT: ReSpeaker LED + button controls (only shown when detected).
+ * - Maintenance: daily restart + RSS ceiling.
  */
 
 import { useNavigation } from '@react-navigation/native';
@@ -162,15 +161,13 @@ export const HardwareTab = ({ nodeId, node }: Props) => {
         <NodeVoiceSettings nodeId={nodeId} />
       </View>
 
+      {/* Speaker HAT (only renders when node reports hat_detected). */}
+      <SpeakerHATCard nodeId={nodeId} />
+
       {/* Maintenance: daily restart + RSS ceiling */}
       <View style={styles.voiceSettingsWrapper}>
         <NodeMaintenanceSettings nodeId={nodeId} />
       </View>
-
-      {/* Speaker HAT (only renders when node reports hat_detected).
-          Kept last so its async pop-in doesn't shove the constant cards
-          above it down when the snapshot lands. */}
-      <SpeakerHATCard nodeId={nodeId} />
     </ScrollView>
   );
 };

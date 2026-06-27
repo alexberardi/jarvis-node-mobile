@@ -9,7 +9,6 @@ import {
   Icon,
   Switch,
   Text,
-  TextInput,
   useTheme,
 } from 'react-native-paper';
 
@@ -28,42 +27,25 @@ interface VoiceSettings {
   wake_word_threshold: number;
   silence_threshold: number;
   silence_duration: number;
-  barge_in_enabled: boolean;
   wake_ack_audio_enabled: boolean;
   follow_up_listen_seconds: number;
   follow_up_silence_duration: number;
   follow_up_min_record_after_onset_secs: number;
   follow_up_min_speech_secs: number;
   volume_percent: number;
-  is_muted: boolean;
-  wake_word_model: string;
-  not_for_me_quiet_seconds: number;
-  audio_output_device: string;
-  mic_sample_rate: number;
 }
 
 const DEFAULTS: VoiceSettings = {
   wake_word_threshold: 0.5,
   silence_threshold: 5000,
   silence_duration: 0.5,
-  barge_in_enabled: true,
   wake_ack_audio_enabled: true,
   follow_up_listen_seconds: 4,
   follow_up_silence_duration: 0.5,
   follow_up_min_record_after_onset_secs: 0.7,
   follow_up_min_speech_secs: 0.3,
   volume_percent: 100,
-  is_muted: false,
-  wake_word_model: 'hey_jarvis',
-  not_for_me_quiet_seconds: 20.0,
-  audio_output_device: '',
-  mic_sample_rate: 48000,
 };
-
-// mic_sample_rate is constrained to these two rates; the slider's step spans
-// exactly the gap so only the two stops are reachable.
-const MIC_SAMPLE_RATE_MIN = 44100;
-const MIC_SAMPLE_RATE_MAX = 48000;
 
 interface SliderRowProps {
   label: string;
@@ -102,28 +84,6 @@ const SliderRow = ({ label, value, displayValue, min, max, step, onChange, testI
   );
 };
 
-interface TextInputRowProps {
-  label: string;
-  value: string;
-  placeholder?: string;
-  onChange: (v: string) => void;
-}
-
-const TextInputRow = ({ label, value, placeholder, onChange }: TextInputRowProps) => (
-  <View style={styles.settingRow}>
-    <Text variant="bodyMedium" style={styles.textInputLabel}>{label}</Text>
-    <TextInput
-      mode="outlined"
-      dense
-      value={value}
-      placeholder={placeholder}
-      onChangeText={onChange}
-      autoCapitalize="none"
-      autoCorrect={false}
-    />
-  </View>
-);
-
 export const NodeVoiceSettings = ({ nodeId }: Props) => {
   const theme = useTheme();
   const [settings, setSettings] = useState<VoiceSettings>({ ...DEFAULTS });
@@ -146,7 +106,6 @@ export const NodeVoiceSettings = ({ nodeId }: Props) => {
       wake_word_threshold: nc.wake_word_threshold ?? DEFAULTS.wake_word_threshold,
       silence_threshold: nc.silence_threshold ?? DEFAULTS.silence_threshold,
       silence_duration: nc.silence_duration ?? DEFAULTS.silence_duration,
-      barge_in_enabled: nc.barge_in_enabled ?? DEFAULTS.barge_in_enabled,
       wake_ack_audio_enabled: nc.wake_ack_audio_enabled ?? DEFAULTS.wake_ack_audio_enabled,
       follow_up_listen_seconds: nc.follow_up_listen_seconds ?? DEFAULTS.follow_up_listen_seconds,
       follow_up_silence_duration: nc.follow_up_silence_duration ?? DEFAULTS.follow_up_silence_duration,
@@ -154,11 +113,6 @@ export const NodeVoiceSettings = ({ nodeId }: Props) => {
         nc.follow_up_min_record_after_onset_secs ?? DEFAULTS.follow_up_min_record_after_onset_secs,
       follow_up_min_speech_secs: nc.follow_up_min_speech_secs ?? DEFAULTS.follow_up_min_speech_secs,
       volume_percent: nc.volume_percent ?? DEFAULTS.volume_percent,
-      is_muted: nc.hardware?.is_muted ?? DEFAULTS.is_muted,
-      wake_word_model: nc.wake_word_model ?? DEFAULTS.wake_word_model,
-      not_for_me_quiet_seconds: nc.not_for_me_quiet_seconds ?? DEFAULTS.not_for_me_quiet_seconds,
-      audio_output_device: nc.audio_output_device ?? DEFAULTS.audio_output_device,
-      mic_sample_rate: nc.mic_sample_rate ?? DEFAULTS.mic_sample_rate,
     });
     seededRef.current = true;
   }, [snapshot, snapshotState]);
@@ -212,18 +166,12 @@ export const NodeVoiceSettings = ({ nodeId }: Props) => {
         wake_word_threshold: settings.wake_word_threshold,
         silence_threshold: settings.silence_threshold,
         silence_duration: settings.silence_duration,
-        barge_in_enabled: settings.barge_in_enabled,
         wake_ack_audio_enabled: settings.wake_ack_audio_enabled,
         follow_up_listen_seconds: settings.follow_up_listen_seconds,
         follow_up_silence_duration: settings.follow_up_silence_duration,
         follow_up_min_record_after_onset_secs: settings.follow_up_min_record_after_onset_secs,
         follow_up_min_speech_secs: settings.follow_up_min_speech_secs,
         volume_percent: settings.volume_percent,
-        is_muted: settings.is_muted,
-        wake_word_model: settings.wake_word_model,
-        not_for_me_quiet_seconds: settings.not_for_me_quiet_seconds,
-        audio_output_device: settings.audio_output_device,
-        mic_sample_rate: settings.mic_sample_rate,
       };
       await updateNodeConfig(nodeId, payload, false);
       setDirty(false);
@@ -312,18 +260,6 @@ export const NodeVoiceSettings = ({ nodeId }: Props) => {
         <Text variant="labelSmall" style={styles.hint}>
           Output level for TTS responses and chimes.
           {settings.volume_percent >= 85 && ' Test in small steps — Line Out can spike.'}
-        </Text>
-
-        <View style={styles.switchRow}>
-          <Text variant="bodyMedium">Mute</Text>
-          <Switch
-            value={settings.is_muted}
-            onValueChange={(v) => update('is_muted', v)}
-            color={theme.colors.primary}
-          />
-        </View>
-        <Text variant="labelSmall" style={styles.hint}>
-          Silences TTS + music output. Mic and wake word still active.
         </Text>
 
         <Divider style={styles.divider} />
@@ -469,20 +405,6 @@ export const NodeVoiceSettings = ({ nodeId }: Props) => {
         <Divider style={styles.divider} />
 
         <View style={styles.switchRow}>
-          <Text variant="bodyMedium">Barge-in (Interrupt)</Text>
-          <Switch
-            value={settings.barge_in_enabled}
-            onValueChange={(v) => update('barge_in_enabled', v)}
-            color={theme.colors.primary}
-          />
-        </View>
-        <Text variant="labelSmall" style={styles.hint}>
-          Allow interrupting responses with the wake word.
-        </Text>
-
-        <Divider style={styles.divider} />
-
-        <View style={styles.switchRow}>
           <Text variant="bodyMedium">Wake Acknowledgment Audio</Text>
           <Switch
             value={settings.wake_ack_audio_enabled}
@@ -494,65 +416,6 @@ export const NodeVoiceSettings = ({ nodeId }: Props) => {
           Play a spoken ack ("On it.") after the wake word. When off, the
           LED is the only "I heard you" cue — feels snappier for fast-path
           queries that respond in well under a second.
-        </Text>
-
-        <Divider style={styles.divider} />
-
-        <TextInputRow
-          label="Wake Word Model"
-          value={settings.wake_word_model}
-          placeholder="hey_jarvis"
-          onChange={(v) => update('wake_word_model', v)}
-        />
-        <Text variant="labelSmall" style={styles.hint}>
-          openWakeWord model name. Change for a custom or non-English wake word.
-        </Text>
-
-        <Divider style={styles.divider} />
-
-        <SliderRow
-          testID="slider-not_for_me_quiet_seconds"
-          label="Not-For-Me Quiet Time"
-          value={settings.not_for_me_quiet_seconds}
-          displayValue={`${Math.round(settings.not_for_me_quiet_seconds)}s`}
-          min={5}
-          max={60}
-          step={5}
-          onChange={(v) => update('not_for_me_quiet_seconds', v)}
-        />
-        <Text variant="labelSmall" style={styles.hint}>
-          How long to suppress wakes after a wake is classified as not meant
-          for this node (ambient false-wake).
-        </Text>
-
-        <Divider style={styles.divider} />
-
-        <TextInputRow
-          label="Audio Output Device"
-          value={settings.audio_output_device}
-          placeholder="auto-detect"
-          onChange={(v) => update('audio_output_device', v)}
-        />
-        <Text variant="labelSmall" style={styles.hint}>
-          ALSA playback device for TTS (e.g. plughw:1,0). Leave blank to
-          auto-detect.
-        </Text>
-
-        <Divider style={styles.divider} />
-
-        <SliderRow
-          testID="slider-mic_sample_rate"
-          label="Mic Sample Rate"
-          value={settings.mic_sample_rate}
-          displayValue={String(Math.round(settings.mic_sample_rate))}
-          min={MIC_SAMPLE_RATE_MIN}
-          max={MIC_SAMPLE_RATE_MAX}
-          step={MIC_SAMPLE_RATE_MAX - MIC_SAMPLE_RATE_MIN}
-          onChange={(v) => update('mic_sample_rate', v)}
-        />
-        <Text variant="labelSmall" style={styles.hint}>
-          Mic capture rate in Hz. Use the lower rate only for USB mics that
-          reject the higher one; audio is resampled to 16 kHz either way.
         </Text>
       </Card.Content>
 
@@ -592,9 +455,6 @@ const styles = StyleSheet.create({
     opacity: 0.6,
     marginBottom: 4,
     marginTop: -2,
-  },
-  textInputLabel: {
-    marginBottom: 4,
   },
   divider: {
     marginVertical: 8,
