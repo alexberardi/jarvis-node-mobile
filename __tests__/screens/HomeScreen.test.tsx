@@ -28,19 +28,28 @@ const mockSendMessage = jest.fn();
 const mockClearConversation = jest.fn();
 const mockRefreshTools = jest.fn();
 
+const mockUseChatBase = {
+  messages: [] as unknown[],
+  conversationId: null,
+  isLoading: false,
+  warmupState: 'idle',
+  toolCount: 0,
+  toolNames: [] as string[],
+  toolInfos: [] as unknown[],
+  toolsPending: false,
+  sendMessage: mockSendMessage,
+  clearConversation: mockClearConversation,
+  refreshTools: mockRefreshTools,
+};
+// Mutable per-test useChat state. `mock`-prefixed so jest allows the factory
+// to reference it. Reset to base in beforeEach; override via setUseChat().
+let mockUseChatState: Record<string, unknown> = { ...mockUseChatBase };
+const setUseChat = (overrides: Record<string, unknown>) => {
+  mockUseChatState = { ...mockUseChatBase, ...overrides };
+};
+
 jest.mock('../../src/hooks/useChat', () => ({
-  useChat: () => ({
-    messages: [],
-    conversationId: null,
-    isLoading: false,
-    warmupState: 'idle',
-    toolCount: 0,
-    toolNames: [],
-    toolInfos: [],
-    sendMessage: mockSendMessage,
-    clearConversation: mockClearConversation,
-    refreshTools: mockRefreshTools,
-  }),
+  useChat: () => mockUseChatState,
 }));
 
 const mockStartRecording = jest.fn().mockResolvedValue(true);
@@ -93,17 +102,27 @@ jest.mock('../../src/auth/AuthContext', () => ({
 
 const mockNodeSelectorRefresh = jest.fn().mockResolvedValue(undefined);
 let mockTriggerPendingReady: ((node: any) => void) | null = null;
+// Controls the readiness the mocked NodeSelector reports when a node is picked.
+// Default true (node is a live household member); set false to simulate a
+// still-provisioning / offline / wrong-household node.
+let mockNodeReady = true;
 jest.mock('../../src/components/NodeSelector', () => {
   const React = require('react');
   const { Text } = require('react-native');
   return {
     __esModule: true,
     default: React.forwardRef(
-      ({ selectedNodeId, onSelectNode, onPendingNodeReady }: any, ref: any) => {
+      ({ selectedNodeId, onSelectNode, onPendingNodeReady, onSelectedNodeReadyChange }: any, ref: any) => {
         React.useImperativeHandle(ref, () => ({ refresh: mockNodeSelectorRefresh }), []);
         mockTriggerPendingReady = onPendingNodeReady ?? null;
         return (
-          <Text testID="node-selector" onPress={() => onSelectNode('node-1')}>
+          <Text
+            testID="node-selector"
+            onPress={() => {
+              onSelectNode('node-1');
+              onSelectedNodeReadyChange?.(mockNodeReady);
+            }}
+          >
             {selectedNodeId ? `Selected: ${selectedNodeId}` : 'No node selected'}
           </Text>
         );
@@ -135,6 +154,8 @@ const wrapper = ({ children }: { children: React.ReactNode }) => (
 describe('HomeScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    setUseChat({});
+    mockNodeReady = true;
     mockGetUnreadCount.mockResolvedValue(0);
     mockStartRecording.mockResolvedValue(true);
     setPendingIntent(null);
@@ -234,7 +255,8 @@ describe('HomeScreen', () => {
     expect(getByPlaceholderText('Select a node first')).toBeTruthy();
   });
 
-  it('should show "Message Jarvis..." placeholder when a node is selected', () => {
+  it('should show "Message Jarvis..." placeholder when a node is selected and tools are ready', () => {
+    setUseChat({ warmupState: 'ready', toolCount: 3, toolsPending: false });
     const { getByTestId, getByPlaceholderText } = render(
       <HomeScreen />,
       { wrapper },
@@ -244,6 +266,36 @@ describe('HomeScreen', () => {
     fireEvent.press(getByTestId('node-selector'));
 
     expect(getByPlaceholderText('Message Jarvis...')).toBeTruthy();
+  });
+
+  it('should disable the input and show "Waiting for node…" while the node is still coming online', () => {
+    // Tools may even have reported, but the node is not yet a live member of the
+    // household (still provisioning / offline / wrong household) — sending would
+    // 404, so the composer must stay disabled.
+    setUseChat({ warmupState: 'ready', toolCount: 15, toolsPending: false });
+    mockNodeReady = false;
+    const { getByTestId, getByPlaceholderText } = render(
+      <HomeScreen />,
+      { wrapper },
+    );
+
+    fireEvent.press(getByTestId('node-selector'));
+
+    const input = getByPlaceholderText('Waiting for node…');
+    expect(input.props.editable).toBe(false);
+  });
+
+  it('should disable the input and show "Loading tools…" while the node has not reported tools', () => {
+    setUseChat({ warmupState: 'ready', toolCount: 0, toolsPending: true });
+    const { getByTestId, getByPlaceholderText } = render(
+      <HomeScreen />,
+      { wrapper },
+    );
+
+    fireEvent.press(getByTestId('node-selector'));
+
+    const input = getByPlaceholderText('Loading tools…');
+    expect(input.props.editable).toBe(false);
   });
 
   it('should show QuickActions when there are no messages', () => {
@@ -262,7 +314,8 @@ describe('HomeScreen', () => {
     expect(input.props.editable).toBe(false);
   });
 
-  it('should enable text input when a node is selected', () => {
+  it('should enable text input when a node is selected and tools are ready', () => {
+    setUseChat({ warmupState: 'ready', toolCount: 3, toolsPending: false });
     const { getByTestId, getByPlaceholderText } = render(
       <HomeScreen />,
       { wrapper },

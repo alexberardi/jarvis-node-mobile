@@ -30,10 +30,27 @@ interface NodeSelectorProps {
   onNodesLoaded?: (count: number) => void;
   /** Fired once when a pending (just-provisioned) node first appears online. */
   onPendingNodeReady?: (node: NodeOption) => void;
+  /**
+   * Fired whenever the selected node's chat-readiness changes. Ready means the
+   * node is a present + online member of *this* household — the only state in
+   * which a chat request won't bomb (offline, still-provisioning, or
+   * wrong-household nodes all report false). The chat input gates on this.
+   */
+  onSelectedNodeReadyChange?: (ready: boolean) => void;
 }
 
 const NodeSelector = forwardRef<NodeSelectorHandle, NodeSelectorProps>(
-  ({ householdId, selectedNodeId, onSelectNode, onNodesLoaded, onPendingNodeReady }, ref) => {
+  (
+    {
+      householdId,
+      selectedNodeId,
+      onSelectNode,
+      onNodesLoaded,
+      onPendingNodeReady,
+      onSelectedNodeReadyChange,
+    },
+    ref,
+  ) => {
     const theme = useTheme();
     const [nodes, setNodes] = useState<NodeOption[]>([]);
     const [menuVisible, setMenuVisible] = useState(false);
@@ -64,6 +81,8 @@ const NodeSelector = forwardRef<NodeSelectorHandle, NodeSelectorProps>(
     onPendingNodeReadyRef.current = onPendingNodeReady;
     const clearPendingRef = useRef(clearPending);
     clearPendingRef.current = clearPending;
+    const onSelectedNodeReadyChangeRef = useRef(onSelectedNodeReadyChange);
+    onSelectedNodeReadyChangeRef.current = onSelectedNodeReadyChange;
     const reqIdRef = useRef(0);
 
     const loadConfig = useCallback(async (): Promise<void> => {
@@ -164,6 +183,16 @@ const NodeSelector = forwardRef<NodeSelectorHandle, NodeSelectorProps>(
 
     const selectedNode = nodes.find((n) => n.node_id === selectedNodeId);
     const selectedOffline = selectedNode && !selectedNode.online;
+
+    // A node is chat-ready only when it's a present + online member of this
+    // household. A just-provisioned node that hasn't registered here yet (or
+    // registered under another household) won't be in `nodes`, so `selectedNode`
+    // is undefined → not ready → the chat input stays disabled and a send can't
+    // 404. Report changes up so HomeScreen can gate the composer.
+    const selectedNodeReady = !!selectedNode && !!selectedNode.online;
+    useEffect(() => {
+      onSelectedNodeReadyChangeRef.current?.(selectedNodeReady);
+    }, [selectedNodeReady]);
     const label = selectedNode
       ? `${selectedNode.room ?? selectedNodeId?.slice(0, 8)}${selectedOffline ? ' (offline)' : ''}`
       : selectedNodeId?.slice(0, 8) ?? 'Select node';

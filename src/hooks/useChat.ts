@@ -66,10 +66,16 @@ interface UseChatReturn {
   toolCount: number;
   toolNames: string[];
   toolInfos: ToolInfo[];
+  /** True while we're still polling a freshly-provisioned node for its tools
+   * (it went online before its command discovery finished). The UI shows a
+   * "Loading tools…" spinner instead of a misleading "0 tools loaded". */
+  toolsPending: boolean;
   /** Non-null when the command center is unreachable. */
   connectionError: string | null;
   sendMessage: (text: string) => void;
   clearConversation: () => void;
+  /** Manually re-run the tool fetch + warmup (wired to pull-to-refresh). */
+  refreshTools: () => void;
 }
 
 export function useChat({
@@ -86,11 +92,24 @@ export function useChat({
   const [toolCount, setToolCount] = useState(0);
   const [toolNames, setToolNames] = useState<string[]>([]);
   const [toolInfos, setToolInfos] = useState<ToolInfo[]>([]);
+  const [toolsPending, setToolsPending] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
+  // Manual refresh trigger (pull-to-refresh) — bumping it re-runs the startup
+  // effect, reusing its cancellation/teardown machinery.
+  const [refreshNonce, setRefreshNonce] = useState(0);
   const abortRef = useRef<AbortController | null>(null);
   const assistantIdRef = useRef<string | null>(null);
   const sendTimestampRef = useRef<number>(0);
   const toolsRef = useRef<NodeToolsResponse | null>(null);
+  // True once the user has sent a message in the current conversation. The
+  // background tool poll and startup re-warm use this to avoid clobbering an
+  // in-progress conversation when they re-warm after tools become available.
+  const messagesStartedRef = useRef(false);
+  // Identity of the conversation's node/household. Lets us reset
+  // messagesStartedRef only on a genuine node/household switch — NOT on a
+  // tool refresh (refreshNonce) or Pantry install (toolsVersion), which re-run
+  // the effect but must preserve an in-progress conversation.
+  const conversationIdentityRef = useRef<string | null>(null);
   const accessTokenRef = useRef(accessToken);
   accessTokenRef.current = accessToken;
   // Track auth readiness (changes once: false → true), not the token value (changes on every refresh)
@@ -98,35 +117,109 @@ export function useChat({
   // Re-warmup only when tools change (Pantry install/uninstall), not on every tab nav
   const { toolsVersion } = useToolsVersion();
 
-  // Preemptive startup: fetch tools → warmup conversation.
-  // Runs on first mount + when node/household changes + when toolsVersion bumps.
-  // Does NOT re-run on tab navigation (state persists since HomeScreen stays mounted).
+  const refreshTools = useCallback(() => setRefreshNonce((n) => n + 1), []);
+
+  // Preemptive startup: fetch tools → warmup conversation, then self-heal.
+  // Runs on first mount + when node/household changes + when toolsVersion bumps
+  // + on manual refresh. Does NOT re-run on tab navigation (state persists
+  // since HomeScreen stays mounted).
+  //
+  // Self-heal: a freshly-provisioned node goes "online" (heartbeat) BEFORE its
+  // command discovery + MQTT tool handler are ready, so the first fetch often
+  // reports 0 tools. The effect used to freeze there ("0 tools loaded") until
+  // the app was killed and relaunched. We now keep polling the node in the
+  // background until its tools appear, then re-warm so the count — and the
+  // cached CC conversation — pick them up without an app restart.
   useEffect(() => {
     if (!nodeId || !householdId || !isAuthenticated) {
       toolsRef.current = null;
       setWarmupState('idle');
       setToolCount(0);
+      setToolsPending(false);
       setConnectionError(null);
       return;
     }
 
     let cancelled = false;
+    let pollTimer: ReturnType<typeof setTimeout> | null = null;
+
+    // Backoff schedule for re-asking a still-booting node for its tools.
+    // Front-loaded: most nodes finish command discovery within ~10-20s, so the
+    // first few retries are quick to catch that case fast; the tail backs off
+    // for a genuinely slow Pi Zero. Bounded (~58s total) — then we give up and
+    // show the truthful "0 tools loaded".
+    const TOOL_POLL_DELAYS_MS = [2000, 2000, 3000, 3000, 4000, 5000, 6000, 8000, 10000, 15000];
+    let pollAttempt = 0;
+
+    const applyTools = (fresh: NodeToolsResponse) => {
+      toolsRef.current = fresh;
+      setToolCount(fresh.client_tools.length);
+      setToolNames(extractToolNames(fresh.client_tools));
+      setToolInfos(extractToolInfos(fresh.client_tools));
+    };
+
+    const pollForTools = async () => {
+      if (cancelled) return;
+
+      let fresh: NodeToolsResponse | null = null;
+      try {
+        fresh = await fetchNodeTools(nodeId);
+      } catch {
+        // Transient network/MQTT error — keep polling.
+      }
+      if (cancelled) return;
+
+      if (fresh && fresh.client_tools.length > 0) {
+        applyTools(fresh);
+        // The CC cached a tool-less warm conversation (get_tools returns []),
+        // and its /chat path only re-warms when the cache is *absent*. So we
+        // must re-warm to give that conversation its tools. Only do so if the
+        // user hasn't started chatting — don't clobber an in-progress
+        // conversation (guard on messages, not conversationId, since the
+        // initial warmup already set a conversationId).
+        if (!messagesStartedRef.current) {
+          try {
+            const result = await warmupChat(nodeId, householdId, undefined, undefined, timezone);
+            if (!cancelled && !messagesStartedRef.current) {
+              setConversationId(result.conversation_id);
+              setToolCount(Math.max(result.tools_loaded, fresh.client_tools.length));
+            }
+          } catch {
+            // Re-warm failed — drop the tool-less warm conversation so the next
+            // send cold-starts a fresh one carrying the freshly-fetched tools
+            // inline (sendMessage's first-message include-tools path).
+            if (!cancelled && !messagesStartedRef.current) {
+              setConversationId(null);
+            }
+          }
+        }
+        if (!cancelled) setToolsPending(false);
+        return;
+      }
+
+      // Still no tools — schedule the next attempt, or give up (truthful "0").
+      if (pollAttempt < TOOL_POLL_DELAYS_MS.length) {
+        pollTimer = setTimeout(pollForTools, TOOL_POLL_DELAYS_MS[pollAttempt++]);
+      } else if (!cancelled) {
+        setToolsPending(false);
+      }
+    };
 
     const startup = async () => {
       setConnectionError(null);
       setToolCount(0);
       setToolNames([]);
       setToolInfos([]);
+      setToolsPending(false);
       setWarmupState('loading_tools');
 
       // Fetch tools fresh from CC (MQTT to node — no caching).
+      let fetchedCount = 0;
       try {
         const fresh = await fetchNodeTools(nodeId);
         if (!cancelled && fresh.client_tools.length > 0) {
-          toolsRef.current = fresh;
-          setToolCount(fresh.client_tools.length);
-          setToolNames(extractToolNames(fresh.client_tools));
-          setToolInfos(extractToolInfos(fresh.client_tools));
+          applyTools(fresh);
+          fetchedCount = fresh.client_tools.length;
           setConnectionError(null);
         }
       } catch {
@@ -147,8 +240,15 @@ export function useChat({
           timezone,
         );
         if (!cancelled) {
-          setConversationId(result.conversation_id);
-          setToolCount(result.tools_loaded);
+          // Adopt the freshly warmed conversation only if the user hasn't
+          // started chatting — a tool refresh / Pantry install re-runs this
+          // effect and must not silently drop an in-progress conversation's
+          // server-side context (the visible history stays either way).
+          if (!messagesStartedRef.current) {
+            setConversationId(result.conversation_id);
+          }
+          // Don't let a warmup that under-reports clobber a good fetch count.
+          setToolCount(Math.max(result.tools_loaded, fetchedCount));
           setWarmupState('ready');
           setConnectionError(null);
         }
@@ -159,17 +259,38 @@ export function useChat({
           setConnectionError('Could not reach Jarvis server.');
         }
       }
+
+      // Node reported no tools yet (freshly provisioned + still booting). Keep
+      // polling in the background until they appear (self-heal, no app restart).
+      if (!cancelled && fetchedCount === 0) {
+        setToolsPending(true);
+        pollTimer = setTimeout(pollForTools, TOOL_POLL_DELAYS_MS[pollAttempt++]);
+      }
     };
+
+    // Only treat this as a brand-new conversation (clearing the user-chat flag)
+    // when the node/household actually changed — not on a refresh/toolsVersion
+    // re-run, which must preserve an in-progress conversation.
+    const identity = `${nodeId}|${householdId}`;
+    if (conversationIdentityRef.current !== identity) {
+      conversationIdentityRef.current = identity;
+      messagesStartedRef.current = false;
+    }
 
     startup();
     return () => {
       cancelled = true;
+      if (pollTimer) clearTimeout(pollTimer);
     };
-  }, [nodeId, householdId, isAuthenticated, timezone, toolsVersion]);
+  }, [nodeId, householdId, isAuthenticated, timezone, toolsVersion, refreshNonce]);
 
   const sendMessage = useCallback(
     (text: string) => {
       if (!nodeId || !householdId || !accessTokenRef.current || isLoading) return;
+
+      // Mark the conversation as user-started so the background tool poll won't
+      // re-warm over it once the node's tools become available.
+      messagesStartedRef.current = true;
 
       const userMsg: ChatMessage = {
         id: generateId(),
@@ -357,6 +478,7 @@ export function useChat({
 
   const clearConversation = useCallback(() => {
     abortRef.current?.abort();
+    messagesStartedRef.current = false;
     setMessages([]);
     setConversationId(null);
     setIsLoading(false);
@@ -372,8 +494,10 @@ export function useChat({
     toolCount,
     toolNames,
     toolInfos,
+    toolsPending,
     connectionError,
     sendMessage,
     clearConversation,
+    refreshTools,
   };
 }
