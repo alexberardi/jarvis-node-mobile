@@ -164,13 +164,38 @@ const HomeScreen = () => {
   }, []);
 
   const [showToolsModal, setShowToolsModal] = useState(false);
+  // The selected node is a present + online member of this household. Reported
+  // by NodeSelector; false while a just-provisioned node is still coming online
+  // (or if it's offline / registered elsewhere) — gates the chat composer so a
+  // send can't 404.
+  const [selectedNodeReady, setSelectedNodeReady] = useState(false);
 
-  const { messages, isLoading, warmupState, toolCount, toolNames, toolInfos, sendMessage, clearConversation } = useChat({
+  const {
+    messages,
+    isLoading,
+    warmupState,
+    toolCount,
+    toolNames,
+    toolInfos,
+    toolsPending,
+    sendMessage,
+    clearConversation,
+    refreshTools,
+  } = useChat({
     nodeId: selectedNodeId,
     householdId,
     accessToken: authState.accessToken,
     onAssistantDone: handleAutoPlay,
   });
+
+  // Tools have been reported by the node (or we've stopped waiting). Until then
+  // the chat input is disabled so users can't send before tools are available.
+  const toolsReady = warmupState === 'ready' && !(toolCount === 0 && toolsPending);
+
+  // The composer is usable only when the node is a live member of this
+  // household AND its tools are in. Either one missing → disabled, so a send
+  // can never bomb against a still-provisioning / offline / wrong-household node.
+  const inputReady = selectedNodeReady && toolsReady;
 
   // Start recording for a pending quick-open once the app is foreground and a
   // node is selected. Node auto-selection is async (NodeSelector), so we wait
@@ -228,11 +253,12 @@ const HomeScreen = () => {
     setRefreshing(true);
     try {
       await nodeSelectorRef.current?.refresh();
+      refreshTools();
       refreshUnreadCount();
     } finally {
       setRefreshing(false);
     }
-  }, [refreshUnreadCount]);
+  }, [refreshUnreadCount, refreshTools]);
 
   // A just-provisioned node finished booting and was auto-selected — celebrate
   // it so the chat screen visibly "comes alive" without an app restart.
@@ -462,10 +488,11 @@ const HomeScreen = () => {
             onSelectNode={setSelectedNodeId}
             onNodesLoaded={setNodeCount}
             onPendingNodeReady={handlePendingNodeReady}
+            onSelectedNodeReadyChange={setSelectedNodeReady}
           />
           {selectedNodeId && warmupState !== 'idle' && (
             <View style={styles.warmupIndicator}>
-              {warmupState === 'ready' ? (
+              {toolsReady ? (
                 <TouchableRipple onPress={() => setShowToolsModal(true)} borderless>
                   <Text variant="labelSmall" style={{ color: theme.colors.primary }}>
                     {toolCount} tools loaded
@@ -475,7 +502,7 @@ const HomeScreen = () => {
                 <View style={styles.warmupLoading}>
                   <ActivityIndicator size={10} color={theme.colors.outline} />
                   <Text variant="labelSmall" style={{ color: theme.colors.outline }}>
-                    {warmupState === 'loading_tools' ? 'Loading tools...' : 'Warming up...'}
+                    {warmupState === 'warming_up' ? 'Warming up...' : 'Loading tools...'}
                   </Text>
                 </View>
               )}
@@ -574,12 +601,20 @@ const HomeScreen = () => {
       <View style={[styles.inputBar, { borderTopColor: theme.colors.outlineVariant }]}>
         <TextInput
           mode="outlined"
-          placeholder={selectedNodeId ? 'Message Jarvis...' : 'Select a node first'}
+          placeholder={
+            !selectedNodeId
+              ? 'Select a node first'
+              : !selectedNodeReady
+                ? 'Waiting for node…'
+                : !toolsReady
+                  ? 'Loading tools…'
+                  : 'Message Jarvis...'
+          }
           value={inputText}
           onChangeText={setInputText}
           onSubmitEditing={handleSend}
           returnKeyType="send"
-          editable={!!selectedNodeId && !isLoading}
+          editable={inputReady && !isLoading}
           style={styles.textInput}
           dense
           outlineStyle={styles.inputOutline}
@@ -588,14 +623,14 @@ const HomeScreen = () => {
           icon={isRecording ? 'microphone-off' : 'microphone'}
           size={24}
           onPress={handleMicPress}
-          disabled={!selectedNodeId || isLoading}
+          disabled={!inputReady || isLoading}
           iconColor={isRecording ? theme.colors.error : theme.colors.outline}
         />
         <IconButton
           icon="send"
           size={24}
           onPress={handleSend}
-          disabled={!inputText.trim() || !selectedNodeId || isLoading}
+          disabled={!inputText.trim() || !inputReady || isLoading}
           iconColor={theme.colors.primary}
         />
       </View>
