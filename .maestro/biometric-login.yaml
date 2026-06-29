@@ -1,0 +1,71 @@
+appId: com.jarvis.nodemobile
+name: Biometric login — enroll via checkbox
+# L2 UI-e2e for opt-in biometric login (src/screens/Auth/LoginScreen.tsx +
+# src/services/tokenStorage.ts). Covers the ENROLL path: on a biometric-capable
+# device the Login screen shows a "Use Face ID / Touch ID next time" checkbox;
+# checking it + a successful password login records the opt-in and rewrites the
+# refresh token behind the OS keychain's biometric access control.
+#
+# SCOPE / WHAT MAESTRO CAN'T DO: the actual biometric MATCH at the next cold boot
+# is an OS keychain prompt that Maestro YAML cannot drive. Verify that half
+# MANUALLY on an iOS simulator after this flow:
+#   1. Enroll Face ID:  Simulator menu → Features → Face ID → Enrolled
+#   2. Relaunch the app (do NOT clearKeychain) → a Face ID prompt appears.
+#   3. Features → Face ID → Matching Face   → app unlocks to the main tabs.
+#      Features → Face ID → Non-matching Face → stays on Login; the
+#      "Unlock with Face ID / Touch ID" retry button (testID
+#      biometric-unlock-button) is shown and the password form still works.
+# (Enrolling Face ID in the sim is what makes SecureStore.canUseBiometricAuthentication()
+#  return true, which is what renders the enroll checkbox below.)
+#
+# Requires: the core stack (auth/config/CC) up and seeded with the EMAIL user, a
+# simulator with Face ID enrolled. Run:
+#   maestro test -e EMAIL=... -e PASSWORD=... .maestro/biometric-login.yaml
+tags:
+  - auth
+  - biometric
+  - e2e
+env:
+  EMAIL: "ci-node-test@example.com"
+  PASSWORD: "ci-node-test-password"
+---
+# Start logged out. Keep the keychain so an already-enrolled biometric state can
+# be exercised across runs; the password login below re-enrolls regardless.
+- launchApp:
+    clearState: true
+
+# Landing → Login.
+- tapOn:
+    text: "Log In"
+- assertVisible:
+    id: "email-input"
+
+# The enroll checkbox only renders when the device is biometric-capable. If this
+# assertion fails, the simulator has no Face ID enrolled (see header step 1).
+- assertVisible:
+    id: "biometric-enroll-checkbox"
+- tapOn:
+    id: "biometric-enroll-checkbox"
+
+# Credentials.
+- tapOn:
+    id: "email-input"
+- inputText: "${EMAIL}"
+- tapOn:
+    id: "password-input"
+- inputText: "${PASSWORD}"
+# Dismiss the keyboard before the login tap (a live keyboard swallows it) — same
+# technique as login.yaml: tap an inert content point, then let it settle.
+- tapOn:
+    point: "50%,18%"
+- waitForAnimationToEnd:
+    timeout: 3000
+- tapOn:
+    id: "login-button"
+
+# Landed in the authenticated app → enroll succeeded and the gated refresh token
+# was written. (The tab accessibility text is a full-string regex match.)
+- extendedWaitUntil:
+    visible:
+      text: "Nodes, tab.*"
+    timeout: 20000

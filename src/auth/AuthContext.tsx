@@ -40,6 +40,8 @@ export interface AuthState {
   isLoading: boolean;
   households: Household[];
   activeHouseholdId: string | null;
+  /** User has opted in to biometric login (refresh token gated behind Face/Touch ID). */
+  biometricEnabled: boolean;
 }
 
 type AuthResponse = {
@@ -57,7 +59,14 @@ import {
   USER_KEY,
   ACTIVE_HOUSEHOLD_KEY,
 } from '../config/storageKeys';
-import { getTokens, setTokens, setAccessToken } from '../services/tokenStorage';
+import {
+  getTokens,
+  setTokens,
+  setAccessToken,
+  isBiometricLoginEnabled,
+  setBiometricLoginEnabled,
+  biometricCapable,
+} from '../services/tokenStorage';
 
 const initialState: AuthState = {
   user: null,
@@ -67,13 +76,14 @@ const initialState: AuthState = {
   isLoading: true,
   households: [],
   activeHouseholdId: null,
+  biometricEnabled: false,
 };
 
 const REFRESH_INTERVAL_MS = 10 * 60 * 1000;
 
 type AuthContextValue = {
   state: AuthState;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, opts?: { enableBiometric?: boolean }) => Promise<void>;
   register: (email: string, password: string, username?: string, inviteCode?: string) => Promise<void>;
   logout: () => Promise<void>;
   deleteAccount: (password: string) => Promise<void>;
@@ -82,6 +92,14 @@ type AuthContextValue = {
   fetchHouseholds: () => Promise<Household[]>;
   setActiveHousehold: (householdId: string | null) => Promise<void>;
   switchHousehold: (householdId: string) => Promise<void>;
+  /** Unlock a stored session via the OS biometric prompt (reads the gated
+   *  refresh token). Returns true on success. Used by the "Unlock" retry
+   *  button after a cancelled cold-boot prompt. */
+  unlockWithBiometrics: () => Promise<boolean>;
+  /** Turn biometric login on/off; re-keys the stored refresh token immediately. */
+  setBiometricEnabled: (enabled: boolean) => Promise<void>;
+  /** Whether this device can enforce biometric login (enrolled strong biometrics). */
+  biometricAvailable: boolean;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -137,13 +155,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const login = useCallback(
-    async (email: string, password: string) => {
+    async (email: string, password: string, opts?: { enableBiometric?: boolean }) => {
       const res = await authApi.post<AuthResponse>('/auth/login', { email, password });
+      // Record the opt-in BEFORE persisting so the refresh token is written with
+      // the correct (gated/ungated) keychain policy on this very first write.
+      if (opts && typeof opts.enableBiometric === 'boolean') {
+        await setBiometricLoginEnabled(opts.enableBiometric);
+      }
       await persistAuth({
         accessToken: res.data.access_token,
         refreshToken: res.data.refresh_token,
         user: res.data.user,
       });
+      if (opts && typeof opts.enableBiometric === 'boolean') {
+        const enabled = opts.enableBiometric;
+        setState((prev) => ({ ...prev, biometricEnabled: enabled }));
+      }
     },
     [persistAuth],
   );
@@ -279,10 +306,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     [setActiveHousehold],
   );
 
-  const bootstrapAuth = useCallback(async () => {
+  const unlockWithBiometrics = useCallback(async (): Promise<boolean> => {
     try {
-      // Tokens come from the keychain (migrating any legacy AsyncStorage copy);
-      // the user blob and active household id stay in AsyncStorage.
+      // Reading the gated refresh token triggers the OS biometric prompt.
       const { accessToken, refreshToken } = await getTokens();
       const [storedUser, storedHouseholdId] = await AsyncStorage.multiGet([
         USER_KEY,
@@ -301,11 +327,64 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           isLoading: false,
           households: [],
           activeHouseholdId,
+          biometricEnabled: true,
+        });
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.debug('[AuthContext] Biometric unlock failed:', error instanceof Error ? error.message : error);
+      return false;
+    }
+  }, []);
+
+  const setBiometricEnabled = useCallback(async (enabled: boolean): Promise<void> => {
+    await setBiometricLoginEnabled(enabled);
+    setState((prev) => ({ ...prev, biometricEnabled: enabled }));
+    // Re-key the stored refresh token immediately so the change takes effect on
+    // the very next cold boot — don't wait for the next login/refresh to rewrite.
+    const { accessToken, refreshToken } = stateRef.current;
+    if (accessToken && refreshToken) {
+      await setTokens(accessToken, refreshToken);
+    }
+  }, []);
+
+  const bootstrapAuth = useCallback(async () => {
+    // Read outside the try so the catch branch can still surface the "Unlock"
+    // retry button (isBiometricLoginEnabled has its own internal catch → false).
+    const biometricEnabled = await isBiometricLoginEnabled();
+    try {
+      // Tokens come from the keychain (migrating any legacy AsyncStorage copy);
+      // the user blob and active household id stay in AsyncStorage. When
+      // biometric login is on, getTokens() prompts here — a cancel returns a
+      // null refresh token (session locked, tokens left intact).
+      const { accessToken, refreshToken } = await getTokens();
+      const [storedUser, storedHouseholdId] = await AsyncStorage.multiGet([
+        USER_KEY,
+        ACTIVE_HOUSEHOLD_KEY,
+      ]);
+      const user = parseUser(storedUser[1]);
+      const activeHouseholdId = storedHouseholdId[1] || null;
+
+      if (accessToken && refreshToken && user) {
+        setK2UserId(String(user.id));
+        setState({
+          user,
+          accessToken,
+          refreshToken,
+          isAuthenticated: true,
+          isLoading: false,
+          households: [],
+          activeHouseholdId,
+          biometricEnabled,
         });
       } else {
+        // Unauthenticated (or biometric cancelled). Keep biometricEnabled so the
+        // login screen offers an "Unlock" retry instead of only a password form.
         setState({
           ...initialState,
           isLoading: false,
+          biometricEnabled,
         });
       }
     } catch (error) {
@@ -313,6 +392,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setState({
         ...initialState,
         isLoading: false,
+        biometricEnabled,
       });
     }
   }, []);
@@ -344,6 +424,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [state.isAuthenticated, state.households.length, state.activeHouseholdId, fetchHouseholds, setActiveHousehold]);
 
+  // Device capability is constant for the app session.
+  const biometricAvailable = useMemo(() => biometricCapable(), []);
+
   const value = useMemo(
     () => ({
       state,
@@ -356,8 +439,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       fetchHouseholds,
       setActiveHousehold,
       switchHousehold,
+      unlockWithBiometrics,
+      setBiometricEnabled,
+      biometricAvailable,
     }),
-    [bootstrapAuth, deleteAccount, fetchHouseholds, login, logout, refreshAccessToken, register, setActiveHousehold, switchHousehold, state],
+    [bootstrapAuth, deleteAccount, fetchHouseholds, login, logout, refreshAccessToken, register, setActiveHousehold, switchHousehold, unlockWithBiometrics, setBiometricEnabled, biometricAvailable, state],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

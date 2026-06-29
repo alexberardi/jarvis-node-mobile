@@ -80,6 +80,10 @@ describe('AuthContext', () => {
       ['@jarvis/user', null],
       ['@jarvis/active_household_id', null],
     ]);
+    // Biometric defaults: not capable, opt-in flag unset. clearAllMocks leaves
+    // implementations in place, so reset these explicitly each test.
+    (SecureStore.canUseBiometricAuthentication as jest.Mock).mockReturnValue(false);
+    (AsyncStorage.getItem as jest.Mock).mockResolvedValue(null);
   });
 
   describe('useAuth', () => {
@@ -176,14 +180,18 @@ describe('AuthContext', () => {
       expect(result.current.state.isAuthenticated).toBe(true);
       expect(result.current.state.user).toEqual({ id: 1, email: 'user@example.com' });
       expect(result.current.state.accessToken).toBe('new-access-token');
-      // Tokens are persisted to the OS keychain (not AsyncStorage).
+      // Tokens are persisted to the OS keychain (not AsyncStorage). The third
+      // arg is the keychain-accessibility options object (added for biometric
+      // login); default (no opt-in) writes are ungated but device-only.
       expect(SecureStore.setItemAsync).toHaveBeenCalledWith(
         'jarvis_access_token',
         'new-access-token',
+        expect.any(Object),
       );
       expect(SecureStore.setItemAsync).toHaveBeenCalledWith(
         'jarvis_refresh_token',
         'new-refresh-token',
+        expect.any(Object),
       );
     });
 
@@ -373,6 +381,143 @@ describe('AuthContext', () => {
 
       expect(result.current.state.isAuthenticated).toBe(false);
       expect(result.current.state.accessToken).toBeNull();
+    });
+  });
+
+  describe('biometric login', () => {
+    const BIOMETRIC_FLAG = '@jarvis/biometric_login_enabled';
+
+    it('login with enableBiometric:true records the opt-in and gates the refresh token', async () => {
+      (SecureStore.canUseBiometricAuthentication as jest.Mock).mockReturnValue(true);
+      // The opt-in write is reflected back on read (login persists it before the
+      // token write, so the gate sees it).
+      (AsyncStorage.getItem as jest.Mock).mockImplementation((key: string) =>
+        Promise.resolve(key === BIOMETRIC_FLAG ? 'true' : null),
+      );
+      (authApi.post as jest.Mock).mockResolvedValue({
+        data: {
+          access_token: 'a1',
+          refresh_token: 'r1',
+          token_type: 'bearer',
+          user: { id: 1, email: 'u@e.com' },
+        },
+      });
+      (authApi.get as jest.Mock).mockResolvedValue({ data: [] });
+
+      const { result } = renderHook(() => useAuth(), { wrapper });
+      await waitFor(() => expect(result.current.state.isLoading).toBe(false));
+
+      await act(async () => {
+        await result.current.login('u@e.com', 'pw', { enableBiometric: true });
+      });
+
+      // Opt-in persisted as a boolean (never the token itself).
+      expect(AsyncStorage.setItem).toHaveBeenCalledWith(BIOMETRIC_FLAG, 'true');
+      expect(result.current.state.biometricEnabled).toBe(true);
+      // Refresh token written with requireAuthentication; access token without.
+      expect(SecureStore.setItemAsync).toHaveBeenCalledWith(
+        'jarvis_refresh_token',
+        'r1',
+        expect.objectContaining({ requireAuthentication: true }),
+      );
+      expect(SecureStore.setItemAsync).toHaveBeenCalledWith(
+        'jarvis_access_token',
+        'a1',
+        expect.not.objectContaining({ requireAuthentication: true }),
+      );
+    });
+
+    it('bootstrap stays unauthenticated (without clearing tokens) when the biometric read is cancelled', async () => {
+      (SecureStore.canUseBiometricAuthentication as jest.Mock).mockReturnValue(true);
+      (AsyncStorage.getItem as jest.Mock).mockImplementation((key: string) =>
+        Promise.resolve(key === BIOMETRIC_FLAG ? 'true' : null),
+      );
+      (AsyncStorage.multiGet as jest.Mock).mockResolvedValue([
+        ['@jarvis/user', JSON.stringify({ id: 1, email: 'u@e.com' })],
+        ['@jarvis/active_household_id', null],
+      ]);
+      // Access read succeeds; the gated refresh read throws (user cancelled).
+      (SecureStore.getItemAsync as jest.Mock).mockImplementation((key: string) => {
+        if (key === 'jarvis_access_token') return Promise.resolve('a1');
+        if (key === 'jarvis_refresh_token') return Promise.reject(new Error('UserCancel'));
+        return Promise.resolve(null);
+      });
+
+      const { result } = renderHook(() => useAuth(), { wrapper });
+      await waitFor(() => expect(result.current.state.isLoading).toBe(false));
+
+      // Locked out → drops to the login screen, but the opt-in survives so the
+      // "Unlock" retry button shows. Tokens are NOT deleted on cancel.
+      expect(result.current.state.isAuthenticated).toBe(false);
+      expect(result.current.state.biometricEnabled).toBe(true);
+      expect(SecureStore.deleteItemAsync).not.toHaveBeenCalledWith('jarvis_refresh_token');
+    });
+
+    it('preserves biometricEnabled when bootstrap throws unexpectedly (Unlock button survives)', async () => {
+      (AsyncStorage.getItem as jest.Mock).mockImplementation((key: string) =>
+        Promise.resolve(key === BIOMETRIC_FLAG ? 'true' : null),
+      );
+      // Make the bootstrap body throw AFTER the flag read.
+      (AsyncStorage.multiGet as jest.Mock).mockRejectedValue(new Error('storage offline'));
+
+      const { result } = renderHook(() => useAuth(), { wrapper });
+      await waitFor(() => expect(result.current.state.isLoading).toBe(false));
+
+      expect(result.current.state.isAuthenticated).toBe(false);
+      expect(result.current.state.biometricEnabled).toBe(true);
+    });
+
+    it('unlockWithBiometrics authenticates when the gated read succeeds', async () => {
+      (SecureStore.canUseBiometricAuthentication as jest.Mock).mockReturnValue(true);
+      (AsyncStorage.multiGet as jest.Mock).mockResolvedValue([
+        ['@jarvis/user', JSON.stringify({ id: 7, email: 'z@e.com' })],
+        ['@jarvis/active_household_id', 'hh-9'],
+      ]);
+      (authApi.get as jest.Mock).mockResolvedValue({ data: [] });
+
+      const { result } = renderHook(() => useAuth(), { wrapper });
+      await waitFor(() => expect(result.current.state.isLoading).toBe(false));
+      expect(result.current.state.isAuthenticated).toBe(false);
+
+      // Now the keychain releases the tokens (biometric passed).
+      setSecureTokens('a7', 'r7');
+      let ok: boolean | undefined;
+      await act(async () => {
+        ok = await result.current.unlockWithBiometrics();
+      });
+
+      expect(ok).toBe(true);
+      expect(result.current.state.isAuthenticated).toBe(true);
+      expect(result.current.state.user).toEqual({ id: 7, email: 'z@e.com' });
+      expect(result.current.state.activeHouseholdId).toBe('hh-9');
+    });
+
+    it('setBiometricEnabled(false) re-keys the refresh token ungated', async () => {
+      (SecureStore.canUseBiometricAuthentication as jest.Mock).mockReturnValue(true);
+      const storedUser = { id: 1, email: 'u@e.com' };
+      setSecureTokens('a1', 'r1');
+      (AsyncStorage.multiGet as jest.Mock).mockResolvedValue([
+        ['@jarvis/user', JSON.stringify(storedUser)],
+        ['@jarvis/active_household_id', null],
+      ]);
+      (authApi.get as jest.Mock).mockResolvedValue({ data: [] });
+
+      const { result } = renderHook(() => useAuth(), { wrapper });
+      await waitFor(() => expect(result.current.state.isAuthenticated).toBe(true));
+
+      (SecureStore.setItemAsync as jest.Mock).mockClear();
+      await act(async () => {
+        await result.current.setBiometricEnabled(false);
+      });
+
+      expect(AsyncStorage.setItem).toHaveBeenCalledWith(BIOMETRIC_FLAG, 'false');
+      expect(result.current.state.biometricEnabled).toBe(false);
+      // The stored refresh token is rewritten immediately, ungated.
+      expect(SecureStore.setItemAsync).toHaveBeenCalledWith(
+        'jarvis_refresh_token',
+        'r1',
+        expect.not.objectContaining({ requireAuthentication: true }),
+      );
     });
   });
 

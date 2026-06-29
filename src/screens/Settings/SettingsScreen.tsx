@@ -3,7 +3,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useQueryClient } from '@tanstack/react-query';
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Alert, Platform, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import {
   ActivityIndicator,
   Button,
@@ -55,7 +55,15 @@ const THEME_BUTTONS = [
 const SettingsScreen = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const theme = useTheme();
-  const { state: authState, logout, deleteAccount, switchHousehold, fetchHouseholds } = useAuth();
+  const {
+    state: authState,
+    logout,
+    deleteAccount,
+    switchHousehold,
+    fetchHouseholds,
+    setBiometricEnabled,
+    biometricAvailable,
+  } = useAuth();
   const { config, isUsingCloud, manualUrl, rediscover, setManualUrl } =
     useConfig();
   const queryClient = useQueryClient();
@@ -207,6 +215,15 @@ const SettingsScreen = () => {
       );
     }
   }, []);
+
+  const handleBiometricToggle = useCallback(async (value: boolean) => {
+    try {
+      await setBiometricEnabled(value);
+    } catch (err) {
+      console.error('[SettingsScreen] Failed to update biometric login', err);
+      Alert.alert('Error', 'Could not update biometric login.');
+    }
+  }, [setBiometricEnabled]);
 
   useEffect(() => {
     if (!householdId) return;
@@ -540,6 +557,31 @@ const SettingsScreen = () => {
           </View>
         </Card.Content>
       </Card>
+
+      {/* Security — biometric login (only on capable devices) */}
+      {biometricAvailable && (
+        <Card style={styles.card}>
+          <Card.Content>
+            <Text variant="titleMedium" style={styles.sectionTitle}>
+              Security
+            </Text>
+            <View style={styles.switchRow}>
+              <View style={{ flex: 1 }}>
+                <Text variant="bodyMedium">Biometric login</Text>
+                <Text variant="bodySmall" style={styles.hint}>
+                  Require {Platform.OS === 'ios' ? 'Face ID / Touch ID' : 'biometric unlock'} to
+                  unlock Jarvis when you open the app. You can always sign in with your password.
+                </Text>
+              </View>
+              <Switch
+                value={authState.biometricEnabled}
+                onValueChange={handleBiometricToggle}
+                testID="biometric-login-toggle"
+              />
+            </View>
+          </Card.Content>
+        </Card>
+      )}
 
       {/* Privacy */}
       <Card style={styles.card}>

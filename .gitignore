@@ -43,6 +43,9 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
+# test coverage output
+/coverage/
+
 # Python (store-publish scripts)
 __pycache__/
 *.pyc

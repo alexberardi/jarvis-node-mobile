@@ -63,7 +63,7 @@ jarvis-node-mobile/
 - **React Native Paper** (Material Design UI)
 - **React Query 5** (data fetching)
 - **expo-camera** (QR scanning)
-- **expo-secure-store** (K2 node-encryption keys only)
+- **expo-secure-store** (OS keychain): JWT access/refresh tokens + K2 node-encryption keys. Supports opt-in biometric login (`requireAuthentication` on the refresh token).
 
 ## Key Features
 
@@ -71,7 +71,8 @@ jarvis-node-mobile/
 - **WiFi Configuration**: Push WiFi credentials to headless nodes
 - **Home Assistant**: Device discovery and control
 - **Config Discovery**: Auto-find jarvis-config-service on local network
-- **Secure Storage**: JWTs (access + refresh) live in AsyncStorage (`src/config/storageKeys.ts`) and are cleared by `src/services/clearUserData.ts`; only K2 node-encryption keys use SecureStore (platform keychain)
+- **Secure Storage**: JWTs (access + refresh) live in the OS keychain via SecureStore (`src/services/tokenStorage.ts`), NOT AsyncStorage — only the non-secret user blob + active-household id are in AsyncStorage (`src/config/storageKeys.ts`). Both token stores are cleared by `src/services/clearUserData.ts`. K2 node-encryption keys also use SecureStore (kept across logout, user-scoped).
+- **Biometric login** (opt-in): the durable refresh token is rewritten with SecureStore `requireAuthentication: true`, so cold-boot session restore (`AuthContext.bootstrapAuth`) requires Face ID / Touch ID. Only the refresh token is gated (access token + K2 stay ungated for unattended refresh / device-control). A failure/cancel always falls back to email+password — there is no OS passcode fallback in the keychain prompt, so the password path is the sole safety net by design. Enable via the Login-screen checkbox or Settings → Security.
 
 ## Environment
 
