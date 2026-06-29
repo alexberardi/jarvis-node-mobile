@@ -63,7 +63,8 @@
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO",
         "android.permission.CHANGE_WIFI_MULTICAST_STATE",
-        "android.permission.ACCESS_WIFI_STATE"
+        "android.permission.ACCESS_WIFI_STATE",
+        "android.permission.USE_BIOMETRIC"
       ]
     },
     "web": {
@@ -76,7 +77,12 @@
           "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera to scan QR codes"
         }
       ],
-      "expo-secure-store",
+      [
+        "expo-secure-store",
+        {
+          "faceIDPermission": "Allow Jarvis to use Face ID to unlock the app."
+        }
+      ],
       "expo-web-browser",
       [
         "expo-build-properties",

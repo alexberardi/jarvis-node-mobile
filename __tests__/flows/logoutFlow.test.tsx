@@ -26,10 +26,13 @@ jest.mock('../../src/api/authApi', () => ({
 }));
 
 jest.mock('../../src/services/tokenStorage', () => ({
-  getTokens: jest.fn().mockResolvedValue({ accessToken: null, refreshToken: null }),
+  getTokens: jest.fn().mockResolvedValue({ accessToken: null, refreshToken: null, biometricCancelled: false }),
   setTokens: jest.fn().mockResolvedValue(undefined),
   setAccessToken: jest.fn().mockResolvedValue(undefined),
   clearTokens: jest.fn().mockResolvedValue(undefined),
+  isBiometricLoginEnabled: jest.fn().mockResolvedValue(false),
+  setBiometricLoginEnabled: jest.fn().mockResolvedValue(undefined),
+  biometricCapable: jest.fn(() => false),
 }));
 
 jest.mock('../../src/contexts/ConfigContext', () => ({

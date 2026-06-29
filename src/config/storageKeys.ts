@@ -39,5 +39,12 @@ export const LAST_NODE_KEY = '@jarvis/last_node_id';
 export const PENDING_NODE_KEY = '@jarvis/pending_node';
 /** Push notifications enabled: 'true' | 'false' */
 export const PUSH_NOTIFICATIONS_KEY = '@jarvis/push_notifications_enabled';
+/**
+ * Biometric login opt-in: 'true' | 'false'. Stores ONLY the boolean preference,
+ * never any token/secret. When 'true', tokenStorage gates the refresh token
+ * behind the OS keychain's biometric access control. Not preserved across
+ * logout (the token is wiped anyway), so it's re-chosen on each login.
+ */
+export const BIOMETRIC_LOGIN_ENABLED_KEY = '@jarvis/biometric_login_enabled';
 
 // Routines are server-owned (command-center) — no local routine storage keys.
