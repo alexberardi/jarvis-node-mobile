@@ -6,12 +6,25 @@ import LoginScreen from '../../src/screens/Auth/LoginScreen';
 import { lightTheme } from '../../src/theme';
 
 const mockLogin = jest.fn();
+const mockUnlock = jest.fn();
 const mockNavigate = jest.fn();
 const mockGoBack = jest.fn();
+
+// Mutable so individual tests can flip biometric capability/enrollment. Names
+// are mock-prefixed so the jest.mock factory may close over them.
+let mockBiometricAvailable = false;
+let mockBiometricEnabled = false;
 
 jest.mock('../../src/auth/AuthContext', () => ({
   useAuth: () => ({
     login: mockLogin,
+    unlockWithBiometrics: mockUnlock,
+    get biometricAvailable() {
+      return mockBiometricAvailable;
+    },
+    get state() {
+      return { biometricEnabled: mockBiometricEnabled };
+    },
   }),
 }));
 
@@ -27,6 +40,8 @@ const wrapper = ({ children }: { children: React.ReactNode }) => (
 describe('LoginScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockBiometricAvailable = false;
+    mockBiometricEnabled = false;
   });
 
   it('should render the Log In header and button', () => {
@@ -55,7 +70,7 @@ describe('LoginScreen', () => {
   it('should call login when form is submitted', async () => {
     mockLogin.mockResolvedValue(undefined);
 
-    const { getAllByText, getByDisplayValue } = render(
+    const { getAllByText } = render(
       <LoginScreen navigation={mockNavigation} route={{} as any} />,
       { wrapper }
     );
@@ -110,5 +125,62 @@ describe('LoginScreen', () => {
     fireEvent.press(backButton);
 
     expect(mockGoBack).toHaveBeenCalled();
+  });
+
+  describe('biometric login', () => {
+    it('hides the enroll checkbox and unlock button when biometrics are unavailable', () => {
+      const { queryByTestId } = render(
+        <LoginScreen navigation={mockNavigation} route={{} as any} />,
+        { wrapper }
+      );
+      expect(queryByTestId('biometric-enroll-checkbox')).toBeNull();
+      expect(queryByTestId('biometric-unlock-button')).toBeNull();
+    });
+
+    it('shows the enroll checkbox and passes the opt-in to login when checked', async () => {
+      mockBiometricAvailable = true;
+      mockBiometricEnabled = false;
+      mockLogin.mockResolvedValue(undefined);
+
+      const { getByTestId, getAllByText } = render(
+        <LoginScreen navigation={mockNavigation} route={{} as any} />,
+        { wrapper }
+      );
+
+      // Opt in via the checkbox.
+      fireEvent.press(getByTestId('biometric-enroll-checkbox'));
+
+      const emailInputs = getAllByText('Email');
+      fireEvent.changeText(emailInputs[emailInputs.length - 1], 'user@example.com');
+      const passwordInputs = getAllByText('Password');
+      fireEvent.changeText(passwordInputs[passwordInputs.length - 1], 'password123');
+
+      const logInElements = getAllByText('Log In');
+      fireEvent.press(logInElements[logInElements.length - 1]);
+
+      await waitFor(() => {
+        expect(mockLogin).toHaveBeenCalledWith('user@example.com', 'password123', {
+          enableBiometric: true,
+        });
+      });
+    });
+
+    it('shows the unlock button (not the checkbox) once enrolled, and calls unlockWithBiometrics', async () => {
+      mockBiometricAvailable = true;
+      mockBiometricEnabled = true;
+      mockUnlock.mockResolvedValue(true);
+
+      const { getByTestId, queryByTestId } = render(
+        <LoginScreen navigation={mockNavigation} route={{} as any} />,
+        { wrapper }
+      );
+
+      expect(queryByTestId('biometric-enroll-checkbox')).toBeNull();
+      fireEvent.press(getByTestId('biometric-unlock-button'));
+
+      await waitFor(() => {
+        expect(mockUnlock).toHaveBeenCalled();
+      });
+    });
   });
 });

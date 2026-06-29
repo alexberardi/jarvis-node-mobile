@@ -6,10 +6,17 @@ jest.mock('@react-native-async-storage/async-storage', () =>
 );
 
 // Mock expo-secure-store (OS keychain) — used for JWT auth tokens and K2 keys.
+// canUseBiometricAuthentication defaults to false so token writes/reads are
+// ungated unless a test opts in (mockReturnValue(true)). The keychainAccessible
+// constants are referenced by tokenStorage's option objects.
 jest.mock('expo-secure-store', () => ({
   setItemAsync: jest.fn().mockResolvedValue(undefined),
   getItemAsync: jest.fn().mockResolvedValue(null),
   deleteItemAsync: jest.fn().mockResolvedValue(undefined),
+  canUseBiometricAuthentication: jest.fn(() => false),
+  WHEN_UNLOCKED: 'whenUnlocked',
+  WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'whenUnlockedThisDeviceOnly',
+  AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY: 'afterFirstUnlockThisDeviceOnly',
 }));
 
 // Mock jarvis-crypto native module.
