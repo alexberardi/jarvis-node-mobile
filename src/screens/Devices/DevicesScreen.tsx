@@ -246,14 +246,17 @@ const DevicesScreen = () => {
         setSnackbar('No nodes available. Add a node first.');
         return;
       }
-      navigation.navigate('DeviceDiscovery', { nodeId: nodes[0].node_id });
+      // Scan with the household's designated primary node (the smart-home node),
+      // not just the first node returned — fall back to nodes[0] if no primary set.
+      const targetNode = nodes.find((n) => n.node_id === primaryNodeId) ?? nodes[0];
+      navigation.navigate('DeviceDiscovery', { nodeId: targetNode.node_id });
       if (nodes.length > 1) {
-        setSnackbar(`Scanning with node: ${nodes[0].room || nodes[0].node_id}`);
+        setSnackbar(`Scanning with node: ${targetNode.room || targetNode.node_id}`);
       }
     } catch {
       setSnackbar('Failed to fetch nodes');
     }
-  }, [navigation, householdId]);
+  }, [navigation, householdId, primaryNodeId]);
 
   if (!householdId) {
     return (
