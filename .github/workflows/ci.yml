@@ -93,6 +93,20 @@ jobs:
         env:
           APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
 
+      # appVersionSource is "local", so the binary's build number comes from
+      # app.json. Local (--local) builds don't auto-increment it, so derive a
+      # monotonic CFBundleVersion/versionCode from the CI run number — every
+      # push gets a unique, increasing build number and TestFlight/Play stop
+      # rejecting "already submitted this version". The marketing version
+      # (expo.version) is still bumped by hand for real releases.
+      - name: Set build number from CI run
+        run: |
+          jq --arg n "${{ github.run_number }}" \
+            '.expo.ios.buildNumber = $n | .expo.android.versionCode = ($n | tonumber)' \
+            app.json > app.json.tmp && mv app.json.tmp app.json
+          echo "Build number set to ${{ github.run_number }}"
+          grep -E '"buildNumber"|"versionCode"' app.json
+
       - name: Build iOS locally
         run: eas build --platform ios --profile production --local --non-interactive --output ${{ github.workspace }}/build.ipa
         env:
@@ -139,6 +153,16 @@ jobs:
         run: echo "$GOOGLE_SERVICE_ACCOUNT_JSON" > ${{ github.workspace }}/google-service-account.json
         env:
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+
+      # See iOS job: derive a monotonic versionCode from the CI run number so
+      # local builds always get a unique, increasing Play Store version code.
+      - name: Set build number from CI run
+        run: |
+          jq --arg n "${{ github.run_number }}" \
+            '.expo.ios.buildNumber = $n | .expo.android.versionCode = ($n | tonumber)' \
+            app.json > app.json.tmp && mv app.json.tmp app.json
+          echo "versionCode set to ${{ github.run_number }}"
+          grep -E '"buildNumber"|"versionCode"' app.json
 
       - name: Build Android locally
         run: eas build --platform android --profile production --local --non-interactive --output ${{ github.workspace }}/build.aab
