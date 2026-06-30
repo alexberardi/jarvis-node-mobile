@@ -1,7 +1,7 @@
 {
   "cli": {
     "version": ">= 5.0.0",
-    "appVersionSource": "remote"
+    "appVersionSource": "local"
   },
   "build": {
     "development": {
@@ -58,7 +58,7 @@
         "buildType": "app-bundle",
         "resourceClass": "medium"
       },
-      "autoIncrement": true
+      "autoIncrement": false
     }
   },
   "submit": {
