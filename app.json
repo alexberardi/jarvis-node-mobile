@@ -2,7 +2,7 @@
   "expo": {
     "name": "Jarvis Automation",
     "slug": "jarvis-node-mobile",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -15,7 +15,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.jarvis.nodemobile",
-      "buildNumber": "10",
+      "buildNumber": "11",
       "appleTeamId": "8H5GA7SX77",
       "associatedDomains": [
         "applinks:docs.jarvisautomation.dev"

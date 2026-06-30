@@ -20,7 +20,7 @@ const RegisterScreen = ({ navigation }: Props) => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [enablePush, setEnablePush] = useState(true);
+  const [enablePush, setEnablePush] = useState(false);
 
   const handleInviteBlur = useCallback(async () => {
     const code = inviteCode.trim();

@@ -4,6 +4,7 @@ import { PaperProvider } from 'react-native-paper';
 
 import RegisterScreen from '../../src/screens/Auth/RegisterScreen';
 import { lightTheme } from '../../src/theme';
+import { setPushNotificationsEnabled } from '../../src/services/pushNotificationService';
 
 const mockRegister = jest.fn();
 const mockNavigate = jest.fn();
@@ -13,6 +14,10 @@ jest.mock('../../src/auth/AuthContext', () => ({
   useAuth: () => ({
     register: mockRegister,
   }),
+}));
+
+jest.mock('../../src/services/pushNotificationService', () => ({
+  setPushNotificationsEnabled: jest.fn().mockResolvedValue(undefined),
 }));
 
 const mockNavigation = {
@@ -75,6 +80,42 @@ describe('RegisterScreen', () => {
     await waitFor(() => {
       expect(mockRegister).toHaveBeenCalledWith('new@example.com', 'Password1', undefined, undefined);
     });
+  });
+
+  it('should render the push notifications checkbox unchecked by default (opt-in)', () => {
+    const { getByRole } = render(
+      <RegisterScreen navigation={mockNavigation} route={{} as any} />,
+      { wrapper }
+    );
+
+    const checkbox = getByRole('checkbox');
+    expect(checkbox.props.accessibilityState?.checked).toBe(false);
+  });
+
+  it('should opt out of push (setPushNotificationsEnabled(false)) when submitting without checking', async () => {
+    mockRegister.mockResolvedValue(undefined);
+
+    const { getAllByText } = render(
+      <RegisterScreen navigation={mockNavigation} route={{} as any} />,
+      { wrapper }
+    );
+
+    const emailInputs = getAllByText('Email');
+    fireEvent.changeText(emailInputs[emailInputs.length - 1], 'new@example.com');
+
+    const passwordInputs = getAllByText('Password');
+    fireEvent.changeText(passwordInputs[passwordInputs.length - 1], 'Password1');
+
+    const confirmInputs = getAllByText('Confirm Password');
+    fireEvent.changeText(confirmInputs[confirmInputs.length - 1], 'Password1');
+
+    const createButtons = getAllByText('Create Account');
+    fireEvent.press(createButtons[createButtons.length - 1]);
+
+    await waitFor(() => {
+      expect(setPushNotificationsEnabled).toHaveBeenCalledWith(false);
+    });
+    expect(setPushNotificationsEnabled).not.toHaveBeenCalledWith(true);
   });
 
   it('should display error on registration failure', async () => {
