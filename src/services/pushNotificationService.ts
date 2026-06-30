@@ -18,11 +18,13 @@ export { PUSH_NOTIFICATIONS_KEY };
 
 /**
  * Check if push notifications are enabled by the user.
- * Defaults to true for existing users who haven't set a preference.
+ * Defaults to FALSE (opt-in): the device does not contact Expo (exp.host)
+ * for a push token until the user explicitly enables push notifications.
+ * An unset/null preference is treated as disabled.
  */
 export async function arePushNotificationsEnabled(): Promise<boolean> {
   const val = await AsyncStorage.getItem(PUSH_NOTIFICATIONS_KEY);
-  return val !== 'false';
+  return val === 'true';
 }
 
 /**
