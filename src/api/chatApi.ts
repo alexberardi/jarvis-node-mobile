@@ -6,7 +6,7 @@
  */
 
 import { getCommandCenterUrl } from '../config/serviceConfig';
-import apiClient from './apiClient';
+import apiClient, { refreshAuthToken } from './apiClient';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -137,59 +137,78 @@ export const sendChatMessage = (
     const baseUrl = getCommandCenterUrl();
     const url = `${baseUrl}/api/v0/mobile/chat`;
 
-    const xhr = new XMLHttpRequest();
-    let processedLength = 0;
+    // This XHR streaming client bypasses the apiClient axios interceptor, so it
+    // must handle a stale-token 401 itself: refresh once (shared single-flight,
+    // which force-logs-out a genuinely dead session) and retry, rather than
+    // surfacing a borked error bubble while the user stays "authenticated".
+    const run = (token: string, isRetry: boolean) => {
+      const xhr = new XMLHttpRequest();
+      let processedLength = 0;
 
-    // Wire up abort signal
-    if (signal) {
-      signal.addEventListener('abort', () => xhr.abort());
-    }
-
-    xhr.open('POST', url);
-    xhr.setRequestHeader('Content-Type', 'application/json');
-    xhr.setRequestHeader('Authorization', `Bearer ${accessToken}`);
-    xhr.setRequestHeader('Accept', 'text/event-stream');
-
-    // React Native XHR fires onprogress with incremental responseText
-    xhr.onprogress = () => {
-      const newText = xhr.responseText.slice(processedLength);
-      processedLength = xhr.responseText.length;
-
-      if (newText) {
-        const events = parseSSEChunk(newText);
-        for (const event of events) {
-          onEvent(event);
-        }
-      }
-    };
-
-    xhr.onload = () => {
-      // Process any remaining text not caught by onprogress
-      const remaining = xhr.responseText.slice(processedLength);
-      if (remaining) {
-        const events = parseSSEChunk(remaining);
-        for (const event of events) {
-          onEvent(event);
-        }
+      // Wire up abort signal
+      if (signal) {
+        signal.addEventListener('abort', () => xhr.abort());
       }
 
-      if (xhr.status >= 200 && xhr.status < 300) {
+      xhr.open('POST', url);
+      xhr.setRequestHeader('Content-Type', 'application/json');
+      xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+      xhr.setRequestHeader('Accept', 'text/event-stream');
+
+      // React Native XHR fires onprogress with incremental responseText
+      xhr.onprogress = () => {
+        const newText = xhr.responseText.slice(processedLength);
+        processedLength = xhr.responseText.length;
+
+        if (newText) {
+          const events = parseSSEChunk(newText);
+          for (const event of events) {
+            onEvent(event);
+          }
+        }
+      };
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          // Process any remaining text not caught by onprogress
+          const remaining = xhr.responseText.slice(processedLength);
+          if (remaining) {
+            const events = parseSSEChunk(remaining);
+            for (const event of events) {
+              onEvent(event);
+            }
+          }
+          resolve();
+        } else if (xhr.status === 401 && !isRetry) {
+          // Stale access token — refresh once and retry the stream.
+          refreshAuthToken()
+            .then((fresh) => {
+              if (fresh) {
+                run(fresh, true);
+              } else {
+                // doRefresh already forced a logout if the session is dead.
+                reject(new Error(`Chat request failed (${xhr.status})`));
+              }
+            })
+            .catch(() => reject(new Error(`Chat request failed (${xhr.status})`)));
+        } else {
+          reject(new Error(`Chat request failed (${xhr.status}): ${xhr.responseText}`));
+        }
+      };
+
+      xhr.onerror = () => {
+        reject(new Error('Network error during chat stream'));
+      };
+
+      xhr.onabort = () => {
+        // Don't reject on intentional abort — just resolve silently
         resolve();
-      } else {
-        reject(new Error(`Chat request failed (${xhr.status}): ${xhr.responseText}`));
-      }
+      };
+
+      xhr.send(JSON.stringify(req));
     };
 
-    xhr.onerror = () => {
-      reject(new Error('Network error during chat stream'));
-    };
-
-    xhr.onabort = () => {
-      // Don't reject on intentional abort — just resolve silently
-      resolve();
-    };
-
-    xhr.send(JSON.stringify(req));
+    run(accessToken, false);
   });
 };
 

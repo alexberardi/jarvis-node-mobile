@@ -13,7 +13,9 @@ import { setK2UserId } from '../services/k2Service';
 import { clearUserData } from '../services/clearUserData';
 import { useConfig } from '../contexts/ConfigContext';
 
-import { configureApiClient } from '../api/apiClient';
+import { AppState } from 'react-native';
+
+import { configureApiClient, refreshAuthToken } from '../api/apiClient';
 import authApi from '../api/authApi';
 import { deleteAccount as deleteAccountApi } from '../api/accountApi';
 
@@ -244,9 +246,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     configureApiClient({
       getAccessToken: () => stateRef.current.accessToken,
       getRefreshToken: () => stateRef.current.refreshToken,
-      updateTokens: (access: string, refresh: string) => {
+      updateTokens: async (access: string, refresh: string) => {
         setState((prev) => ({ ...prev, accessToken: access, refreshToken: refresh, isAuthenticated: true }));
-        void setTokens(access, refresh);
+        // Await the keychain write: tokens are rotated server-side, so the new
+        // refresh token must be durably persisted before the next refresh can
+        // fire — otherwise a kill/cold-boot could replay the rotated token.
+        await setTokens(access, refresh);
       },
       onForceLogout: () => {
         logout();
@@ -254,28 +259,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   }, [logout]);
 
-  const refreshAccessToken = useCallback(async () => {
-    const refreshToken = state.refreshToken;
-    if (!refreshToken) return null;
-    try {
-      const res = await authApi.post<Omit<AuthResponse, 'user'>>('/auth/refresh', {
-        refresh_token: refreshToken,
-      });
-      const newAccess = res.data.access_token;
-      const newRefresh = res.data.refresh_token ?? refreshToken;
-      setState((prev) => ({
-        ...prev,
-        accessToken: newAccess,
-        refreshToken: newRefresh,
-        isAuthenticated: true,
-      }));
-      await setTokens(newAccess, newRefresh);
-      return newAccess;
-    } catch (error) {
-      console.debug('[AuthContext] Token refresh failed:', error instanceof Error ? error.message : error);
-      return null;
-    }
-  }, [state.refreshToken]);
+  // Delegate to the shared single-flight in apiClient so the background timer,
+  // the AppState-resume refresh, and the 401 interceptor can never double-spend
+  // the rotated refresh token. State + keychain are updated via the
+  // `updateTokens` bridge wired in configureApiClient above; a genuinely dead
+  // session force-logs-out from inside doRefresh.
+  const refreshAccessToken = useCallback((): Promise<string | null> => refreshAuthToken(), []);
 
   const fetchHouseholds = useCallback(async (): Promise<Household[]> => {
     if (!state.accessToken) return [];
@@ -411,6 +400,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, REFRESH_INTERVAL_MS);
     return () => clearInterval(timer);
   }, [state.isAuthenticated, refreshAccessToken]);
+
+  // Proactively refresh on foreground. iOS suspends the JS interval timer while
+  // the app is backgrounded, so after a long background the access token is
+  // stale and the resume burst of screen queries would all 401 at once.
+  // Refresh once up front (shared single-flight) so they carry a fresh token —
+  // and so a genuinely dead session logs out immediately (via doRefresh)
+  // instead of lingering behind borked node/device screens.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (next) => {
+      if (next === 'active' && stateRef.current.isAuthenticated) {
+        refreshAuthToken().catch(() => {});
+      }
+    });
+    return () => sub.remove();
+  }, []);
 
   // Fetch households when authenticated
   useEffect(() => {
