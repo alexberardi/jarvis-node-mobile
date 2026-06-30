@@ -237,6 +237,55 @@ const DeviceControlPanel: React.FC<Props> = ({
         />
       );
 
+    case 'pairing': {
+      // The accessory needs to be paired before it can be controlled (e.g.
+      // HomeKit setup-code pairing). Surface a Pair button regardless of the
+      // device's domain — its domain panel (e.g. thermostat) can't trigger it.
+      // The existing pair_start → InputRequest dialog → pair_finish flow in
+      // DeviceEditScreen handles the rest.
+
+      // While pairing is in flight (pair_start opens the dialog; pair_finish runs
+      // the handshake + state refetch), show a spinner instead of the button so
+      // the user gets feedback and the panel auto-flips to the real control after.
+      const pairingInFlight =
+        actionLoading === 'pair_start' || actionLoading === 'pair_finish';
+      if (pairingInFlight) {
+        return (
+          <View style={styles.pairingContainer}>
+            <ActivityIndicator size="small" />
+            <Text
+              variant="bodySmall"
+              style={{ color: theme.colors.onSurfaceVariant, marginTop: 8 }}
+            >
+              Pairing…
+            </Text>
+          </View>
+        );
+      }
+
+      const pairAction: JarvisButton = {
+        button_text: 'Pair HomeKit device',
+        button_action: 'pair_start',
+        button_type: 'primary',
+        button_icon: 'link',
+      };
+      return (
+        <View style={styles.pairingContainer}>
+          <Text
+            variant="bodySmall"
+            style={{ color: theme.colors.onSurfaceVariant, marginBottom: 12 }}
+          >
+            This accessory isn't paired yet. Pair it to control it from Jarvis.
+          </Text>
+          <ActionButtons
+            actions={[pairAction]}
+            onPress={onAction}
+            loadingAction={actionLoading}
+          />
+        </View>
+      );
+    }
+
     default:
       // Unknown domain — fall back to action buttons
       if (fallbackActions && fallbackActions.length > 0) {
@@ -256,6 +305,9 @@ const styles = StyleSheet.create({
   loadingContainer: {
     alignItems: 'center',
     paddingVertical: 24,
+  },
+  pairingContainer: {
+    paddingVertical: 8,
   },
 });
 

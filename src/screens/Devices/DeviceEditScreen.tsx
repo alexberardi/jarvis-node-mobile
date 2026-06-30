@@ -151,6 +151,11 @@ const DeviceEditScreen = ({ navigation, route }: Props) => {
       if (result.success) {
         setLastAction('Paired');
         setTimeout(() => setLastAction(null), 3000);
+        // Re-fetch device state so the panel swaps the Pair affordance for the
+        // real per-domain control (e.g. thermostat). AWAIT it so the "Pairing…"
+        // spinner stays up until the new state is in — then the panel flips
+        // straight to the thermostat with no Pair-button flash.
+        await queryClient.invalidateQueries({ queryKey: ['deviceState', householdId, deviceId] });
       } else {
         Alert.alert('Pairing Failed', result.error || 'Could not complete pairing');
       }
@@ -159,7 +164,7 @@ const DeviceEditScreen = ({ navigation, route }: Props) => {
     } finally {
       setActionLoading(null);
     }
-  }, [inputDialog, inputValue, device, householdId, deviceId]);
+  }, [inputDialog, inputValue, device, householdId, deviceId, queryClient]);
 
   if (devicesLoading) {
     return (
