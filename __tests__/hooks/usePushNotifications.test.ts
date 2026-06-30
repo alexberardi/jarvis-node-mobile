@@ -3,6 +3,7 @@ import * as Notifications from 'expo-notifications';
 
 import { usePushNotifications } from '../../src/hooks/usePushNotifications';
 import {
+  arePushNotificationsEnabled,
   getExpoPushToken,
   registerPushToken,
   unregisterPushToken,
@@ -46,6 +47,8 @@ describe('usePushNotifications', () => {
     mockAuthState.isAuthenticated = false;
     mockAuthState.accessToken = null;
     (useAuth as jest.Mock).mockReturnValue({ state: { ...mockAuthState } });
+    // Default: push enabled (opt-in already granted) — individual tests override.
+    (arePushNotificationsEnabled as jest.Mock).mockResolvedValue(true);
     (getExpoPushToken as jest.Mock).mockResolvedValue(null);
     (registerPushToken as jest.Mock).mockResolvedValue(true);
     (unregisterPushToken as jest.Mock).mockResolvedValue(true);
@@ -134,6 +137,31 @@ describe('usePushNotifications', () => {
     });
 
     expect(getExpoPushToken).toHaveBeenCalled();
+    expect(registerPushToken).not.toHaveBeenCalled();
+  });
+
+  it('should not contact Expo or register when push notifications are disabled (opt-in default)', async () => {
+    // Privacy default: preference unset/disabled → no egress to exp.host.
+    (arePushNotificationsEnabled as jest.Mock).mockResolvedValue(false);
+    (getExpoPushToken as jest.Mock).mockResolvedValue('ExponentPushToken[should-not-happen]');
+
+    (useAuth as jest.Mock).mockReturnValue({
+      state: {
+        ...mockAuthState,
+        isAuthenticated: true,
+        accessToken: 'test-access-token',
+      },
+    });
+
+    renderHook(() => usePushNotifications());
+
+    // Flush the arePushNotificationsEnabled().then(...) microtask chain.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(arePushNotificationsEnabled).toHaveBeenCalled();
+    expect(getExpoPushToken).not.toHaveBeenCalled();
     expect(registerPushToken).not.toHaveBeenCalled();
   });
 
