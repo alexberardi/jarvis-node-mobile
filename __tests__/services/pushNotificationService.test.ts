@@ -1,8 +1,10 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
 import {
+  arePushNotificationsEnabled,
   getExpoPushToken,
   registerPushToken,
   unregisterPushToken,
@@ -55,6 +57,32 @@ describe('pushNotificationService', () => {
     jest.clearAllMocks();
     mockFetch.mockReset();
     mockIsDevice = true;
+  });
+
+  describe('arePushNotificationsEnabled', () => {
+    it('defaults to false when the preference is unset (opt-in)', async () => {
+      (AsyncStorage.getItem as jest.Mock).mockResolvedValueOnce(null);
+
+      const enabled = await arePushNotificationsEnabled();
+
+      expect(enabled).toBe(false);
+    });
+
+    it('returns true only when explicitly set to "true"', async () => {
+      (AsyncStorage.getItem as jest.Mock).mockResolvedValueOnce('true');
+
+      const enabled = await arePushNotificationsEnabled();
+
+      expect(enabled).toBe(true);
+    });
+
+    it('returns false when explicitly set to "false"', async () => {
+      (AsyncStorage.getItem as jest.Mock).mockResolvedValueOnce('false');
+
+      const enabled = await arePushNotificationsEnabled();
+
+      expect(enabled).toBe(false);
+    });
   });
 
   describe('getExpoPushToken', () => {

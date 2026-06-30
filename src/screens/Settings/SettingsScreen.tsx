@@ -72,7 +72,7 @@ const SettingsScreen = () => {
   const [urlInput, setUrlInput] = useState(manualUrl ?? '');
   const [saving, setSaving] = useState(false);
   const [autoPlayTTS, setAutoPlayTTS] = useState(false);
-  const [pushEnabled, setPushEnabled] = useState(true);
+  const [pushEnabled, setPushEnabled] = useState(false);
 
   // Household join flow
   const [joinCode, setJoinCode] = useState('');
