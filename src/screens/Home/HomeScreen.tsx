@@ -22,6 +22,7 @@ import { getUnreadCount } from '../../api/inboxApi';
 import { sendNodeAction } from '../../api/commandCenterApi';
 import { getTTSConfig, transcribeAudio } from '../../api/chatApi';
 import type { ChatAction, ChatMessage } from '../../api/chatApi';
+import { refreshAuthToken } from '../../api/apiClient';
 
 /** Strip markdown + think tags for clean TTS input. */
 function cleanForTTS(text: string): string {
@@ -349,12 +350,27 @@ const HomeScreen = () => {
 
         const ttsConfig = getTTSConfig(text, householdId, authState.accessToken);
 
-        // Fetch audio as blob, convert to base64 data URI for expo-av
-        const response = await fetch(ttsConfig.url, {
+        // Fetch audio as blob, convert to base64 data URI for expo-av. This
+        // raw fetch bypasses the apiClient interceptor, so handle a stale-token
+        // 401 here: refresh once (shared single-flight; force-logs-out a dead
+        // session) and retry, rather than just snackbar-ing "Could not play".
+        let response = await fetch(ttsConfig.url, {
           method: 'POST',
           headers: ttsConfig.headers,
           body: ttsConfig.body,
         });
+
+        if (response.status === 401) {
+          const fresh = await refreshAuthToken();
+          if (fresh) {
+            const retry = getTTSConfig(text, householdId, fresh);
+            response = await fetch(retry.url, {
+              method: 'POST',
+              headers: retry.headers,
+              body: retry.body,
+            });
+          }
+        }
 
         if (!response.ok) throw new Error('TTS request failed');
 

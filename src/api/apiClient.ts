@@ -25,7 +25,7 @@ import authApi from './authApi';
 
 type TokenGetter = () => string | null;
 type RefreshTokenGetter = () => string | null;
-type TokenUpdater = (access: string, refresh: string) => void;
+type TokenUpdater = (access: string, refresh: string) => void | Promise<void>;
 type LogoutFn = () => void;
 
 let getAccessToken: TokenGetter = () => null;
@@ -70,7 +70,12 @@ let refreshPromise: Promise<string | null> | null = null;
 
 const doRefresh = async (): Promise<string | null> => {
   const refreshToken = getRefreshToken();
-  if (!refreshToken) return null;
+  if (!refreshToken) {
+    // No session left to refresh — drop to the login screen rather than
+    // lingering authenticated-but-broken behind empty/stale screens.
+    onForceLogout();
+    return null;
+  }
 
   try {
     const res = await authApi.post<{ access_token: string; refresh_token?: string }>(
@@ -79,11 +84,39 @@ const doRefresh = async (): Promise<string | null> => {
     );
     const newAccess = res.data.access_token;
     const newRefresh = res.data.refresh_token ?? refreshToken;
-    updateTokens(newAccess, newRefresh);
+    // Await persistence: the auth server ROTATES refresh tokens, so the new one
+    // must be committed to the keychain before the next refresh can fire —
+    // otherwise a later path could replay the now-rotated token.
+    await updateTokens(newAccess, newRefresh);
     return newAccess;
-  } catch {
+  } catch (err) {
+    // A 401/403 means the refresh token itself is dead → the session is over;
+    // force a clean logout so the user lands on the login screen, never on a
+    // borked node/device screen. A network/5xx error is transient — keep the
+    // user signed in and let the next attempt (or the still-valid access token)
+    // recover.
+    const status = (err as AxiosError)?.response?.status;
+    if (status === 401 || status === 403) {
+      onForceLogout();
+    }
     return null;
   }
+};
+
+/**
+ * Single-flight refresh shared across the 401 interceptor AND external callers
+ * (AuthContext's background timer and AppState-resume refresh). Routing every
+ * refresh through this one in-flight promise guarantees the rotated refresh
+ * token is never double-spent — a stale replay would be rejected by the server
+ * (and, in strict mode, could revoke the whole session family).
+ */
+export const refreshAuthToken = (): Promise<string | null> => {
+  if (!refreshPromise) {
+    refreshPromise = doRefresh().finally(() => {
+      refreshPromise = null;
+    });
+  }
+  return refreshPromise;
 };
 
 // Auth-service endpoints where a 401 is NOT a stale-session signal: the
@@ -129,18 +162,15 @@ const attachAuthRefresh = (instance: AxiosInstance): void => {
 
       original._retried = true;
 
-      // Single-flight: if a refresh is already in progress, wait for it
-      if (!refreshPromise) {
-        refreshPromise = doRefresh().finally(() => {
-          refreshPromise = null;
-        });
-      }
-
-      const newToken = await refreshPromise;
+      // Shared single-flight refresh — coalesces concurrent 401s across BOTH
+      // axios instances AND the AuthContext background timer / resume refresh,
+      // so the rotated refresh token is never double-spent.
+      const newToken = await refreshAuthToken();
       if (!newToken) {
-        // Refresh token is dead too — surface the login screen rather than
-        // leaving the user authenticated-but-broken behind empty screens.
-        onForceLogout();
+        // Refresh failed. `doRefresh` has already forced a logout if the
+        // session is genuinely dead (no refresh token, or a 401/403 from
+        // /auth/refresh). A transient network failure just rejects here so the
+        // caller surfaces/retries — no spurious logout.
         return Promise.reject(error);
       }
 

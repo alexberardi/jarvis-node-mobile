@@ -10,7 +10,7 @@
  * We drive the real axios instances through canned per-instance adapters so
  * the actual interceptor logic runs.
  */
-import apiClient, { configureApiClient } from '../../src/api/apiClient';
+import apiClient, { configureApiClient, refreshAuthToken } from '../../src/api/apiClient';
 import authApi from '../../src/api/authApi';
 
 type AdapterFn = (config: any) => Promise<any>;
@@ -101,5 +101,56 @@ describe('auth-refresh interceptor', () => {
     await expect(authApi.post('/auth/login', { email: 'x', password: 'wrong' })).rejects.toBeTruthy();
     expect(updateTokens).not.toHaveBeenCalled();
     expect(onForceLogout).not.toHaveBeenCalled();
+  });
+
+  // ── Shared single-flight + centralized logout (M1) ─────────────────────────
+
+  it('refreshAuthToken: concurrent callers share ONE /auth/refresh (single-flight)', async () => {
+    let refreshCalls = 0;
+    setAdapter(authApi, (config) => {
+      if (config.url === '/auth/refresh') {
+        refreshCalls += 1;
+        return ok(config, { access_token: 'fresh-token', refresh_token: 'rotated' });
+      }
+      return reject401(config);
+    });
+
+    // The timer, the resume refresh, and the interceptor can all ask at once.
+    const results = await Promise.all([refreshAuthToken(), refreshAuthToken(), refreshAuthToken()]);
+
+    expect(results).toEqual(['fresh-token', 'fresh-token', 'fresh-token']);
+    expect(refreshCalls).toBe(1); // never double-spends the rotated refresh token
+    expect(updateTokens).toHaveBeenCalledWith('fresh-token', 'rotated');
+  });
+
+  it('refreshAuthToken: a 401 from /auth/refresh forces a clean logout (dead session)', async () => {
+    setAdapter(authApi, (config) => reject401(config)); // refresh token itself is dead
+
+    const token = await refreshAuthToken();
+
+    expect(token).toBeNull();
+    expect(onForceLogout).toHaveBeenCalledTimes(1);
+  });
+
+  it('refreshAuthToken: a transient network error does NOT force logout', async () => {
+    setAdapter(authApi, (config) =>
+      config.url === '/auth/refresh'
+        ? Promise.reject(Object.assign(new Error('Network Error'), { config })) // no response → transient
+        : reject401(config),
+    );
+
+    const token = await refreshAuthToken();
+
+    expect(token).toBeNull();
+    expect(onForceLogout).not.toHaveBeenCalled(); // stay signed in; the access token may still work
+  });
+
+  it('refreshAuthToken: no refresh token at all forces logout (no silent limbo)', async () => {
+    refresh = null;
+
+    const token = await refreshAuthToken();
+
+    expect(token).toBeNull();
+    expect(onForceLogout).toHaveBeenCalledTimes(1);
   });
 });
