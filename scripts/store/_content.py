@@ -105,8 +105,8 @@ Support: alex@alexberardi.net"""
 REVIEW_CONTACT = {
     "contactFirstName": "Alex",
     "contactLastName": "Berardi",
-    "contactEmail": "alex@alexberardi.net",
-    "contactPhone": "+1 555-555-0123",
+    "contactEmail": os.environ.get("ASC_CONTACT_EMAIL", "alex@alexberardi.net"),
+    "contactPhone": os.environ.get("ASC_CONTACT_PHONE", ""),
     "demoAccountRequired": True,
     "demoAccountName": DEMO_ACCOUNT_EMAIL,
     "demoAccountPassword": DEMO_ACCOUNT_PASSWORD,
