@@ -3,6 +3,7 @@ import { ActivityIndicator, View, StyleSheet } from 'react-native';
 import React from 'react';
 
 import { useAuth } from '../auth/AuthContext';
+import ForcePasswordChangeScreen from '../screens/Auth/ForcePasswordChangeScreen';
 import AuthNavigator from './AuthNavigator';
 import CommandDataStackNavigator from './CommandDataStackNavigator';
 import InboxStackNavigator from './InboxStackNavigator';
@@ -19,7 +20,7 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 
 const RootNavigator = () => {
   const {
-    state: { isAuthenticated, isLoading },
+    state: { isAuthenticated, isLoading, mustChangePassword },
   } = useAuth();
 
   if (isLoading) {
@@ -32,6 +33,13 @@ const RootNavigator = () => {
 
   if (!isAuthenticated) {
     return <AuthNavigator />;
+  }
+
+  // Temp-password session: the whole app tree is swapped out (same pattern as
+  // the auth gate above), so there's no back-button escape until a real
+  // password is set or the user logs out.
+  if (mustChangePassword) {
+    return <ForcePasswordChangeScreen />;
   }
 
   return (

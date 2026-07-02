@@ -46,5 +46,13 @@ export const PUSH_NOTIFICATIONS_KEY = '@jarvis/push_notifications_enabled';
  * logout (the token is wiped anyway), so it's re-chosen on each login.
  */
 export const BIOMETRIC_LOGIN_ENABLED_KEY = '@jarvis/biometric_login_enabled';
+/**
+ * 'true' while the session was opened with an admin-issued temporary password
+ * and the user hasn't set a real one yet. Mirrors the server's
+ * users.must_change_password. Gates the whole app behind
+ * ForcePasswordChangeScreen (see RootNavigator); restored on cold boot,
+ * cleared by change-password and by clearUserData on logout.
+ */
+export const MUST_CHANGE_PASSWORD_KEY = '@jarvis/must_change_password';
 
 // Routines are server-owned (command-center) — no local routine storage keys.

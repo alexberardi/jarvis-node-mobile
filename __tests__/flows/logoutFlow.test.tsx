@@ -132,8 +132,15 @@ describe('Logout — flow integration (real AuthContext + clearUserData security
     expect(tokenStorage.clearTokens).toHaveBeenCalledTimes(1);
 
     // Per-user @jarvis/* + routine bindings wiped; theme pref + unrelated key NOT.
-    expect(AsyncStorage.multiRemove).toHaveBeenCalledTimes(1);
-    const removed: string[] = (AsyncStorage.multiRemove as jest.Mock).mock.calls[0][0];
+    // Assert on clearUserData's bulk-wipe call specifically: the AsyncStorage
+    // mock implements removeItem() via multiRemove(), so single-key removals
+    // elsewhere in the flow (e.g. login clearing the must-change-password
+    // flag) also show up as multiRemove calls.
+    const bulkWipes = (AsyncStorage.multiRemove as jest.Mock).mock.calls
+      .map((call) => call[0] as string[])
+      .filter((keys) => keys.includes('@jarvis/cached_nodes'));
+    expect(bulkWipes).toHaveLength(1);
+    const removed: string[] = bulkWipes[0];
     expect(removed).toEqual(
       expect.arrayContaining(['@jarvis/cached_nodes', 'routine_bindings:hh-1']),
     );
