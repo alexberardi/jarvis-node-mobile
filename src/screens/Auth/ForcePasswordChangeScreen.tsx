@@ -68,7 +68,10 @@ const ForcePasswordChangeScreen = () => {
       <Appbar.Header>
         <Appbar.Content title="Set a New Password" />
       </Appbar.Header>
-      <View style={styles.container}>
+      {/* Rendered standalone by RootNavigator (not inside a navigator), so it
+          doesn't inherit the navigation theme's background — set it explicitly
+          or the container defaults to white in dark mode. */}
+      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
         <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
           You signed in with a temporary password. Choose a new password to continue — your other
           devices will be signed out.
