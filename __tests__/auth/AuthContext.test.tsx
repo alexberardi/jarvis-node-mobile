@@ -245,6 +245,173 @@ describe('AuthContext', () => {
     });
   });
 
+  describe('temp-password flow (must_change_password)', () => {
+    const tempLoginResponse = {
+      data: {
+        access_token: 'temp-access-token',
+        refresh_token: 'temp-refresh-token',
+        token_type: 'bearer',
+        user: { id: 7, email: 'reset@example.com' },
+        must_change_password: true,
+      },
+    };
+    const changeResponse = {
+      data: {
+        access_token: 'fresh-access-token',
+        refresh_token: 'fresh-refresh-token',
+        token_type: 'bearer',
+        user: { id: 7, email: 'reset@example.com' },
+        must_change_password: false,
+      },
+    };
+
+    it('login with a temp password sets and persists the gate flag', async () => {
+      (authApi.post as jest.Mock).mockResolvedValue(tempLoginResponse);
+      (authApi.get as jest.Mock).mockResolvedValue({ data: [] });
+
+      const { result } = renderHook(() => useAuth(), { wrapper });
+      await waitFor(() => expect(result.current.state.isLoading).toBe(false));
+
+      await act(async () => {
+        await result.current.login('reset@example.com', 'temp-pass-1234');
+      });
+
+      expect(result.current.state.isAuthenticated).toBe(true);
+      expect(result.current.state.mustChangePassword).toBe(true);
+      expect(result.current.hasTempPassword()).toBe(true);
+      expect(AsyncStorage.setItem).toHaveBeenCalledWith(
+        '@jarvis/must_change_password',
+        'true',
+      );
+    });
+
+    it('normal login leaves the gate off', async () => {
+      (authApi.post as jest.Mock).mockResolvedValue({
+        data: {
+          access_token: 'a',
+          refresh_token: 'r',
+          token_type: 'bearer',
+          user: { id: 1, email: 'user@example.com' },
+        },
+      });
+      (authApi.get as jest.Mock).mockResolvedValue({ data: [] });
+
+      const { result } = renderHook(() => useAuth(), { wrapper });
+      await waitFor(() => expect(result.current.state.isLoading).toBe(false));
+
+      await act(async () => {
+        await result.current.login('user@example.com', 'password123');
+      });
+
+      expect(result.current.state.mustChangePassword).toBe(false);
+      expect(result.current.hasTempPassword()).toBe(false);
+    });
+
+    it('changePassword uses the in-memory temp password, adopts the fresh pair, and clears the gate', async () => {
+      (authApi.post as jest.Mock).mockImplementation((url: string) =>
+        Promise.resolve(url === '/auth/change-password' ? changeResponse : tempLoginResponse),
+      );
+      (authApi.get as jest.Mock).mockResolvedValue({ data: [] });
+
+      const { result } = renderHook(() => useAuth(), { wrapper });
+      await waitFor(() => expect(result.current.state.isLoading).toBe(false));
+
+      await act(async () => {
+        await result.current.login('reset@example.com', 'temp-pass-1234');
+      });
+      await act(async () => {
+        await result.current.changePassword('NewPassw0rd');
+      });
+
+      expect(authApi.post).toHaveBeenCalledWith(
+        '/auth/change-password',
+        { current_password: 'temp-pass-1234', new_password: 'NewPassw0rd' },
+        { headers: { Authorization: 'Bearer temp-access-token' } },
+      );
+      expect(result.current.state.mustChangePassword).toBe(false);
+      expect(result.current.state.accessToken).toBe('fresh-access-token');
+      expect(result.current.state.refreshToken).toBe('fresh-refresh-token');
+      expect(result.current.hasTempPassword()).toBe(false);
+      expect(AsyncStorage.removeItem).toHaveBeenCalledWith('@jarvis/must_change_password');
+      // The rotated pair must be durably persisted (server revoked the rest).
+      expect(SecureStore.setItemAsync).toHaveBeenCalledWith(
+        'jarvis_refresh_token',
+        'fresh-refresh-token',
+        expect.any(Object),
+      );
+    });
+
+    it('changePassword without a current password throws after a cold boot (no in-memory temp)', async () => {
+      setSecureTokens('boot-access', 'boot-refresh');
+      (AsyncStorage.multiGet as jest.Mock).mockResolvedValue([
+        ['@jarvis/user', JSON.stringify({ id: 7, email: 'reset@example.com' })],
+        ['@jarvis/active_household_id', null],
+        ['@jarvis/must_change_password', 'true'],
+      ]);
+
+      const { result } = renderHook(() => useAuth(), { wrapper });
+      await waitFor(() => expect(result.current.state.isLoading).toBe(false));
+
+      // Gate restored from storage, but the temp password is memory-only.
+      expect(result.current.state.mustChangePassword).toBe(true);
+      expect(result.current.hasTempPassword()).toBe(false);
+
+      // No act(): the guard throws before any state update, and a rejected
+      // act() poisons the act environment for every test after this one.
+      await expect(result.current.changePassword('NewPassw0rd')).rejects.toThrow(
+        'Current password is required.',
+      );
+
+      // With an explicit current password it goes through.
+      (authApi.post as jest.Mock).mockResolvedValue(changeResponse);
+      await act(async () => {
+        await result.current.changePassword('NewPassw0rd', 'temp-pass-1234');
+      });
+      expect(result.current.state.mustChangePassword).toBe(false);
+    });
+
+    it('logout best-effort revokes the session server-side', async () => {
+      (authApi.post as jest.Mock).mockResolvedValue(tempLoginResponse);
+      (authApi.get as jest.Mock).mockResolvedValue({ data: [] });
+
+      const { result } = renderHook(() => useAuth(), { wrapper });
+      await waitFor(() => expect(result.current.state.isLoading).toBe(false));
+
+      await act(async () => {
+        await result.current.login('reset@example.com', 'temp-pass-1234');
+      });
+      await act(async () => {
+        await result.current.logout();
+      });
+
+      expect(authApi.post).toHaveBeenCalledWith('/auth/logout', {
+        refresh_token: 'temp-refresh-token',
+      });
+      expect(result.current.state.isAuthenticated).toBe(false);
+    });
+
+    it('logout still succeeds when the server revoke fails', async () => {
+      (authApi.post as jest.Mock).mockImplementation((url: string) =>
+        url === '/auth/logout'
+          ? Promise.reject(new Error('network down'))
+          : Promise.resolve(tempLoginResponse),
+      );
+      (authApi.get as jest.Mock).mockResolvedValue({ data: [] });
+
+      const { result } = renderHook(() => useAuth(), { wrapper });
+      await waitFor(() => expect(result.current.state.isLoading).toBe(false));
+
+      await act(async () => {
+        await result.current.login('reset@example.com', 'temp-pass-1234');
+      });
+      await act(async () => {
+        await result.current.logout();
+      });
+
+      expect(result.current.state.isAuthenticated).toBe(false);
+    });
+  });
+
   describe('logout', () => {
     it('should clear auth state and storage', async () => {
       // First, set up authenticated state
