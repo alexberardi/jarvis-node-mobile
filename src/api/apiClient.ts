@@ -129,6 +129,7 @@ const SKIP_REFRESH_PATHS = new Set<string>([
   '/auth/register',
   '/auth/refresh',
   '/auth/me',
+  '/auth/change-password',
 ]);
 
 /**

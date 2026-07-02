@@ -44,6 +44,9 @@ export interface AuthState {
   activeHouseholdId: string | null;
   /** User has opted in to biometric login (refresh token gated behind Face/Touch ID). */
   biometricEnabled: boolean;
+  /** Session was opened with an admin-issued temporary password — the app is
+   *  gated behind ForcePasswordChangeScreen until a real one is set. */
+  mustChangePassword: boolean;
 }
 
 type AuthResponse = {
@@ -51,6 +54,7 @@ type AuthResponse = {
   refresh_token: string;
   token_type: 'bearer';
   user: AuthUser;
+  must_change_password?: boolean;
 };
 
 type RegisterResponse = AuthResponse & {
@@ -60,6 +64,7 @@ type RegisterResponse = AuthResponse & {
 import {
   USER_KEY,
   ACTIVE_HOUSEHOLD_KEY,
+  MUST_CHANGE_PASSWORD_KEY,
 } from '../config/storageKeys';
 import {
   getTokens,
@@ -79,6 +84,7 @@ const initialState: AuthState = {
   households: [],
   activeHouseholdId: null,
   biometricEnabled: false,
+  mustChangePassword: false,
 };
 
 const REFRESH_INTERVAL_MS = 10 * 60 * 1000;
@@ -87,6 +93,14 @@ type AuthContextValue = {
   state: AuthState;
   login: (email: string, password: string, opts?: { enableBiometric?: boolean }) => Promise<void>;
   register: (email: string, password: string, username?: string, inviteCode?: string) => Promise<void>;
+  /** Change the account password. `currentPassword` may be omitted right after
+   *  a temp-password login (the login form's password is held in memory); after
+   *  a cold boot it must be provided. Persists the fresh token pair the server
+   *  returns and clears the must-change gate. */
+  changePassword: (newPassword: string, currentPassword?: string) => Promise<void>;
+  /** Whether the temp password from this session's login is still in memory
+   *  (i.e. ForcePasswordChangeScreen doesn't need to ask for it). */
+  hasTempPassword: () => boolean;
   logout: () => Promise<void>;
   deleteAccount: (password: string) => Promise<void>;
   refreshAccessToken: () => Promise<string | null>;
@@ -124,6 +138,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Ref to always have current tokens for the API client interceptor
   const stateRef = React.useRef(state);
   stateRef.current = state;
+
+  // Held in memory ONLY (never persisted) so the forced-change screen can
+  // submit the temp password without making the user retype it. Null after a
+  // cold boot — the screen then asks for the current (temp) password.
+  const tempPasswordRef = React.useRef<string | null>(null);
 
   const persistAuth = useCallback(
     async (payload: { accessToken: string; refreshToken: string; user: AuthUser }) => {
@@ -169,6 +188,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         refreshToken: res.data.refresh_token,
         user: res.data.user,
       });
+      const mustChange = !!res.data.must_change_password;
+      tempPasswordRef.current = mustChange ? password : null;
+      setState((prev) => ({ ...prev, mustChangePassword: mustChange }));
+      // Persisted so a kill/cold-boot mid-flow still lands on the gate.
+      if (mustChange) {
+        await AsyncStorage.setItem(MUST_CHANGE_PASSWORD_KEY, 'true');
+      } else {
+        await AsyncStorage.removeItem(MUST_CHANGE_PASSWORD_KEY);
+      }
       if (opts && typeof opts.enableBiometric === 'boolean') {
         const enabled = opts.enableBiometric;
         setState((prev) => ({ ...prev, biometricEnabled: enabled }));
@@ -176,6 +204,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     },
     [persistAuth],
   );
+
+  const changePassword = useCallback(
+    async (newPassword: string, currentPassword?: string) => {
+      const current = currentPassword ?? tempPasswordRef.current;
+      if (!current) {
+        throw new Error('Current password is required.');
+      }
+      const res = await authApi.post<AuthResponse>(
+        '/auth/change-password',
+        { current_password: current, new_password: newPassword },
+        { headers: { Authorization: `Bearer ${stateRef.current.accessToken}` } },
+      );
+      // The server revoked every other session and returned a fresh pair —
+      // adopt it, or the next refresh replays a revoked token and logs us out.
+      await persistAuth({
+        accessToken: res.data.access_token,
+        refreshToken: res.data.refresh_token,
+        user: res.data.user,
+      });
+      tempPasswordRef.current = null;
+      setState((prev) => ({ ...prev, mustChangePassword: false }));
+      await AsyncStorage.removeItem(MUST_CHANGE_PASSWORD_KEY);
+    },
+    [persistAuth],
+  );
+
+  const hasTempPassword = useCallback(() => tempPasswordRef.current != null, []);
 
   const register = useCallback(
     async (email: string, password: string, username?: string, inviteCode?: string) => {
@@ -204,6 +259,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // A "Log Out" tap must ALWAYS log the user out: swallow any cache-wipe
     // error (e.g. a storage failure) and still force the unauthenticated state.
     // logout() never rejects — the user is logged out regardless.
+    //
+    // Best-effort server-side revoke first (fire-and-forget): kills this
+    // device's refresh-token family so the session actually ends server-side
+    // instead of the token staying valid for 14 more days. Local logout never
+    // waits on (or fails with) the network.
+    const refreshToken = stateRef.current.refreshToken;
+    if (refreshToken) {
+      authApi.post('/auth/logout', { refresh_token: refreshToken }).catch(() => {});
+    }
+    tempPasswordRef.current = null;
     try {
       await clearUserData({ queryClient, rediscover });
     } catch (e) {
@@ -299,12 +364,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       // Reading the gated refresh token triggers the OS biometric prompt.
       const { accessToken, refreshToken } = await getTokens();
-      const [storedUser, storedHouseholdId] = await AsyncStorage.multiGet([
+      const stored = await AsyncStorage.multiGet([
         USER_KEY,
         ACTIVE_HOUSEHOLD_KEY,
+        MUST_CHANGE_PASSWORD_KEY,
       ]);
-      const user = parseUser(storedUser[1]);
-      const activeHouseholdId = storedHouseholdId[1] || null;
+      const user = parseUser(stored[0][1]);
+      const activeHouseholdId = stored[1][1] || null;
+      const mustChangePassword = stored[2]?.[1] === 'true';
 
       if (accessToken && refreshToken && user) {
         setK2UserId(String(user.id));
@@ -317,6 +384,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           households: [],
           activeHouseholdId,
           biometricEnabled: true,
+          mustChangePassword,
         });
         return true;
       }
@@ -348,12 +416,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // biometric login is on, getTokens() prompts here — a cancel returns a
       // null refresh token (session locked, tokens left intact).
       const { accessToken, refreshToken } = await getTokens();
-      const [storedUser, storedHouseholdId] = await AsyncStorage.multiGet([
+      const stored = await AsyncStorage.multiGet([
         USER_KEY,
         ACTIVE_HOUSEHOLD_KEY,
+        MUST_CHANGE_PASSWORD_KEY,
       ]);
-      const user = parseUser(storedUser[1]);
-      const activeHouseholdId = storedHouseholdId[1] || null;
+      const user = parseUser(stored[0][1]);
+      const activeHouseholdId = stored[1][1] || null;
+      const mustChangePassword = stored[2]?.[1] === 'true';
 
       if (accessToken && refreshToken && user) {
         setK2UserId(String(user.id));
@@ -366,6 +436,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           households: [],
           activeHouseholdId,
           biometricEnabled,
+          mustChangePassword,
         });
       } else {
         // Unauthenticated (or biometric cancelled). Keep biometricEnabled so the
@@ -436,6 +507,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       state,
       login,
       register,
+      changePassword,
+      hasTempPassword,
       logout,
       deleteAccount,
       refreshAccessToken,
@@ -447,7 +520,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setBiometricEnabled,
       biometricAvailable,
     }),
-    [bootstrapAuth, deleteAccount, fetchHouseholds, login, logout, refreshAccessToken, register, setActiveHousehold, switchHousehold, unlockWithBiometrics, setBiometricEnabled, biometricAvailable, state],
+    [bootstrapAuth, changePassword, hasTempPassword, deleteAccount, fetchHouseholds, login, logout, refreshAccessToken, register, setActiveHousehold, switchHousehold, unlockWithBiometrics, setBiometricEnabled, biometricAvailable, state],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
