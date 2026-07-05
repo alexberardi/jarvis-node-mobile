@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
-import { ActivityIndicator, Button, Text, useTheme } from 'react-native-paper';
+import { Alert, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Button, Switch, Text, useTheme } from 'react-native-paper';
 
 import { NodeInfo } from '../api/nodeApi';
 import { getLatestRelease, LatestRelease } from '../api/nodeUpdateApi';
 import { useNodeUpdate } from '../hooks/useNodeUpdate';
+import { useSettingsSnapshot } from '../hooks/useSettingsSnapshot';
+import { encryptAndPushConfig } from '../services/configPushService';
 
 interface Props {
   node: NodeInfo;
@@ -46,6 +48,77 @@ export const NodeUpdateSection: React.FC<Props> = ({ node }) => {
   const { task, error, loading, cancelling, rehydrating, trigger, cancel } =
     useNodeUpdate(node.node_id);
 
+  // The node's allow_updates consent gate, read from the K2 snapshot.
+  // `undefined` after load = the node predates the snapshot keys
+  // (< 0.1.137): hide the consent controls entirely — a node_config push
+  // at an old node would be silently misapplied, and its update flow
+  // behaves as before. Only tarball installs can self-update, so skip the
+  // (expensive) snapshot round-trip for docker/dev nodes.
+  const { snapshot, state: snapshotState, refetch: refetchSnapshot } =
+    useSettingsSnapshot({
+      nodeId: node.node_id,
+      enabled: node.install_mode === 'tarball',
+    });
+  const [pushedAllow, setPushedAllow] = useState<boolean | null>(null);
+  const [savingAllow, setSavingAllow] = useState(false);
+  const snapshotAllow = snapshot?.node_config?.allow_updates;
+  const allowUpdates = pushedAllow ?? snapshotAllow;
+  // While the snapshot is still in flight we can't tell a consenting node
+  // from a refusing one — keep the Update button visible but inert so a
+  // tap can't queue a task that is guaranteed to be refused. On
+  // error/timeout we fall back to the legacy flow rather than holding the
+  // update UI hostage.
+  const consentUnknown = snapshotState === 'idle' || snapshotState === 'loading';
+
+  // Optimistic state holds only until the snapshot agrees with what we
+  // pushed; then the snapshot goes back to being the source of truth so
+  // later refetches (or a push the node never applied) aren't masked
+  // forever.
+  useEffect(() => {
+    if (pushedAllow !== null && snapshotAllow === pushedAllow) {
+      setPushedAllow(null);
+    }
+  }, [pushedAllow, snapshotAllow]);
+
+  const pushAllowUpdates = async (value: boolean) => {
+    setSavingAllow(true);
+    try {
+      // K2-encrypted end-to-end: only a paired phone can flip this gate —
+      // the server only ferries ciphertext. __issued_at feeds the node's
+      // monotonic replay guard (a stored ciphertext re-served later is
+      // rejected as stale).
+      await encryptAndPushConfig(node.node_id, 'node_config', {
+        allow_updates: value,
+        __issued_at: Date.now(),
+      });
+      setPushedAllow(value);
+      refetchSnapshot();
+    } catch (e) {
+      Alert.alert(
+        'Could not update setting',
+        e instanceof Error ? e.message : 'Unknown error',
+      );
+    } finally {
+      setSavingAllow(false);
+    }
+  };
+
+  const confirmEnableUpdates = () => {
+    Alert.alert(
+      'Allow remote updates?',
+      'This node will be allowed to download and install Jarvis releases when you trigger an update from the app.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Enable',
+          onPress: () => {
+            void pushAllowUpdates(true);
+          },
+        },
+      ],
+    );
+  };
+
   useEffect(() => {
     let cancelled = false;
     getLatestRelease().then((info) => {
@@ -86,12 +159,27 @@ export const NodeUpdateSection: React.FC<Props> = ({ node }) => {
             </Text>
           )}
         </View>
-        {supported && updateAvailable && !isActive && !rehydrating && (
+        {supported && !isActive && !rehydrating && allowUpdates === false && (
+          // The node has refused consent for remote updates: the consent
+          // action (with confirmation) replaces the Update button — and,
+          // unlike Update, it renders even with no update pending so
+          // toggling consent off is never a dead-end.
+          <Button
+            mode="contained"
+            onPress={confirmEnableUpdates}
+            loading={savingAllow}
+            disabled={savingAllow}
+          >
+            Enable updates
+          </Button>
+        )}
+        {supported && updateAvailable && !isActive && !rehydrating &&
+          allowUpdates !== false && (
           <Button
             mode="contained"
             onPress={() => trigger(null)}
             loading={loading}
-            disabled={loading || node.is_busy}
+            disabled={loading || node.is_busy || savingAllow || consentUnknown}
           >
             Update
           </Button>
@@ -100,6 +188,24 @@ export const NodeUpdateSection: React.FC<Props> = ({ node }) => {
           <ActivityIndicator size={16} style={{ marginLeft: 8 }} />
         )}
       </View>
+
+      {supported && allowUpdates === true && (
+        <View style={styles.allowRow}>
+          <Text
+            variant="bodySmall"
+            style={{ color: theme.colors.onSurfaceVariant, flex: 1 }}
+          >
+            Remote updates enabled
+          </Text>
+          <Switch
+            value
+            disabled={savingAllow}
+            onValueChange={() => {
+              void pushAllowUpdates(false);
+            }}
+          />
+        </View>
+      )}
 
       {node.is_busy && !isActive && (
         <Text
@@ -172,6 +278,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   activeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  allowRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 8,

@@ -29,7 +29,10 @@ const utf8ToBase64url = (str: string): string => {
 export const encryptAndPushConfig = async (
   nodeId: string,
   configType: string,
-  configData: Record<string, string>,
+  // Values must keep their JSON types: the node's "node_config" dispatcher
+  // rejects non-boolean values for boolean policy gates (a string "false"
+  // would read back truthy on the node).
+  configData: Record<string, string | number | boolean>,
 ): Promise<void> => {
   const k2 = await getK2(nodeId);
   if (!k2) {
