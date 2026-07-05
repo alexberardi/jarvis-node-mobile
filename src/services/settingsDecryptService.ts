@@ -147,6 +147,13 @@ export interface NodeConfigSnapshot {
   maintenance_restart_enabled?: boolean;
   maintenance_restart_at_time?: string; // "HH:MM" 24-h, node-local time
   maintenance_restart_rss_ceiling_mb?: number; // 0 = ceiling disabled
+  // PR #40 consent gates (node-setup >= 0.1.137). Read-only state here —
+  // writes go through the K2-encrypted config push (config_type
+  // "node_config"), NOT the plaintext node-config channel. Absence of
+  // these keys = the node predates the feature; hide the controls.
+  allow_updates?: boolean;
+  wake_word_model_autodownload_enabled?: boolean;
+  release_track?: string; // "stable" | "dev"
   hardware?: NodeHardwareInfo;
 }
 
