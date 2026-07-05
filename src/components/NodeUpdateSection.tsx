@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
-import { ActivityIndicator, Button, Text, useTheme } from 'react-native-paper';
+import { Alert, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Button, Switch, Text, useTheme } from 'react-native-paper';
 
 import { NodeInfo } from '../api/nodeApi';
 import { getLatestRelease, LatestRelease } from '../api/nodeUpdateApi';
 import { useNodeUpdate } from '../hooks/useNodeUpdate';
+import { useSettingsSnapshot } from '../hooks/useSettingsSnapshot';
+import { encryptAndPushConfig } from '../services/configPushService';
 
 interface Props {
   node: NodeInfo;
@@ -45,6 +47,53 @@ export const NodeUpdateSection: React.FC<Props> = ({ node }) => {
   const [latest, setLatest] = useState<LatestRelease | null>(null);
   const { task, error, loading, cancelling, rehydrating, trigger, cancel } =
     useNodeUpdate(node.node_id);
+
+  // The node's allow_updates consent gate, read from the K2 snapshot.
+  // `undefined` = the node predates the snapshot keys (< 0.1.137): hide the
+  // consent controls entirely — a node_config push at an old node would be
+  // silently misapplied, and its update flow behaves as before.
+  const { snapshot, refetch: refetchSnapshot } = useSettingsSnapshot({
+    nodeId: node.node_id,
+  });
+  const [pushedAllow, setPushedAllow] = useState<boolean | null>(null);
+  const [savingAllow, setSavingAllow] = useState(false);
+  const allowUpdates = pushedAllow ?? snapshot?.node_config?.allow_updates;
+
+  const pushAllowUpdates = async (value: boolean) => {
+    setSavingAllow(true);
+    try {
+      // K2-encrypted end-to-end: only a paired phone can flip this gate —
+      // the server only ferries ciphertext.
+      await encryptAndPushConfig(node.node_id, 'node_config', {
+        allow_updates: value,
+      });
+      setPushedAllow(value);
+      refetchSnapshot();
+    } catch (e) {
+      Alert.alert(
+        'Could not update setting',
+        e instanceof Error ? e.message : 'Unknown error',
+      );
+    } finally {
+      setSavingAllow(false);
+    }
+  };
+
+  const confirmEnableUpdates = () => {
+    Alert.alert(
+      'Allow remote updates?',
+      'This node will be allowed to download and install Jarvis releases when you trigger an update from the app.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Enable',
+          onPress: () => {
+            void pushAllowUpdates(true);
+          },
+        },
+      ],
+    );
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -87,19 +136,50 @@ export const NodeUpdateSection: React.FC<Props> = ({ node }) => {
           )}
         </View>
         {supported && updateAvailable && !isActive && !rehydrating && (
-          <Button
-            mode="contained"
-            onPress={() => trigger(null)}
-            loading={loading}
-            disabled={loading || node.is_busy}
-          >
-            Update
-          </Button>
+          allowUpdates === false ? (
+            // The node has refused consent for remote updates: the Update
+            // button is replaced by the consent action (with confirmation).
+            <Button
+              mode="contained"
+              onPress={confirmEnableUpdates}
+              loading={savingAllow}
+              disabled={savingAllow}
+            >
+              Enable updates
+            </Button>
+          ) : (
+            <Button
+              mode="contained"
+              onPress={() => trigger(null)}
+              loading={loading}
+              disabled={loading || node.is_busy}
+            >
+              Update
+            </Button>
+          )
         )}
         {rehydrating && (
           <ActivityIndicator size={16} style={{ marginLeft: 8 }} />
         )}
       </View>
+
+      {supported && allowUpdates === true && (
+        <View style={styles.allowRow}>
+          <Text
+            variant="bodySmall"
+            style={{ color: theme.colors.onSurfaceVariant, flex: 1 }}
+          >
+            Remote updates enabled
+          </Text>
+          <Switch
+            value
+            disabled={savingAllow}
+            onValueChange={() => {
+              void pushAllowUpdates(false);
+            }}
+          />
+        </View>
+      )}
 
       {node.is_busy && !isActive && (
         <Text
@@ -172,6 +252,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   activeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  allowRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 8,
