@@ -70,7 +70,7 @@ Jarvis is fully open source. Source, docs, and self-hosting instructions: https:
 
 QUESTIONS
 
-Email alex@alexberardi.net or open an issue on GitHub."""
+Email help@jarvisautomation.io or open an issue on GitHub."""
 
 # ── App Store Review ─────────────────────────────────────────────────────────
 DEMO_CONFIG_URL = "https://config.jarvisautomation.io"
@@ -100,12 +100,12 @@ Local network permission: used to auto-discover the Jarvis server on the user's 
 No analytics, advertising, or tracking SDKs.
 Open source: https://docs.jarvisautomation.dev
 
-Support: alex@alexberardi.net"""
+Support: help@jarvisautomation.io"""
 
 REVIEW_CONTACT = {
     "contactFirstName": "Alex",
     "contactLastName": "Berardi",
-    "contactEmail": os.environ.get("ASC_CONTACT_EMAIL", "alex@alexberardi.net"),
+    "contactEmail": os.environ.get("ASC_CONTACT_EMAIL", "alex@jarvisautomation.io"),
     "contactPhone": os.environ.get("ASC_CONTACT_PHONE", ""),
     "demoAccountRequired": True,
     "demoAccountName": DEMO_ACCOUNT_EMAIL,
