@@ -78,6 +78,31 @@ const InboxCallbackResultScreen = () => {
       bullet_list: { marginLeft: 8 },
       ordered_list: { marginLeft: 8 },
       strong: { fontWeight: 'bold' as const },
+      // Without these, the library's light-theme code defaults leak through
+      // in dark mode (light-gray box, unreadable light text).
+      code_inline: {
+        backgroundColor: theme.colors.surfaceVariant,
+        color: theme.colors.onSurfaceVariant,
+        paddingHorizontal: 4,
+        borderRadius: 3,
+        fontSize: 13,
+      },
+      code_block: {
+        backgroundColor: theme.colors.surfaceVariant,
+        color: theme.colors.onSurfaceVariant,
+        borderColor: theme.colors.outlineVariant,
+        padding: 8,
+        borderRadius: 6,
+        fontSize: 13,
+      },
+      fence: {
+        backgroundColor: theme.colors.surfaceVariant,
+        color: theme.colors.onSurfaceVariant,
+        borderColor: theme.colors.outlineVariant,
+        padding: 8,
+        borderRadius: 6,
+        fontSize: 13,
+      },
     }),
     [theme],
   );
