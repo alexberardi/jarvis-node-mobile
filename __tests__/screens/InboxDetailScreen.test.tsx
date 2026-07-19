@@ -28,6 +28,26 @@ jest.mock('react-native-markdown-display', () => {
   };
 });
 
+// InboxAudioPlayer pulls in expo-av / slider / file-system natives — mock at
+// the module boundary (repo pattern: HomeScreen.test.tsx mocks expo-av).
+jest.mock('expo-av', () => ({
+  Audio: {
+    Sound: { createAsync: jest.fn() },
+    setAudioModeAsync: jest.fn(),
+  },
+}));
+jest.mock('@react-native-community/slider', () => {
+  const { View } = require('react-native');
+  return { __esModule: true, default: (props: any) => <View {...props} /> };
+});
+jest.mock('expo-file-system/legacy', () => ({
+  cacheDirectory: 'file:///cache/',
+  getInfoAsync: jest.fn().mockResolvedValue({ exists: false }),
+  makeDirectoryAsync: jest.fn(),
+  downloadAsync: jest.fn(),
+  deleteAsync: jest.fn(),
+}));
+
 jest.mock('../../src/auth/AuthContext', () => ({
   useAuth: () => ({
     state: {
@@ -52,6 +72,7 @@ jest.mock('../../src/api/inboxApi', () => ({
 const mockSendInteractiveCallback = jest.fn();
 
 jest.mock('../../src/api/commandCenterApi', () => ({
+  ...jest.requireActual('../../src/api/commandCenterApi'),
   sendNodeAction: jest.fn(),
   sendInteractiveCallback: (...args: any[]) => mockSendInteractiveCallback(...args),
 }));
@@ -463,5 +484,163 @@ describe('InboxDetailScreen', () => {
       });
       expect(queryByTestId('editable-text-input')).toBeNull();
     });
+  });
+});
+
+// Phone-call confirm-card style item: typed multi-field editors + a
+// server-plane element + a plan TTL (phone-calls PRD prereqs).
+const samplePhoneConfirmItem = {
+  ...sampleItem,
+  category: 'phone_call_confirm',
+  title: 'Call Tony\'s Pizza?',
+  body: 'Ready to call and order 2 large pepperoni pizzas.',
+  content_format: 'plain' as const,
+  metadata: {
+    editor_schema: 2,
+    expires_at: '2099-01-01T00:00:00Z',
+    editable_fields: [
+      {
+        label: 'Phone number',
+        initial: '+15551234567',
+        data_key: 'dialed_number',
+        input_type: 'tel',
+      },
+      {
+        label: 'Details',
+        initial: '2 large pepperoni, pickup',
+        data_key: 'details',
+        input_type: 'multiline',
+        required: false,
+      },
+    ],
+    interactive_elements: [
+      {
+        id: 'confirm-1',
+        label: 'Call now',
+        command: 'make_phone_call',
+        callback: 'confirm_call',
+        data: { session_id: 's-1', dialed_number: '+15551234567', details: '2 large pepperoni, pickup' },
+        target: 'server',
+      },
+      {
+        id: 'cancel-1',
+        label: 'Cancel',
+        command: 'make_phone_call',
+        callback: 'cancel_call',
+        data: { session_id: 's-1' },
+        target: 'server',
+      },
+    ],
+  },
+};
+
+describe('phone-call prereqs (typed editors / server plane / expiry / guard)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('renders typed fields with keyboards and merges edits into a server-plane tap', async () => {
+    mockGetInboxItem.mockResolvedValue(samplePhoneConfirmItem);
+    mockSendInteractiveCallback.mockResolvedValue({
+      id: 'job-1', status: 'pending', navigation_type: 'new_notification', created_at: 'x',
+    });
+
+    const { getByTestId, getByText } = render(<InboxDetailScreen />, { wrapper });
+    await waitFor(() => expect(getByTestId('editable-field-dialed_number')).toBeTruthy());
+
+    const telInput = getByTestId('editable-field-dialed_number');
+    expect(telInput.props.keyboardType).toBe('phone-pad');
+    expect(telInput.props.multiline).toBe(false);
+    expect(getByTestId('editable-field-details').props.multiline).toBe(true);
+
+    fireEvent.changeText(telInput, '+15559998888');
+    fireEvent.press(getByText('Call now'));
+
+    await waitFor(() => expect(mockSendInteractiveCallback).toHaveBeenCalledTimes(1));
+    const body = mockSendInteractiveCallback.mock.calls[0][0];
+    expect(body.household_id).toBe('household-1');
+    expect(body).not.toHaveProperty('target_node_id');
+    expect(body.data.dialed_number).toBe('+15559998888');
+    expect(body.data.details).toBe('2 large pepperoni, pickup');
+  });
+
+  it('fails closed on an unknown editor type: notice shown, elements disabled', async () => {
+    mockGetInboxItem.mockResolvedValue({
+      ...samplePhoneConfirmItem,
+      metadata: {
+        ...samplePhoneConfirmItem.metadata,
+        editable_fields: [
+          { label: 'Signature', initial: '', data_key: 'sig', input_type: 'signature_pad' },
+        ],
+      },
+    });
+
+    const { getByTestId, getByText, queryByTestId } = render(<InboxDetailScreen />, { wrapper });
+    await waitFor(() => expect(getByTestId('unsupported-editor-notice')).toBeTruthy());
+
+    // No partial editor rendered; taps blocked.
+    expect(queryByTestId('editable-field-sig')).toBeNull();
+    fireEvent.press(getByText('Call now'));
+    expect(mockSendInteractiveCallback).not.toHaveBeenCalled();
+  });
+
+  it('fails closed on a newer editor_schema than this build supports', async () => {
+    mockGetInboxItem.mockResolvedValue({
+      ...samplePhoneConfirmItem,
+      metadata: { ...samplePhoneConfirmItem.metadata, editor_schema: 99 },
+    });
+
+    const { getByTestId, getByText } = render(<InboxDetailScreen />, { wrapper });
+    await waitFor(() => expect(getByTestId('unsupported-editor-notice')).toBeTruthy());
+    fireEvent.press(getByText('Call now'));
+    expect(mockSendInteractiveCallback).not.toHaveBeenCalled();
+  });
+
+  it('renders the expired state for a past expires_at and blocks taps', async () => {
+    mockGetInboxItem.mockResolvedValue({
+      ...samplePhoneConfirmItem,
+      metadata: { ...samplePhoneConfirmItem.metadata, expires_at: '2020-01-01T00:00:00Z' },
+    });
+
+    const { getByTestId, getByText } = render(<InboxDetailScreen />, { wrapper });
+    await waitFor(() => expect(getByTestId('expired-card-notice')).toBeTruthy());
+    expect(getByText(/ask jarvis again/i)).toBeTruthy();
+    fireEvent.press(getByText('Call now'));
+    expect(mockSendInteractiveCallback).not.toHaveBeenCalled();
+  });
+
+  it('switches to the expired state when the server rejects the tap as expired', async () => {
+    mockGetInboxItem.mockResolvedValue(samplePhoneConfirmItem);
+    mockSendInteractiveCallback.mockRejectedValue({
+      response: { status: 400, data: { detail: 'Callback job expired' } },
+    });
+
+    const { getByTestId, getByText, queryByTestId } = render(<InboxDetailScreen />, { wrapper });
+    await waitFor(() => expect(getByText('Call now')).toBeTruthy());
+    expect(queryByTestId('expired-card-notice')).toBeNull();
+
+    fireEvent.press(getByText('Call now'));
+
+    await waitFor(() => expect(getByTestId('expired-card-notice')).toBeTruthy());
+  });
+
+  it('renders the audio player when metadata.audio is present', async () => {
+    mockGetInboxItem.mockResolvedValue({
+      ...sampleItem,
+      metadata: {
+        audio: { url: '/api/v0/phone/sessions/s-1/audio', duration_seconds: 93 },
+      },
+    });
+
+    const { getByTestId } = render(<InboxDetailScreen />, { wrapper });
+    await waitFor(() => expect(getByTestId('inbox-audio-player')).toBeTruthy());
+  });
+
+  it('does not render the audio player without metadata.audio', async () => {
+    mockGetInboxItem.mockResolvedValue(sampleItem);
+
+    const { getByText, queryByTestId } = render(<InboxDetailScreen />, { wrapper });
+    await waitFor(() => expect(getByText('Deep Research Results')).toBeTruthy());
+    expect(queryByTestId('inbox-audio-player')).toBeNull();
   });
 });
