@@ -317,3 +317,239 @@ describe('InteractiveElementsSection', () => {
     });
   });
 });
+
+describe('server-plane elements (target: "server" — CC PR #55)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  });
+
+  const serverEl = (overrides: Partial<InteractiveElement> = {}): InteractiveElement =>
+    el({
+      id: 'confirm-1',
+      label: 'Call now',
+      command: 'make_phone_call',
+      callback: 'confirm_call',
+      data: { session_id: 's-1', dialed_number: '+15551234567' },
+      target: 'server',
+      ...overrides,
+    });
+
+  it('POSTs household_id and no target_node_id', async () => {
+    (sendInteractiveCallback as jest.Mock).mockResolvedValue({
+      id: 'job-1', status: 'pending', navigation_type: 'new_notification', created_at: 'x',
+    });
+    const { getByText } = render(
+      <InteractiveElementsSection
+        elements={[serverEl()]}
+        targetNodeId={null}
+        serverHouseholdId="hh-9"
+      />,
+      { wrapper },
+    );
+
+    fireEvent.press(getByText('Call now'));
+
+    await waitFor(() => {
+      expect(sendInteractiveCallback).toHaveBeenCalledTimes(1);
+    });
+    const body = (sendInteractiveCallback as jest.Mock).mock.calls[0][0];
+    expect(body.household_id).toBe('hh-9');
+    expect(body).not.toHaveProperty('target_node_id');
+    expect(body.command_name).toBe('make_phone_call');
+  });
+
+  it('node-plane elements on the same card still send target_node_id', async () => {
+    (sendInteractiveCallback as jest.Mock).mockResolvedValue({
+      id: 'job-1', status: 'pending', navigation_type: 'new_notification', created_at: 'x',
+    });
+    const { getByText } = render(
+      <InteractiveElementsSection
+        elements={[el({ id: 'node-el', label: 'Tom Hanks' })]}
+        targetNodeId="node-abc"
+        serverHouseholdId="hh-9"
+      />,
+      { wrapper },
+    );
+
+    fireEvent.press(getByText('Tom Hanks'));
+
+    await waitFor(() => {
+      expect(sendInteractiveCallback).toHaveBeenCalledTimes(1);
+    });
+    const body = (sendInteractiveCallback as jest.Mock).mock.calls[0][0];
+    expect(body.target_node_id).toBe('node-abc');
+    expect(body).not.toHaveProperty('household_id');
+  });
+
+  it('server element works without any node context', async () => {
+    (sendInteractiveCallback as jest.Mock).mockResolvedValue({
+      id: 'job-1', status: 'pending', navigation_type: 'new_notification', created_at: 'x',
+    });
+    const { getByText } = render(
+      <InteractiveElementsSection
+        elements={[serverEl()]}
+        targetNodeId={null}
+        serverHouseholdId="hh-9"
+      />,
+      { wrapper },
+    );
+    fireEvent.press(getByText('Call now'));
+    await waitFor(() => expect(sendInteractiveCallback).toHaveBeenCalled());
+  });
+
+  it('server element without household context does not POST', () => {
+    const { getByText } = render(
+      <InteractiveElementsSection
+        elements={[serverEl()]}
+        targetNodeId="node-abc"
+        serverHouseholdId={null}
+      />,
+      { wrapper },
+    );
+    fireEvent.press(getByText('Call now'));
+    expect(sendInteractiveCallback).not.toHaveBeenCalled();
+  });
+
+  it('calls onExpired instead of alerting when the POST returns an expiry error', async () => {
+    (sendInteractiveCallback as jest.Mock).mockRejectedValue({
+      response: { status: 400, data: { detail: 'Callback job expired' } },
+    });
+    const onExpired = jest.fn();
+    const { getByText } = render(
+      <InteractiveElementsSection
+        elements={[serverEl()]}
+        targetNodeId={null}
+        serverHouseholdId="hh-9"
+        onExpired={onExpired}
+      />,
+      { wrapper },
+    );
+
+    fireEvent.press(getByText('Call now'));
+
+    await waitFor(() => expect(onExpired).toHaveBeenCalledTimes(1));
+    expect(Alert.alert).not.toHaveBeenCalled();
+  });
+
+  it('disabled prop suppresses taps entirely', () => {
+    const { getByText } = render(
+      <InteractiveElementsSection
+        elements={[serverEl()]}
+        targetNodeId={null}
+        serverHouseholdId="hh-9"
+        disabled
+      />,
+      { wrapper },
+    );
+    fireEvent.press(getByText('Call now'));
+    expect(sendInteractiveCallback).not.toHaveBeenCalled();
+  });
+});
+
+describe('multi-field editors merge (phone confirm card)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  });
+
+  const fields = [
+    {
+      key: 'dialed_number', initial: '+15551234567', data_key: 'dialed_number',
+      input_type: 'tel' as const, required: true, legacy: false, label: 'Phone number',
+    },
+    {
+      key: 'details', initial: 'Table for 4', data_key: 'details',
+      input_type: 'multiline' as const, required: false, legacy: false, label: 'Details',
+    },
+  ];
+  const confirmEl = (): InteractiveElement =>
+    el({
+      id: 'confirm-1',
+      label: 'Call now',
+      command: 'make_phone_call',
+      callback: 'confirm_call',
+      data: { session_id: 's-1', dialed_number: '+15551234567', details: 'Table for 4' },
+      target: 'server',
+    });
+
+  it('merges every live field value into the payload', async () => {
+    (sendInteractiveCallback as jest.Mock).mockResolvedValue({
+      id: 'job-1', status: 'pending', navigation_type: 'new_notification', created_at: 'x',
+    });
+    const { getByText } = render(
+      <InteractiveElementsSection
+        elements={[confirmEl()]}
+        targetNodeId={null}
+        serverHouseholdId="hh-9"
+        editors={{
+          fields,
+          values: { dialed_number: '+15559998888', details: 'Table for 2, patio' },
+        }}
+      />,
+      { wrapper },
+    );
+
+    fireEvent.press(getByText('Call now'));
+
+    await waitFor(() => {
+      expect(sendInteractiveCallback).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: {
+            session_id: 's-1',
+            dialed_number: '+15559998888',
+            details: 'Table for 2, patio',
+          },
+        }),
+      );
+    });
+  });
+
+  it('blocks the tap when a required field is empty', () => {
+    const { getByText } = render(
+      <InteractiveElementsSection
+        elements={[confirmEl()]}
+        targetNodeId={null}
+        serverHouseholdId="hh-9"
+        editors={{
+          fields,
+          values: { dialed_number: '  ', details: 'x' },
+        }}
+      />,
+      { wrapper },
+    );
+
+    fireEvent.press(getByText('Call now'));
+
+    expect(getByText('Phone number is required')).toBeTruthy();
+    expect(sendInteractiveCallback).not.toHaveBeenCalled();
+  });
+
+  it('allows empty non-required fields through', async () => {
+    (sendInteractiveCallback as jest.Mock).mockResolvedValue({
+      id: 'job-1', status: 'pending', navigation_type: 'new_notification', created_at: 'x',
+    });
+    const { getByText } = render(
+      <InteractiveElementsSection
+        elements={[confirmEl()]}
+        targetNodeId={null}
+        serverHouseholdId="hh-9"
+        editors={{
+          fields,
+          values: { dialed_number: '+15551234567', details: '' },
+        }}
+      />,
+      { wrapper },
+    );
+
+    fireEvent.press(getByText('Call now'));
+
+    await waitFor(() => {
+      expect(sendInteractiveCallback).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ details: '' }),
+        }),
+      );
+    });
+  });
+});

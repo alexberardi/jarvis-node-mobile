@@ -139,13 +139,22 @@ const InboxCallbackResultScreen = () => {
         title?: string;
         summary?: string;
         body?: string;
-        metadata?: { interactive_elements?: InteractiveElement[]; content_format?: string; node_id?: string };
+        metadata?: {
+          interactive_elements?: InteractiveElement[];
+          content_format?: string;
+          node_id?: string;
+          household_id?: string;
+        };
       }
     | undefined) ?? {};
 
   const elements: InteractiveElement[] = inbox.metadata?.interactive_elements ?? [];
   const nextTargetNodeId: string | null =
     (inbox.metadata?.node_id as string | undefined) ?? route.params.targetNodeId ?? null;
+  // Server-plane follow-up elements need the household — producers put it in
+  // the result block's metadata (there's no inbox item to read it from here).
+  const nextHouseholdId: string | null =
+    (inbox.metadata?.household_id as string | undefined) ?? null;
   const useMarkdown = (inbox.metadata?.content_format ?? 'markdown') === 'markdown';
 
   return (
@@ -173,6 +182,7 @@ const InboxCallbackResultScreen = () => {
           <InteractiveElementsSection
             elements={elements}
             targetNodeId={nextTargetNodeId}
+            serverHouseholdId={nextHouseholdId}
           />
         ) : null}
       </ScrollView>

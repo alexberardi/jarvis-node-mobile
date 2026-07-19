@@ -49,15 +49,21 @@ export type NavigationType = 'stack' | 'new_notification' | 'popover';
 /**
  * Interactive element embedded in an inbox item's metadata.
  *
- * Tapping one POSTs an `InteractiveCallbackRequest` to CC, which enqueues a
- * job and signals the node over MQTT. The node dispatches to the command's
- * @callback-decorated method and emits a follow-up inbox item.
+ * Tapping one POSTs an `InteractiveCallbackRequest` to CC. Two dispatch
+ * planes, chosen by the element's `target`:
+ *   - node plane (default, `target` absent or "node"): CC signals the item's
+ *     node over MQTT; the node dispatches the command's @callback-decorated
+ *     method. Requires the item's `metadata.node_id`.
+ *   - server plane (`target: "server"`, CC PR #55): CC executes a registered
+ *     server-side handler itself — no node involved. The request carries the
+ *     inbox item's `household_id` instead of `target_node_id`. Used by CC
+ *     server tools (phone-call confirm/escalation cards).
  *
  * `navigation_type` controls what happens on tap:
  *   - "stack" — push a new screen onto the inbox stack; mobile polls the
  *     callback status endpoint and renders the result inline.
  *   - "new_notification" (default for back-compat) — fire-and-forget; a
- *     fresh inbox item lands when the node completes.
+ *     fresh inbox item lands when the job completes.
  *   - "popover" — present a modal sheet over the current screen with the
  *     same poll/render semantics as "stack" (not implemented yet).
  */
@@ -70,13 +76,20 @@ export interface InteractiveElement {
   callback: string;      // target @callback name on that command
   data: Record<string, any>;  // payload forwarded to the callback method
   navigation_type?: NavigationType;
+  /** Dispatch plane — absent/"node" = node plane; "server" = CC executes. */
+  target?: 'node' | 'server';
 }
 
+/**
+ * Exactly one of `target_node_id` (node plane) or `household_id` (server
+ * plane) is present — CC branches on `target_node_id`'s absence.
+ */
 export interface InteractiveCallbackRequest {
   command_name: string;
   callback_name: string;
   data: Record<string, any>;
-  target_node_id: string;
+  target_node_id?: string;
+  household_id?: string;
   navigation_type?: NavigationType;
 }
 
