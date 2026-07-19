@@ -16,6 +16,7 @@ import {
   getInteractiveCallbackStatus,
   InteractiveCallbackStatus,
   InteractiveElement,
+  normalizeInteractiveElements,
 } from '../../api/commandCenterApi';
 import InteractiveElementsSection from '../../components/InteractiveElementsSection';
 import { InboxStackParamList } from '../../navigation/types';
@@ -77,6 +78,31 @@ const InboxCallbackResultScreen = () => {
       bullet_list: { marginLeft: 8 },
       ordered_list: { marginLeft: 8 },
       strong: { fontWeight: 'bold' as const },
+      // Without these, the library's light-theme code defaults leak through
+      // in dark mode (light-gray box, unreadable light text).
+      code_inline: {
+        backgroundColor: theme.colors.surfaceVariant,
+        color: theme.colors.onSurfaceVariant,
+        paddingHorizontal: 4,
+        borderRadius: 3,
+        fontSize: 13,
+      },
+      code_block: {
+        backgroundColor: theme.colors.surfaceVariant,
+        color: theme.colors.onSurfaceVariant,
+        borderColor: theme.colors.outlineVariant,
+        padding: 8,
+        borderRadius: 6,
+        fontSize: 13,
+      },
+      fence: {
+        backgroundColor: theme.colors.surfaceVariant,
+        color: theme.colors.onSurfaceVariant,
+        borderColor: theme.colors.outlineVariant,
+        padding: 8,
+        borderRadius: 6,
+        fontSize: 13,
+      },
     }),
     [theme],
   );
@@ -139,13 +165,24 @@ const InboxCallbackResultScreen = () => {
         title?: string;
         summary?: string;
         body?: string;
-        metadata?: { interactive_elements?: InteractiveElement[]; content_format?: string; node_id?: string };
+        metadata?: {
+          interactive_elements?: InteractiveElement[];
+          content_format?: string;
+          node_id?: string;
+          household_id?: string;
+        };
       }
     | undefined) ?? {};
 
-  const elements: InteractiveElement[] = inbox.metadata?.interactive_elements ?? [];
+  const elements: InteractiveElement[] = normalizeInteractiveElements(
+    inbox.metadata?.interactive_elements,
+  );
   const nextTargetNodeId: string | null =
     (inbox.metadata?.node_id as string | undefined) ?? route.params.targetNodeId ?? null;
+  // Server-plane follow-up elements need the household — producers put it in
+  // the result block's metadata (there's no inbox item to read it from here).
+  const nextHouseholdId: string | null =
+    (inbox.metadata?.household_id as string | undefined) ?? null;
   const useMarkdown = (inbox.metadata?.content_format ?? 'markdown') === 'markdown';
 
   return (
@@ -173,6 +210,7 @@ const InboxCallbackResultScreen = () => {
           <InteractiveElementsSection
             elements={elements}
             targetNodeId={nextTargetNodeId}
+            serverHouseholdId={nextHouseholdId}
           />
         ) : null}
       </ScrollView>

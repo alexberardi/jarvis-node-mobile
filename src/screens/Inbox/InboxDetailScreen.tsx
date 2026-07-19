@@ -14,39 +14,31 @@ import {
 } from 'react-native-paper';
 
 import { deleteInboxItem, getInboxItem, InboxItem } from '../../api/inboxApi';
-import { InteractiveElement, sendNodeAction } from '../../api/commandCenterApi';
+import {
+  InteractiveElement,
+  normalizeInteractiveElements,
+  sendNodeAction,
+} from '../../api/commandCenterApi';
 import { useAuth } from '../../auth/AuthContext';
 import ActionButtons from '../../components/ActionButtons';
+import InboxAudioPlayer from '../../components/InboxAudioPlayer';
 import InteractiveElementsSection from '../../components/InteractiveElementsSection';
 import { InboxStackParamList } from '../../navigation/types';
 import { JarvisButton, normalizeButton } from '../../types/SmartHome';
+import { parseInboxAudio } from '../../services/inboxAudioService';
+import {
+  parseExpiresAt,
+  parseInboxEditors,
+  type EditorField,
+} from '../../utils/inboxEditors';
 
 type DetailRoute = RouteProp<InboxStackParamList, 'InboxDetail'>;
 
-/**
- * Generic editable-text affordance. Producers attach
- * `metadata.editable_text = { label?, initial, data_key }` and the screen
- * renders a multiline editor seeded with `initial` below the body. When an
- * interactive element whose data contains `data_key` is tapped, the live
- * editor text replaces data[data_key] in the callback payload (the merge
- * lives in InteractiveElementsSection). First producer: smart-reply drafts —
- * the draft lives ONLY here; the item body stays From/Subject/snippet.
- *
- * Malformed shapes (missing initial/data_key, wrong types) are ignored
- * entirely: no editor renders and elements behave exactly as before.
- */
-type EditableText = { label?: string; initial: string; data_key: string };
-
-const parseEditableText = (
-  metadata: Record<string, any> | null | undefined,
-): EditableText | null => {
-  const et = metadata?.editable_text;
-  if (!et || typeof et !== 'object' || Array.isArray(et)) return null;
-  if (typeof et.initial !== 'string') return null;
-  if (typeof et.data_key !== 'string' || et.data_key.length === 0) return null;
-  if (et.label != null && typeof et.label !== 'string') return null;
-  return { label: et.label ?? undefined, initial: et.initial, data_key: et.data_key };
-};
+// Editable-text/fields affordances (metadata.editable_text — legacy single
+// multiline editor — and metadata.editable_fields — typed multi-field, e.g.
+// the phone-call confirm card's tel-keyboard number + multiline details).
+// Parsing, the fail-closed unsupported-editor rule, and the expiry
+// affordance all live in utils/inboxEditors — see that module's docs.
 
 const parseThinkBlock = (body: string): { thinking: string | null; content: string } => {
   const match = body.match(/<think>([\s\S]*?)<\/think>/);
@@ -69,10 +61,14 @@ const InboxDetailScreen = () => {
   const [showThinking, setShowThinking] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [actionComplete, setActionComplete] = useState(false);
-  // Live text of the metadata.editable_text editor (seeded on load) and
-  // whether an interactive callback is in flight (editor disabled meanwhile).
-  const [editorText, setEditorText] = useState('');
+  // Live values of the editable fields keyed by data_key (seeded on load)
+  // and whether an interactive callback is in flight (editors disabled
+  // meanwhile).
+  const [editorValues, setEditorValues] = useState<Record<string, string>>({});
   const [callbackPending, setCallbackPending] = useState(false);
+  // Set when a tap comes back with "plan expired" (410 / expired detail) —
+  // proactive expiry uses metadata.expires_at below.
+  const [expiredByServer, setExpiredByServer] = useState(false);
 
   const loadItem = useCallback(async () => {
     if (!authState.accessToken) return;
@@ -81,7 +77,11 @@ const InboxDetailScreen = () => {
       setLoading(true);
       const data = await getInboxItem(route.params.itemId);
       setItem(data);
-      setEditorText(parseEditableText(data.metadata)?.initial ?? '');
+      const seeded: Record<string, string> = {};
+      for (const field of parseInboxEditors(data.metadata).fields) {
+        seeded[field.data_key] = field.initial;
+      }
+      setEditorValues(seeded);
     } catch {
       setError('Could not load item');
     } finally {
@@ -155,6 +155,31 @@ const InboxDetailScreen = () => {
       ordered_list: { marginLeft: 8 },
       hr: { backgroundColor: theme.colors.outlineVariant },
       strong: { fontWeight: 'bold' as const },
+      // Without these, the library's light-theme code defaults leak through
+      // in dark mode (light-gray box, unreadable light text).
+      code_inline: {
+        backgroundColor: theme.colors.surfaceVariant,
+        color: theme.colors.onSurfaceVariant,
+        paddingHorizontal: 4,
+        borderRadius: 3,
+        fontSize: 13,
+      },
+      code_block: {
+        backgroundColor: theme.colors.surfaceVariant,
+        color: theme.colors.onSurfaceVariant,
+        borderColor: theme.colors.outlineVariant,
+        padding: 8,
+        borderRadius: 6,
+        fontSize: 13,
+      },
+      fence: {
+        backgroundColor: theme.colors.surfaceVariant,
+        color: theme.colors.onSurfaceVariant,
+        borderColor: theme.colors.outlineVariant,
+        padding: 8,
+        borderRadius: 6,
+        fontSize: 13,
+      },
     }),
     [theme],
   );
@@ -187,11 +212,17 @@ const InboxDetailScreen = () => {
   const actions: JarvisButton[] = ((item.metadata?.actions ?? []) as unknown[]).map(normalizeButton);
   const isConfirmation = item.category === 'confirmation' && actions.length > 0;
 
-  const interactiveElements: InteractiveElement[] =
-    (item.metadata?.interactive_elements as InteractiveElement[] | undefined) ?? [];
+  const interactiveElements: InteractiveElement[] = normalizeInteractiveElements(
+    item.metadata?.interactive_elements,
+  );
   const interactiveTargetNodeId: string | null =
     typeof item.metadata?.node_id === 'string' ? item.metadata.node_id : null;
-  const editableText = parseEditableText(item.metadata);
+  const editorParse = parseInboxEditors(item.metadata);
+  const editorFields: EditorField[] = editorParse.fields;
+  const expiresAt = parseExpiresAt(item.metadata);
+  const isExpired =
+    expiredByServer || (expiresAt !== null && expiresAt.getTime() <= Date.now());
+  const inboxAudio = parseInboxAudio(item.metadata);
 
   const formatDate = (iso: string) => {
     const d = new Date(iso);
@@ -301,43 +332,87 @@ const InboxDetailScreen = () => {
         </Text>
       )}
 
-      {/* Editable text block (metadata.editable_text — e.g. a smart-reply
-          draft). The editor holds the live text that InteractiveElementsSection
-          merges into tapped elements whose data carries data_key. Back-compat:
-          items without editable_text render exactly as before; older app
-          builds ignore this metadata and the Send chip still carries the
-          producer's original draft. */}
-      {editableText && (
-        <View style={styles.editableSection}>
-          {editableText.label ? (
+      {/* Inline audio attachment (metadata.audio — e.g. a phone-call
+          recording). Downloaded through the authenticated cache path;
+          absent metadata renders nothing. */}
+      {inboxAudio && <InboxAudioPlayer audio={inboxAudio} />}
+
+      {/* FAIL-CLOSED editor guard: this card declares editors the build
+          can't render (unknown field type / newer editor_schema). Submitting
+          without them is exactly the unsafe path (e.g. dialing a number the
+          user couldn't see or edit) — so say why, and disable the elements
+          below instead of hiding the problem. */}
+      {editorParse.unsupported && (
+        <View
+          style={[styles.noticeCard, { backgroundColor: theme.colors.surfaceVariant }]}
+          testID="unsupported-editor-notice"
+        >
+          <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
+            This card needs a newer version of the app to respond. Update the
+            app, then open it again.
+          </Text>
+        </View>
+      )}
+
+      {/* TTL'd cards (metadata.expires_at, or the server rejecting the tap
+          as expired): dead buttons explain themselves instead of failing
+          silently. */}
+      {isExpired && (
+        <View
+          style={[styles.noticeCard, { backgroundColor: theme.colors.surfaceVariant }]}
+          testID="expired-card-notice"
+        >
+          <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
+            This card has expired. Ask Jarvis again to get a fresh one.
+          </Text>
+        </View>
+      )}
+
+      {/* Editable field block (metadata.editable_text — legacy single
+          multiline draft — or metadata.editable_fields — typed fields, e.g.
+          the phone-call confirm card's number + details). The editors hold
+          the live values that InteractiveElementsSection merges into tapped
+          elements whose data carries each field's data_key. Back-compat:
+          items without editors render exactly as before. */}
+      {editorFields.map((field) => (
+        <View style={styles.editableSection} key={field.key}>
+          {field.label ? (
             <Text variant="titleSmall" style={styles.editableLabel}>
-              {editableText.label}
+              {field.label}
             </Text>
           ) : null}
           <TextInput
             mode="outlined"
-            multiline
-            value={editorText}
-            onChangeText={setEditorText}
-            disabled={callbackPending}
-            style={styles.editableInput}
-            testID="editable-text-input"
+            multiline={field.input_type !== 'tel'}
+            keyboardType={field.input_type === 'tel' ? 'phone-pad' : 'default'}
+            value={editorValues[field.data_key] ?? ''}
+            onChangeText={(text) =>
+              setEditorValues((prev) => ({ ...prev, [field.data_key]: text }))
+            }
+            disabled={callbackPending || isExpired}
+            style={field.input_type === 'tel' ? styles.editableInputSingle : styles.editableInput}
+            testID={field.legacy ? 'editable-text-input' : `editable-field-${field.key}`}
           />
         </View>
-      )}
+      ))}
 
-      {/* Tappable interactive elements (actor cards, "expand similar", etc.).
-          Hidden when metadata.interactive_elements is absent — preserves
-          back-compat for inbox items that predate this feature. */}
+      {/* Tappable interactive elements (actor cards, "expand similar",
+          phone-call confirm, etc.). Hidden when metadata.interactive_elements
+          is absent — preserves back-compat for inbox items that predate this
+          feature. Node-plane elements need metadata.node_id; server-plane
+          elements (target: "server") use the item's household. */}
       {interactiveElements.length > 0 && (
         <InteractiveElementsSection
           elements={interactiveElements}
           targetNodeId={interactiveTargetNodeId}
-          editableText={
-            editableText
-              ? { dataKey: editableText.data_key, value: editorText }
+          serverHouseholdId={item.household_id ?? null}
+          editors={
+            editorFields.length > 0
+              ? { fields: editorFields, values: editorValues }
               : undefined
           }
+          disabled={editorParse.unsupported || isExpired}
+          onExpired={() => setExpiredByServer(true)}
           onPendingChange={setCallbackPending}
         />
       )}
@@ -459,6 +534,9 @@ const styles = StyleSheet.create({
   // multiline Paper TextInput grows with content; minHeight gives the empty
   // editor a sensible starting size.
   editableInput: { minHeight: 100 },
+  // Single-line fields (tel keypad) don't need the multiline minimum.
+  editableInputSingle: {},
+  noticeCard: { marginTop: 16, padding: 12, borderRadius: 8 },
 });
 
 export default InboxDetailScreen;
