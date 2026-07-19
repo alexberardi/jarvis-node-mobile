@@ -518,6 +518,21 @@ const SettingsScreen = () => {
                 <Icon source="chevron-right" size={24} />
               </View>
             </TouchableRipple>
+            <Divider style={{ marginVertical: 4 }} />
+            <TouchableRipple
+              testID="settings-phonebook-row"
+              onPress={() => navigation.navigate('Phonebook')}
+            >
+              <View style={styles.switchRow}>
+                <View style={{ flex: 1 }}>
+                  <Text variant="bodyMedium">Phonebook</Text>
+                  <Text variant="bodySmall" style={styles.hint}>
+                    Businesses Jarvis can call — numbers, notes, and do-not-call
+                  </Text>
+                </View>
+                <Icon source="chevron-right" size={24} />
+              </View>
+            </TouchableRipple>
           </Card.Content>
         </Card>
       )}

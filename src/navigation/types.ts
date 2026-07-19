@@ -140,6 +140,12 @@ export type MemoriesStackParamList = {
   MemoryEdit: { memoryId?: number };
 };
 
+export type PhonebookStackParamList = {
+  PhonebookList: undefined;
+  /** Omit `contactId` to add a new business. */
+  PhonebookEdit: { contactId?: string };
+};
+
 export type StoreStackParamList = {
   StoreBrowse: undefined;
   StoreDetail: { commandName: string };
@@ -183,4 +189,5 @@ export type RootStackParamList = {
   VoiceProfile: undefined;
   CommandData: NavigatorScreenParams<CommandDataStackParamList>;
   Memories: NavigatorScreenParams<MemoriesStackParamList> | undefined;
+  Phonebook: NavigatorScreenParams<PhonebookStackParamList> | undefined;
 };
