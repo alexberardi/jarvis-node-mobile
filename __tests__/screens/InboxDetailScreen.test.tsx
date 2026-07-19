@@ -72,6 +72,7 @@ jest.mock('../../src/api/inboxApi', () => ({
 const mockSendInteractiveCallback = jest.fn();
 
 jest.mock('../../src/api/commandCenterApi', () => ({
+  ...jest.requireActual('../../src/api/commandCenterApi'),
   sendNodeAction: jest.fn(),
   sendInteractiveCallback: (...args: any[]) => mockSendInteractiveCallback(...args),
 }));

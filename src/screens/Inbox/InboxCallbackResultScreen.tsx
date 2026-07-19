@@ -16,6 +16,7 @@ import {
   getInteractiveCallbackStatus,
   InteractiveCallbackStatus,
   InteractiveElement,
+  normalizeInteractiveElements,
 } from '../../api/commandCenterApi';
 import InteractiveElementsSection from '../../components/InteractiveElementsSection';
 import { InboxStackParamList } from '../../navigation/types';
@@ -148,7 +149,9 @@ const InboxCallbackResultScreen = () => {
       }
     | undefined) ?? {};
 
-  const elements: InteractiveElement[] = inbox.metadata?.interactive_elements ?? [];
+  const elements: InteractiveElement[] = normalizeInteractiveElements(
+    inbox.metadata?.interactive_elements,
+  );
   const nextTargetNodeId: string | null =
     (inbox.metadata?.node_id as string | undefined) ?? route.params.targetNodeId ?? null;
   // Server-plane follow-up elements need the household — producers put it in

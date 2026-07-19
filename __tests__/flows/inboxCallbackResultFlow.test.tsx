@@ -46,6 +46,7 @@ jest.mock('react-native-markdown-display', () => {
 
 const mockGetInteractiveCallbackStatus = jest.fn();
 jest.mock('../../src/api/commandCenterApi', () => ({
+  ...jest.requireActual('../../src/api/commandCenterApi'),
   getInteractiveCallbackStatus: (...args: any[]) =>
     mockGetInteractiveCallbackStatus(...args),
 }));

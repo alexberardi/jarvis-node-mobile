@@ -14,7 +14,11 @@ import {
 } from 'react-native-paper';
 
 import { deleteInboxItem, getInboxItem, InboxItem } from '../../api/inboxApi';
-import { InteractiveElement, sendNodeAction } from '../../api/commandCenterApi';
+import {
+  InteractiveElement,
+  normalizeInteractiveElements,
+  sendNodeAction,
+} from '../../api/commandCenterApi';
 import { useAuth } from '../../auth/AuthContext';
 import ActionButtons from '../../components/ActionButtons';
 import InboxAudioPlayer from '../../components/InboxAudioPlayer';
@@ -183,8 +187,9 @@ const InboxDetailScreen = () => {
   const actions: JarvisButton[] = ((item.metadata?.actions ?? []) as unknown[]).map(normalizeButton);
   const isConfirmation = item.category === 'confirmation' && actions.length > 0;
 
-  const interactiveElements: InteractiveElement[] =
-    (item.metadata?.interactive_elements as InteractiveElement[] | undefined) ?? [];
+  const interactiveElements: InteractiveElement[] = normalizeInteractiveElements(
+    item.metadata?.interactive_elements,
+  );
   const interactiveTargetNodeId: string | null =
     typeof item.metadata?.node_id === 'string' ? item.metadata.node_id : null;
   const editorParse = parseInboxEditors(item.metadata);

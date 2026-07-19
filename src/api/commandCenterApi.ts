@@ -154,3 +154,43 @@ export const requestProvisioningToken = async (
   );
   return response.data;
 };
+
+/**
+ * Defensive parse of `metadata.interactive_elements`. Producers are supposed
+ * to send unique `id`s (React key + tap dedup), but the renderer must not
+ * break when one doesn't: a missing or duplicate id is filled with a stable
+ * derived fallback, and entries without the required label/command/callback
+ * are dropped. Found live 2026-07-19: an id-less two-chip card made both
+ * chips share `undefined`, so one tap marked BOTH as sent.
+ */
+export function normalizeInteractiveElements(raw: unknown): InteractiveElement[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const out: InteractiveElement[] = [];
+  raw.forEach((entry, index) => {
+    if (!entry || typeof entry !== 'object') return;
+    const el = entry as Partial<InteractiveElement>;
+    if (
+      typeof el.label !== 'string' ||
+      typeof el.command !== 'string' ||
+      typeof el.callback !== 'string'
+    ) {
+      return;
+    }
+    let id =
+      typeof el.id === 'string' && el.id.length > 0
+        ? el.id
+        : `${el.command}:${el.callback}:${index}`;
+    if (seen.has(id)) id = `${id}#${index}`;
+    seen.add(id);
+    out.push({
+      ...(el as InteractiveElement),
+      id,
+      data:
+        el.data && typeof el.data === 'object'
+          ? (el.data as Record<string, any>)
+          : {},
+    });
+  });
+  return out;
+}
