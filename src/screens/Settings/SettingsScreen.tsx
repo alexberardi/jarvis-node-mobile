@@ -533,6 +533,22 @@ const SettingsScreen = () => {
                 <Icon source="chevron-right" size={24} />
               </View>
             </TouchableRipple>
+
+            <TouchableRipple
+              testID="settings-call-context-row"
+              onPress={() => navigation.navigate('CallContext')}
+            >
+              <View style={styles.switchRow}>
+                <View style={{ flex: 1 }}>
+                  <Text variant="bodyMedium">Call details</Text>
+                  <Text variant="bodySmall" style={styles.hint}>
+                    Your details Jarvis can use on a call — name, callback
+                    number, insurance. Private ones stay back unless asked.
+                  </Text>
+                </View>
+                <Icon source="chevron-right" size={24} />
+              </View>
+            </TouchableRipple>
           </Card.Content>
         </Card>
       )}

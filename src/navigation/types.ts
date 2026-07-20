@@ -146,6 +146,21 @@ export type PhonebookStackParamList = {
   PhonebookEdit: { contactId?: string };
 };
 
+export type CallContextStackParamList = {
+  CallContextList: undefined;
+  /**
+   * The whole list is saved as a unit, so the editor is handed the current
+   * fields and the index it is editing (omit `index` to add a new one), plus
+   * the catalog for the category/tier pickers. Plain serializable data — the
+   * list screen reloads on focus to reflect what was saved.
+   */
+  CallContextEdit: {
+    fields: import('../api/callContextApi').CallContextField[];
+    catalog: import('../api/callContextApi').CallContextCatalog;
+    index?: number;
+  };
+};
+
 export type StoreStackParamList = {
   StoreBrowse: undefined;
   StoreDetail: { commandName: string };
@@ -190,4 +205,5 @@ export type RootStackParamList = {
   CommandData: NavigatorScreenParams<CommandDataStackParamList>;
   Memories: NavigatorScreenParams<MemoriesStackParamList> | undefined;
   Phonebook: NavigatorScreenParams<PhonebookStackParamList> | undefined;
+  CallContext: NavigatorScreenParams<CallContextStackParamList> | undefined;
 };
