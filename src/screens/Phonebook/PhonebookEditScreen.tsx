@@ -16,7 +16,7 @@ import {
   createPhoneContact,
   deletePhoneContact,
   listPhoneContacts,
-  numberRejectionMessage,
+  fieldRejection,
   PhoneContact,
   updatePhoneContact,
 } from '../../api/phoneContactsApi';
@@ -114,9 +114,9 @@ const PhonebookEditScreen = ({ navigation, route }: Props) => {
     } catch (e) {
       // A rejected number is the one failure the user can fix from here, so
       // it lands on the field instead of a generic error dialog.
-      const numberError = numberRejectionMessage(e);
-      if (numberError) {
-        setErrors({ number: numberError });
+      const rejection = fieldRejection(e);
+      if (rejection) {
+        setErrors({ [rejection.field]: rejection.message });
       } else {
         Alert.alert('Error', e instanceof Error ? e.message : 'Failed to save');
       }

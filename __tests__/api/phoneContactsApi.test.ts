@@ -3,6 +3,7 @@ import {
   createPhoneContact,
   deletePhoneContact,
   listPhoneContacts,
+  fieldRejection,
   numberRejectionMessage,
   updatePhoneContact,
 } from '../../src/api/phoneContactsApi';
@@ -119,5 +120,36 @@ describe('phoneContactsApi', () => {
       expect(numberRejectionMessage(new Error('network'))).toBeNull();
       expect(numberRejectionMessage(undefined)).toBeNull();
     });
+  });
+});
+
+describe('fieldRejection', () => {
+  const err = (status: number, data?: unknown) => ({ response: { status, data } });
+
+  it('routes a duplicate-name 409 to the name field', () => {
+    const out = fieldRejection(
+      err(409, { detail: 'A contact named "Tony\'s" already exists.' }),
+    );
+    expect(out).toEqual({
+      field: 'name',
+      message: 'A contact named "Tony\'s" already exists.',
+    });
+  });
+
+  it('falls back to a plain-English 409 message', () => {
+    expect(fieldRejection(err(409))).toEqual({
+      field: 'name',
+      message: 'You already have a business with that name.',
+    });
+  });
+
+  it('routes a 400 to the number field', () => {
+    const out = fieldRejection(err(400, { detail: 'That number is not valid.' }));
+    expect(out).toEqual({ field: 'number', message: 'That number is not valid.' });
+  });
+
+  it('ignores failures the user cannot fix', () => {
+    expect(fieldRejection(err(500))).toBeNull();
+    expect(fieldRejection(new Error('network'))).toBeNull();
   });
 });

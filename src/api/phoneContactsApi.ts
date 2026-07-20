@@ -85,6 +85,41 @@ export const deletePhoneContact = async (
 };
 
 /**
+ * The server's own message for a rejected save, tagged with the field it
+ * belongs to, or null when the failure wasn't the user's to fix.
+ *
+ * These are the errors the user can actually correct from the form, so they
+ * belong inline on the offending field rather than in a generic banner:
+ *   400 → an invalid phone number (or a name with no alphanumerics)
+ *   409 → a duplicate business name (create) or a rename collision (patch)
+ */
+export type FieldRejection = { field: 'number' | 'name'; message: string };
+
+export const fieldRejection = (error: unknown): FieldRejection | null => {
+  const status = (error as { response?: { status?: number } })?.response?.status;
+  if (status === 409) {
+    return {
+      field: 'name',
+      message:
+        serverMessage(error) ?? 'You already have a business with that name.',
+    };
+  }
+  const message = numberRejectionMessage(error);
+  return message ? { field: 'number', message } : null;
+};
+
+/** Raw server message from an error body, if it carries one. */
+const serverMessage = (error: unknown): string | null => {
+  const data = (error as { response?: { data?: unknown } })?.response?.data;
+  if (typeof data === 'string' && data.trim()) return data;
+  const detail = (data as { detail?: unknown })?.detail;
+  if (typeof detail === 'string' && detail.trim()) return detail;
+  const message = (data as { message?: unknown })?.message;
+  if (typeof message === 'string' && message.trim()) return message;
+  return null;
+};
+
+/**
  * The server's own validation message for a rejected number, or null when
  * the failure wasn't a 400.
  *
