@@ -459,6 +459,31 @@ const NodeSettingsScreen: React.FC = () => {
     return allSecrets.some((s) => s.value_type === 'user');
   }, [commands, agents, deviceFamilies]);
 
+  // A user-scoped key declared by BOTH a command and an agent resolves to one
+  // storage slot on the node, so an agent that re-declares CALENDAR_USERNAME is
+  // already reusing the command's credential — there is nothing separate to
+  // enter. Map key → the command entry that owns it, so the agent's copy can
+  // render as inherited instead of as a blank field the user re-types.
+  //
+  // The command entry is also the trustworthy one: the node resolves agent
+  // secrets with no user context, so an agent's `is_set`/`value` for a
+  // user-scoped key always reads as unset regardless of what's stored.
+  const inheritedUserSecrets = useMemo(() => {
+    const map = new Map<string, { serviceName: string; secret: CommandSecretEntry }>();
+    for (const cmd of commands) {
+      if (!cmd.associated_service) continue;
+      for (const secret of cmd.secrets) {
+        if (secret.scope !== 'user') continue;
+        const existing = map.get(secret.key);
+        // If several commands declare the key, prefer a configured one.
+        if (!existing || (!existing.secret.is_set && secret.is_set)) {
+          map.set(secret.key, { serviceName: cmd.associated_service, secret });
+        }
+      }
+    }
+    return map;
+  }, [commands]);
+
   useEffect(() => {
     const hId = authState.activeHouseholdId;
     const token = authState.accessToken;
@@ -937,6 +962,42 @@ const NodeSettingsScreen: React.FC = () => {
 
   // ── Render helpers ─────────────────────────────────────────────────
 
+  /** A secret satisfied by another component's shared user-scoped slot. Shown
+   * read-only — editing it here would just re-enter the same credential. */
+  const renderInheritedSecretRow = (
+    secret: CommandSecretEntry,
+    owner: { serviceName: string; secret: CommandSecretEntry },
+    isLast: boolean,
+    disabled: boolean,
+  ) => {
+    const isSet = owner.secret.is_set;
+    const label = owner.secret.friendly_name ?? secret.friendly_name ?? secret.key;
+
+    return (
+      <View key={secret.key} style={disabled ? { opacity: 0.4 } : undefined}>
+        <View style={styles.secretRow}>
+          <Icon
+            source={isSet ? 'check-circle' : 'circle-outline'}
+            size={20}
+            color={isSet ? theme.colors.primary : theme.colors.outlineVariant}
+          />
+          <View style={styles.secretInfo}>
+            <Text variant="bodyMedium" style={{ fontWeight: '500' }}>
+              {label}
+            </Text>
+            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+              {isSet
+                ? `Configured in ${owner.serviceName}`
+                : `Set this up in ${owner.serviceName}`}
+            </Text>
+          </View>
+          <Icon source="link-variant" size={18} color={theme.colors.outlineVariant} />
+        </View>
+        {!isLast && <Divider />}
+      </View>
+    );
+  };
+
   const renderSecretRow = (secret: CommandSecretEntry, isLast: boolean, disabled: boolean = false) => {
     const isSet = secret.is_set;
     const iconName = isSet ? 'check-circle' : secret.required ? 'alert-circle' : 'circle-outline';
@@ -1391,9 +1452,17 @@ const NodeSettingsScreen: React.FC = () => {
               { backgroundColor: theme.colors.surfaceVariant, marginTop: 6 },
             ]}
           >
-            {agentSecrets.map((secret, i) =>
-              renderSecretRow(secret, i === agentSecrets.length - 1, !enabled),
-            )}
+            {agentSecrets.map((secret, i) => {
+              const isLast = i === agentSecrets.length - 1;
+              // Only user-scoped keys share a slot with the parent service.
+              // Agent-specific keys (e.g. CALENDAR_AGENT_USER, scope
+              // "integration") stay editable here.
+              const owner =
+                secret.scope === 'user' ? inheritedUserSecrets.get(secret.key) : undefined;
+              return owner
+                ? renderInheritedSecretRow(secret, owner, isLast, !enabled)
+                : renderSecretRow(secret, isLast, !enabled);
+            })}
           </Surface>
         )}
       </View>
