@@ -314,7 +314,7 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
         <Card style={styles.card}>
           <Card.Content>
             <Text variant="titleMedium" style={styles.sectionTitle}>Name</Text>
-            <View style={styles.nameRow}>
+            <View style={styles.inputRow}>
               <TextInput
                 testID="household-name-input"
                 mode="outlined"
@@ -384,19 +384,34 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
             {webSearchLoading ? (
               <ActivityIndicator size="small" />
             ) : (
-              <TextInput
-                testID="household-location-input"
-                mode="outlined"
-                dense
-                value={location}
-                onChangeText={setLocation}
-                onBlur={handleSaveLocation}
-                onSubmitEditing={handleSaveLocation}
-                placeholder="Springfield, IL 62704"
-                autoCapitalize="words"
-                returnKeyType="done"
-                disabled={!isAdmin || savingLocation}
-              />
+              <View style={styles.inputRow}>
+                <TextInput
+                  testID="household-location-input"
+                  mode="outlined"
+                  dense
+                  value={location}
+                  onChangeText={setLocation}
+                  onSubmitEditing={handleSaveLocation}
+                  placeholder="Springfield, IL 62704"
+                  autoCapitalize="words"
+                  returnKeyType="done"
+                  style={{ flex: 1 }}
+                  disabled={!isAdmin}
+                />
+                {isAdmin && (
+                  <Button
+                    testID="household-save-location"
+                    mode="contained-tonal"
+                    onPress={handleSaveLocation}
+                    loading={savingLocation}
+                    disabled={savingLocation || location.trim() === savedLocation}
+                    style={{ marginLeft: 8 }}
+                    compact
+                  >
+                    Save
+                  </Button>
+                )}
+              </View>
             )}
             {!isAdmin && !webSearchLoading && (
               <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 8 }}>
@@ -606,7 +621,7 @@ const styles = StyleSheet.create({
   content: { padding: 16, paddingBottom: 48 },
   card: { marginBottom: 16 },
   sectionTitle: { fontWeight: '600', marginBottom: 12 },
-  nameRow: { flexDirection: 'row', alignItems: 'center' },
+  inputRow: { flexDirection: 'row', alignItems: 'center' },
   toggleRow: { flexDirection: 'row', alignItems: 'center' },
   memberRow: {
     flexDirection: 'row',
