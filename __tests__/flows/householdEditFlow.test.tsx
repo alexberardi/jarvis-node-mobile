@@ -218,13 +218,13 @@ describe('Household edit — flow integration (rename, roles, members, invites, 
     const input = await utils.findByTestId('household-location-input');
 
     await act(async () => {
-      fireEvent.changeText(input, '  Brick, NJ 08724  ');
+      fireEvent.changeText(input, '  Springfield, IL 62704  ');
     });
     await act(async () => {
       fireEvent(input, 'blur');
     });
 
-    expect(setSetting).toHaveBeenCalledWith('hh-1', 'household.location', 'Brick, NJ 08724');
+    expect(setSetting).toHaveBeenCalledWith('hh-1', 'household.location', 'Springfield, IL 62704');
   });
 
   it('leaving the location untouched writes nothing', async () => {

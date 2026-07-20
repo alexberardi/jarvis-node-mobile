@@ -14,7 +14,7 @@ export interface HouseholdSettings {
   /** Master toggle for web search (quick_search + deep_research). Default off. */
   'web_search.enabled': boolean;
   /**
-   * Where the household is, as a free-text locality ("Brick, NJ 08724").
+   * Where the household is, as a free-text locality ("Springfield, IL 62704").
    * Biases business lookups so a phone call reaches the nearby branch —
    * a search for "Tony's Pizzeria" once resolved to Maryland for a New
    * Jersey household. Deliberately NOT a street address.

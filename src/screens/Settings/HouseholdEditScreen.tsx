@@ -378,7 +378,7 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
             <Text variant="titleMedium" style={styles.sectionTitle}>Location</Text>
             <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 8 }}>
               Your town and state, so Jarvis finds the nearby business when it
-              looks up a phone number. Not a street address — "Brick, NJ" or a
+              looks up a phone number. Not a street address — "Springfield, IL" or a
               ZIP code is enough.
             </Text>
             {webSearchLoading ? (
@@ -392,7 +392,7 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
                 onChangeText={setLocation}
                 onBlur={handleSaveLocation}
                 onSubmitEditing={handleSaveLocation}
-                placeholder="Brick, NJ 08724"
+                placeholder="Springfield, IL 62704"
                 autoCapitalize="words"
                 returnKeyType="done"
                 disabled={!isAdmin || savingLocation}
