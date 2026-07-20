@@ -13,7 +13,17 @@ import apiClient from './apiClient';
 export interface HouseholdSettings {
   /** Master toggle for web search (quick_search + deep_research). Default off. */
   'web_search.enabled': boolean;
+  /**
+   * Where the household is, as a free-text locality ("Brick, NJ 08724").
+   * Biases business lookups so a phone call reaches the nearby branch —
+   * a search for "Tony's Pizzeria" once resolved to Maryland for a New
+   * Jersey household. Deliberately NOT a street address.
+   */
+  'household.location': string;
 }
+
+/** Values the allowlisted settings can hold. */
+export type HouseholdSettingValue = HouseholdSettings[keyof HouseholdSettings];
 
 const base = (householdId: string) =>
   `${getCommandCenterUrl()}/api/v0/mobile/household/${householdId}/settings`;
@@ -29,10 +39,10 @@ export const getHouseholdSettings = async (
 };
 
 /** Set one household-controllable setting (requires household admin). */
-export const setHouseholdSetting = async (
+export const setHouseholdSetting = async <K extends keyof HouseholdSettings>(
   householdId: string,
-  key: keyof HouseholdSettings,
-  value: boolean,
+  key: K,
+  value: HouseholdSettings[K],
 ): Promise<void> => {
   await apiClient.put(`${base(householdId)}/${key}`, { value });
 };
