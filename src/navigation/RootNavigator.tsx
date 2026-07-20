@@ -9,6 +9,7 @@ import CommandDataStackNavigator from './CommandDataStackNavigator';
 import InboxStackNavigator from './InboxStackNavigator';
 import MainTabNavigator from './MainTabNavigator';
 import MemoriesStackNavigator from './MemoriesStackNavigator';
+import PhonebookStackNavigator from './PhonebookStackNavigator';
 import RecentCommandsStackNavigator from './RecentCommandsStackNavigator';
 import SmartHomeSetupNavigator from './SmartHomeSetupNavigator';
 import HouseholdEditScreen from '../screens/Settings/HouseholdEditScreen';
@@ -67,6 +68,11 @@ const RootNavigator = () => {
       <Stack.Screen
         name="Memories"
         component={MemoriesStackNavigator}
+        options={{ presentation: 'modal' }}
+      />
+      <Stack.Screen
+        name="Phonebook"
+        component={PhonebookStackNavigator}
         options={{ presentation: 'modal' }}
       />
     </Stack.Navigator>
