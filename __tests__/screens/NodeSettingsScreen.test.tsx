@@ -562,3 +562,176 @@ describe('NodeSettingsScreen — package health badges', () => {
     });
   });
 });
+
+// A user-scoped secret declared by both a command and its agent resolves to a
+// single slot on the node, so the agent is already using the command's
+// credential. The node builds agent secrets with no user context, so those
+// entries always come back is_set:false — rendering them as editable made the
+// agent card show blank "Calendar Type"/"Username" fields that looked broken.
+describe('NodeSettingsScreen — agent secrets inherited from the parent service', () => {
+  const members = [
+    { user_id: 7, username: 'alex', email: 'alex@example.com', role: 'admin' },
+  ];
+
+  // Mirrors the real shapes: the command declares friendly names and
+  // is_sensitive=False for CALENDAR_TYPE; the agent re-declares the same keys
+  // bare (SDK default is_sensitive=True, no friendly_name) and the node
+  // reports them unset because it resolved them with user_id=None.
+  function calendarSnapshot() {
+    return {
+      schema_version: 1,
+      commands_schema_version: 2,
+      commands: [
+        {
+          command_name: 'get_calendar_events',
+          description: 'Read calendar',
+          enabled: true,
+          associated_service: 'Calendar',
+          secrets: [
+            {
+              key: 'CALENDAR_TYPE',
+              scope: 'user',
+              description: 'Type of calendar service (icloud, google)',
+              value_type: 'string',
+              required: true,
+              is_sensitive: false,
+              is_set: true,
+              value: 'icloud',
+              friendly_name: 'Calendar Type',
+            },
+            {
+              key: 'CALENDAR_USERNAME',
+              scope: 'user',
+              description: 'Username/Apple ID for calendar service',
+              value_type: 'string',
+              required: true,
+              is_sensitive: true,
+              is_set: true,
+              friendly_name: 'Username',
+            },
+          ],
+        },
+      ],
+      agents: [
+        {
+          agent_name: 'calendar_alerts',
+          description: 'Calendar reminders',
+          enabled: true,
+          schedule: { interval_seconds: 300, run_on_startup: true },
+          associated_service: 'Calendar',
+          secrets: [
+            {
+              key: 'CALENDAR_TYPE',
+              scope: 'user',
+              description: 'Type of calendar service (icloud, google)',
+              value_type: 'string',
+              required: false,
+              is_sensitive: true,
+              is_set: false,
+            },
+            {
+              key: 'CALENDAR_USERNAME',
+              scope: 'user',
+              description: 'Username/Apple ID for calendar service',
+              value_type: 'string',
+              required: false,
+              is_sensitive: true,
+              is_set: false,
+            },
+            {
+              key: 'CALENDAR_AGENT_USER',
+              scope: 'integration',
+              description: 'The household member whose calendar this agent watches.',
+              value_type: 'user',
+              required: false,
+              is_sensitive: false,
+              is_set: false,
+              friendly_name: 'Watch user',
+            },
+          ],
+        },
+      ],
+      device_families: [],
+      device_managers: [],
+    };
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockListHouseholdMembers.mockResolvedValue(members);
+  });
+
+  async function openTasksTab() {
+    const view = await renderLoaded(calendarSnapshot() as any);
+    await waitFor(() => expect(view.getByText('get calendar events')).toBeTruthy());
+    await act(async () => {
+      fireEvent.press(view.getByText('Tasks'));
+    });
+    return view;
+  }
+
+  it('shows shared user-scoped secrets as configured by the parent service', async () => {
+    const view = await openTasksTab();
+
+    await waitFor(() => {
+      // The command's friendly names win over the agent's bare keys.
+      expect(view.getByText('Calendar Type')).toBeTruthy();
+      expect(view.getByText('Username')).toBeTruthy();
+      expect(view.getAllByText('Configured in Calendar')).toHaveLength(2);
+      // The agent's own is_set:false must not surface as a call to action.
+      expect(view.queryByText('Required')).toBeNull();
+      expect(view.queryByText('CALENDAR_TYPE')).toBeNull();
+    });
+  });
+
+  it('inherited rows are read-only — tapping one opens no edit dialog', async () => {
+    const view = await openTasksTab();
+    await waitFor(() => expect(view.getByText('Calendar Type')).toBeTruthy());
+
+    await act(async () => {
+      fireEvent.press(view.getByText('Calendar Type'));
+    });
+
+    // SecretEditDialog titles itself with the raw key.
+    expect(view.queryByText('CALENDAR_TYPE')).toBeNull();
+    expect(view.queryByText('Value')).toBeNull();
+  });
+
+  it('agent-specific secrets stay editable', async () => {
+    const view = await openTasksTab();
+    await waitFor(() => expect(view.getByText('Watch user')).toBeTruthy());
+
+    // Not user-scoped, so it owns its own slot and must remain tappable.
+    await act(async () => {
+      fireEvent.press(view.getByText('Watch user'));
+    });
+
+    await waitFor(() => {
+      expect(view.getByText('CALENDAR_AGENT_USER')).toBeTruthy();
+    });
+  });
+
+  it('reports the shared secret as unconfigured when the service has not set it', async () => {
+    const snapshot = calendarSnapshot();
+    snapshot.commands[0].secrets[0].is_set = false;
+    delete (snapshot.commands[0].secrets[0] as { value?: string }).value;
+
+    mockHasK2.mockResolvedValue(true);
+    mockRequestSettingsSnapshot.mockResolvedValue({ request_id: 'req-1' });
+    mockPollSettingsResult.mockResolvedValue({
+      status: 'fulfilled',
+      snapshot: { ciphertext: 'ct', nonce: 'n', tag: 't' },
+    });
+    mockDecryptSettingsSnapshot.mockResolvedValue(snapshot);
+
+    const view = render(<NodeSettingsScreen />, { wrapper });
+    await waitFor(() => expect(view.getByText('get calendar events')).toBeTruthy());
+    await act(async () => {
+      fireEvent.press(view.getByText('Tasks'));
+    });
+
+    await waitFor(() => {
+      expect(view.getByText('Set this up in Calendar')).toBeTruthy();
+    });
+  });
+});
