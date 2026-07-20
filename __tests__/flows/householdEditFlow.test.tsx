@@ -23,7 +23,9 @@ jest.mock('../../src/api/authApi', () => ({
 
 jest.mock('../../src/api/householdSettingsApi', () => ({
   __esModule: true,
-  getHouseholdSettings: jest.fn(() => Promise.resolve({ 'web_search.enabled': false })),
+  getHouseholdSettings: jest.fn(() =>
+    Promise.resolve({ 'web_search.enabled': false, 'household.location': '' }),
+  ),
   setHouseholdSetting: jest.fn(() => Promise.resolve()),
 }));
 
@@ -204,5 +206,37 @@ describe('Household edit — flow integration (rename, roles, members, invites, 
     });
 
     expect(setSetting).toHaveBeenCalledWith('hh-1', 'web_search.enabled', true);
+  });
+
+  // Location biases business lookups — a search for "Tony's Pizzeria" once
+  // resolved to a Maryland listing for a New Jersey household and the call
+  // went to the wrong business.
+  it('admin sets the household location → PUT trimmed value', async () => {
+    const setSetting = setHouseholdSetting as jest.Mock;
+    setSetting.mockClear();
+    const utils = renderScreen();
+    const input = await utils.findByTestId('household-location-input');
+
+    await act(async () => {
+      fireEvent.changeText(input, '  Springfield, IL 62704  ');
+    });
+    await act(async () => {
+      fireEvent(input, 'blur');
+    });
+
+    expect(setSetting).toHaveBeenCalledWith('hh-1', 'household.location', 'Springfield, IL 62704');
+  });
+
+  it('leaving the location untouched writes nothing', async () => {
+    const setSetting = setHouseholdSetting as jest.Mock;
+    setSetting.mockClear();
+    const utils = renderScreen();
+    const input = await utils.findByTestId('household-location-input');
+
+    await act(async () => {
+      fireEvent(input, 'blur');
+    });
+
+    expect(setSetting).not.toHaveBeenCalled();
   });
 });

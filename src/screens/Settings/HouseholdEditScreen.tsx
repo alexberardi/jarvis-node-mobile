@@ -62,6 +62,9 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const [webSearchLoading, setWebSearchLoading] = useState(true);
   const [savingWebSearch, setSavingWebSearch] = useState(false);
+  const [location, setLocation] = useState('');
+  const [savedLocation, setSavedLocation] = useState('');
+  const [savingLocation, setSavingLocation] = useState(false);
 
   // Members
   const [members, setMembers] = useState<Member[]>([]);
@@ -118,6 +121,9 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
     try {
       const settings = await getHouseholdSettings(householdId);
       setWebSearchEnabled(!!settings['web_search.enabled']);
+      const loc = settings['household.location'] ?? '';
+      setLocation(loc);
+      setSavedLocation(loc);
     } catch (error) {
       console.error('[HouseholdEditScreen] Failed to load household settings', error);
     } finally {
@@ -144,6 +150,25 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
       setSavingWebSearch(false);
     }
   }, [householdId]);
+
+  // Save the household's locality. Trimmed; saving the unchanged value is a
+  // no-op so leaving the field alone never fires a write.
+  const handleSaveLocation = useCallback(async () => {
+    const next = location.trim();
+    if (next === savedLocation) return;
+    setSavingLocation(true);
+    try {
+      await setHouseholdSetting(householdId, 'household.location', next);
+      setSavedLocation(next);
+    } catch (err: unknown) {
+      setLocation(savedLocation);
+      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+        ?? 'Failed to update location';
+      Alert.alert('Error', msg);
+    } finally {
+      setSavingLocation(false);
+    }
+  }, [householdId, location, savedLocation]);
 
   // Save name
   const handleSaveName = useCallback(async () => {
@@ -340,6 +365,39 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
                 />
               )}
             </View>
+            {!isAdmin && !webSearchLoading && (
+              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 8 }}>
+                Only a household admin can change this.
+              </Text>
+            )}
+          </Card.Content>
+        </Card>
+
+        <Card style={styles.card}>
+          <Card.Content>
+            <Text variant="titleMedium" style={styles.sectionTitle}>Location</Text>
+            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 8 }}>
+              Your town and state, so Jarvis finds the nearby business when it
+              looks up a phone number. Not a street address — "Springfield, IL" or a
+              ZIP code is enough.
+            </Text>
+            {webSearchLoading ? (
+              <ActivityIndicator size="small" />
+            ) : (
+              <TextInput
+                testID="household-location-input"
+                mode="outlined"
+                dense
+                value={location}
+                onChangeText={setLocation}
+                onBlur={handleSaveLocation}
+                onSubmitEditing={handleSaveLocation}
+                placeholder="Springfield, IL 62704"
+                autoCapitalize="words"
+                returnKeyType="done"
+                disabled={!isAdmin || savingLocation}
+              />
+            )}
             {!isAdmin && !webSearchLoading && (
               <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 8 }}>
                 Only a household admin can change this.
