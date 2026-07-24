@@ -202,8 +202,9 @@ const CallContextEditScreen = ({ navigation, route }: Props) => {
           Category
         </Text>
         <Text variant="bodySmall" style={styles.hint}>
-          Only loaded onto a call of a matching kind — a member ID stays off a
-          pizza order.
+          Tags this detail so calls can use it later. For now every detail is
+          available on every call — categories will let a member ID stay off a
+          pizza order down the line.
         </Text>
         <Menu
           visible={categoryMenu}
