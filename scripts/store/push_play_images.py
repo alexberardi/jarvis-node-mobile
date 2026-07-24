@@ -28,31 +28,51 @@ from _config import (  # noqa: E402
 )
 from _content import SHOTS  # noqa: E402
 
+# Google Play allows at most 8 screenshots per device type (ASC allows 10).
+# SHOTS is ordered by priority, so ship the first 8 here.
+PLAY_SHOTS = SHOTS[:8]
+
 ICON_PATH = ASSETS_DIR / "play-store-icon-512.png"   # 512×512
 FEATURE_PATH = ASSETS_DIR / "feature-graphic.png"    # 1024×500
 
-PHONE_DIR = STORE_DIR / "play-phone"                 # 1500×2868
-TABLET_7_DIR = STORE_DIR / "play-tablet-7"           # 1200×1920
-TABLET_10_DIR = STORE_DIR / "ipad-13"                # 2048×2732 (shared with ASC)
+# --style raw:    full-bleed captures / composited derivatives
+# --style framed: captioned marketing frames from frame_shots.py
+SRC_DIRS = {
+    "raw": {
+        "phone": STORE_DIR / "play-phone",           # 1500×2868
+        "tablet7": STORE_DIR / "play-tablet-7",      # 1200×1920
+        "tablet10": STORE_DIR / "ipad-13",           # 2048×2732 (shared with ASC)
+    },
+    "framed": {
+        "phone": STORE_DIR / "framed-play-phone",
+        "tablet7": STORE_DIR / "framed-play-tablet-7",
+        "tablet10": STORE_DIR / "framed-ipad-13",
+    },
+}
 
-SCREENSHOT_SETS = [
-    ("phoneScreenshots", PHONE_DIR, "phoneScreenshot"),
-    ("sevenInchScreenshots", TABLET_7_DIR, "7-inch screenshot"),
-    ("tenInchScreenshots", TABLET_10_DIR, "10-inch screenshot"),
-]
+
+def screenshot_sets(style: str):
+    dirs = SRC_DIRS[style]
+    return [
+        ("phoneScreenshots", dirs["phone"], "phoneScreenshot"),
+        ("sevenInchScreenshots", dirs["tablet7"], "7-inch screenshot"),
+        ("tenInchScreenshots", dirs["tablet10"], "10-inch screenshot"),
+    ]
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--apply", action="store_true")
+    ap.add_argument("--style", choices=["raw", "framed"], default="raw")
     args = ap.parse_args()
 
+    sets = screenshot_sets(args.style)
     if not args.apply:
         print("[DRY] would push:")
         print(f"  icon            ← {ICON_PATH.relative_to(ASSETS_DIR.parent)}")
         print(f"  featureGraphic  ← {FEATURE_PATH.relative_to(ASSETS_DIR.parent)}")
-        for image_type, src_dir, _ in SCREENSHOT_SETS:
-            print(f"  {image_type:22s} ← {len(SHOTS)} files from {src_dir.relative_to(ASSETS_DIR.parent)}")
+        for image_type, src_dir, _ in sets:
+            print(f"  {image_type:22s} ← {len(PLAY_SHOTS)} files from {src_dir.relative_to(ASSETS_DIR.parent)}")
         print("Done. (dry-run)")
         return 0
 
@@ -79,7 +99,7 @@ def main():
         upload("icon", ICON_PATH, "icon")
         upload("featureGraphic", FEATURE_PATH, "featureGraphic")
 
-        for image_type, src_dir, label in SCREENSHOT_SETS:
+        for image_type, src_dir, label in sets:
             edits.images().deleteall(
                 editId=edit_id,
                 packageName=PLAY_PACKAGE,
@@ -87,7 +107,7 @@ def main():
                 imageType=image_type,
             ).execute()
             print(f"  cleared existing {image_type}")
-            for s in SHOTS:
+            for s in PLAY_SHOTS:
                 upload(image_type, src_dir / s, label)
 
         edits.commit(editId=edit_id, packageName=PLAY_PACKAGE).execute()

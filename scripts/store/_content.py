@@ -131,6 +131,47 @@ Local network: server auto-discovery.
 
 No analytics or tracking. Open source: https://docs.jarvisautomation.dev"""
 
+# ── Release notes (What's New) ───────────────────────────────────────────────
+# Customer-facing changes since build 131 (v1.0.0 → v1.0.2).
+# ASC limit: 4000 chars. Pushed by push_release_notes.py.
+WHATS_NEW = """Talk to Jarvis faster, automate more, and keep even more under your control.
+
+NEW
+• Instant voice access on iOS — launch straight into a listening Jarvis from the Action Button, Control Center, or a Shortcut.
+• Face ID / Touch ID login — opt-in biometric unlock for your account.
+• All-new routine builder — build automations step by step with smart dropdowns for your actual devices, rooms, and commands, plus schedules and a Run Now button.
+• Memories — review, edit, or delete what Jarvis remembers about you, right from Settings.
+• HomeKit pairing — pair locks, thermostats, and more directly from the Devices tab.
+• Interactive lists in your Inbox — turn a voice-made shopping list into an exported cart, with an item picker when there's more than one match.
+• Node updates are now consent-based — nodes never update until you explicitly enable it, and the consent travels end-to-end encrypted so only your phone can flip it.
+• Package health at a glance — "Needs setup" and "Failed" badges, plus one-tap revert to the previous version of any installed package.
+• More voice tuning — new node voice settings including wake acknowledgment and sensitivity controls.
+
+IMPROVED
+• Chat is ready the moment your node is — newly paired nodes appear without restarting the app, tools load automatically, and the message box waits until your node can actually hear you.
+• You stay signed in reliably, and signing out is instant and clean.
+• Push notifications are now off by default — enable them only if you want them; everything else stays on your network.
+• Your login tokens now live in the iOS Keychain.
+• Better server discovery on tricky networks, and a pinned server address is always respected.
+
+FIXED
+• A crash when creating or importing password-protected key backups.
+• Long dropdowns in the routine editor now scroll.
+• General stability improvements throughout the app."""
+
+# Play limit: 500 chars per language.
+PLAY_RELEASE_NOTES = (
+    "New: instant voice from Shortcuts, biometric login, all-new routine "
+    "builder with device-aware dropdowns, Memories you can review and delete, "
+    "HomeKit pairing, consent-based node updates, package health badges with "
+    "one-tap revert.\n"
+    "Improved: chat is ready as soon as your node is, reliable sign-in, push "
+    "notifications now off by default.\n"
+    "Fixed: crash in password-protected key backups, routine editor "
+    "scrolling, stability."
+)
+assert len(PLAY_RELEASE_NOTES) <= 500, "Play release notes exceed 500 chars"
+
 # ── ASC categories ───────────────────────────────────────────────────────────
 PRIMARY_CATEGORY = "LIFESTYLE"
 SECONDARY_CATEGORY = "UTILITIES"
@@ -163,13 +204,17 @@ AGE_RATING_ATTRS = {
 }
 
 # ── Screenshot ordering (used by every store push) ───────────────────────────
+# Captured 2026-07-07 (dark mode, iPhone 17 Pro Max sim — see screenshots/flows/store/).
+# nodes.png is a 10th, App-Store-only shot (Play caps at 8 — see PLAY_SHOTS).
 SHOTS = [
     "home.png",
-    "routines.png",
     "devices.png",
-    "nodes.png",
-    "nav-pantry.png",
+    "routines.png",
+    "routine-edit.png",
+    "rooms.png",
     "inbox.png",
+    "nav-pantry.png",
     "settings-household.png",
     "auth-landing.png",
+    "nodes.png",
 ]
