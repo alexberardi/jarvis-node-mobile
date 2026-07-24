@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import sys
+import time
 from pathlib import Path
 
 import requests
@@ -38,8 +39,18 @@ from _config import (  # noqa: E402
 )
 from _content import SHOTS  # noqa: E402
 
-IPHONE_DIR = SHOTS_DIR                    # raw 1320×2868 captures
-IPAD_DIR = STORE_DIR / "ipad-13"          # 2048×2732 simulated
+# --style raw:    full-bleed captures / composited derivatives
+# --style framed: captioned marketing frames from frame_shots.py
+SRC_DIRS = {
+    "raw": {
+        "iphone": SHOTS_DIR,                       # 1320×2868 captures
+        "ipad": STORE_DIR / "ipad-13",             # 2048×2732 simulated
+    },
+    "framed": {
+        "iphone": STORE_DIR / "framed-appstore",
+        "ipad": STORE_DIR / "framed-ipad-13",
+    },
+}
 
 
 def get_or_create_set(headers, version_loc_id: str, display_type: str) -> str:
@@ -112,11 +123,24 @@ def upload_screenshot(headers, set_id: str, file_path: Path) -> str:
     for op in upload_ops:
         chunk = data[op["offset"]:op["offset"] + op["length"]]
         op_headers = {h["name"]: h["value"] for h in op.get("requestHeaders", [])}
-        r2 = requests.request(
-            op["method"], op["url"], data=chunk, headers=op_headers, timeout=120
-        )
-        if r2.status_code not in (200, 201, 204):
-            raise RuntimeError(f"chunk upload failed {r2.status_code}: {r2.text[:400]}")
+        # Apple's asset store intermittently drops chunk PUTs (TLS resets);
+        # retry with backoff before giving up.
+        last_err: Exception | None = None
+        for attempt in range(4):
+            try:
+                r2 = requests.request(
+                    op["method"], op["url"], data=chunk, headers=op_headers, timeout=120
+                )
+                if r2.status_code in (200, 201, 204):
+                    break
+                last_err = RuntimeError(
+                    f"chunk upload failed {r2.status_code}: {r2.text[:400]}"
+                )
+            except requests.exceptions.RequestException as e:
+                last_err = e
+            time.sleep(2 * (attempt + 1))
+        else:
+            raise RuntimeError(f"chunk upload failed after retries: {last_err}")
 
     commit = {
         "data": {
@@ -183,14 +207,16 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--apply", action="store_true")
     ap.add_argument("--only", choices=["iphone", "ipad", "both"], default="both")
+    ap.add_argument("--style", choices=["raw", "framed"], default="raw")
     args = ap.parse_args()
 
+    dirs = SRC_DIRS[args.style]
     if not args.apply:
         print("[DRY] would push:")
         if args.only in ("iphone", "both"):
-            print(f"  APP_IPHONE_67: {len(SHOTS)} from {IPHONE_DIR}")
+            print(f"  APP_IPHONE_67: {len(SHOTS)} from {dirs['iphone']}")
         if args.only in ("ipad", "both"):
-            print(f"  APP_IPAD_PRO_3GEN_129: {len(SHOTS)} from {IPAD_DIR}")
+            print(f"  APP_IPAD_PRO_3GEN_129: {len(SHOTS)} from {dirs['ipad']}")
         return 0
 
     h = asc_headers()
@@ -198,9 +224,9 @@ def main():
     version_loc_id = ids["appStoreVersionLocalization"]
 
     if args.only in ("iphone", "both"):
-        push_set(h, version_loc_id, "APP_IPHONE_67", IPHONE_DIR)
+        push_set(h, version_loc_id, "APP_IPHONE_67", dirs["iphone"])
     if args.only in ("ipad", "both"):
-        push_set(h, version_loc_id, "APP_IPAD_PRO_3GEN_129", IPAD_DIR)
+        push_set(h, version_loc_id, "APP_IPAD_PRO_3GEN_129", dirs["ipad"])
     print("\nDone.")
 
 
