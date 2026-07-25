@@ -8,6 +8,8 @@ import { lightTheme } from '../../src/theme';
 import authApi from '../../src/api/authApi';
 import { setHouseholdSetting } from '../../src/api/householdSettingsApi';
 
+const DEFAULT_VOICE = 'Warm and folksy default voice.';
+
 // L1 FLOW INTEGRATION — the Household admin surface (no prior coverage): the
 // member/invite load, admin-gated rename (PATCH + household refresh), change-role
 // via the per-member menu, remove-member (destructive confirm → DELETE → row
@@ -24,9 +26,24 @@ jest.mock('../../src/api/authApi', () => ({
 jest.mock('../../src/api/householdSettingsApi', () => ({
   __esModule: true,
   getHouseholdSettings: jest.fn(() =>
-    Promise.resolve({ 'web_search.enabled': false, 'household.location': '' }),
+    Promise.resolve({
+      'web_search.enabled': false,
+      'household.location': '',
+      'persona.household_prompt': '',
+    }),
   ),
   setHouseholdSetting: jest.fn(() => Promise.resolve()),
+  getPersonaPresets: jest.fn(() =>
+    Promise.resolve({
+      presets: [
+        { id: 'warm_folksy', label: 'Warm & folksy', text: 'Warm and folksy default voice.' },
+        { id: 'dry_witty', label: 'Dry & witty', text: 'Dry and witty.' },
+      ],
+      default_preset_id: 'warm_folksy',
+      default_text: 'Warm and folksy default voice.',
+      max_chars: 2000,
+    }),
+  ),
 }));
 
 const mockFetchHouseholds = jest.fn();
@@ -258,5 +275,75 @@ describe('Household edit — flow integration (rename, roles, members, invites, 
     });
 
     expect(setSetting).not.toHaveBeenCalled();
+  });
+
+  // The "Voice" persona — the household's speaking style. Shapes tone only; the
+  // backend fences it off from tool-calling.
+  it('admin edits the voice → PUT trimmed persona.household_prompt', async () => {
+    const setSetting = setHouseholdSetting as jest.Mock;
+    setSetting.mockClear();
+    const utils = renderScreen();
+    const input = await utils.findByTestId('household-persona-input');
+    await act(async () => {
+      fireEvent.changeText(input, '  Be dry and witty.  ');
+    });
+    await act(async () => {
+      fireEvent.press(utils.getByTestId('household-save-persona'));
+    });
+    expect(setSetting).toHaveBeenCalledWith('hh-1', 'persona.household_prompt', 'Be dry and witty.');
+  });
+
+  it('tapping a starter chip loads its voice into the box (unsaved)', async () => {
+    const setSetting = setHouseholdSetting as jest.Mock;
+    setSetting.mockClear();
+    const utils = renderScreen();
+    const chip = await utils.findByTestId('persona-preset-dry_witty');
+    await act(async () => {
+      fireEvent.press(chip);
+    });
+    expect(utils.getByTestId('household-persona-input').props.value).toBe('Dry and witty.');
+    expect(setSetting).not.toHaveBeenCalled();
+  });
+
+  it('the default starter restores the default voice (reset)', async () => {
+    const utils = renderScreen();
+    const input = await utils.findByTestId('household-persona-input');
+    await act(async () => {
+      fireEvent.changeText(input, 'Something custom.');
+    });
+    await act(async () => {
+      fireEvent.press(utils.getByTestId('persona-preset-warm_folksy'));
+    });
+    expect(utils.getByTestId('household-persona-input').props.value).toBe(DEFAULT_VOICE);
+  });
+
+  it('leaving the voice untouched keeps Save disabled and writes nothing', async () => {
+    const setSetting = setHouseholdSetting as jest.Mock;
+    setSetting.mockClear();
+    const utils = renderScreen();
+    const save = await utils.findByTestId('household-save-persona');
+    expect(save).toBeDisabled();
+    await act(async () => {
+      fireEvent.press(save);
+    });
+    expect(setSetting).not.toHaveBeenCalled();
+  });
+
+  it('surfaces the backend error when the voice is too long', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert');
+    const setSetting = setHouseholdSetting as jest.Mock;
+    setSetting.mockRejectedValueOnce({
+      response: { data: { detail: 'Persona is too long (2001 chars); max is 2000.' } },
+    });
+    const utils = renderScreen();
+    const input = await utils.findByTestId('household-persona-input');
+    await act(async () => {
+      fireEvent.changeText(input, 'way too long');
+    });
+    await act(async () => {
+      fireEvent.press(utils.getByTestId('household-save-persona'));
+    });
+    expect(alertSpy).toHaveBeenCalledWith('Error', 'Persona is too long (2001 chars); max is 2000.');
+    alertSpy.mockRestore();
   });
 });
