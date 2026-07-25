@@ -19,7 +19,12 @@ import {
 } from 'react-native-paper';
 
 import authApi from '../../api/authApi';
-import { getHouseholdSettings, setHouseholdSetting } from '../../api/householdSettingsApi';
+import {
+  getHouseholdSettings,
+  getPersonaPresets,
+  setHouseholdSetting,
+  type PersonaPreset,
+} from '../../api/householdSettingsApi';
 import { useAuth } from '../../auth/AuthContext';
 import type { RootStackParamList } from '../../navigation/types';
 
@@ -65,6 +70,14 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
   const [location, setLocation] = useState('');
   const [savedLocation, setSavedLocation] = useState('');
   const [savingLocation, setSavingLocation] = useState(false);
+
+  // Voice persona (household speaking style — shapes TONE only, not tools)
+  const [persona, setPersona] = useState('');
+  const [savedPersona, setSavedPersona] = useState('');
+  const [savingPersona, setSavingPersona] = useState(false);
+  const [personaPresets, setPersonaPresets] = useState<PersonaPreset[]>([]);
+  const [personaDefaultId, setPersonaDefaultId] = useState<string | null>(null);
+  const [personaMaxChars, setPersonaMaxChars] = useState(2000);
 
   // Members
   const [members, setMembers] = useState<Member[]>([]);
@@ -124,6 +137,9 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
       const loc = settings['household.location'] ?? '';
       setLocation(loc);
       setSavedLocation(loc);
+      const voice = settings['persona.household_prompt'] ?? '';
+      setPersona(voice);
+      setSavedPersona(voice);
     } catch (error) {
       console.error('[HouseholdEditScreen] Failed to load household settings', error);
     } finally {
@@ -134,6 +150,24 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
   useEffect(() => {
     loadHouseholdSettings();
   }, [loadHouseholdSettings]);
+
+  // Load persona starter presets (best-effort — the box works without chips).
+  useEffect(() => {
+    let cancelled = false;
+    getPersonaPresets(householdId)
+      .then((p) => {
+        if (cancelled) return;
+        setPersonaPresets(p.presets ?? []);
+        setPersonaDefaultId(p.default_preset_id ?? null);
+        if (p.max_chars) setPersonaMaxChars(p.max_chars);
+      })
+      .catch((error) => {
+        console.warn('[HouseholdEditScreen] Failed to load persona presets', error);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [householdId]);
 
   // Toggle web search (optimistic; revert on failure)
   const handleToggleWebSearch = useCallback(async (next: boolean) => {
@@ -169,6 +203,31 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
       setSavingLocation(false);
     }
   }, [householdId, location, savedLocation]);
+
+  // Save the household's voice persona. Trimmed; saving the unchanged value is a
+  // no-op. An empty box is a valid save — it clears the voice layer.
+  const handleSavePersona = useCallback(async () => {
+    const next = persona.trim();
+    if (next === savedPersona.trim()) return;
+    setSavingPersona(true);
+    try {
+      await setHouseholdSetting(householdId, 'persona.household_prompt', next);
+      setSavedPersona(next);
+      setPersona(next);
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+        ?? 'Failed to update voice';
+      Alert.alert('Error', msg);
+    } finally {
+      setSavingPersona(false);
+    }
+  }, [householdId, persona, savedPersona]);
+
+  // Tapping a starter chip loads its voice into the box (unsaved — the user
+  // reviews, tweaks, then Saves). The default preset doubles as "reset".
+  const handleLoadPreset = useCallback((preset: PersonaPreset) => {
+    setPersona(preset.text);
+  }, []);
 
   // Save name
   const handleSaveName = useCallback(async () => {
@@ -338,6 +397,82 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
                 </Button>
               )}
             </View>
+          </Card.Content>
+        </Card>
+
+        {/* Voice / personality */}
+        <Card style={styles.card}>
+          <Card.Content>
+            <Text variant="titleMedium" style={styles.sectionTitle}>Voice</Text>
+            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 12 }}>
+              How Jarvis talks — its tone and personality. This shapes the way it
+              speaks, not what it can do. Tap a starter to try it on, then tweak
+              the wording however you like.
+            </Text>
+            {webSearchLoading ? (
+              <ActivityIndicator size="small" />
+            ) : (
+              <>
+                {personaPresets.length > 0 && (
+                  <View style={styles.presetRow}>
+                    {personaPresets.map((preset) => (
+                      <Chip
+                        key={preset.id}
+                        testID={`persona-preset-${preset.id}`}
+                        compact
+                        mode="outlined"
+                        icon={preset.id === personaDefaultId ? 'restore' : undefined}
+                        selected={persona.trim() === preset.text.trim()}
+                        onPress={() => handleLoadPreset(preset)}
+                        disabled={!isAdmin}
+                        style={styles.presetChip}
+                      >
+                        {preset.label}
+                      </Chip>
+                    ))}
+                  </View>
+                )}
+                <TextInput
+                  testID="household-persona-input"
+                  mode="outlined"
+                  value={persona}
+                  onChangeText={setPersona}
+                  multiline
+                  numberOfLines={5}
+                  maxLength={personaMaxChars}
+                  placeholder="Describe how Jarvis should sound…"
+                  disabled={!isAdmin}
+                  style={styles.personaInput}
+                />
+                <View style={styles.personaFooter}>
+                  <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                    {persona.length}/{personaMaxChars}
+                  </Text>
+                  {isAdmin && (
+                    <Button
+                      testID="household-save-persona"
+                      mode="contained-tonal"
+                      onPress={handleSavePersona}
+                      loading={savingPersona}
+                      disabled={savingPersona || persona.trim() === savedPersona.trim()}
+                      compact
+                    >
+                      Save
+                    </Button>
+                  )}
+                </View>
+                {personaDefaultId && isAdmin && (
+                  <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}>
+                    Tap the ↺ starter to restore the default voice.
+                  </Text>
+                )}
+              </>
+            )}
+            {!isAdmin && !webSearchLoading && (
+              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 8 }}>
+                Only a household admin can change this.
+              </Text>
+            )}
           </Card.Content>
         </Card>
 
@@ -623,6 +758,15 @@ const styles = StyleSheet.create({
   sectionTitle: { fontWeight: '600', marginBottom: 12 },
   inputRow: { flexDirection: 'row', alignItems: 'center' },
   toggleRow: { flexDirection: 'row', alignItems: 'center' },
+  presetRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
+  presetChip: { marginRight: 0 },
+  personaInput: { minHeight: 96 },
+  personaFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
+  },
   memberRow: {
     flexDirection: 'row',
     alignItems: 'center',
