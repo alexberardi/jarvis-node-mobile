@@ -435,6 +435,10 @@ const InboxDetailScreen = () => {
           elements (target: "server") use the item's household. */}
       {interactiveElements.length > 0 && (
         <InteractiveElementsSection
+          // Remount when the plan revision changes so the "already tapped" (✓,
+          // disabled) chip state resets — an in-place Revise updates THIS card, so
+          // without this the Revise/Run buttons would stay disabled after one tap.
+          key={`ie-${item.metadata?.revision ?? item.id}`}
           elements={interactiveElements}
           targetNodeId={interactiveTargetNodeId}
           serverHouseholdId={item.household_id ?? null}
