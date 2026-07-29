@@ -104,15 +104,21 @@ const InboxDetailScreen = () => {
     setRefreshing(false);
   }, [loadItem]);
 
-  // Auto-refetch shortly after a callback completes — a Revise/re-plan PATCHes
-  // this same card, so pull it silently once the server has had a beat to update.
+  // Auto-refetch after a callback completes — a Revise/re-plan runs server-side
+  // (node-command fetch + LLM, typically ~3s but up to ~13s on a slow node/model)
+  // then PATCHes this same card. A single delayed pull races that completion, so
+  // refetch at several points; whenever the update lands, one of them catches it.
+  // (The item is fetched by id, so each refetch picks up the in-place update;
+  // pull-to-refresh is the manual fallback.)
   const prevPending = useRef(false);
   useEffect(() => {
     const wasPending = prevPending.current;
     prevPending.current = callbackPending;
     if (wasPending && !callbackPending) {
-      const t = setTimeout(() => loadItem(true), 2500);
-      return () => clearTimeout(t);
+      const timers = [2000, 4000, 6500, 9500, 13000].map((d) =>
+        setTimeout(() => loadItem(true), d),
+      );
+      return () => timers.forEach(clearTimeout);
     }
   }, [callbackPending, loadItem]);
 
