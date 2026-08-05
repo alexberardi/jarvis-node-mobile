@@ -92,6 +92,7 @@ export type CommandDataStackParamList = {
 export type RoutinesStackParamList = {
   RoutineList: undefined;
   RoutineEdit: { routineId?: string };
+  ScheduleList: undefined;
 };
 
 export type InboxStackParamList = {

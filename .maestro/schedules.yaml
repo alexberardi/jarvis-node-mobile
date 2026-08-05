@@ -1,0 +1,49 @@
+appId: com.jarvis.nodemobile
+name: schedules-list-and-cancel
+# L2 device-e2e — the Scheduled errands screen (src/screens/Schedules/ScheduleListScreen.tsx),
+# reached from the Routines tab header (the `open-schedules` calendar button). Logs in,
+# opens the screen, and asserts it renders.
+#
+# Cancel is destructive, so this flow ASSERTS the screen (+ the empty/populated state)
+# by default and leaves the cancel steps commented. To exercise cancel, seed a schedule
+# first — say "Hey Jarvis, schedule an errand every day to check the weather" to a node,
+# or POST the CC schedules API — then uncomment the "Cancel path" block. Every card +
+# its cancel button carry id-suffixed testIDs (schedule-card-<id> / schedule-cancel-<id>)
+# so they're addressable by regex.
+#
+# Run:  maestro test -e EMAIL=... -e PASSWORD=... .maestro/schedules.yaml
+tags:
+  - schedules
+  - e2e
+env:
+  EMAIL: "ci-node-test@example.com"
+  PASSWORD: "ci-node-test-password"
+---
+- launchApp:
+    clearState: true
+- runFlow: login.yaml
+# Open the Routines tab, then the Scheduled errands screen from its header button.
+- tapOn:
+    text: "Routines"
+- assertVisible:
+    id: "open-schedules"
+- tapOn:
+    id: "open-schedules"
+# The screen is up — the list container + title render whether empty or populated.
+- assertVisible:
+    id: "schedule-list"
+- assertVisible:
+    text: "Scheduled errands"
+
+# ── Cancel path (needs a seeded schedule) ─────────────────────────────────────
+# Uncomment once at least one schedule exists:
+# - assertVisible:
+#     id: "schedule-cancel-.*"     # regex — the first schedule's cancel button
+# - tapOn:
+#     id: "schedule-cancel-.*"
+# - assertVisible:
+#     text: "Cancel errand"        # the destructive confirm dialog
+# - tapOn:
+#     text: "Cancel errand"        # confirm → cancelSchedule → refetch
+# - assertVisible:
+#     id: "schedule-list"          # back on the refreshed list

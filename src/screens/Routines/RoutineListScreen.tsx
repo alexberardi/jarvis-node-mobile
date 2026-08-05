@@ -253,7 +253,16 @@ const RoutineListScreen = () => {
 
   return (
     <View style={styles.container}>
-      <Text variant="headlineMedium" style={[styles.title, { color: theme.colors.onBackground }]}>Routines</Text>
+      <View style={styles.header}>
+        <Text variant="headlineMedium" style={[styles.title, styles.titleFlex, { color: theme.colors.onBackground }]}>Routines</Text>
+        <IconButton
+          testID="open-schedules"
+          icon="calendar-clock"
+          size={24}
+          onPress={() => navigation.navigate('ScheduleList')}
+          accessibilityLabel="Scheduled errands"
+        />
+      </View>
       <FlatList
         data={routines}
         keyExtractor={(r) => r.id}
@@ -277,7 +286,9 @@ const RoutineListScreen = () => {
 const styles = StyleSheet.create({
   container: { flex: 1, paddingTop: 64 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 },
+  header: { flexDirection: 'row', alignItems: 'center', paddingRight: 8 },
   title: { fontWeight: 'bold', paddingHorizontal: 16, marginBottom: 12 },
+  titleFlex: { flex: 1, marginBottom: 0 },
   list: { padding: 16, gap: 12, paddingBottom: 96 },
   emptyList: { flexGrow: 1, justifyContent: 'center', alignItems: 'center' },
   card: {},
