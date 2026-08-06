@@ -1,6 +1,6 @@
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Linking, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, Linking, RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import {
   ActivityIndicator,
@@ -70,11 +70,13 @@ const InboxDetailScreen = () => {
   // proactive expiry uses metadata.expires_at below.
   const [expiredByServer, setExpiredByServer] = useState(false);
 
-  const loadItem = useCallback(async () => {
+  const loadItem = useCallback(async (silent = false) => {
     if (!authState.accessToken) return;
     try {
-      setError(null);
-      setLoading(true);
+      if (!silent) {
+        setError(null);
+        setLoading(true);
+      }
       const data = await getInboxItem(route.params.itemId);
       setItem(data);
       const seeded: Record<string, string> = {};
@@ -83,15 +85,42 @@ const InboxDetailScreen = () => {
       }
       setEditorValues(seeded);
     } catch {
-      setError('Could not load item');
+      if (!silent) setError('Could not load item');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [authState.accessToken, route.params.itemId]);
 
   useEffect(() => {
     loadItem();
   }, [loadItem]);
+
+  // Pull-to-refresh (a server-plane action like Revise updates this card in
+  // place; the item is fetched by id so a refetch picks up the new content).
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadItem(true);
+    setRefreshing(false);
+  }, [loadItem]);
+
+  // Auto-refetch after a callback completes — a Revise/re-plan runs server-side
+  // (node-command fetch + LLM, typically ~3s but up to ~13s on a slow node/model)
+  // then PATCHes this same card. A single delayed pull races that completion, so
+  // refetch at several points; whenever the update lands, one of them catches it.
+  // (The item is fetched by id, so each refetch picks up the in-place update;
+  // pull-to-refresh is the manual fallback.)
+  const prevPending = useRef(false);
+  useEffect(() => {
+    const wasPending = prevPending.current;
+    prevPending.current = callbackPending;
+    if (wasPending && !callbackPending) {
+      const timers = [2000, 4000, 6500, 9500, 13000].map((d) =>
+        setTimeout(() => loadItem(true), d),
+      );
+      return () => timers.forEach(clearTimeout);
+    }
+  }, [callbackPending, loadItem]);
 
   const handleAction = useCallback(async (action: JarvisButton) => {
     if (!authState.accessToken || !item?.metadata) return;
@@ -198,7 +227,7 @@ const InboxDetailScreen = () => {
         <Text variant="bodyLarge" style={{ color: theme.colors.error }}>
           {error || 'Item not found'}
         </Text>
-        <Button mode="text" onPress={loadItem} style={{ marginTop: 8 }}>
+        <Button mode="text" onPress={() => loadItem()} style={{ marginTop: 8 }}>
           Retry
         </Button>
       </View>
@@ -274,7 +303,10 @@ const InboxDetailScreen = () => {
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
         <Chip
           compact
           style={styles.chip}
@@ -403,6 +435,10 @@ const InboxDetailScreen = () => {
           elements (target: "server") use the item's household. */}
       {interactiveElements.length > 0 && (
         <InteractiveElementsSection
+          // Remount when the plan revision changes so the "already tapped" (✓,
+          // disabled) chip state resets — an in-place Revise updates THIS card, so
+          // without this the Revise/Run buttons would stay disabled after one tap.
+          key={`ie-${item.metadata?.revision ?? item.id}`}
           elements={interactiveElements}
           targetNodeId={interactiveTargetNodeId}
           serverHouseholdId={item.household_id ?? null}
