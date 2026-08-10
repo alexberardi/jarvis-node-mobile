@@ -98,6 +98,9 @@ export type RoutinesStackParamList = {
 export type InboxStackParamList = {
   InboxList: undefined;
   InboxDetail: { itemId: string };
+  // The household's "never suggest this again" blocklist for agent-proposed
+  // action cards. Reached from the Inbox header (where the proposals land).
+  SuppressedSuggestions: undefined;
   // Pushed onto the stack when a user taps an InteractiveElement whose
   // navigation_type is "stack". Polls the callback's status endpoint
   // until the result lands, then renders the same body/chip layout as
