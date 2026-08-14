@@ -55,4 +55,20 @@ export const BIOMETRIC_LOGIN_ENABLED_KEY = '@jarvis/biometric_login_enabled';
  */
 export const MUST_CHANGE_PASSWORD_KEY = '@jarvis/must_change_password';
 
+/**
+ * On-device home geofence for presence detection. Serialized as
+ * `{ latitude, longitude, radiusMeters, enabled }`. The PRECISE coordinate is
+ * deliberately stored ONLY here (never sent to the server) — the phone computes
+ * home/away locally and reports just that binary state to command-center. See
+ * services/presenceService.ts.
+ */
+export const HOME_GEOFENCE_KEY = '@jarvis/home_geofence';
+/**
+ * The last presence state reported to the server, keyed by household. Serialized
+ * as `{ [householdId]: 'home' | 'away' }`. Lets presenceService report only on a
+ * *change* of state instead of on every foreground/sample, so a phone sitting at
+ * home doesn't re-POST on every app resume.
+ */
+export const PRESENCE_LAST_STATE_KEY = '@jarvis/presence_last_state';
+
 // Routines are server-owned (command-center) — no local routine storage keys.
