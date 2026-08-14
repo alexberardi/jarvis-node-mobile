@@ -1,6 +1,6 @@
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Linking, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, Linking, RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import {
   ActivityIndicator,
@@ -21,6 +21,7 @@ import {
 } from '../../api/commandCenterApi';
 import { useAuth } from '../../auth/AuthContext';
 import ActionButtons from '../../components/ActionButtons';
+import EditableDateTimeField from '../../components/EditableDateTimeField';
 import InboxAudioPlayer from '../../components/InboxAudioPlayer';
 import InteractiveElementsSection from '../../components/InteractiveElementsSection';
 import { InboxStackParamList } from '../../navigation/types';
@@ -39,6 +40,12 @@ type DetailRoute = RouteProp<InboxStackParamList, 'InboxDetail'>;
 // the phone-call confirm card's tel-keyboard number + multiline details).
 // Parsing, the fail-closed unsupported-editor rule, and the expiry
 // affordance all live in utils/inboxEditors — see that module's docs.
+
+// Sentence-case a display label ("start" → "Start"). Cosmetic only — the merge
+// keys off data_key, never the label — and it deliberately leaves already-
+// capitalized multi-word labels ("Phone number") untouched.
+const titleCaseLabel = (label: string): string =>
+  label.length > 0 ? label.charAt(0).toUpperCase() + label.slice(1) : label;
 
 const parseThinkBlock = (body: string): { thinking: string | null; content: string } => {
   const match = body.match(/<think>([\s\S]*?)<\/think>/);
@@ -70,28 +77,95 @@ const InboxDetailScreen = () => {
   // proactive expiry uses metadata.expires_at below.
   const [expiredByServer, setExpiredByServer] = useState(false);
 
-  const loadItem = useCallback(async () => {
-    if (!authState.accessToken) return;
+  // Always-current item, so the post-callback poll can read the revision it
+  // started from without re-subscribing the effect on every refetch.
+  const itemRef = useRef<InboxItem | null>(item);
+  itemRef.current = item;
+
+  const loadItem = useCallback(async (silent = false): Promise<InboxItem | null> => {
+    if (!authState.accessToken) return null;
     try {
-      setError(null);
-      setLoading(true);
-      const data = await getInboxItem(route.params.itemId);
-      setItem(data);
-      const seeded: Record<string, string> = {};
-      for (const field of parseInboxEditors(data.metadata).fields) {
-        seeded[field.data_key] = field.initial;
+      if (!silent) {
+        setError(null);
+        setLoading(true);
       }
-      setEditorValues(seeded);
+      const data = await getInboxItem(route.params.itemId);
+      const prevRev = itemRef.current?.metadata?.revision;
+      const newRev = data.metadata?.revision;
+      setItem(data);
+      // Re-seed the editor fields only on a fresh (non-silent) load or when the
+      // revision actually changed (an in-place Revise). A silent poll that
+      // returns the SAME revision must NOT wipe text the user may be typing for
+      // the next revise.
+      if (!silent || newRev !== prevRev) {
+        const seeded: Record<string, string> = {};
+        for (const field of parseInboxEditors(data.metadata).fields) {
+          seeded[field.data_key] = field.initial;
+        }
+        setEditorValues(seeded);
+      }
+      return data;
     } catch {
-      setError('Could not load item');
+      if (!silent) setError('Could not load item');
+      return null;
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [authState.accessToken, route.params.itemId]);
 
   useEffect(() => {
     loadItem();
   }, [loadItem]);
+
+  // Pull-to-refresh (a server-plane action like Revise updates this card in
+  // place; the item is fetched by id so a refetch picks up the new content).
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadItem(true);
+    setRefreshing(false);
+  }, [loadItem]);
+
+  // Auto-refetch after a server-plane callback (Revise/re-plan) completes. The
+  // POST returns immediately; the server then runs the re-plan (node-command
+  // fetch + LLM) and PATCHes THIS card in place with a BUMPED revision. The
+  // completion time is highly variable (~3s to 20s+ — the node fetch alone can
+  // take up to 10s), so a fixed set of refetch timers races it and often fires
+  // before the update lands, then stops. Instead POLL by id until the revision
+  // actually changes (or a timeout) — robust to whatever the re-plan latency is.
+  // (The item is fetched by id, so each poll picks up the in-place update;
+  // pull-to-refresh remains the manual fallback.)
+  const prevPending = useRef(false);
+  useEffect(() => {
+    const wasPending = prevPending.current;
+    prevPending.current = callbackPending;
+    if (!(wasPending && !callbackPending)) return;
+
+    const startRev = itemRef.current?.metadata?.revision ?? null;
+    let cancelled = false;
+    let attempts = 0;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const POLL_MS = 1500;
+    const MAX_ATTEMPTS = 20; // ~30s ceiling
+
+    const poll = async () => {
+      if (cancelled) return;
+      attempts += 1;
+      const data = await loadItem(true);
+      const newRev = data?.metadata?.revision ?? null;
+      // Stop as soon as the in-place update lands (revision changed). For cards
+      // that carry no revision, just stop after the bounded attempts.
+      const changed = startRev !== null && newRev !== null && newRev !== startRev;
+      if (!cancelled && !changed && attempts < MAX_ATTEMPTS) {
+        timer = setTimeout(poll, POLL_MS);
+      }
+    };
+    timer = setTimeout(poll, POLL_MS);
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [callbackPending, loadItem]);
 
   const handleAction = useCallback(async (action: JarvisButton) => {
     if (!authState.accessToken || !item?.metadata) return;
@@ -180,6 +254,20 @@ const InboxDetailScreen = () => {
         borderRadius: 6,
         fontSize: 13,
       },
+      // Like code_block above, the library's default blockquote is a light box
+      // with light text that's unreadable in dark mode (it made the mid-call
+      // escalation card — which quotes the callee's question in a blockquote —
+      // render as a broken-looking gray input). Theme it explicitly.
+      blockquote: {
+        backgroundColor: theme.colors.surfaceVariant,
+        color: theme.colors.onSurfaceVariant,
+        borderColor: theme.colors.primary,
+        borderLeftWidth: 3,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 6,
+        marginVertical: 4,
+      },
     }),
     [theme],
   );
@@ -198,7 +286,7 @@ const InboxDetailScreen = () => {
         <Text variant="bodyLarge" style={{ color: theme.colors.error }}>
           {error || 'Item not found'}
         </Text>
-        <Button mode="text" onPress={loadItem} style={{ marginTop: 8 }}>
+        <Button mode="text" onPress={() => loadItem()} style={{ marginTop: 8 }}>
           Retry
         </Button>
       </View>
@@ -274,7 +362,10 @@ const InboxDetailScreen = () => {
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
         <Chip
           compact
           style={styles.chip}
@@ -378,21 +469,36 @@ const InboxDetailScreen = () => {
         <View style={styles.editableSection} key={field.key}>
           {field.label ? (
             <Text variant="titleSmall" style={styles.editableLabel}>
-              {field.label}
+              {titleCaseLabel(field.label)}
             </Text>
           ) : null}
-          <TextInput
-            mode="outlined"
-            multiline={field.input_type !== 'tel'}
-            keyboardType={field.input_type === 'tel' ? 'phone-pad' : 'default'}
-            value={editorValues[field.data_key] ?? ''}
-            onChangeText={(text) =>
-              setEditorValues((prev) => ({ ...prev, [field.data_key]: text }))
-            }
-            disabled={callbackPending || isExpired}
-            style={field.input_type === 'tel' ? styles.editableInputSingle : styles.editableInput}
-            testID={field.legacy ? 'editable-text-input' : `editable-field-${field.key}`}
-          />
+          {field.input_type === 'datetime' ? (
+            // Native date/time picker. The stored value stays an ISO 8601
+            // string ("2026-08-11T18:00:00"), so InteractiveElementsSection's
+            // merge sends ISO to the callback (CC's add_event parses ISO).
+            <EditableDateTimeField
+              label={field.label}
+              value={editorValues[field.data_key] ?? field.initial}
+              onChange={(iso) =>
+                setEditorValues((prev) => ({ ...prev, [field.data_key]: iso }))
+              }
+              disabled={callbackPending || isExpired}
+              testID={`editable-field-${field.key}`}
+            />
+          ) : (
+            <TextInput
+              mode="outlined"
+              multiline={field.input_type !== 'tel'}
+              keyboardType={field.input_type === 'tel' ? 'phone-pad' : 'default'}
+              value={editorValues[field.data_key] ?? ''}
+              onChangeText={(text) =>
+                setEditorValues((prev) => ({ ...prev, [field.data_key]: text }))
+              }
+              disabled={callbackPending || isExpired}
+              style={field.input_type === 'tel' ? styles.editableInputSingle : styles.editableInput}
+              testID={field.legacy ? 'editable-text-input' : `editable-field-${field.key}`}
+            />
+          )}
         </View>
       ))}
 
@@ -403,6 +509,10 @@ const InboxDetailScreen = () => {
           elements (target: "server") use the item's household. */}
       {interactiveElements.length > 0 && (
         <InteractiveElementsSection
+          // Remount when the plan revision changes so the "already tapped" (✓,
+          // disabled) chip state resets — an in-place Revise updates THIS card, so
+          // without this the Revise/Run buttons would stay disabled after one tap.
+          key={`ie-${item.metadata?.revision ?? item.id}`}
           elements={interactiveElements}
           targetNodeId={interactiveTargetNodeId}
           serverHouseholdId={item.household_id ?? null}

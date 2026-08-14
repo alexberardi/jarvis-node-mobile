@@ -10,6 +10,7 @@ import InboxCallbackResultScreen from '../screens/Inbox/InboxCallbackResultScree
 import InboxDetailScreen from '../screens/Inbox/InboxDetailScreen';
 import InboxListScreen from '../screens/Inbox/InboxListScreen';
 import InteractiveListScreen from '../screens/Inbox/InteractiveListScreen';
+import SuppressedSuggestionsScreen from '../screens/Inbox/SuppressedSuggestionsScreen';
 import WebViewPickerScreen from '../screens/Inbox/WebViewPickerScreen';
 import { InboxStackParamList } from './types';
 
@@ -33,6 +34,7 @@ const InboxStackNavigator = () => {
           />
           <Stack.Screen name="AdapterDeployed" component={AdapterDeployedScreen} />
           <Stack.Screen name="InteractiveList" component={InteractiveListScreen} />
+          <Stack.Screen name="SuppressedSuggestions" component={SuppressedSuggestionsScreen} />
           <Stack.Screen name="WebViewPicker" component={WebViewPickerScreen} />
         </Stack.Navigator>
       </HelpProvider>

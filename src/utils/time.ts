@@ -42,3 +42,50 @@ export const coerceTimeList = (value: unknown): string[] => {
   }
   return [];
 };
+
+/**
+ * ISO 8601 local-wall-clock helpers, for editable inbox-card fields of
+ * input_type "datetime" (values like "2026-08-11T18:00:00" — no timezone,
+ * interpreted as local time). The value that flows through the callback merge
+ * MUST stay this ISO string shape (command-center's add_event parses ISO), so
+ * these convert to/from the Date @react-native-community/datetimepicker wants
+ * WITHOUT ever going through UTC (toISOString would shift the wall time).
+ */
+
+/** Parse an ISO 8601 datetime string into a Date. A bare date-time with no
+ *  offset ("YYYY-MM-DDTHH:MM:SS") is interpreted as local time. Unparseable
+ *  input falls back to now (rounded to the minute) so the picker still opens. */
+export const parseIsoToDate = (iso: string): Date => {
+  const parsed = new Date((iso ?? '').trim());
+  if (Number.isNaN(parsed.getTime())) {
+    const now = new Date();
+    now.setSeconds(0, 0);
+    return now;
+  }
+  return parsed;
+};
+
+/** Format a Date back to a local-wall-clock ISO 8601 string
+ *  ("YYYY-MM-DDTHH:MM:SS") — built from local components, NOT toISOString(),
+ *  so 18:00 local stays 18:00 rather than shifting to UTC. */
+export const formatDateToIso = (d: Date): string => {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return (
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
+    `T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+  );
+};
+
+/** Friendly, locale-aware display of an ISO datetime (e.g. "Tue, Aug 11,
+ *  6:00 PM"). Falls back to the raw string if it can't be parsed. */
+export const formatIsoFriendly = (iso: string): string => {
+  const d = new Date((iso ?? '').trim());
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+};

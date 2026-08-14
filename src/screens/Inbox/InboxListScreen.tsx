@@ -374,6 +374,12 @@ const InboxListScreen = () => {
         ) : (
           <View style={styles.headerActions}>
             <IconButton
+              testID="open-suppressed-suggestions"
+              icon="bell-off-outline"
+              onPress={() => navigation.navigate('SuppressedSuggestions')}
+              accessibilityLabel="Suppressed suggestions"
+            />
+            <IconButton
               icon="checkbox-multiple-outline"
               onPress={() => setSelectMode(true)}
               accessibilityLabel="Select messages"
