@@ -18,7 +18,11 @@
  *        { label: "Details", initial: "...", data_key: "details",
  *          input_type: "multiline" },
  *      ]
- *    input_type ∈ {"text", "multiline", "tel"}; required defaults to true.
+ *    input_type ∈ {"text", "multiline", "tel", "datetime"}; required defaults
+ *    to true. "datetime" fields carry/emit an ISO 8601 local-wall-clock string
+ *    ("2026-08-11T18:00:00") and render as a native date/time picker
+ *    (InboxDetailScreen → EditableDateTimeField); the value stays an ISO string
+ *    so it merges into the callback unchanged.
  *
  * FAIL-CLOSED RULE (the difference from legacy): if editable_fields is
  * declared but this build can't fully render it — unknown input_type,
@@ -30,9 +34,9 @@
  * exists to prevent.
  */
 
-export type EditorFieldType = 'text' | 'multiline' | 'tel';
+export type EditorFieldType = 'text' | 'multiline' | 'tel' | 'datetime';
 
-const KNOWN_FIELD_TYPES: readonly string[] = ['text', 'multiline', 'tel'];
+const KNOWN_FIELD_TYPES: readonly string[] = ['text', 'multiline', 'tel', 'datetime'];
 
 /** Highest editor_schema this build can render. */
 export const SUPPORTED_EDITOR_SCHEMA = 2;
