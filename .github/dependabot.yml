@@ -15,6 +15,23 @@ updates:
     groups:
       minor-and-patch:
         update-types: ["minor", "patch"]
+    # Expo-SDK-managed + React Native native modules: their versions are pinned
+    # to the Expo SDK and MUST be bumped via `npx expo install` (an SDK upgrade),
+    # NOT by dependabot. An off-SDK bump compiles fine but crashes the RELEASE
+    # build at native-module init (black screen) — expo-network 8->57 and
+    # @react-native-async-storage 2->3 both did exactly that. Leave the whole
+    # native/SDK surface to `expo install`.
+    ignore:
+      - dependency-name: "expo"
+      - dependency-name: "expo-*"
+      - dependency-name: "@expo/*"
+      - dependency-name: "react"
+      - dependency-name: "react-dom"
+      - dependency-name: "react-native"
+      - dependency-name: "react-native-*"
+      - dependency-name: "@react-native-community/*"
+      - dependency-name: "@react-native-async-storage/*"
+      - dependency-name: "@react-navigation/*"
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
