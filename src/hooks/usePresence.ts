@@ -8,18 +8,26 @@
  * server's presence fresh (the heartbeat in presenceService). On logout it
  * forgets the last-reported state so the next session reports fresh.
  *
- * All the gating lives in presenceService.reportIfChanged — it silently no-ops
- * when presence is disabled, no home is set, or location permission isn't
- * already granted, and it reports only on a *change* (or a stale heartbeat). So
- * this hook can call it liberally; the cost of a no-op sample is a couple of
- * AsyncStorage reads.
+ * Phase 3: on each foreground sync it also (a) FLUSHES any deferred edges the
+ * background geofence task couldn't report (locked phone / offline), before the
+ * live sample so those edges land first, and (b) RE-ARMS the OS geofence if it
+ * was cleared (Android reboot / Location toggle). The heavy background geofence
+ * lives in services/backgroundPresenceTask; this hook stays the foreground fast
+ * path.
+ *
+ * All the gating lives in presenceService — reportIfChanged/flushPendingQueue
+ * silently no-op when presence is disabled, no home is set, or location
+ * permission isn't already granted, and reportIfChanged reports only on a
+ * *change* (or a stale heartbeat). So this hook can call them liberally.
  */
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { AppState } from 'react-native';
 
 import { useAuth } from '../auth/AuthContext';
+import { rearmIfNeeded } from '../services/backgroundPresenceTask';
 import {
   clearLastPresenceState,
+  flushPendingQueue,
   reportIfChanged,
   REFRESH_AFTER_MS,
 } from '../services/presenceService';
@@ -36,12 +44,26 @@ export function usePresence(): void {
 
   const canReport = isAuthenticated && !!activeHouseholdId && userId !== undefined;
 
+  // Flush deferred background edges, then take a fresh foreground sample, and
+  // re-arm the OS geofence if it was cleared. Flush BEFORE the live sample so
+  // its edges land first and the sample no-ops on unchanged state (both write
+  // the same per-(household,user) last-state map) instead of racing it.
+  const syncPresence = useCallback(() => {
+    if (!canReport) return;
+    const hh = activeHouseholdId as string;
+    const uid = userId as number;
+    rearmIfNeeded().catch(() => {});
+    flushPendingQueue(hh, uid, name)
+      .catch(() => {})
+      .finally(() => {
+        reportIfChanged(hh, uid, name).catch(() => {});
+      });
+  }, [canReport, activeHouseholdId, userId, name]);
+
   // Sample on login and whenever the active household becomes known/changes.
   useEffect(() => {
-    if (canReport) {
-      reportIfChanged(activeHouseholdId as string, userId as number, name).catch(() => {});
-    }
-  }, [canReport, activeHouseholdId, userId, name]);
+    syncPresence();
+  }, [syncPresence]);
 
   // Forget the remembered state on logout so the next login reports fresh
   // (a different user, or a re-arrival, should not be masked by a stale
@@ -60,12 +82,10 @@ export function usePresence(): void {
   // Re-sample when the app comes to the foreground.
   useEffect(() => {
     const sub = AppState.addEventListener('change', (next) => {
-      if (next === 'active' && canReport) {
-        reportIfChanged(activeHouseholdId as string, userId as number, name).catch(() => {});
-      }
+      if (next === 'active') syncPresence();
     });
     return () => sub.remove();
-  }, [canReport, activeHouseholdId, userId, name]);
+  }, [syncPresence]);
 
   // Heartbeat while foregrounded: a phone left open all day never fires an
   // AppState → active edge, so without this a still-valid "home" would expire

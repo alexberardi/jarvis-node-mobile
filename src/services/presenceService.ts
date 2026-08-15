@@ -23,7 +23,20 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 
 import { reportPresence, type PresenceState } from '../api/presenceApi';
-import { HOME_GEOFENCE_KEY, PRESENCE_LAST_STATE_KEY } from '../config/storageKeys';
+import { getServiceConfig, loadCachedConfig } from '../config/serviceConfig';
+import {
+  ACTIVE_HOUSEHOLD_KEY,
+  BG_PRESENCE_ENABLED_KEY,
+  HOME_GEOFENCE_KEY,
+  PRESENCE_LAST_STATE_KEY,
+  PRESENCE_PENDING_QUEUE_KEY,
+  USER_KEY,
+} from '../config/storageKeys';
+import {
+  persistBgRotatedTokens,
+  readDurableRefreshToken,
+  readTokenForBg,
+} from './tokenStorage';
 
 /** A user's home geofence, stored on-device only. */
 export interface HomeGeofence {
@@ -152,11 +165,31 @@ interface LastReport {
 }
 type LastStateMap = Record<string, LastReport>;
 
+// Serialize AsyncStorage read-modify-write on the presence stores (last-state
+// map + pending queue) so they stay atomic across ALL three writers: the
+// foreground sample (reportIfChanged), the foreground flush (flushPendingQueue),
+// and the IN-PROCESS background report (reportPresenceBg). The `inFlight` guard
+// below only covers the two foreground paths; a geofence crossing delivered to
+// the live JS runtime (app backgrounded-not-killed, or foreground) runs
+// reportPresenceBg concurrently, so without this a slow flush could clobber a
+// fresh bg enqueue (lost crossing) or resurrect a flushed edge (duplicate
+// report). Network is kept OUTSIDE this critical section — only the store
+// mutation is serialized.
+let opChain: Promise<unknown> = Promise.resolve();
+const runSerialized = <T>(fn: () => Promise<T>): Promise<T> => {
+  const result = opChain.then(fn, fn);
+  opChain = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  return result;
+};
+
 // Keyed by household AND user: the server binds presence to the JWT user_id, so
 // deduping by household alone would let one user on a shared phone mask another,
 // and would let a stale in-flight report from a logged-out user suppress the
 // next user's first report.
-const keyFor = (householdId: string, userId: number | string): string =>
+export const keyFor = (householdId: string, userId: number | string): string =>
   `${householdId}:${userId}`;
 
 const readLastStateMap = async (): Promise<LastStateMap> => {
@@ -170,14 +203,12 @@ const readLastStateMap = async (): Promise<LastStateMap> => {
   }
 };
 
-const writeLastState = async (
-  key: string,
-  report: LastReport,
-): Promise<void> => {
-  const map = await readLastStateMap();
-  map[key] = report;
-  await AsyncStorage.setItem(PRESENCE_LAST_STATE_KEY, JSON.stringify(map));
-};
+const writeLastState = async (key: string, report: LastReport): Promise<void> =>
+  runSerialized(async () => {
+    const map = await readLastStateMap();
+    map[key] = report;
+    await AsyncStorage.setItem(PRESENCE_LAST_STATE_KEY, JSON.stringify(map));
+  });
 
 /** Forget the remembered state (e.g. on logout, so the next login reports fresh). */
 export const clearLastPresenceState = async (): Promise<void> => {
@@ -283,5 +314,335 @@ export const reportIfChanged = async (
     };
   } finally {
     inFlight = false;
+  }
+};
+
+// ── Background presence opt-in (Phase 3) ────────────────────────────────
+
+/**
+ * Whether the user has opted into TRUE background geofencing (Always-location +
+ * an OS geofence that fires when the app is backgrounded/terminated). DISTINCT
+ * from the foreground `HomeGeofence.enabled` flag: this one also downgrades
+ * keychain token accessibility (see tokenStorage.computeAccessibility), so it's
+ * only set once the user explicitly turns it on AND grants Always permission.
+ */
+export const isBackgroundPresenceEnabled = async (): Promise<boolean> => {
+  try {
+    return (await AsyncStorage.getItem(BG_PRESENCE_ENABLED_KEY)) === 'true';
+  } catch {
+    return false;
+  }
+};
+
+/** Persist the background-presence opt-in (boolean only — never a token). */
+export const setBackgroundPresenceEnabled = async (enabled: boolean): Promise<void> => {
+  await AsyncStorage.setItem(BG_PRESENCE_ENABLED_KEY, enabled ? 'true' : 'false');
+};
+
+// ── Deferred pending-edge queue (Phase 3 background fallback) ────────────
+
+/** How long a queued edge stays worth replaying — the server's mobile-presence
+ *  TTL. Older edges are dropped on flush (except the newest, which asserts
+ *  current truth) so we never replay a stale "home" as a fresh arrival. */
+export const PRESENCE_STALE_MS = 4 * 60 * 60 * 1000;
+/** Bound the log so a device offline for days can't grow it unboundedly. */
+const MAX_PENDING_EDGES = 20;
+/** Treat the access token as unusable this many seconds before its real exp. */
+const ACCESS_EXP_SKEW_SECONDS = 30;
+
+/** A presence edge captured by the background task when it couldn't report. */
+export interface PendingEdge {
+  state: PresenceState;
+  ts: number;
+  householdId: string;
+  userId: number | string;
+  name?: string;
+}
+
+const readPendingQueue = async (): Promise<PendingEdge[]> => {
+  const raw = await AsyncStorage.getItem(PRESENCE_PENDING_QUEUE_KEY);
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as PendingEdge[]) : [];
+  } catch {
+    return [];
+  }
+};
+
+const writePendingQueue = async (queue: PendingEdge[]): Promise<void> => {
+  await AsyncStorage.setItem(PRESENCE_PENDING_QUEUE_KEY, JSON.stringify(queue));
+};
+
+/**
+ * Append a deferred edge. Consecutive same-state edges for the same (household,
+ * user) are COALESCED (the tail's timestamp is bumped) so the log strictly
+ * alternates home/away — an arrive→leave transition that happened while
+ * backgrounded still delivers both edges, but a heartbeat-style repeat doesn't
+ * bloat the log. Bounded to MAX_PENDING_EDGES, dropping oldest on overflow.
+ */
+export const enqueuePendingEdge = async (entry: PendingEdge): Promise<void> =>
+  runSerialized(async () => {
+    const queue = await readPendingQueue();
+    const tail = queue[queue.length - 1];
+    if (
+      tail &&
+      tail.state === entry.state &&
+      tail.householdId === entry.householdId &&
+      String(tail.userId) === String(entry.userId)
+    ) {
+      tail.ts = entry.ts;
+      if (entry.name) tail.name = entry.name;
+    } else {
+      queue.push(entry);
+    }
+    while (queue.length > MAX_PENDING_EDGES) queue.shift();
+    await writePendingQueue(queue);
+  });
+
+/** Value-identity of an edge, for removal that survives a concurrent re-read. */
+const edgeKey = (e: PendingEdge): string =>
+  `${e.householdId}:${e.userId}:${e.state}:${e.ts}`;
+
+/**
+ * Flush deferred edges for the active (household, user) via the normal authed
+ * path (the token is fresh in the foreground). Oldest→newest so transitions
+ * replay in order; entries older than PRESENCE_STALE_MS are dropped (except the
+ * newest, so current truth is still asserted). Stops on the first POST failure
+ * and keeps the remainder for the next flush. Edges for other (household, user)
+ * pairs are left in place.
+ *
+ * The `inFlight` guard keeps this from double-sending with a concurrent live
+ * foreground sample. The POSTs run OUTSIDE the store's serialization lock; the
+ * queue removal at the end is done under `runSerialized` and removes only the
+ * exact edges we sent/dropped (by value identity), so a geofence crossing that
+ * enqueued a NEW edge mid-flush is preserved rather than clobbered.
+ */
+export const flushPendingQueue = async (
+  householdId: string,
+  userId: number | string,
+  name?: string,
+): Promise<void> => {
+  if (inFlight) return;
+  inFlight = true;
+  try {
+    const snapshot = await readPendingQueue();
+    if (snapshot.length === 0) return;
+    const now = Date.now();
+    const lastIdx = snapshot.length - 1;
+
+    // Edges we've fully resolved (sent or dropped-stale) → to remove from the
+    // live queue at the end. Others (not ours, or after a failure) stay.
+    const resolved = new Set<string>();
+    let stopped = false;
+    for (let i = 0; i < snapshot.length; i++) {
+      const edge = snapshot[i];
+      // Only flush the active session's edges; leave a shared phone's other
+      // user / household edges queued for when that session is active.
+      if (edge.householdId !== householdId || String(edge.userId) !== String(userId)) {
+        continue;
+      }
+      // Once a POST has failed, stop resolving anything so the remainder is
+      // preserved intact for the next flush.
+      if (stopped) continue;
+      // Drop stale entries (server TTL passed) but always keep the newest.
+      if (i !== lastIdx && now - edge.ts > PRESENCE_STALE_MS) {
+        resolved.add(edgeKey(edge));
+        continue;
+      }
+      try {
+        await reportPresence(edge.householdId, edge.state, edge.name ?? name);
+        await writeLastState(keyFor(edge.householdId, edge.userId), {
+          state: edge.state,
+          ts: Date.now(),
+        });
+        resolved.add(edgeKey(edge));
+      } catch {
+        stopped = true; // keep this and everything after it for the next flush
+      }
+    }
+    if (resolved.size > 0) {
+      // Re-read under the lock and remove only the resolved edges, so an edge
+      // enqueued concurrently (different ts) survives.
+      await runSerialized(async () => {
+        const live = await readPendingQueue();
+        await writePendingQueue(live.filter((e) => !resolved.has(edgeKey(e))));
+      });
+    }
+  } finally {
+    inFlight = false;
+  }
+};
+
+// ── Headless background report (Phase 3) ────────────────────────────────
+
+/** Decode a JWT's `exp` (seconds) without verifying the signature. */
+const decodeJwtExpSeconds = (token: string): number | null => {
+  try {
+    const payload = token.split('.')[1];
+    if (!payload) return null;
+    const b64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4);
+    const claims = JSON.parse(atob(padded));
+    return typeof claims.exp === 'number' ? claims.exp : null;
+  } catch {
+    return null;
+  }
+};
+
+const accessTokenUsable = (token: string | null): boolean => {
+  if (!token) return false;
+  const exp = decodeJwtExpSeconds(token);
+  // Can't parse → optimistically try; a 401 on the POST handles a bad token.
+  if (exp === null) return true;
+  return exp - ACCESS_EXP_SKEW_SECONDS > Date.now() / 1000;
+};
+
+/** Bare (interceptor-free) refresh — the headless context has no apiClient
+ *  wiring and authApi's baseURL is empty. Returns null on any failure (the
+ *  background NEVER forces a logout). */
+const bgRefresh = async (
+  authBaseUrl: string,
+  refreshToken: string,
+): Promise<{ access: string; refresh: string } | null> => {
+  try {
+    const res = await fetch(`${authBaseUrl}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data?.access_token) return null;
+    return { access: data.access_token, refresh: data.refresh_token ?? refreshToken };
+  } catch {
+    return null;
+  }
+};
+
+type BgPostOutcome = 'ok' | 'unauthorized' | 'error';
+
+const bgPostPresence = async (
+  commandCenterUrl: string,
+  accessToken: string,
+  householdId: string,
+  state: PresenceState,
+  name?: string,
+): Promise<BgPostOutcome> => {
+  try {
+    const body: { household_id: string; state: PresenceState; name?: string } = {
+      household_id: householdId,
+      state,
+    };
+    if (name) body.name = name;
+    const res = await fetch(`${commandCenterUrl}/api/v0/mobile/presence`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify(body),
+    });
+    if (res.ok) return 'ok';
+    if (res.status === 401 || res.status === 403) return 'unauthorized';
+    return 'error';
+  } catch {
+    return 'error';
+  }
+};
+
+/**
+ * Report presence from the HEADLESS background geofence task. There is no React
+ * tree, no apiClient interceptor, and the device is often locked. Best-effort
+ * with a deferred fallback: anything that can't report right now is enqueued and
+ * flushed on the next foreground. NEVER throws, NEVER forces a logout, NEVER
+ * clears tokens. Full design in project_mobile_presence.md (Phase 3).
+ */
+export const reportPresenceBg = async (state: PresenceState): Promise<void> => {
+  try {
+    // 1. Config — the in-memory currentConfig is EMPTY in a headless launch;
+    //    fall back to the AsyncStorage-cached copy.
+    let cfg = getServiceConfig();
+    if (!cfg.commandCenterUrl || !cfg.authBaseUrl) {
+      const cached = await loadCachedConfig();
+      if (cached) cfg = cached;
+    }
+    // 2. Identity — from AsyncStorage (self-scoped; CC binds identity to the JWT).
+    const [householdId, userRaw] = await Promise.all([
+      AsyncStorage.getItem(ACTIVE_HOUSEHOLD_KEY),
+      AsyncStorage.getItem(USER_KEY),
+    ]);
+    let userId: number | string | undefined;
+    let name: string | undefined;
+    if (userRaw) {
+      try {
+        const user = JSON.parse(userRaw);
+        userId = user?.id;
+        name = user?.username;
+      } catch {
+        /* fall through to the missing-identity guard */
+      }
+    }
+    const hasIdentity =
+      !!householdId && userId !== undefined && userId !== null && userId !== '';
+    const edge: PendingEdge = {
+      state,
+      ts: Date.now(),
+      householdId: householdId ?? '',
+      userId: userId ?? '',
+      name,
+    };
+
+    if (!cfg.commandCenterUrl || !cfg.authBaseUrl || !hasIdentity) {
+      await enqueuePendingEdge(edge);
+      return;
+    }
+
+    // 3. Tokens (adaptive: refresh is null for biometric users → access-only).
+    const tokens = await readTokenForBg();
+    let access = tokens.access;
+    const refresh = tokens.refresh;
+
+    // 4. Refresh if the access token is stale AND we have a bg-usable refresh
+    //    token (read immediately before the POST to stay inside the auth grace).
+    if (!accessTokenUsable(access) && refresh) {
+      const rotated = await bgRefresh(cfg.authBaseUrl, refresh);
+      if (rotated) {
+        access = rotated.access;
+        await persistBgRotatedTokens(rotated.access, rotated.refresh);
+      }
+    }
+
+    if (!access) {
+      await enqueuePendingEdge(edge);
+      return;
+    }
+
+    // 5. Report; on a rejected access token do ONE refresh+retry with the live
+    //    durable tail, else defer.
+    let outcome = await bgPostPresence(cfg.commandCenterUrl, access, householdId!, state, name);
+    if (outcome === 'unauthorized' && refresh) {
+      const durable = (await readDurableRefreshToken()) ?? refresh;
+      const rotated = await bgRefresh(cfg.authBaseUrl, durable);
+      if (rotated) {
+        await persistBgRotatedTokens(rotated.access, rotated.refresh);
+        outcome = await bgPostPresence(
+          cfg.commandCenterUrl,
+          rotated.access,
+          householdId!,
+          state,
+          name,
+        );
+      }
+    }
+
+    if (outcome === 'ok') {
+      await writeLastState(keyFor(householdId!, userId!), { state, ts: Date.now() });
+    } else {
+      await enqueuePendingEdge(edge);
+    }
+  } catch {
+    // A headless executor must never throw — swallow and let the next crossing
+    // or the next foreground sample reconcile.
   }
 };

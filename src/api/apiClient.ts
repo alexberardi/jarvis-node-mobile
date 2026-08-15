@@ -20,6 +20,7 @@
 import axios, { AxiosError, AxiosInstance, InternalAxiosRequestConfig } from 'axios';
 
 import authApi from './authApi';
+import { readDurableRefreshToken } from '../services/tokenStorage';
 
 // ── Token bridge (set by AuthContext) ──────────────────────────────────
 
@@ -90,13 +91,36 @@ const doRefresh = async (): Promise<string | null> => {
     await updateTokens(newAccess, newRefresh);
     return newAccess;
   } catch (err) {
-    // A 401/403 means the refresh token itself is dead → the session is over;
-    // force a clean logout so the user lands on the login screen, never on a
-    // borked node/device screen. A network/5xx error is transient — keep the
-    // user signed in and let the next attempt (or the still-valid access token)
-    // recover.
+    // A 401/403 means the refresh token we sent was rejected. Usually that means
+    // the session is over → force a clean logout. But the background geofence
+    // task can rotate the refresh chain out-of-band while the app is
+    // backgrounded/terminated, leaving our IN-MEMORY copy a stale ANCESTOR of
+    // the token now in the keychain. Replaying that ancestor 401s (the auth
+    // server's ~10s grace window is long gone on resume) yet the session is very
+    // much alive. So before logging out, re-read the durable keychain token; if
+    // it differs from what we just sent, retry the refresh once with it. Only a
+    // second 401 (or a genuinely dead session) reaches onForceLogout.
+    // A network/5xx error is transient — keep the user signed in and recover on
+    // the next attempt.
     const status = (err as AxiosError)?.response?.status;
     if (status === 401 || status === 403) {
+      const durable = await readDurableRefreshToken();
+      if (durable && durable !== refreshToken) {
+        try {
+          const retry = await authApi.post<{ access_token: string; refresh_token?: string }>(
+            '/auth/refresh',
+            { refresh_token: durable },
+          );
+          const retryAccess = retry.data.access_token;
+          const retryRefresh = retry.data.refresh_token ?? durable;
+          await updateTokens(retryAccess, retryRefresh);
+          return retryAccess;
+        } catch (retryErr) {
+          const retryStatus = (retryErr as AxiosError)?.response?.status;
+          if (retryStatus === 401 || retryStatus === 403) onForceLogout();
+          return null;
+        }
+      }
       onForceLogout();
     }
     return null;

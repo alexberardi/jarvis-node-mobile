@@ -40,6 +40,7 @@
     "expo-notifications": "~0.32.16",
     "expo-secure-store": "~15.0.0",
     "expo-status-bar": "~3.0.9",
+    "expo-task-manager": "~14.0.9",
     "expo-web-browser": "~15.0.10",
     "jarvis-crypto": "file:./modules/jarvis-crypto",
     "react": "19.1.0",

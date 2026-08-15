@@ -25,6 +25,7 @@
         "NSMicrophoneUsageDescription": "Microphone access is required to send voice commands to Jarvis.",
         "NSLocalNetworkUsageDescription": "Jarvis needs local network access to discover your self-hosted server.",
         "NSLocationWhenInUseUsageDescription": "Jarvis uses your location while the app is open to tell whether you're home, so it can respond to your presence. Your precise location stays on this device — only 'home' or 'away' is ever sent.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Jarvis checks whether you've arrived at or left home in the background so it can respond to your presence. Your precise location never leaves this device — only 'home' or 'away' is sent.",
         "NSBonjourServices": [
           "_jarvis-config._tcp"
         ],
@@ -67,7 +68,8 @@
         "android.permission.ACCESS_WIFI_STATE",
         "android.permission.USE_BIOMETRIC",
         "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.ACCESS_COARSE_LOCATION"
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION"
       ]
     },
     "web": {
@@ -90,7 +92,11 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Jarvis uses your location while the app is open to tell whether you're home. Your precise location stays on this device — only 'home' or 'away' is ever sent."
+          "locationWhenInUsePermission": "Jarvis uses your location while the app is open to tell whether you're home. Your precise location stays on this device — only 'home' or 'away' is ever sent.",
+          "locationAlwaysAndWhenInUsePermission": "Jarvis checks whether you've arrived at or left home in the background so it can respond to your presence. Your precise location never leaves this device — only 'home' or 'away' is sent.",
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": false
         }
       ],
       [
