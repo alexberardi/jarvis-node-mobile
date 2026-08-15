@@ -19,6 +19,16 @@ jest.mock('expo-secure-store', () => ({
   AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY: 'afterFirstUnlockThisDeviceOnly',
 }));
 
+// Mock expo-task-manager. The background geofence task registers via
+// TaskManager.defineTask at import time; unmocked it touches the native module
+// and throws under jest-expo. Tests that need the registered executor import it
+// directly (backgroundPresenceTask exports it) or re-mock inline.
+jest.mock('expo-task-manager', () => ({
+  defineTask: jest.fn(),
+  unregisterTaskAsync: jest.fn().mockResolvedValue(undefined),
+  isTaskRegisteredAsync: jest.fn().mockResolvedValue(false),
+}));
+
 // Mock jarvis-crypto native module.
 // IMPORTANT: keep these method names in sync with modules/jarvis-crypto/index.ts.
 // The real module exports AES-256-GCM (aesGcmEncrypt/aesGcmDecrypt) + argon2id +

@@ -8,15 +8,30 @@ import {
   isBiometricLoginEnabled,
   setBiometricLoginEnabled,
   biometricCapable,
+  readTokenForBg,
+  readDurableRefreshToken,
+  persistBgRotatedTokens,
 } from '../../src/services/tokenStorage';
 
 const FLAG = '@jarvis/biometric_login_enabled';
+const BG = '@jarvis/bg_presence_enabled';
 const ACCESS = 'jarvis_access_token';
 const REFRESH = 'jarvis_refresh_token';
+const WHEN_UNLOCKED = SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY;
+const AFTER_FIRST_UNLOCK = SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY;
 
 const setFlag = (enabled: boolean) =>
   (AsyncStorage.getItem as jest.Mock).mockImplementation((key: string) =>
     Promise.resolve(key === FLAG ? (enabled ? 'true' : 'false') : null),
+  );
+
+// Set both opt-ins (biometric login + background presence) for the adaptive
+// keychain-policy tests.
+const setFlags = ({ bio = false, bg = false }: { bio?: boolean; bg?: boolean }) =>
+  (AsyncStorage.getItem as jest.Mock).mockImplementation((key: string) =>
+    Promise.resolve(
+      key === FLAG ? (bio ? 'true' : 'false') : key === BG ? (bg ? 'true' : 'false') : null,
+    ),
   );
 
 describe('tokenStorage', () => {
@@ -187,6 +202,126 @@ describe('tokenStorage', () => {
       await clearTokens();
       expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith(ACCESS);
       expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith(REFRESH);
+    });
+  });
+
+  // ── Adaptive background-presence keychain policy (Phase 3) ───────────────
+  describe('adaptive accessibility policy (bg-presence × biometric)', () => {
+    it('bg ON + biometric OFF → BOTH tokens background-readable (AFTER_FIRST_UNLOCK), ungated', async () => {
+      setFlags({ bg: true, bio: false });
+
+      await setTokens('a1', 'r1');
+
+      expect(SecureStore.setItemAsync).toHaveBeenCalledWith(
+        ACCESS,
+        'a1',
+        expect.objectContaining({ keychainAccessible: AFTER_FIRST_UNLOCK }),
+      );
+      expect(SecureStore.setItemAsync).toHaveBeenCalledWith(
+        REFRESH,
+        'r1',
+        expect.objectContaining({ keychainAccessible: AFTER_FIRST_UNLOCK }),
+      );
+      expect(SecureStore.setItemAsync).toHaveBeenCalledWith(
+        REFRESH,
+        'r1',
+        expect.not.objectContaining({ requireAuthentication: true }),
+      );
+    });
+
+    it('bg ON + biometric ON → biometric WINS the refresh token (stays gated + WHEN_UNLOCKED)', async () => {
+      setFlags({ bg: true, bio: true });
+
+      await setTokens('a1', 'r1');
+
+      // Refresh stays gated behind biometrics regardless of the bg opt-in.
+      expect(SecureStore.setItemAsync).toHaveBeenCalledWith(
+        REFRESH,
+        'r1',
+        expect.objectContaining({ requireAuthentication: true, keychainAccessible: WHEN_UNLOCKED }),
+      );
+      // Access may be background-readable (it's never a sensitive credential).
+      expect(SecureStore.setItemAsync).toHaveBeenCalledWith(
+        ACCESS,
+        'a1',
+        expect.objectContaining({ keychainAccessible: AFTER_FIRST_UNLOCK }),
+      );
+    });
+
+    it('bg OFF → both tokens revert to WHEN_UNLOCKED (not background-readable)', async () => {
+      setFlags({ bg: false, bio: false });
+
+      await setTokens('a1', 'r1');
+
+      expect(SecureStore.setItemAsync).toHaveBeenCalledWith(
+        ACCESS,
+        'a1',
+        expect.objectContaining({ keychainAccessible: WHEN_UNLOCKED }),
+      );
+      expect(SecureStore.setItemAsync).toHaveBeenCalledWith(
+        REFRESH,
+        'r1',
+        expect.objectContaining({ keychainAccessible: WHEN_UNLOCKED }),
+      );
+    });
+
+    it('readTokenForBg (biometric OFF) returns both tokens, prompt-free', async () => {
+      setFlags({ bg: true, bio: false });
+      (SecureStore.getItemAsync as jest.Mock).mockImplementation((key: string) =>
+        Promise.resolve(key === ACCESS ? 'a1' : key === REFRESH ? 'r1' : null),
+      );
+
+      const res = await readTokenForBg();
+
+      expect(res).toEqual({ access: 'a1', refresh: 'r1' });
+      // Never reads with a biometric gate (would prompt — impossible in bg).
+      expect(SecureStore.getItemAsync).not.toHaveBeenCalledWith(
+        REFRESH,
+        expect.objectContaining({ requireAuthentication: true }),
+      );
+    });
+
+    it('readTokenForBg (biometric ON) refuses the refresh token (access-only best-effort)', async () => {
+      setFlags({ bg: true, bio: true });
+      (SecureStore.getItemAsync as jest.Mock).mockImplementation((key: string) =>
+        Promise.resolve(key === ACCESS ? 'a1' : key === REFRESH ? 'r1' : null),
+      );
+
+      const res = await readTokenForBg();
+
+      expect(res.access).toBe('a1');
+      expect(res.refresh).toBeNull();
+      // Must not even attempt the (gated) refresh read.
+      expect(SecureStore.getItemAsync).not.toHaveBeenCalledWith(REFRESH, expect.anything());
+    });
+
+    it('readDurableRefreshToken returns the token when biometric OFF, null when ON', async () => {
+      (SecureStore.getItemAsync as jest.Mock).mockImplementation((key: string) =>
+        Promise.resolve(key === REFRESH ? 'r1' : null),
+      );
+
+      setFlags({ bio: false });
+      expect(await readDurableRefreshToken()).toBe('r1');
+
+      setFlags({ bio: true });
+      expect(await readDurableRefreshToken()).toBeNull();
+    });
+
+    it('persistBgRotatedTokens forces AFTER_FIRST_UNLOCK on both (delete-before-create)', async () => {
+      await persistBgRotatedTokens('a2', 'r2');
+
+      expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith(ACCESS);
+      expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith(REFRESH);
+      expect(SecureStore.setItemAsync).toHaveBeenCalledWith(
+        ACCESS,
+        'a2',
+        expect.objectContaining({ keychainAccessible: AFTER_FIRST_UNLOCK }),
+      );
+      expect(SecureStore.setItemAsync).toHaveBeenCalledWith(
+        REFRESH,
+        'r2',
+        expect.objectContaining({ keychainAccessible: AFTER_FIRST_UNLOCK }),
+      );
     });
   });
 

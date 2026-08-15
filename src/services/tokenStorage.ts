@@ -45,6 +45,7 @@ import {
   ACCESS_TOKEN_KEY as LEGACY_ACCESS_KEY,
   REFRESH_TOKEN_KEY as LEGACY_REFRESH_KEY,
   BIOMETRIC_LOGIN_ENABLED_KEY,
+  BG_PRESENCE_ENABLED_KEY,
 } from '../config/storageKeys';
 
 const ACCESS_TOKEN_SECURE_KEY = 'jarvis_access_token';
@@ -63,6 +64,48 @@ const biometricOpts = (): SecureStore.SecureStoreOptions => ({
   requireAuthentication: true,
   authenticationPrompt: 'Unlock Jarvis',
 });
+
+// Background-readable options: readable/writable while the device is LOCKED
+// (after the first unlock since boot), so the headless geofence task can report
+// presence and rotate tokens from the background. Still THIS_DEVICE_ONLY (never
+// in backups) and never gated. Applied to BOTH tokens only when the user has
+// opted into background presence AND biometric login is OFF (biometric wins the
+// refresh token below).
+const BG_PLAIN_OPTS: SecureStore.SecureStoreOptions = {
+  keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY,
+};
+
+/** Whether background presence is on — drives the at-rest keychain policy. */
+async function backgroundPresenceEnabled(): Promise<boolean> {
+  try {
+    return (await AsyncStorage.getItem(BG_PRESENCE_ENABLED_KEY)) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Decide the at-rest keychain policy for the two token items from the two
+ * opt-ins, so every write goes through ONE decision (no path can silently
+ * downgrade a background user's access item to locked-unreadable, and no path
+ * can strand a background token behind a WHEN_UNLOCKED gate). Biometric login
+ * ALWAYS wins the refresh token — it stays gated, and the background task then
+ * gets access-token-only best-effort. Background presence (biometric off)
+ * relaxes BOTH items to AFTER_FIRST_UNLOCK so the headless task can read/write
+ * them while the phone is locked.
+ */
+async function computeAccessibility(): Promise<{
+  access: SecureStore.SecureStoreOptions;
+  refresh: SecureStore.SecureStoreOptions;
+}> {
+  const [bioOn, bgOn] = await Promise.all([
+    refreshGateRequested(),
+    backgroundPresenceEnabled(),
+  ]);
+  const access = bgOn ? BG_PLAIN_OPTS : PLAIN_OPTS;
+  const refresh = bioOn ? biometricOpts() : bgOn ? BG_PLAIN_OPTS : PLAIN_OPTS;
+  return { access, refresh };
+}
 
 /**
  * Whether this device can store an item with `requireAuthentication` — i.e. it
@@ -106,16 +149,19 @@ async function refreshGateRequested(): Promise<boolean> {
   return isBiometricLoginEnabled();
 }
 
-async function writeRefreshToken(refreshToken: string, gated: boolean): Promise<void> {
+async function writeRefreshToken(
+  refreshToken: string,
+  opts: SecureStore.SecureStoreOptions,
+): Promise<void> {
   // ALWAYS delete first so the write is a CREATE, not an UPDATE. On iOS,
   // updating an existing item prompts for biometrics — and updating a GATED item
   // would prompt even when the user is DISABLING biometrics. CREATE never
   // prompts, so both enable and disable stay prompt-free on the write; the only
   // prompt is the READ at the next cold boot.
   await SecureStore.deleteItemAsync(REFRESH_TOKEN_SECURE_KEY).catch(() => {});
-  if (gated) {
+  if (opts.requireAuthentication) {
     try {
-      await SecureStore.setItemAsync(REFRESH_TOKEN_SECURE_KEY, refreshToken, biometricOpts());
+      await SecureStore.setItemAsync(REFRESH_TOKEN_SECURE_KEY, refreshToken, opts);
       return;
     } catch (error) {
       // The device genuinely cannot store a gated item right now (no enrolled
@@ -128,23 +174,45 @@ async function writeRefreshToken(refreshToken: string, gated: boolean): Promise<
         '[tokenStorage] gated refresh write failed; storing ungated:',
         error instanceof Error ? error.message : error,
       );
+      await SecureStore.setItemAsync(REFRESH_TOKEN_SECURE_KEY, refreshToken, PLAIN_OPTS);
+      return;
     }
   }
-  await SecureStore.setItemAsync(REFRESH_TOKEN_SECURE_KEY, refreshToken, PLAIN_OPTS);
+  await SecureStore.setItemAsync(REFRESH_TOKEN_SECURE_KEY, refreshToken, opts);
 }
 
-/** Persist both tokens to the keychain (refresh gated iff biometric login is on). */
+/**
+ * Persist the access token as a CREATE (delete-before-set) so a change of
+ * accessibility class — e.g. toggling background presence flips it between
+ * WHEN_UNLOCKED and AFTER_FIRST_UNLOCK — is a clean re-key rather than an
+ * in-place update that could leave the stale accessibility attribute in place.
+ * The access token is never gated, so this never prompts.
+ */
+async function writeAccessToken(
+  accessToken: string,
+  opts: SecureStore.SecureStoreOptions,
+): Promise<void> {
+  await SecureStore.deleteItemAsync(ACCESS_TOKEN_SECURE_KEY).catch(() => {});
+  await SecureStore.setItemAsync(ACCESS_TOKEN_SECURE_KEY, accessToken, opts);
+}
+
+/**
+ * Persist both tokens to the keychain under the current policy
+ * (`computeAccessibility`): refresh gated iff biometric login is on; both
+ * background-readable iff background presence is on (biometric off).
+ */
 export async function setTokens(accessToken: string, refreshToken: string): Promise<void> {
-  const gated = await refreshGateRequested();
+  const { access, refresh } = await computeAccessibility();
   await Promise.all([
-    SecureStore.setItemAsync(ACCESS_TOKEN_SECURE_KEY, accessToken, PLAIN_OPTS),
-    writeRefreshToken(refreshToken, gated),
+    writeAccessToken(accessToken, access),
+    writeRefreshToken(refreshToken, refresh),
   ]);
 }
 
 /** Persist only the access token (e.g. after switch-household). Never gated. */
 export async function setAccessToken(accessToken: string): Promise<void> {
-  await SecureStore.setItemAsync(ACCESS_TOKEN_SECURE_KEY, accessToken, PLAIN_OPTS);
+  const { access } = await computeAccessibility();
+  await writeAccessToken(accessToken, access);
 }
 
 export interface GetTokensResult {
@@ -220,4 +288,74 @@ export async function clearTokens(): Promise<void> {
     AsyncStorage.removeItem(LEGACY_ACCESS_KEY),
     AsyncStorage.removeItem(LEGACY_REFRESH_KEY),
   ]);
+}
+
+// ── Background-task token access (Phase 3) ──────────────────────────────
+// The headless geofence task runs with no React tree and often while the
+// device is locked. These helpers give it prompt-free, best-effort token
+// access and let the foreground survive a token the background rotated
+// out-of-band. See services/backgroundPresenceTask.ts + api/apiClient.ts.
+
+/**
+ * Prompt-free token read for the headless background task. The access token's
+ * accessibility is a WRITE-time attribute — a locked-readable AFTER_FIRST_UNLOCK
+ * item reads fine here — so we read with plain options and never pass
+ * `requireAuthentication`. The refresh token is read ONLY when biometric login
+ * is OFF (a gated item would trip a biometric prompt the background can't
+ * satisfy → biometric users get access-token-only best-effort). Returns nulls
+ * on a locked-unreadable / missing item rather than throwing.
+ */
+export async function readTokenForBg(): Promise<{ access: string | null; refresh: string | null }> {
+  const bioOn = await refreshGateRequested();
+  let access: string | null = null;
+  try {
+    access = await SecureStore.getItemAsync(ACCESS_TOKEN_SECURE_KEY, PLAIN_OPTS);
+  } catch {
+    access = null;
+  }
+  let refresh: string | null = null;
+  if (!bioOn) {
+    try {
+      refresh = await SecureStore.getItemAsync(REFRESH_TOKEN_SECURE_KEY, PLAIN_OPTS);
+    } catch {
+      refresh = null;
+    }
+  }
+  return { access, refresh };
+}
+
+/**
+ * Persist a token pair rotated by the BACKGROUND task. Forces the
+ * background-readable (AFTER_FIRST_UNLOCK, ungated) policy directly rather than
+ * recomputing it — this path is only ever reached on the non-biometric
+ * background-refresh flow, and forcing the class keeps it deterministic in the
+ * headless context (where a mis-read opt-in must not gate the token).
+ */
+export async function persistBgRotatedTokens(
+  accessToken: string,
+  refreshToken: string,
+): Promise<void> {
+  await Promise.all([
+    writeAccessToken(accessToken, BG_PLAIN_OPTS),
+    writeRefreshToken(refreshToken, BG_PLAIN_OPTS),
+  ]);
+}
+
+/**
+ * Read the durable refresh token WITHOUT a biometric prompt, for the foreground
+ * `doRefresh` safeguard: on a 401 from /auth/refresh the in-memory token we sent
+ * may be a stale ANCESTOR of what the background task rotated into the keychain
+ * (the ~10s auth grace window has long passed on resume). Re-reading the durable
+ * tail lets the foreground retry with the live token instead of force-logging
+ * out. Returns null when biometric login is on — those users have no background
+ * rotation (so the safeguard doesn't apply), and we must not prompt here.
+ */
+export async function readDurableRefreshToken(): Promise<string | null> {
+  const bioOn = await refreshGateRequested();
+  if (bioOn) return null;
+  try {
+    return await SecureStore.getItemAsync(REFRESH_TOKEN_SECURE_KEY, PLAIN_OPTS);
+  } catch {
+    return null;
+  }
 }

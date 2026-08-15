@@ -55,4 +55,37 @@ export const BIOMETRIC_LOGIN_ENABLED_KEY = '@jarvis/biometric_login_enabled';
  */
 export const MUST_CHANGE_PASSWORD_KEY = '@jarvis/must_change_password';
 
+/**
+ * On-device home geofence for presence detection. Serialized as
+ * `{ latitude, longitude, radiusMeters, enabled }`. The PRECISE coordinate is
+ * deliberately stored ONLY here (never sent to the server) — the phone computes
+ * home/away locally and reports just that binary state to command-center. See
+ * services/presenceService.ts.
+ */
+export const HOME_GEOFENCE_KEY = '@jarvis/home_geofence';
+/**
+ * The last presence state reported to the server, keyed by household. Serialized
+ * as `{ [householdId]: 'home' | 'away' }`. Lets presenceService report only on a
+ * *change* of state instead of on every foreground/sample, so a phone sitting at
+ * home doesn't re-POST on every app resume.
+ */
+export const PRESENCE_LAST_STATE_KEY = '@jarvis/presence_last_state';
+/**
+ * Background presence opt-in (Phase 3): 'true' when the user has granted
+ * Always-location and turned on true OS geofencing (enter/exit reported even
+ * when the app is backgrounded/terminated). DISTINCT from the foreground
+ * `HomeGeofence.enabled` flag — a foreground-only presence user must NOT have
+ * their keychain tokens downgraded to background-readable. tokenStorage reads
+ * this key to decide keychain accessibility (see `computeAccessibility`), and
+ * backgroundPresenceTask gates start/re-arm on it.
+ */
+export const BG_PRESENCE_ENABLED_KEY = '@jarvis/bg_presence_enabled';
+/**
+ * Deferred presence edges (Phase 3). An ordered, coalesced log of
+ * `{ state, ts, householdId, userId, name? }` enqueued when the background
+ * geofence task can't report (no usable token while locked, offline). Flushed
+ * on the next foreground via the normal authed path. Bounded + stale-dropped.
+ */
+export const PRESENCE_PENDING_QUEUE_KEY = '@jarvis/presence_pending_queue';
+
 // Routines are server-owned (command-center) — no local routine storage keys.

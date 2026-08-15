@@ -688,6 +688,65 @@ describe('AuthContext', () => {
     });
   });
 
+  describe('background presence (Phase 3)', () => {
+    const BG_FLAG = '@jarvis/bg_presence_enabled';
+    const AFTER_FIRST_UNLOCK = 'afterFirstUnlockThisDeviceOnly';
+    const WHEN_UNLOCKED = 'whenUnlockedThisDeviceOnly';
+
+    const authed = () => {
+      setSecureTokens('a1', 'r1');
+      (AsyncStorage.multiGet as jest.Mock).mockResolvedValue([
+        ['@jarvis/user', JSON.stringify({ id: 1, email: 'u@e.com' })],
+        ['@jarvis/active_household_id', null],
+      ]);
+      (authApi.get as jest.Mock).mockResolvedValue({ data: [] });
+    };
+
+    it('setBackgroundPresence(true) persists the opt-in AND re-keys tokens background-readable', async () => {
+      authed();
+      // Reflect the bg opt-in on read so setTokens' accessibility decision sees it.
+      (AsyncStorage.getItem as jest.Mock).mockImplementation((key: string) =>
+        Promise.resolve(key === BG_FLAG ? 'true' : null),
+      );
+
+      const { result } = renderHook(() => useAuth(), { wrapper });
+      await waitFor(() => expect(result.current.state.isAuthenticated).toBe(true));
+
+      (SecureStore.setItemAsync as jest.Mock).mockClear();
+      await act(async () => {
+        await result.current.setBackgroundPresence(true);
+      });
+
+      expect(AsyncStorage.setItem).toHaveBeenCalledWith(BG_FLAG, 'true');
+      // The core Phase-3 promise: the headless geofence task must be able to
+      // read/rotate the refresh token while the phone is LOCKED.
+      expect(SecureStore.setItemAsync).toHaveBeenCalledWith(
+        'jarvis_refresh_token',
+        'r1',
+        expect.objectContaining({ keychainAccessible: AFTER_FIRST_UNLOCK }),
+      );
+    });
+
+    it('setBackgroundPresence(false) persists off AND re-keys tokens back to WHEN_UNLOCKED', async () => {
+      authed(); // getItem defaults to null → bg off → WHEN_UNLOCKED policy
+
+      const { result } = renderHook(() => useAuth(), { wrapper });
+      await waitFor(() => expect(result.current.state.isAuthenticated).toBe(true));
+
+      (SecureStore.setItemAsync as jest.Mock).mockClear();
+      await act(async () => {
+        await result.current.setBackgroundPresence(false);
+      });
+
+      expect(AsyncStorage.setItem).toHaveBeenCalledWith(BG_FLAG, 'false');
+      expect(SecureStore.setItemAsync).toHaveBeenCalledWith(
+        'jarvis_refresh_token',
+        'r1',
+        expect.objectContaining({ keychainAccessible: WHEN_UNLOCKED }),
+      );
+    });
+  });
+
   describe('setActiveHousehold', () => {
     it('should update active household in state and storage', async () => {
       const { result } = renderHook(() => useAuth(), { wrapper });

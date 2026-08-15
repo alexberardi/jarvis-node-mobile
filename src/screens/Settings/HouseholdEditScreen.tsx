@@ -1,6 +1,7 @@
+import Slider from '@react-native-community/slider';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Linking, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import {
   ActivityIndicator,
   Appbar,
@@ -27,6 +28,24 @@ import {
 } from '../../api/householdSettingsApi';
 import { useAuth } from '../../auth/AuthContext';
 import type { RootStackParamList } from '../../navigation/types';
+import {
+  ensureBackgroundPermission,
+  startHomeGeofence,
+  stopHomeGeofence,
+} from '../../services/backgroundPresenceTask';
+import {
+  captureCurrentLocation,
+  clearHomeGeofence,
+  clearLastPresenceState,
+  getHomeGeofence,
+  isBackgroundPresenceEnabled,
+  reportIfChanged,
+  setHomeGeofence,
+  DEFAULT_RADIUS_METERS,
+  MAX_RADIUS_METERS,
+  MIN_RADIUS_METERS,
+  type HomeGeofence,
+} from '../../services/presenceService';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'HouseholdEdit'>;
 
@@ -57,7 +76,7 @@ const ROLE_LABELS: Record<string, string> = {
 const HouseholdEditScreen = ({ navigation, route }: Props) => {
   const { householdId, householdName } = route.params;
   const theme = useTheme();
-  const { state: authState, fetchHouseholds } = useAuth();
+  const { state: authState, fetchHouseholds, setBackgroundPresence } = useAuth();
 
   // Household name
   const [name, setName] = useState(householdName);
@@ -78,6 +97,20 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
   const [personaPresets, setPersonaPresets] = useState<PersonaPreset[]>([]);
   const [personaDefaultId, setPersonaDefaultId] = useState<string | null>(null);
   const [personaMaxChars, setPersonaMaxChars] = useState(2000);
+
+  // Home presence (device-local geofence — the precise coordinate never leaves
+  // this phone; only home/away is ever reported). Opt-in: `enabled` defaults to
+  // false and capturing a home does NOT auto-enable it — the user flips the
+  // "Presence detection" switch themselves.
+  const [homeGeo, setHomeGeo] = useState<HomeGeofence | null>(null);
+  const [presenceLoading, setPresenceLoading] = useState(true);
+  const [capturingHome, setCapturingHome] = useState(false);
+  const [radius, setRadius] = useState(DEFAULT_RADIUS_METERS);
+  // Background presence (Phase 3): true OS geofencing that fires even when the
+  // app is closed. Separate opt-in from foreground "Presence detection" — it
+  // needs Always-location permission and downgrades keychain accessibility.
+  const [bgEnabled, setBgEnabled] = useState(false);
+  const [bgBusy, setBgBusy] = useState(false);
 
   // Members
   const [members, setMembers] = useState<Member[]>([]);
@@ -168,6 +201,225 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
       cancelled = true;
     };
   }, [householdId]);
+
+  // Load the device-local home geofence (not household-scoped — it's per-phone)
+  // and the background-presence opt-in.
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([getHomeGeofence(), isBackgroundPresenceEnabled()])
+      .then(([g, bg]) => {
+        if (cancelled) return;
+        setHomeGeo(g);
+        if (g) setRadius(g.radiusMeters);
+        setBgEnabled(bg);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setPresenceLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Fire an immediate presence sample so enabling (or re-pinning home while
+  // enabled) reports right away, instead of waiting for the next app foreground.
+  // Reports against the ACTIVE household (what usePresence uses); best-effort.
+  const reportPresenceNow = useCallback(() => {
+    const activeHh = authState.activeHouseholdId;
+    const uid = authState.user?.id;
+    if (!activeHh || uid === undefined) return;
+    reportIfChanged(activeHh, uid, authState.user?.username).catch(() => {});
+  }, [authState.activeHouseholdId, authState.user?.id, authState.user?.username]);
+
+  // Tear background presence down consistently from every path (explicit
+  // disable, rollback on a failed arm, foreground-presence-off, remove-home,
+  // and a failed re-arm). Order matters: flip the UI switch OFF *first* so it
+  // stays honest even if the token re-key or geofence stop throws — otherwise a
+  // rejected SecureStore/AsyncStorage write would strand the switch "on" with
+  // nothing monitoring. stopHomeGeofence never throws (self-caught); the token
+  // re-key is best-effort (state reloads from storage on relaunch).
+  const teardownBackgroundPresence = useCallback(async () => {
+    setBgEnabled(false);
+    await stopHomeGeofence();
+    try {
+      await setBackgroundPresence(false);
+    } catch {
+      /* best-effort — the opt-in flag reloads from storage on next launch */
+    }
+  }, [setBackgroundPresence]);
+
+  // Capture (or update) the home coordinate from the phone's current position.
+  // Prompts for location permission. Does NOT change the enabled flag — setting
+  // a home and turning presence ON are deliberately separate, so nobody is
+  // opted in just by pinning their home.
+  const handleUseCurrentLocation = useCallback(async () => {
+    setCapturingHome(true);
+    try {
+      const coord = await captureCurrentLocation();
+      if (!coord) {
+        Alert.alert(
+          'Location permission needed',
+          'Allow location access while using the app to set your home. You can grant it in your phone\'s Settings.',
+        );
+        return;
+      }
+      const next: HomeGeofence = {
+        latitude: coord.latitude,
+        longitude: coord.longitude,
+        radiusMeters: radius,
+        enabled: homeGeo?.enabled ?? false,
+      };
+      await setHomeGeofence(next);
+      setHomeGeo(next);
+      // If presence is already on, a new/updated home may flip the state — sample now.
+      if (next.enabled) reportPresenceNow();
+      // Re-arm the OS geofence around the new coordinate if background is on. If
+      // the re-arm didn't take (e.g. Always permission was revoked meanwhile),
+      // tear background down so the switch doesn't keep monitoring the OLD home.
+      if (bgEnabled) {
+        const res = await startHomeGeofence(next);
+        if (res.status !== 'started') {
+          await teardownBackgroundPresence();
+          Alert.alert('Background presence off', 'Location access changed, so background detection was turned off. Turn it back on to re-enable.');
+        }
+      }
+    } catch {
+      Alert.alert('Error', 'Could not read your current location. Try again in a moment.');
+    } finally {
+      setCapturingHome(false);
+    }
+  }, [radius, homeGeo, reportPresenceNow, bgEnabled, teardownBackgroundPresence]);
+
+  // The master opt-in. Only meaningful once a home is set (the switch is
+  // disabled otherwise). Optimistic; reverts on failure.
+  const handleTogglePresence = useCallback(async (next: boolean) => {
+    if (!homeGeo) return;
+    const updated: HomeGeofence = { ...homeGeo, enabled: next };
+    setHomeGeo(updated);
+    try {
+      await setHomeGeofence(updated);
+      if (next) {
+        // Report immediately on opt-in rather than waiting for the next foreground.
+        reportPresenceNow();
+      } else {
+        // Turning it off clears the remembered state so a later re-enable reports
+        // a fresh edge instead of being masked by a stale "home".
+        await clearLastPresenceState();
+        // Foreground presence is the prerequisite for background presence, so
+        // turning it off also tears background presence down.
+        if (bgEnabled) await teardownBackgroundPresence();
+      }
+    } catch {
+      setHomeGeo(homeGeo);
+      Alert.alert('Error', 'Could not update presence detection.');
+    }
+  }, [homeGeo, reportPresenceNow, bgEnabled, teardownBackgroundPresence]);
+
+  // Background presence opt-in. Only offered once foreground presence is on and
+  // a home is set (the switch is hidden/disabled otherwise). Enabling walks the
+  // two-step Always-location escalation, re-keys tokens for background access,
+  // and arms the OS geofence; disabling stops it and restores accessibility.
+  const handleToggleBgPresence = useCallback(async (next: boolean) => {
+    if (!homeGeo) return;
+    setBgBusy(true);
+    try {
+      if (next) {
+        const granted = await ensureBackgroundPermission();
+        if (!granted) {
+          // The OS won't let the app force the "Always" prompt — point the user
+          // at Settings. Leave the toggle off.
+          Alert.alert(
+            'Allow location “Always”',
+            'Background presence needs location access set to “Always” so Jarvis can tell when you come and go while the app is closed. Grant it in Settings, then turn this on again.',
+            [
+              { text: 'Not now', style: 'cancel' },
+              { text: 'Open Settings', onPress: () => { Linking.openSettings().catch(() => {}); } },
+            ],
+          );
+          return;
+        }
+        // Persist the opt-in + re-key tokens BEFORE arming, so the headless task
+        // can read/rotate them while locked.
+        await setBackgroundPresence(true);
+        setBgEnabled(true);
+        let armed = false;
+        try {
+          const res = await startHomeGeofence(homeGeo);
+          armed = res.status === 'started';
+        } catch {
+          armed = false;
+        }
+        if (!armed) {
+          // The OS geofence didn't actually arm — roll back so we never leave
+          // the switch "on" with tokens downgraded to background-readable but
+          // nothing monitoring. Mirrors the optimistic-revert used by the other
+          // toggles on this screen.
+          await teardownBackgroundPresence();
+          Alert.alert('Error', 'Could not start background presence. Please try again.');
+          return;
+        }
+        // A fresh sample now so the current state is asserted immediately.
+        reportPresenceNow();
+      } else {
+        await teardownBackgroundPresence();
+      }
+    } catch {
+      Alert.alert('Error', 'Could not update background presence.');
+    } finally {
+      setBgBusy(false);
+    }
+  }, [homeGeo, reportPresenceNow, teardownBackgroundPresence]);
+
+  // Persist the radius when the slider settles (not on every tick).
+  const handleRadiusComplete = useCallback(async (value: number) => {
+    const r = Math.round(value);
+    setRadius(r);
+    if (!homeGeo) return;
+    const updated: HomeGeofence = { ...homeGeo, radiusMeters: r };
+    setHomeGeo(updated);
+    try {
+      await setHomeGeofence(updated);
+      // Re-arm the OS geofence with the new radius if background is on. If the
+      // re-arm didn't take, tear background down so we don't keep monitoring the
+      // OLD radius while the switch reads "on".
+      if (bgEnabled) {
+        const res = await startHomeGeofence(updated);
+        if (res.status !== 'started') await teardownBackgroundPresence();
+      }
+    } catch {
+      /* best-effort; the next save will reconcile */
+    }
+  }, [homeGeo, bgEnabled, teardownBackgroundPresence]);
+
+  // Delete the on-device home + stop reporting.
+  const handleRemoveHome = useCallback(() => {
+    Alert.alert(
+      'Remove home location',
+      'Turn off presence detection and delete the home location stored on this phone?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            // Reset UI state in a finally so a rejected storage/keychain write
+            // can't strand the card showing a home that's already been wiped.
+            try {
+              if (bgEnabled) await teardownBackgroundPresence();
+              await clearHomeGeofence();
+              await clearLastPresenceState();
+            } catch {
+              /* best-effort; state reloads from storage on relaunch */
+            } finally {
+              setHomeGeo(null);
+              setRadius(DEFAULT_RADIUS_METERS);
+            }
+          },
+        },
+      ],
+    );
+  }, [bgEnabled, teardownBackgroundPresence]);
 
   // Toggle web search (optimistic; revert on failure)
   const handleToggleWebSearch = useCallback(async (next: boolean) => {
@@ -552,6 +804,124 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
               <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 8 }}>
                 Only a household admin can change this.
               </Text>
+            )}
+          </Card.Content>
+        </Card>
+
+        {/* Home Presence (device-local, opt-in) */}
+        <Card style={styles.card}>
+          <Card.Content>
+            <Text variant="titleMedium" style={styles.sectionTitle}>Home Presence</Text>
+            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 12 }}>
+              Let Jarvis know when you're home so it can respond to your presence.
+              Your precise location is stored only on this phone — Jarvis only ever
+              learns whether you're “home” or “away”. It's off until you turn it on.
+            </Text>
+            {presenceLoading ? (
+              <ActivityIndicator size="small" />
+            ) : (
+              <>
+                {/* The master opt-in switch. Disabled until a home is set so it
+                    can never be turned on without a location to check against. */}
+                <View style={styles.toggleRow}>
+                  <View style={{ flex: 1, paddingRight: 12 }}>
+                    <Text variant="bodyMedium">Presence detection</Text>
+                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 2 }}>
+                      {!homeGeo
+                        ? 'Set your home location below to enable this.'
+                        : homeGeo.enabled
+                          ? 'On — checked when you open the app.'
+                          : 'Off — your location is not being used.'}
+                    </Text>
+                  </View>
+                  <Switch
+                    testID="presence-enabled-toggle"
+                    value={!!homeGeo?.enabled}
+                    onValueChange={handleTogglePresence}
+                    disabled={!homeGeo}
+                  />
+                </View>
+
+                {/* Background (Always) opt-in — offered only once foreground
+                    presence is on. Detects home/away even when the app is
+                    closed, using "Always" location. */}
+                {homeGeo?.enabled && (
+                  <View style={[styles.toggleRow, { marginTop: 12 }]}>
+                    <View style={{ flex: 1, paddingRight: 12 }}>
+                      <Text variant="bodyMedium">Detect in the background</Text>
+                      <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 2 }}>
+                        {bgEnabled
+                          ? 'On — detected even when the app is closed (uses “Always” location).'
+                          : 'Off — only checked while the app is open. Needs “Always” location.'}
+                      </Text>
+                    </View>
+                    <Switch
+                      testID="presence-background-toggle"
+                      value={bgEnabled}
+                      onValueChange={handleToggleBgPresence}
+                      disabled={bgBusy}
+                    />
+                  </View>
+                )}
+
+                {/* Home location capture + radius */}
+                <View style={{ marginTop: 16 }}>
+                  <Text variant="bodyMedium" style={{ marginBottom: 4 }}>Home location</Text>
+                  <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 8 }}>
+                    {homeGeo
+                      ? 'Saved on this phone. Stand at home and update it if it drifts.'
+                      : 'Stand at home and tap below to save it on this phone.'}
+                  </Text>
+                  <View style={styles.inputRow}>
+                    <Button
+                      testID={homeGeo ? 'presence-update-location' : 'presence-set-location'}
+                      mode="contained-tonal"
+                      icon="crosshairs-gps"
+                      onPress={handleUseCurrentLocation}
+                      loading={capturingHome}
+                      disabled={capturingHome}
+                      compact
+                    >
+                      {homeGeo ? 'Update to current location' : 'Use my current location'}
+                    </Button>
+                    {homeGeo && (
+                      <Button
+                        testID="presence-remove"
+                        mode="text"
+                        textColor={theme.colors.error}
+                        onPress={handleRemoveHome}
+                        style={{ marginLeft: 8 }}
+                        compact
+                      >
+                        Remove
+                      </Button>
+                    )}
+                  </View>
+                </View>
+
+                {homeGeo && (
+                  <View style={{ marginTop: 16 }}>
+                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                      Home radius: {radius} m
+                    </Text>
+                    <Slider
+                      testID="presence-radius-slider"
+                      style={{ marginTop: 4 }}
+                      minimumValue={MIN_RADIUS_METERS}
+                      maximumValue={MAX_RADIUS_METERS}
+                      step={25}
+                      value={radius}
+                      onValueChange={(v) => setRadius(Math.round(v))}
+                      onSlidingComplete={handleRadiusComplete}
+                      minimumTrackTintColor={theme.colors.primary}
+                    />
+                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 2 }}>
+                      How close you must be to count as home. A wider radius is
+                      more forgiving of GPS drift.
+                    </Text>
+                  </View>
+                )}
+              </>
             )}
           </Card.Content>
         </Card>

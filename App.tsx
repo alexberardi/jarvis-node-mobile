@@ -17,6 +17,7 @@ import { ConfigProvider } from './src/contexts/ConfigContext';
 import { ConnectionProvider } from './src/contexts/ConnectionContext';
 import { PendingNodeProvider } from './src/contexts/PendingNodeContext';
 import { ToolsProvider } from './src/contexts/ToolsContext';
+import { usePresence } from './src/hooks/usePresence';
 import { usePushNotifications } from './src/hooks/usePushNotifications';
 import {
   parseQuickOpenUrl,
@@ -93,6 +94,16 @@ const PushNotificationManager: React.FC<{ children: React.ReactNode }> = ({ chil
 };
 
 /**
+ * Drives foreground presence reporting (phone → Signal Bus). Lives inside
+ * AuthProvider so usePresence can observe auth state. Renders nothing; all the
+ * gating is in presenceService (off until the user sets a home + enables it).
+ */
+const PresenceManager: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  usePresence();
+  return <>{children}</>;
+};
+
+/**
  * Routes quick-open deep links (com.jarvis.app://stt | ://chat) to the chat
  * screen. These back every iOS instant-trigger surface (Action Button,
  * Control Center, Lock Screen, Back Tap, Shortcuts).
@@ -163,18 +174,20 @@ const AppContent = () => {
               <PendingNodeProvider>
                 <ToolsProvider>
                   <PushNotificationManager>
-                    <DeepLinkManager navReady={navReady} />
-                    <HelpProvider>
-                      <NavigationContainer
-                        theme={navTheme}
-                        ref={navigationRef}
-                        onReady={() => setNavReady(true)}
-                      >
-                        <ConnectionBanner />
-                        <RootNavigator />
-                        <StatusBar style={isDark ? 'light' : 'dark'} />
-                      </NavigationContainer>
-                    </HelpProvider>
+                    <PresenceManager>
+                      <DeepLinkManager navReady={navReady} />
+                      <HelpProvider>
+                        <NavigationContainer
+                          theme={navTheme}
+                          ref={navigationRef}
+                          onReady={() => setNavReady(true)}
+                        >
+                          <ConnectionBanner />
+                          <RootNavigator />
+                          <StatusBar style={isDark ? 'light' : 'dark'} />
+                        </NavigationContainer>
+                      </HelpProvider>
+                    </PresenceManager>
                   </PushNotificationManager>
                 </ToolsProvider>
               </PendingNodeProvider>

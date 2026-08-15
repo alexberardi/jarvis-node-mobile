@@ -1,3 +1,8 @@
+// Register the background geofence task FIRST (import side-effect) so
+// TaskManager.defineTask runs at global scope before anything else — required
+// for the OS to find it when it cold-relaunches the app for a boundary crossing.
+import './src/services/backgroundPresenceTask';
+
 import { registerRootComponent } from 'expo';
 
 import App from './App';

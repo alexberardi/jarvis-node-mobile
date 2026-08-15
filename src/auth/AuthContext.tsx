@@ -65,6 +65,7 @@ import {
   USER_KEY,
   ACTIVE_HOUSEHOLD_KEY,
   MUST_CHANGE_PASSWORD_KEY,
+  BG_PRESENCE_ENABLED_KEY,
 } from '../config/storageKeys';
 import {
   getTokens,
@@ -73,6 +74,7 @@ import {
   isBiometricLoginEnabled,
   setBiometricLoginEnabled,
   biometricCapable,
+  readTokenForBg,
 } from '../services/tokenStorage';
 
 const initialState: AuthState = {
@@ -114,6 +116,9 @@ type AuthContextValue = {
   unlockWithBiometrics: () => Promise<boolean>;
   /** Turn biometric login on/off; re-keys the stored refresh token immediately. */
   setBiometricEnabled: (enabled: boolean) => Promise<void>;
+  /** Turn background presence (Phase 3) on/off; re-keys the stored tokens so the
+   *  headless geofence task can read/rotate them while the device is locked. */
+  setBackgroundPresence: (enabled: boolean) => Promise<void>;
   /** Whether this device can enforce biometric login (enrolled strong biometrics). */
   biometricAvailable: boolean;
 };
@@ -400,6 +405,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setState((prev) => ({ ...prev, biometricEnabled: enabled }));
     // Re-key the stored refresh token immediately so the change takes effect on
     // the very next cold boot — don't wait for the next login/refresh to rewrite.
+    // (This also destroys any ungated background copy the instant biometrics are
+    // turned on, since setTokens now gates the refresh token — biometric wins.)
+    const { accessToken, refreshToken } = stateRef.current;
+    if (accessToken && refreshToken) {
+      await setTokens(accessToken, refreshToken);
+    }
+  }, []);
+
+  // Persist the background-presence opt-in (Phase 3) and re-key the stored
+  // tokens so keychain accessibility matches: bg on → AFTER_FIRST_UNLOCK (the
+  // headless geofence task can read/rotate them while the phone is locked);
+  // bg off → back to WHEN_UNLOCKED. The BG key is written here (not via
+  // presenceService) to keep AuthContext free of the expo-location import graph.
+  // Mirrors setBiometricEnabled; the actual geofence start/stop lives in the
+  // settings screen (it needs the home coordinate + permission flow).
+  const setBackgroundPresence = useCallback(async (enabled: boolean): Promise<void> => {
+    await AsyncStorage.setItem(BG_PRESENCE_ENABLED_KEY, enabled ? 'true' : 'false');
     const { accessToken, refreshToken } = stateRef.current;
     if (accessToken && refreshToken) {
       await setTokens(accessToken, refreshToken);
@@ -479,10 +501,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // and so a genuinely dead session logs out immediately (via doRefresh)
   // instead of lingering behind borked node/device screens.
   useEffect(() => {
-    const sub = AppState.addEventListener('change', (next) => {
-      if (next === 'active' && stateRef.current.isAuthenticated) {
-        refreshAuthToken().catch(() => {});
+    const sub = AppState.addEventListener('change', async (next) => {
+      if (next !== 'active' || !stateRef.current.isAuthenticated) return;
+      // Reconcile in-memory tokens from the keychain FIRST: the background
+      // geofence task can rotate the durable token while we were backgrounded,
+      // leaving our in-memory copy a stale ANCESTOR. Adopt the durable pair
+      // (prompt-free; refresh is null for biometric users → no-op) so the
+      // resume refresh below uses the live tail instead of 401-ing and burning
+      // a retry. The doRefresh keychain-retry safeguard still guarantees
+      // correctness even if this reconcile is skipped.
+      try {
+        const { access, refresh } = await readTokenForBg();
+        if (
+          access &&
+          refresh &&
+          (access !== stateRef.current.accessToken ||
+            refresh !== stateRef.current.refreshToken)
+        ) {
+          const reconciled = { ...stateRef.current, accessToken: access, refreshToken: refresh };
+          stateRef.current = reconciled; // sync so the immediate refresh sees it
+          setState(reconciled);
+        }
+      } catch {
+        /* best-effort; the doRefresh safeguard protects correctness */
       }
+      refreshAuthToken().catch(() => {});
     });
     return () => sub.remove();
   }, []);
@@ -518,9 +561,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       switchHousehold,
       unlockWithBiometrics,
       setBiometricEnabled,
+      setBackgroundPresence,
       biometricAvailable,
     }),
-    [bootstrapAuth, changePassword, hasTempPassword, deleteAccount, fetchHouseholds, login, logout, refreshAccessToken, register, setActiveHousehold, switchHousehold, unlockWithBiometrics, setBiometricEnabled, biometricAvailable, state],
+    [bootstrapAuth, changePassword, hasTempPassword, deleteAccount, fetchHouseholds, login, logout, refreshAccessToken, register, setActiveHousehold, switchHousehold, unlockWithBiometrics, setBiometricEnabled, setBackgroundPresence, biometricAvailable, state],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
