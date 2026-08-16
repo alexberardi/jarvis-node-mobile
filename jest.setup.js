@@ -29,6 +29,23 @@ jest.mock('expo-task-manager', () => ({
   isTaskRegisteredAsync: jest.fn().mockResolvedValue(false),
 }));
 
+// Mock expo-notifications. presenceService now transitively imports it (local
+// arrive/leave notifications), so any test touching presence would otherwise
+// load the native module and throw under jest-expo. Tests that assert on
+// notification calls can re-mock inline.
+jest.mock('expo-notifications', () => ({
+  getPermissionsAsync: jest.fn().mockResolvedValue({ status: 'granted' }),
+  requestPermissionsAsync: jest.fn().mockResolvedValue({ status: 'granted' }),
+  scheduleNotificationAsync: jest.fn().mockResolvedValue('local-notif-id'),
+  setNotificationHandler: jest.fn(),
+  setNotificationChannelAsync: jest.fn().mockResolvedValue(undefined),
+  getExpoPushTokenAsync: jest.fn().mockResolvedValue({ data: 'ExponentPushToken[mock]' }),
+  addNotificationReceivedListener: jest.fn(() => ({ remove: jest.fn() })),
+  addNotificationResponseReceivedListener: jest.fn(() => ({ remove: jest.fn() })),
+  removeNotificationSubscription: jest.fn(),
+  AndroidImportance: { MAX: 5, HIGH: 4, DEFAULT: 3, LOW: 2, MIN: 1 },
+}));
+
 // Mock jarvis-crypto native module.
 // IMPORTANT: keep these method names in sync with modules/jarvis-crypto/index.ts.
 // The real module exports AES-256-GCM (aesGcmEncrypt/aesGcmDecrypt) + argon2id +

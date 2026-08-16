@@ -32,6 +32,7 @@ import {
   PRESENCE_PENDING_QUEUE_KEY,
   USER_KEY,
 } from '../config/storageKeys';
+import { firePresenceNotification } from './presenceNotifications';
 import {
   persistBgRotatedTokens,
   readDurableRefreshToken,
@@ -215,6 +216,19 @@ export const clearLastPresenceState = async (): Promise<void> => {
   await AsyncStorage.removeItem(PRESENCE_LAST_STATE_KEY);
 };
 
+/**
+ * The last-reported presence for a (household, user) — powers the "Currently:
+ * Home/Away (since …)" status line. Returns null if nothing's been reported yet.
+ */
+export const getLastPresenceState = async (
+  householdId: string,
+  userId: number | string,
+): Promise<{ state: PresenceState; ts: number } | null> => {
+  const map = await readLastStateMap();
+  const entry = map[keyFor(householdId, userId)];
+  return entry ? { state: entry.state, ts: entry.ts } : null;
+};
+
 // ── Permission + capture (used by the settings screen) ──────────────────
 
 /**
@@ -302,10 +316,14 @@ export const reportIfChanged = async (
     if (last && last.state === state && fresh) {
       return { status: 'unchanged', state };
     }
+    // A genuine home/away transition (not a heartbeat re-assert) → arrive/leave
+    // notification below.
+    const isChange = !last || last.state !== state;
 
     await reportPresence(householdId, state, name);
     // Persist only after a successful POST, so a failed report retries next sample.
     await writeLastState(key, { state, ts: Date.now() });
+    if (isChange) firePresenceNotification(state, name).catch(() => {});
     return { status: 'reported', state };
   } catch (err) {
     return {
@@ -637,7 +655,13 @@ export const reportPresenceBg = async (state: PresenceState): Promise<void> => {
     }
 
     if (outcome === 'ok') {
-      await writeLastState(keyFor(householdId!, userId!), { state, ts: Date.now() });
+      const lastKey = keyFor(householdId!, userId!);
+      const prior = (await readLastStateMap())[lastKey];
+      const isChange = !prior || prior.state !== state;
+      await writeLastState(lastKey, { state, ts: Date.now() });
+      // Fire the arrive/leave notification from the headless task on a real
+      // transition — this is what the user (and the Play reviewer) actually see.
+      if (isChange) await firePresenceNotification(state, name);
     } else {
       await enqueuePendingEdge(edge);
     }
