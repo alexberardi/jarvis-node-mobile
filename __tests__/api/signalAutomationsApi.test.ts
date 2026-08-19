@@ -38,6 +38,7 @@ describe('getSignalAutomations', () => {
             observed: true,
             instruction: 'Lock up',
             enabled: true,
+            delivery: 'automatic',
           },
         ],
       },
@@ -55,24 +56,29 @@ describe('getSignalAutomations', () => {
 describe('setSignalAutomation', () => {
   it('PUTs instruction + enabled to the kind endpoint and returns the result', async () => {
     mockPut.mockResolvedValue({
-      data: { success: true, instruction: 'Lock up', enabled: true, cleared: false },
+      data: { success: true, instruction: 'Lock up', enabled: true, delivery: 'automatic', cleared: false },
     });
-    const res = await setSignalAutomation('hh-1', 'presence.left', 'Lock up', true);
+    const res = await setSignalAutomation('hh-1', 'presence.left', 'Lock up', true, 'automatic');
     expect(mockPut).toHaveBeenCalledWith(
       'http://cc.test/api/v0/mobile/household/hh-1/signal-automations/presence.left',
-      { instruction: 'Lock up', enabled: true },
+      { instruction: 'Lock up', enabled: true, delivery: 'automatic' },
     );
-    expect(res).toEqual({ instruction: 'Lock up', enabled: true, cleared: false });
+    expect(res).toEqual({
+      instruction: 'Lock up',
+      enabled: true,
+      delivery: 'automatic',
+      cleared: false,
+    });
   });
 
   it('reports a cleared rule (blank instruction)', async () => {
     mockPut.mockResolvedValue({
-      data: { success: true, instruction: '', enabled: false, cleared: true },
+      data: { success: true, instruction: '', enabled: false, delivery: 'notification', cleared: true },
     });
-    const res = await setSignalAutomation('hh-1', 'appt.upcoming', '', false);
+    const res = await setSignalAutomation('hh-1', 'appt.upcoming', '', false, 'notification');
     expect(mockPut).toHaveBeenCalledWith(
       'http://cc.test/api/v0/mobile/household/hh-1/signal-automations/appt.upcoming',
-      { instruction: '', enabled: false },
+      { instruction: '', enabled: false, delivery: 'notification' },
     );
     expect(res.cleared).toBe(true);
   });

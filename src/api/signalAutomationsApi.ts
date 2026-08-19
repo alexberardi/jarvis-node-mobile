@@ -11,6 +11,13 @@
 import { getCommandCenterUrl } from '../config/serviceConfig';
 import apiClient from './apiClient';
 
+/**
+ * How a fired automation is delivered — the user's per-signal choice:
+ * `automatic` runs the action immediately; `notification` proposes a
+ * tap-to-confirm card first.
+ */
+export type DeliveryMode = 'automatic' | 'notification';
+
 /** One authorable signal kind + the household's current rule for it. */
 export interface SignalAutomation {
   /** Stable signal kind, e.g. "presence.left". */
@@ -31,6 +38,8 @@ export interface SignalAutomation {
   instruction: string;
   /** Whether the rule is enabled. */
   enabled: boolean;
+  /** How a fired automation is delivered (defaults to "notification"). */
+  delivery: DeliveryMode;
 }
 
 const base = (householdId: string) =>
@@ -50,28 +59,32 @@ export const getSignalAutomations = async (
 export interface SetAutomationResult {
   instruction: string;
   enabled: boolean;
+  delivery: DeliveryMode;
   cleared: boolean;
 }
 
 /**
- * Set one signal kind's instruction (requires household admin). A blank
- * instruction clears the rule.
+ * Set one signal kind's rule (requires household admin). A blank instruction
+ * clears the rule.
  */
 export const setSignalAutomation = async (
   householdId: string,
   kind: string,
   instruction: string,
   enabled: boolean,
+  delivery: DeliveryMode,
 ): Promise<SetAutomationResult> => {
   const res = await apiClient.put<{
     success: boolean;
     instruction: string;
     enabled: boolean;
+    delivery: DeliveryMode;
     cleared: boolean;
-  }>(`${base(householdId)}/${encodeURIComponent(kind)}`, { instruction, enabled });
+  }>(`${base(householdId)}/${encodeURIComponent(kind)}`, { instruction, enabled, delivery });
   return {
     instruction: res.data.instruction,
     enabled: res.data.enabled,
+    delivery: res.data.delivery,
     cleared: res.data.cleared,
   };
 };

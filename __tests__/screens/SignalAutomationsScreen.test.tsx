@@ -39,6 +39,7 @@ const CATALOG = [
     observed: true,
     instruction: '',
     enabled: false,
+    delivery: 'notification',
   },
   {
     kind: 'appt.upcoming',
@@ -50,6 +51,7 @@ const CATALOG = [
     observed: false,
     instruction: 'Old text',
     enabled: true,
+    delivery: 'automatic',
   },
 ];
 
@@ -84,8 +86,13 @@ it('the save button reads "Clear" for an empty rule and "Save" once text is type
   await waitFor(() => expect(card.getByText('Save')).toBeTruthy());
 });
 
-it('saves a typed instruction (with the enable toggle) via the API', async () => {
-  mockSet.mockResolvedValue({ instruction: 'Lock the door', enabled: true, cleared: false });
+it('saves a typed instruction with the enable toggle + delivery via the API', async () => {
+  mockSet.mockResolvedValue({
+    instruction: 'Lock the door',
+    enabled: true,
+    delivery: 'notification',
+    cleared: false,
+  });
   const { getByTestId } = renderScreen();
   await waitFor(() => getByTestId('automation-presence.left'));
 
@@ -94,7 +101,39 @@ it('saves a typed instruction (with the enable toggle) via the API', async () =>
   fireEvent.press(getByTestId('save-presence.left'));
 
   await waitFor(() =>
-    expect(mockSet).toHaveBeenCalledWith('hh-1', 'presence.left', 'Lock the door', true),
+    // presence.left seeded with delivery "notification"; unchanged here.
+    expect(mockSet).toHaveBeenCalledWith(
+      'hh-1',
+      'presence.left',
+      'Lock the door',
+      true,
+      'notification',
+    ),
+  );
+});
+
+it('changing Delivery to Automatic makes the card dirty and saves that choice', async () => {
+  mockSet.mockResolvedValue({
+    instruction: 'Old text',
+    enabled: true,
+    delivery: 'notification',
+    cleared: false,
+  });
+  const { getByTestId } = renderScreen();
+  await waitFor(() => getByTestId('automation-appt.upcoming'));
+
+  // appt.upcoming seeds delivery "automatic"; flip it to "notification".
+  fireEvent.press(getByTestId('delivery-notification-appt.upcoming'));
+  fireEvent.press(getByTestId('save-appt.upcoming'));
+
+  await waitFor(() =>
+    expect(mockSet).toHaveBeenCalledWith(
+      'hh-1',
+      'appt.upcoming',
+      'Old text',
+      true,
+      'notification',
+    ),
   );
 });
 

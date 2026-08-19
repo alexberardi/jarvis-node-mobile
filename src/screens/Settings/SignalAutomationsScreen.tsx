@@ -18,6 +18,7 @@ import {
   Button,
   Card,
   Chip,
+  SegmentedButtons,
   Switch,
   Text,
   TextInput,
@@ -27,6 +28,7 @@ import {
 import {
   getSignalAutomations,
   setSignalAutomation,
+  type DeliveryMode,
   type SignalAutomation,
 } from '../../api/signalAutomationsApi';
 import type { RootStackParamList } from '../../navigation/types';
@@ -36,6 +38,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'SignalAutomations'>;
 interface Draft {
   instruction: string;
   enabled: boolean;
+  delivery: DeliveryMode;
 }
 
 const SignalAutomationsScreen = ({ navigation, route }: Props) => {
@@ -57,7 +60,10 @@ const SignalAutomationsScreen = ({ navigation, route }: Props) => {
       setItems(data);
       setDrafts(
         Object.fromEntries(
-          data.map((a) => [a.kind, { instruction: a.instruction, enabled: a.enabled }]),
+          data.map((a) => [
+            a.kind,
+            { instruction: a.instruction, enabled: a.enabled, delivery: a.delivery },
+          ]),
         ),
       );
       setError(null);
@@ -80,13 +86,22 @@ const SignalAutomationsScreen = ({ navigation, route }: Props) => {
 
   const patchDraft = (kind: string, patch: Partial<Draft>) =>
     setDrafts((prev) => {
-      const base: Draft = prev[kind] ?? { instruction: '', enabled: false };
+      const base: Draft = prev[kind] ?? {
+        instruction: '',
+        enabled: false,
+        delivery: 'notification',
+      };
       return { ...prev, [kind]: { ...base, ...patch } };
     });
 
   const isDirty = (a: SignalAutomation): boolean => {
     const d = drafts[a.kind];
-    return !!d && (d.instruction !== a.instruction || d.enabled !== a.enabled);
+    return (
+      !!d &&
+      (d.instruction !== a.instruction ||
+        d.enabled !== a.enabled ||
+        d.delivery !== a.delivery)
+    );
   };
 
   const save = useCallback(
@@ -100,6 +115,7 @@ const SignalAutomationsScreen = ({ navigation, route }: Props) => {
           a.kind,
           d.instruction.trim(),
           d.enabled,
+          d.delivery,
         );
         // Fold the saved values back into both the baseline and the draft so the
         // card is no longer dirty (a cleared rule comes back as instruction="").
@@ -107,14 +123,23 @@ const SignalAutomationsScreen = ({ navigation, route }: Props) => {
           prev
             ? prev.map((it) =>
                 it.kind === a.kind
-                  ? { ...it, instruction: res.instruction, enabled: res.enabled }
+                  ? {
+                      ...it,
+                      instruction: res.instruction,
+                      enabled: res.enabled,
+                      delivery: res.delivery,
+                    }
                   : it,
               )
             : prev,
         );
         setDrafts((prev) => ({
           ...prev,
-          [a.kind]: { instruction: res.instruction, enabled: res.enabled },
+          [a.kind]: {
+            instruction: res.instruction,
+            enabled: res.enabled,
+            delivery: res.delivery,
+          },
         }));
       } catch {
         Alert.alert('Save failed', 'Could not save this automation. Please try again.');
@@ -147,13 +172,13 @@ const SignalAutomationsScreen = ({ navigation, route }: Props) => {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         <Text variant="bodyMedium" style={styles.intro}>
-          Describe what Jarvis should do when something happens. Reversible actions
-          run automatically; sensitive ones (like unlocking a door) ask you to
-          confirm first.
+          Describe what Jarvis should do when something happens, and choose how it's
+          delivered — run it automatically, or ask you to confirm first.
         </Text>
 
         {(items ?? []).map((a) => {
-          const draft = drafts[a.kind] ?? { instruction: '', enabled: false };
+          const draft: Draft =
+            drafts[a.kind] ?? { instruction: '', enabled: false, delivery: 'notification' };
           const hasText = draft.instruction.trim().length > 0;
           return (
             <Card key={a.kind} style={styles.card} testID={`automation-${a.kind}`}>
@@ -183,6 +208,34 @@ const SignalAutomationsScreen = ({ navigation, route }: Props) => {
                   onChangeText={(t) => patchDraft(a.kind, { instruction: t })}
                   style={styles.input}
                 />
+
+                <Text variant="bodySmall" style={styles.deliveryLabel}>
+                  Delivery
+                </Text>
+                <SegmentedButtons
+                  value={draft.delivery}
+                  onValueChange={(v) => patchDraft(a.kind, { delivery: v as DeliveryMode })}
+                  buttons={[
+                    {
+                      value: 'automatic',
+                      label: 'Automatic',
+                      icon: 'flash',
+                      testID: `delivery-automatic-${a.kind}`,
+                    },
+                    {
+                      value: 'notification',
+                      label: 'Ask first',
+                      icon: 'bell',
+                      testID: `delivery-notification-${a.kind}`,
+                    },
+                  ]}
+                  style={styles.delivery}
+                />
+                <Text variant="bodySmall" style={styles.deliveryHint}>
+                  {draft.delivery === 'automatic'
+                    ? 'Runs the moment it fires.'
+                    : 'Sends a notification to confirm before doing it.'}
+                </Text>
 
                 <View style={styles.row}>
                   <Text variant="bodyMedium">Enabled</Text>
@@ -239,6 +292,9 @@ const styles = StyleSheet.create({
   chip: { alignSelf: 'flex-start' },
   desc: { marginTop: 2, marginBottom: 8, opacity: 0.7 },
   input: { marginBottom: 8 },
+  deliveryLabel: { marginBottom: 4, opacity: 0.7 },
+  delivery: { marginBottom: 4 },
+  deliveryHint: { marginBottom: 8, opacity: 0.6 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
