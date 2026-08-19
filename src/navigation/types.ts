@@ -204,6 +204,7 @@ export type RootStackParamList = {
   RecentCommands: NavigatorScreenParams<RecentCommandsStackParamList> | undefined;
   Settings: undefined;
   HouseholdEdit: { householdId: string; householdName: string };
+  SignalAutomations: { householdId: string };
   SmartHomeSetup: NavigatorScreenParams<SmartHomeSetupParamList>;
   VoiceProfile: undefined;
   CommandData: NavigatorScreenParams<CommandDataStackParamList>;
