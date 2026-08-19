@@ -81,6 +81,12 @@ export const PRESENCE_LAST_STATE_KEY = '@jarvis/presence_last_state';
  */
 export const BG_PRESENCE_ENABLED_KEY = '@jarvis/bg_presence_enabled';
 /**
+ * Opt-in for local "you arrived / you left" notifications on a presence change
+ * (fired from the geofence task + foreground sample). Separate from the
+ * detection toggles — a user can detect presence without being notified.
+ */
+export const PRESENCE_NOTIFY_ENABLED_KEY = '@jarvis/presence_notify_enabled';
+/**
  * Deferred presence edges (Phase 3). An ordered, coalesced log of
  * `{ state, ts, householdId, userId, name? }` enqueued when the background
  * geofence task can't report (no usable token while locked, offline). Flushed

@@ -34,10 +34,16 @@ import {
   stopHomeGeofence,
 } from '../../services/backgroundPresenceTask';
 import {
+  ensureNotifyPermission,
+  isPresenceNotifyEnabled,
+  setPresenceNotifyEnabled,
+} from '../../services/presenceNotifications';
+import {
   captureCurrentLocation,
   clearHomeGeofence,
   clearLastPresenceState,
   getHomeGeofence,
+  getLastPresenceState,
   isBackgroundPresenceEnabled,
   reportIfChanged,
   setHomeGeofence,
@@ -111,6 +117,10 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
   // needs Always-location permission and downgrades keychain accessibility.
   const [bgEnabled, setBgEnabled] = useState(false);
   const [bgBusy, setBgBusy] = useState(false);
+  // Arrive/leave notifications (opt-in) + the live "Currently: home/away" status.
+  const [notifyEnabled, setNotifyEnabled] = useState(false);
+  const [notifyBusy, setNotifyBusy] = useState(false);
+  const [currentPresence, setCurrentPresence] = useState<{ state: 'home' | 'away'; ts: number } | null>(null);
 
   // Members
   const [members, setMembers] = useState<Member[]>([]);
@@ -206,12 +216,21 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
   // and the background-presence opt-in.
   useEffect(() => {
     let cancelled = false;
-    Promise.all([getHomeGeofence(), isBackgroundPresenceEnabled()])
-      .then(([g, bg]) => {
+    const activeHh = authState.activeHouseholdId;
+    const uid = authState.user?.id;
+    Promise.all([
+      getHomeGeofence(),
+      isBackgroundPresenceEnabled(),
+      isPresenceNotifyEnabled(),
+      activeHh && uid !== undefined ? getLastPresenceState(activeHh, uid) : Promise.resolve(null),
+    ])
+      .then(([g, bg, notify, cur]) => {
         if (cancelled) return;
         setHomeGeo(g);
         if (g) setRadius(g.radiusMeters);
         setBgEnabled(bg);
+        setNotifyEnabled(notify);
+        setCurrentPresence(cur);
       })
       .catch(() => {})
       .finally(() => {
@@ -221,6 +240,22 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
       cancelled = true;
     };
   }, []);
+
+  // Keep the "Currently: home/away" line live-ish while the screen is open, so a
+  // crossing shows up here too (the notification is the headline; this is the
+  // in-app mirror). Cheap: a couple of AsyncStorage reads.
+  useEffect(() => {
+    const activeHh = authState.activeHouseholdId;
+    const uid = authState.user?.id;
+    if (!activeHh || uid === undefined) return;
+    const refresh = () => {
+      getLastPresenceState(activeHh, uid)
+        .then((cur) => setCurrentPresence(cur))
+        .catch(() => {});
+    };
+    const id = setInterval(refresh, 15000);
+    return () => clearInterval(id);
+  }, [authState.activeHouseholdId, authState.user?.id]);
 
   // Fire an immediate presence sample so enabling (or re-pinning home while
   // enabled) reports right away, instead of waiting for the next app foreground.
@@ -370,6 +405,37 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
       setBgBusy(false);
     }
   }, [homeGeo, reportPresenceNow, teardownBackgroundPresence]);
+
+  // Arrive/leave notification opt-in. Requesting notification permission is an
+  // explicit user action, so it happens here (the background task never prompts).
+  const handleToggleNotify = useCallback(async (next: boolean) => {
+    setNotifyBusy(true);
+    try {
+      if (next) {
+        const granted = await ensureNotifyPermission();
+        if (!granted) {
+          Alert.alert(
+            'Allow notifications',
+            'Turn on notifications for Jarvis so it can tell you when you arrive at or leave home. You can enable it in your phone’s Settings.',
+            [
+              { text: 'Not now', style: 'cancel' },
+              { text: 'Open Settings', onPress: () => { Linking.openSettings().catch(() => {}); } },
+            ],
+          );
+          return;
+        }
+        await setPresenceNotifyEnabled(true);
+        setNotifyEnabled(true);
+      } else {
+        await setPresenceNotifyEnabled(false);
+        setNotifyEnabled(false);
+      }
+    } catch {
+      Alert.alert('Error', 'Could not update arrival notifications.');
+    } finally {
+      setNotifyBusy(false);
+    }
+  }, []);
 
   // Persist the radius when the slider settles (not on every tick).
   const handleRadiusComplete = useCallback(async (value: number) => {
@@ -861,6 +927,52 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
                       onValueChange={handleToggleBgPresence}
                       disabled={bgBusy}
                     />
+                  </View>
+                )}
+
+                {/* Arrive/leave notifications (opt-in) */}
+                {homeGeo?.enabled && (
+                  <View style={[styles.toggleRow, { marginTop: 12 }]}>
+                    <View style={{ flex: 1, paddingRight: 12 }}>
+                      <Text variant="bodyMedium">Notify me when I arrive / leave</Text>
+                      <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 2 }}>
+                        {notifyEnabled
+                          ? 'On — you’ll get a notification when you get home or leave.'
+                          : 'Off — no arrival/departure notifications.'}
+                      </Text>
+                    </View>
+                    <Switch
+                      testID="presence-notify-toggle"
+                      value={notifyEnabled}
+                      onValueChange={handleToggleNotify}
+                      disabled={notifyBusy}
+                    />
+                  </View>
+                )}
+
+                {/* Live presence status */}
+                {homeGeo?.enabled && currentPresence && (
+                  <View
+                    testID="presence-current-status"
+                    style={{ flexDirection: 'row', alignItems: 'center', marginTop: 12 }}
+                  >
+                    <View
+                      style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: 4,
+                        marginRight: 8,
+                        backgroundColor:
+                          currentPresence.state === 'home' ? '#2e7d32' : theme.colors.onSurfaceVariant,
+                      }}
+                    />
+                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                      Currently: {currentPresence.state === 'home' ? 'Home' : 'Away'}
+                      {`  ·  since ${new Date(currentPresence.ts).toLocaleTimeString([], {
+                        hour: 'numeric',
+                        minute: '2-digit',
+                      })}`}
+                    </Text>
                   </View>
                 )}
 
