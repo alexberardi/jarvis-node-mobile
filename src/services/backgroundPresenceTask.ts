@@ -11,6 +11,14 @@
  * Privacy model is unchanged from Phase 2: the precise home coordinate is fed to
  * the OS geofence and never leaves the device; only "home"/"away" is reported.
  *
+ * ⚠️ iOS ONLY. Every entry point here is gated on
+ * `BACKGROUND_PRESENCE_SUPPORTED` (presenceService) and no-ops on Android,
+ * whose build ships without ACCESS_BACKGROUND_LOCATION so it can go through
+ * Play review — Android keeps foreground-only presence (usePresence →
+ * reportIfChanged). The task is still *defined* on every platform: defineTask
+ * is inert without a registration, and an Android upgrader may still carry a
+ * stale one until `rearmIfNeeded` tears it down.
+ *
  * ⚠️ `TaskManager.defineTask` MUST run at module top level (an import
  * side-effect), never inside a component/effect — on a cold background relaunch
  * only global scope executes. This module is imported first from `index.ts` so
@@ -21,9 +29,11 @@ import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 
 import {
+  BACKGROUND_PRESENCE_SUPPORTED,
   getHomeGeofence,
   isBackgroundPresenceEnabled,
   reportPresenceBg,
+  setBackgroundPresenceEnabled,
   type HomeGeofence,
 } from './presenceService';
 
@@ -56,8 +66,11 @@ export const geofenceTaskExecutor: TaskManager.TaskManagerTaskExecutor<
 
 TaskManager.defineTask(GEOFENCE_TASK, geofenceTaskExecutor);
 
-/** Whether background ("Always") location permission is currently granted. */
+/** Whether background ("Always") location permission is currently granted.
+ *  Always false where background presence isn't supported (Android — the build
+ *  has no ACCESS_BACKGROUND_LOCATION, so the OS would deny it anyway). */
 export async function hasBackgroundPermission(): Promise<boolean> {
+  if (!BACKGROUND_PRESENCE_SUPPORTED) return false;
   try {
     const perm = await Location.getBackgroundPermissionsAsync();
     return perm.status === 'granted';
@@ -71,9 +84,11 @@ export async function hasBackgroundPermission(): Promise<boolean> {
  * (NOT "Allow Once") before requesting background, or the background request
  * silently denies. Returns true only when background ("Always") is granted. The
  * app can't force the OS Always dialog — the caller deep-links to Settings when
- * this returns false.
+ * this returns false. No-ops (false) on a platform without background presence —
+ * it must never prompt for a permission the build doesn't declare.
  */
 export async function ensureBackgroundPermission(): Promise<boolean> {
+  if (!BACKGROUND_PRESENCE_SUPPORTED) return false;
   try {
     const fg = await Location.requestForegroundPermissionsAsync();
     if (fg.status !== 'granted') return false;
@@ -86,7 +101,10 @@ export async function ensureBackgroundPermission(): Promise<boolean> {
 
 export type StartGeofenceResult =
   | { status: 'started' }
-  | { status: 'skipped'; reason: 'disabled' | 'no-home' | 'no-background-permission' }
+  | {
+      status: 'skipped';
+      reason: 'unsupported' | 'disabled' | 'no-home' | 'no-background-permission';
+    }
   | { status: 'error'; reason: string };
 
 /**
@@ -99,6 +117,9 @@ export async function startHomeGeofence(
   home?: HomeGeofence | null,
 ): Promise<StartGeofenceResult> {
   try {
+    if (!BACKGROUND_PRESENCE_SUPPORTED) {
+      return { status: 'skipped', reason: 'unsupported' };
+    }
     if (!(await isBackgroundPresenceEnabled())) {
       return { status: 'skipped', reason: 'disabled' };
     }
@@ -149,6 +170,10 @@ export async function stopHomeGeofence(): Promise<void> {
  */
 export async function rearmIfNeeded(): Promise<void> {
   try {
+    if (!BACKGROUND_PRESENCE_SUPPORTED) {
+      await cleanUpUnsupportedBackgroundPresence();
+      return;
+    }
     if (!(await isBackgroundPresenceEnabled())) return;
     const geo = await getHomeGeofence();
     if (!geo || typeof geo.latitude !== 'number' || typeof geo.longitude !== 'number') {
@@ -157,6 +182,30 @@ export async function rearmIfNeeded(): Promise<void> {
     if (!(await hasBackgroundPermission())) return;
     if (await Location.hasStartedGeofencingAsync(GEOFENCE_TASK)) return;
     await startHomeGeofence(geo);
+  } catch {
+    /* best-effort */
+  }
+}
+
+// ── Upgrade cleanup for platforms without background presence ────────────
+
+/** Run the teardown below once per app launch, not on every foreground sync. */
+let unsupportedCleanupDone = false;
+
+/**
+ * Tear down anything an OLDER build left armed on a platform that no longer
+ * supports background presence (Android, which shipped background geofencing
+ * before ACCESS_BACKGROUND_LOCATION was dropped for Play review). Stops a
+ * lingering OS geofence registration and clears the stored opt-in, so the flag
+ * can't keep downgrading keychain accessibility (tokenStorage) for a feature
+ * that no longer runs. Best-effort and idempotent; never throws.
+ */
+async function cleanUpUnsupportedBackgroundPresence(): Promise<void> {
+  if (unsupportedCleanupDone) return;
+  unsupportedCleanupDone = true;
+  try {
+    await stopHomeGeofence();
+    await setBackgroundPresenceEnabled(false);
   } catch {
     /* best-effort */
   }
