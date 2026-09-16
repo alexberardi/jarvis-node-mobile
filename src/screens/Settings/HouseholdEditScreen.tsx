@@ -39,6 +39,7 @@ import {
   setPresenceNotifyEnabled,
 } from '../../services/presenceNotifications';
 import {
+  BACKGROUND_PRESENCE_SUPPORTED,
   captureCurrentLocation,
   clearHomeGeofence,
   clearLastPresenceState,
@@ -115,6 +116,8 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
   // Background presence (Phase 3): true OS geofencing that fires even when the
   // app is closed. Separate opt-in from foreground "Presence detection" — it
   // needs Always-location permission and downgrades keychain accessibility.
+  // iOS only: the Android build ships without ACCESS_BACKGROUND_LOCATION (Play
+  // review), so the switch below is hidden and bgEnabled stays false there.
   const [bgEnabled, setBgEnabled] = useState(false);
   const [bgBusy, setBgBusy] = useState(false);
   // Arrive/leave notifications (opt-in) + the live "Currently: home/away" status.
@@ -909,9 +912,10 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
                 </View>
 
                 {/* Background (Always) opt-in — offered only once foreground
-                    presence is on. Detects home/away even when the app is
-                    closed, using "Always" location. */}
-                {homeGeo?.enabled && (
+                    presence is on, and only where the platform supports it
+                    (iOS). Detects home/away even when the app is closed, using
+                    "Always" location. */}
+                {BACKGROUND_PRESENCE_SUPPORTED && homeGeo?.enabled && (
                   <View style={[styles.toggleRow, { marginTop: 12 }]}>
                     <View style={{ flex: 1, paddingRight: 12 }}>
                       <Text variant="bodyMedium">Detect in the background</Text>

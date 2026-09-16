@@ -58,6 +58,9 @@ jest.mock('../../src/services/presenceService', () => ({
   reportIfChanged: jest.fn(() => Promise.resolve({ status: 'unchanged', state: 'home' })),
   captureCurrentLocation: jest.fn(() => Promise.resolve(null)),
   getLastPresenceState: jest.fn(() => Promise.resolve(null)),
+  // This suite exercises the iOS-shaped screen, where the background switch is
+  // rendered. The Android build hides it — see backgroundPresenceAndroid.test.ts.
+  BACKGROUND_PRESENCE_SUPPORTED: true,
   DEFAULT_RADIUS_METERS: 150,
   MIN_RADIUS_METERS: 75,
   MAX_RADIUS_METERS: 1000,

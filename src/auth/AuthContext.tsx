@@ -13,7 +13,7 @@ import { setK2UserId } from '../services/k2Service';
 import { clearUserData } from '../services/clearUserData';
 import { useConfig } from '../contexts/ConfigContext';
 
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 
 import { configureApiClient, refreshAuthToken } from '../api/apiClient';
 import authApi from '../api/authApi';
@@ -421,7 +421,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Mirrors setBiometricEnabled; the actual geofence start/stop lives in the
   // settings screen (it needs the home coordinate + permission flow).
   const setBackgroundPresence = useCallback(async (enabled: boolean): Promise<void> => {
-    await AsyncStorage.setItem(BG_PRESENCE_ENABLED_KEY, enabled ? 'true' : 'false');
+    // Android has no background presence (no ACCESS_BACKGROUND_LOCATION — see
+    // presenceService.BACKGROUND_PRESENCE_SUPPORTED), so only `false` is ever
+    // stored there. The settings screen already hides the switch; this keeps
+    // the flag honest for any other caller.
+    const on = enabled && Platform.OS !== 'android';
+    await AsyncStorage.setItem(BG_PRESENCE_ENABLED_KEY, on ? 'true' : 'false');
     const { accessToken, refreshToken } = stateRef.current;
     if (accessToken && refreshToken) {
       await setTokens(accessToken, refreshToken);
