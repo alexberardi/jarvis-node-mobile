@@ -28,7 +28,58 @@ export interface HouseholdSettings {
    * clears the voice layer back to the plain assistant.
    */
   'persona.household_prompt': string;
+  /**
+   * The household's own Twilio account (AD6), used for the phone calls the
+   * assistant places. Write-only: the server answers `"********"` once the
+   * SID / auth token are set and `null` when they are not — the values are
+   * never read back. Each key reads the household's OWN row only (never the
+   * install's default account). PUT `""` (or `null`) clears one.
+   */
+  'phone.twilio_account_sid': string | null;
+  'phone.twilio_auth_token': string | null;
+  /** The Twilio number calls are placed from, E.164 (`+15551234567`); not secret. */
+  'phone.twilio_from_number': string | null;
 }
+
+/** The three Twilio keys, which only work as a set (one account). */
+export const TWILIO_KEYS = [
+  'phone.twilio_account_sid',
+  'phone.twilio_auth_token',
+  'phone.twilio_from_number',
+] as const;
+
+/** What a secret household setting reads back as once it is set. */
+export const MASKED_SECRET = '********';
+
+/**
+ * E.164, exactly as the server checks the from number
+ * (jarvisd `internal/modules/cc/household_settings.go`).
+ */
+export const E164_PATTERN = /^\+[1-9][0-9]{6,14}$/;
+
+/**
+ * The user-facing message from a failed household-settings write: the server's
+ * `detail` string, a FastAPI-style 422 `detail: [{msg}]`, or CC's validation
+ * envelope `{message, details: [...]}`. Falls back to `fallback`.
+ */
+export const settingErrorMessage = (error: unknown, fallback: string): string => {
+  const data = (error as { response?: { data?: unknown } })?.response?.data;
+  if (typeof data === 'string' && data.trim()) return data;
+  const obj = (data ?? {}) as { detail?: unknown; message?: unknown; details?: unknown };
+  if (typeof obj.detail === 'string' && obj.detail.trim()) return obj.detail;
+  if (Array.isArray(obj.detail)) {
+    const msg = obj.detail
+      .map((d) => (d as { msg?: unknown })?.msg)
+      .find((m) => typeof m === 'string' && m.trim());
+    if (typeof msg === 'string') return msg;
+  }
+  if (Array.isArray(obj.details)) {
+    const first = obj.details.find((d) => typeof d === 'string' && d.trim());
+    if (typeof first === 'string') return first;
+  }
+  if (typeof obj.message === 'string' && obj.message.trim()) return obj.message;
+  return fallback;
+};
 
 /** Values the allowlisted settings can hold. */
 export type HouseholdSettingValue = HouseholdSettings[keyof HouseholdSettings];
