@@ -26,6 +26,10 @@ import {
   setHouseholdSetting,
   type PersonaPreset,
 } from '../../api/householdSettingsApi';
+import TwilioSettingsCard, {
+  twilioStateFromSettings,
+  type TwilioState,
+} from '../../components/TwilioSettingsCard';
 import { useAuth } from '../../auth/AuthContext';
 import type { RootStackParamList } from '../../navigation/types';
 import {
@@ -104,6 +108,9 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
   const [personaPresets, setPersonaPresets] = useState<PersonaPreset[]>([]);
   const [personaDefaultId, setPersonaDefaultId] = useState<string | null>(null);
   const [personaMaxChars, setPersonaMaxChars] = useState(2000);
+
+  // The household's own Twilio account (write-only: only whether it is set).
+  const [twilio, setTwilio] = useState<TwilioState>({ sidSet: false, tokenSet: false, fromNumber: null });
 
   // Home presence (device-local geofence — the precise coordinate never leaves
   // this phone; only home/away is ever reported). Opt-in: `enabled` defaults to
@@ -186,6 +193,7 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
       const voice = settings['persona.household_prompt'] ?? '';
       setPersona(voice);
       setSavedPersona(voice);
+      setTwilio(twilioStateFromSettings(settings));
     } catch (error) {
       console.error('[HouseholdEditScreen] Failed to load household settings', error);
     } finally {
@@ -876,6 +884,15 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
             )}
           </Card.Content>
         </Card>
+
+        {/* Phone calls — the household's own Twilio account (write-only) */}
+        <TwilioSettingsCard
+          householdId={householdId}
+          state={twilio}
+          loading={webSearchLoading}
+          canEdit={isAdmin}
+          onChanged={loadHouseholdSettings}
+        />
 
         {/* Home Presence (device-local, opt-in) */}
         <Card style={styles.card}>

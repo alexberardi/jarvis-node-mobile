@@ -6,7 +6,7 @@ import { PaperProvider } from 'react-native-paper';
 import HouseholdEditScreen from '../../src/screens/Settings/HouseholdEditScreen';
 import { lightTheme } from '../../src/theme';
 import authApi from '../../src/api/authApi';
-import { setHouseholdSetting } from '../../src/api/householdSettingsApi';
+import { getHouseholdSettings, setHouseholdSetting } from '../../src/api/householdSettingsApi';
 
 const DEFAULT_VOICE = 'Warm and folksy default voice.';
 
@@ -25,6 +25,7 @@ jest.mock('../../src/api/authApi', () => ({
 
 jest.mock('../../src/api/householdSettingsApi', () => ({
   __esModule: true,
+  ...jest.requireActual('../../src/api/householdSettingsApi'),
   getHouseholdSettings: jest.fn(() =>
     Promise.resolve({
       'web_search.enabled': false,
@@ -345,5 +346,50 @@ describe('Household edit — flow integration (rename, roles, members, invites, 
     });
     expect(alertSpy).toHaveBeenCalledWith('Error', 'Persona is too long (2001 chars); max is 2000.');
     alertSpy.mockRestore();
+  });
+
+  // AD6: the household's own Twilio account. The GET masks the SID and token;
+  // the screen shows only whether they are set, and only an admin may edit.
+  it('shows the household Twilio account as set without revealing secrets', async () => {
+    (getHouseholdSettings as jest.Mock).mockResolvedValueOnce({
+      'web_search.enabled': false,
+      'household.location': '',
+      'persona.household_prompt': '',
+      'phone.twilio_account_sid': '********',
+      'phone.twilio_auth_token': '********',
+      'phone.twilio_from_number': '+15551234567',
+    });
+    const utils = renderScreen();
+    await utils.findByTestId('twilio-edit');
+    expect(utils.getByTestId('twilio-status').props.children).toBe(
+      'Set up — calls are placed from +15551234567.',
+    );
+    expect(utils.queryByText(/\*\*\*\*/)).toBeNull();
+  });
+
+  it('admin sets up Twilio from the household screen → PUTs, then re-reads settings', async () => {
+    const setSetting = setHouseholdSetting as jest.Mock;
+    setSetting.mockClear();
+    const getSettings = getHouseholdSettings as jest.Mock;
+    const utils = renderScreen();
+    fireEvent.press(await utils.findByTestId('twilio-edit'));
+    const loadsBefore = getSettings.mock.calls.length;
+    fireEvent.changeText(utils.getByTestId('twilio-sid-input'), 'AC123');
+    fireEvent.changeText(utils.getByTestId('twilio-token-input'), 'tok');
+    fireEvent.changeText(utils.getByTestId('twilio-from-input'), '+15551234567');
+    await act(async () => {
+      fireEvent.press(utils.getByTestId('twilio-save'));
+    });
+    expect(setSetting).toHaveBeenCalledWith('hh-1', 'phone.twilio_account_sid', 'AC123');
+    expect(setSetting).toHaveBeenCalledWith('hh-1', 'phone.twilio_auth_token', 'tok');
+    expect(setSetting).toHaveBeenCalledWith('hh-1', 'phone.twilio_from_number', '+15551234567');
+    expect(getSettings.mock.calls.length).toBeGreaterThan(loadsBefore);
+  });
+
+  it('a plain member sees the Twilio status but cannot edit it', async () => {
+    const utils = renderScreen([{ ...ME, role: 'member' }, BOB]);
+    await utils.findByText('bob@test.com');
+    await utils.findByTestId('twilio-status');
+    expect(utils.queryByTestId('twilio-edit')).toBeNull();
   });
 });
