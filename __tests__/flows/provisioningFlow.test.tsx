@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { act, render, fireEvent, waitFor } from '@testing-library/react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { PaperProvider } from 'react-native-paper';
 
@@ -10,6 +10,8 @@ import { MOCK_NODE, MOCK_NETWORKS, resetMockState } from '../../src/api/mockProv
 import * as provisioningApi from '../../src/api/provisioningApi';
 import * as commandCenterApi from '../../src/api/commandCenterApi';
 import * as k2Service from '../../src/services/k2Service';
+import * as smartHomeApi from '../../src/api/smartHomeApi';
+import { VERIFY_POLL_MS, VERIFY_TIMEOUT_MS } from '../../src/hooks/useProvisioning';
 
 // L1 FLOW INTEGRATION — the seam the per-screen tests never cross.
 // Every existing provisioning screen test stubs useProvisioningContext (a
@@ -25,7 +27,13 @@ jest.mock('../../src/api/provisioningApi', () => ({
   scanNetworks: jest.fn(),
   provision: jest.fn(),
   provisionK2: jest.fn(),
+  getNodeRegistrationStatus: jest.fn(),
   setNodeIp: jest.fn(),
+}));
+
+// After "I've Reconnected", the wizard waits for the node in the household list.
+jest.mock('../../src/api/smartHomeApi', () => ({
+  getSmartHomeConfig: jest.fn(),
 }));
 
 jest.mock('../../src/services/k2Service', () => ({
@@ -116,6 +124,19 @@ describe('Provisioning wizard — flow integration (real hook, real screens, rea
       expires_at: new Date(Date.now() + 3_600_000).toISOString(),
       expires_in: 3600,
     });
+    (smartHomeApi.getSmartHomeConfig as jest.Mock).mockResolvedValue({
+      device_manager: 'jarvis',
+      primary_node_id: '',
+      use_external_devices: false,
+      nodes: [{ node_id: 'cc-node-1', room: 'living_room', online: true, last_seen: null }],
+    });
+    (provisioningApi.getNodeRegistrationStatus as jest.Mock).mockRejectedValue(
+      new Error('Network Error'),
+    );
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
   });
 
   it('drives ScanForNodes → NodeInfo → SelectNetwork → EnterPassword → Progress → Success', async () => {
@@ -145,6 +166,8 @@ describe('Provisioning wizard — flow integration (real hook, real screens, rea
     expect(await findByText('Success!')).toBeTruthy();
     expect(getByText('cc-node-1')).toBeTruthy();
     expect(mockMarkPending).toHaveBeenCalledWith('cc-node-1', 'test-household-123');
+    // Success was gated on the node actually appearing in the household.
+    expect(smartHomeApi.getSmartHomeConfig).toHaveBeenCalledWith('test-household-123');
 
     // The real hook ran the entire pipeline across the wizard:
     expect(commandCenterApi.requestProvisioningToken).toHaveBeenCalled();
@@ -181,6 +204,40 @@ describe('Provisioning wizard — flow integration (real hook, real screens, rea
 
     expect(await findByText('Success!')).toBeTruthy();
     expect(provisioningApi.provision).toHaveBeenCalled();
+  });
+
+  it('shows an actionable error (not an endless spinner) when the node never registers, and Try Again restarts at Prepare', async () => {
+    (smartHomeApi.getSmartHomeConfig as jest.Mock).mockResolvedValue({
+      device_manager: 'jarvis',
+      primary_node_id: '',
+      use_external_devices: false,
+      nodes: [],
+    });
+    const { getByTestId, findByTestId, findByText, queryByText } = renderFlow();
+
+    fireEvent.press(getByTestId('prepare-button'));
+    fireEvent.press(await findByTestId('connect-button'));
+    fireEvent.press(await findByTestId('continue-button'));
+    fireEvent.press(await findByText(MOCK_NETWORKS[0].ssid));
+    fireEvent.changeText(await findByTestId('password-input'), 'password123');
+    fireEvent.press(getByTestId('provision-button'));
+    const reconnected = await findByText(/I've Reconnected/i);
+
+    jest.useFakeTimers();
+    fireEvent.press(reconnected);
+    expect(await findByTestId('verifying-indicator')).toBeTruthy();
+
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(VERIFY_TIMEOUT_MS + VERIFY_POLL_MS);
+    });
+
+    expect(await findByText(/couldn't register — reconnect to its setup hotspot/)).toBeTruthy();
+    expect(queryByText('Success!')).toBeNull();
+
+    jest.useRealTimers();
+    fireEvent.press(getByTestId('start-over-button'));
+    // Back at the start, needing a fresh token — not "Token ready!" with none behind it.
+    expect(await findByTestId('prepare-button')).toBeTruthy();
   });
 
   it('halts on NodeInfo (does not advance to SelectNetwork) when the network scan fails', async () => {

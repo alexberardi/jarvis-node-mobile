@@ -43,7 +43,8 @@ export type ProvisioningState =
   | 'configuring'
   | 'provisioning'
   | 'awaiting_wifi_switch' // Credentials sent, user needs to reconnect to home WiFi
-  | 'verifying'
+  | 'verifying' // Back on home WiFi, waiting for the node to show up in the household
+  | 'registration_failed' // Node never appeared (or reported a failure) — actionable retry UI
   | 'success'
   | 'error';
 
@@ -53,6 +54,22 @@ export interface ApiProvisioningStatus {
   message: string;
   progress_percent: number;
   error: string | null;
+}
+
+/**
+ * The node's provisioning status, as read over its setup hotspot.
+ *
+ * `registrationFailed` is set when the node reports that it could not register
+ * with the command center (e.g. a 401 for an expired provisioning token) — the
+ * node then drops back to its hotspot so it can be re-provisioned. Older node
+ * firmware has no dedicated field; there an ERROR state with an `error` string
+ * is the only signal, and it is mapped the same way.
+ */
+export interface NodeRegistrationStatus {
+  nodeState: NodeState | string;
+  message: string;
+  registrationFailed: boolean;
+  failureReason: string | null;
 }
 
 // Internal UI status

@@ -1,10 +1,20 @@
-import { renderHook, act } from '@testing-library/react-native';
+import { renderHook, act, waitFor } from '@testing-library/react-native';
 
-import { useProvisioning } from '../../src/hooks/useProvisioning';
+import {
+  useProvisioning,
+  parseServerTimestamp,
+  tokenExpiresAt,
+  REGISTRATION_FAILED_MESSAGE,
+  TOKEN_EXPIRED_MESSAGE,
+  TOKEN_REFRESH_TIMEOUT_MS,
+  VERIFY_POLL_MS,
+  VERIFY_TIMEOUT_MS,
+} from '../../src/hooks/useProvisioning';
 import { MOCK_NODE, MOCK_NETWORKS, resetMockState } from '../../src/api/mockProvisioningApi';
 import * as provisioningApi from '../../src/api/provisioningApi';
 import * as k2Service from '../../src/services/k2Service';
 import * as commandCenterApi from '../../src/api/commandCenterApi';
+import * as smartHomeApi from '../../src/api/smartHomeApi';
 
 // Mock the provisioning API
 jest.mock('../../src/api/provisioningApi', () => ({
@@ -13,6 +23,7 @@ jest.mock('../../src/api/provisioningApi', () => ({
   scanNetworks: jest.fn(),
   provision: jest.fn(),
   getProvisioningStatus: jest.fn(),
+  getNodeRegistrationStatus: jest.fn(),
   provisionK2: jest.fn(),
   setNodeIp: jest.fn(),
 }));
@@ -26,6 +37,11 @@ jest.mock('../../src/services/k2Service', () => ({
 // Mock the command center API
 jest.mock('../../src/api/commandCenterApi', () => ({
   requestProvisioningToken: jest.fn(),
+}));
+
+// The post-send verification polls the household's node list.
+jest.mock('../../src/api/smartHomeApi', () => ({
+  getSmartHomeConfig: jest.fn(),
 }));
 
 // Mock serviceConfig so getCommandCenterUrl returns a valid URL
@@ -66,6 +82,16 @@ describe('useProvisioning', () => {
       expires_at: new Date(Date.now() + 3600000).toISOString(),
       expires_in: 3600,
     });
+    // By default the node registers right away and is not reachable over its hotspot.
+    (smartHomeApi.getSmartHomeConfig as jest.Mock).mockResolvedValue({
+      device_manager: 'jarvis',
+      primary_node_id: '',
+      use_external_devices: false,
+      nodes: [{ node_id: 'cc-assigned-node-id', room: 'kitchen', online: true, last_seen: null }],
+    });
+    (provisioningApi.getNodeRegistrationStatus as jest.Mock).mockRejectedValue(
+      new Error('Network Error'),
+    );
   });
 
   describe('initial state', () => {
@@ -186,12 +212,12 @@ describe('useProvisioning', () => {
       expect(result.current.provisioningResult).not.toBeNull();
       expect(result.current.provisioningResult?.success).toBe(true);
 
-      // Call confirmWifiSwitched to complete provisioning
-      act(() => {
+      // Back on home WiFi: success only once the node shows up in the household.
+      await act(async () => {
         result.current.confirmWifiSwitched();
       });
 
-      expect(result.current.state).toBe('success');
+      await waitFor(() => expect(result.current.state).toBe('success'));
     });
   });
 
@@ -242,12 +268,12 @@ describe('useProvisioning', () => {
       expect(result.current.progress).toBe(75);
 
       // Complete provisioning flow
-      act(() => {
+      await act(async () => {
         result.current.confirmWifiSwitched();
       });
 
       // Now progress should be 100
-      expect(result.current.progress).toBe(100);
+      await waitFor(() => expect(result.current.progress).toBe(100));
     });
   });
 
@@ -394,6 +420,365 @@ describe('useProvisioning', () => {
 
       expect(ok).toBe(false);
       expect(result.current.error).toContain('token denied');
+    });
+  });
+  describe('token timing (2026-10-08: a 14-min-old token was sent and the node 401d)', () => {
+    type Hook = { current: ReturnType<typeof useProvisioning> };
+    const tokenResponse = (token: string, ttlSec = 600) => ({
+      token,
+      node_id: 'cc-assigned-node-id',
+      expires_at: new Date(Date.now() + ttlSec * 1000).toISOString(),
+      expires_in: ttlSec,
+    });
+
+    const prepareAndPick = async (result: Hook) => {
+      await act(async () => {
+        await result.current.fetchProvisioningToken('hh-1');
+      });
+      await act(async () => {
+        await result.current.connect('192.168.4.1');
+      });
+      await act(async () => {
+        await result.current.fetchNetworks();
+      });
+      act(() => {
+        result.current.selectNetwork(MOCK_NETWORKS[0]);
+      });
+    };
+
+    let now: number;
+    beforeEach(() => {
+      now = Date.parse('2026-10-08T18:54:00Z');
+      jest.spyOn(Date, 'now').mockImplementation(() => now);
+    });
+    afterEach(() => {
+      (Date.now as jest.Mock).mockRestore();
+    });
+
+    it('mints a fresh token immediately before sending credentials and sends that one', async () => {
+      (commandCenterApi.requestProvisioningToken as jest.Mock)
+        .mockResolvedValueOnce(tokenResponse('tok-prepare'))
+        .mockResolvedValueOnce(tokenResponse('tok-fresh'));
+      const { result } = renderHook(() => useProvisioning());
+      await prepareAndPick(result);
+
+      await act(async () => {
+        await result.current.startProvisioning('pw', 'kitchen', 'hh-1');
+      });
+
+      const tokenCalls = (commandCenterApi.requestProvisioningToken as jest.Mock).mock;
+      expect(tokenCalls.calls).toHaveLength(2);
+      // The second request reuses the node_id (refresh) with a short timeout…
+      expect(tokenCalls.calls[1]).toEqual([
+        { household_id: 'hh-1', node_id: 'cc-assigned-node-id' },
+        { timeoutMs: TOKEN_REFRESH_TIMEOUT_MS },
+      ]);
+      // …is made in the same tap as the send, before anything goes to the node…
+      const provisionMock = provisioningApi.provision as jest.Mock;
+      expect(tokenCalls.invocationCallOrder[1]).toBeLessThan(
+        (provisioningApi.provisionK2 as jest.Mock).mock.invocationCallOrder[0],
+      );
+      // …and the node gets the fresh token, not the one from Prepare.
+      expect(provisionMock).toHaveBeenCalledWith(
+        expect.objectContaining({ provisioning_token: 'tok-fresh', node_id: 'cc-assigned-node-id' }),
+      );
+      expect(result.current.provisioningToken).toBe('tok-fresh');
+      expect(result.current.state).toBe('awaiting_wifi_switch');
+    });
+
+    it('falls back to the Prepare token on the hotspot while it still has enough life left', async () => {
+      (commandCenterApi.requestProvisioningToken as jest.Mock)
+        .mockResolvedValueOnce(tokenResponse('tok-prepare'))
+        .mockRejectedValue(new Error('Network Error')); // command center unreachable from the hotspot
+      const { result } = renderHook(() => useProvisioning());
+      await prepareAndPick(result);
+
+      now += 2 * 60 * 1000; // 2 min on the hotspot — 8 min of a 10-min token left
+      await act(async () => {
+        await result.current.startProvisioning('pw', 'kitchen', 'hh-1');
+      });
+
+      expect(provisioningApi.provision).toHaveBeenCalledWith(
+        expect.objectContaining({ provisioning_token: 'tok-prepare' }),
+      );
+      expect(result.current.state).toBe('awaiting_wifi_switch');
+    });
+
+    it('refuses to send a token too old to survive registration, before touching the node', async () => {
+      (commandCenterApi.requestProvisioningToken as jest.Mock)
+        .mockResolvedValueOnce(tokenResponse('tok-prepare'))
+        .mockRejectedValue(new Error('Network Error'));
+      const { result } = renderHook(() => useProvisioning());
+      await prepareAndPick(result);
+
+      now += 6 * 60 * 1000; // e.g. the node was power-cycled mid-setup
+      await act(async () => {
+        await result.current.startProvisioning('pw', 'kitchen', 'hh-1');
+      });
+
+      expect(result.current.state).toBe('error');
+      expect(result.current.error).toBe(TOKEN_EXPIRED_MESSAGE);
+      expect(provisioningApi.provisionK2).not.toHaveBeenCalled();
+      expect(provisioningApi.provision).not.toHaveBeenCalled();
+    });
+
+    it('uses a longer-lived (jarvisd 30-min) token from Prepare after a longer detour', async () => {
+      (commandCenterApi.requestProvisioningToken as jest.Mock)
+        .mockResolvedValueOnce(tokenResponse('tok-prepare', 1800))
+        .mockRejectedValue(new Error('Network Error'));
+      const { result } = renderHook(() => useProvisioning());
+      await prepareAndPick(result);
+
+      now += 14 * 60 * 1000;
+      await act(async () => {
+        await result.current.startProvisioning('pw', 'kitchen', 'hh-1');
+      });
+
+      expect(provisioningApi.provision).toHaveBeenCalledWith(
+        expect.objectContaining({ provisioning_token: 'tok-prepare' }),
+      );
+    });
+
+    it('gets a new token and resends once when the node explicitly rejects the send', async () => {
+      (commandCenterApi.requestProvisioningToken as jest.Mock)
+        .mockResolvedValueOnce(tokenResponse('tok-prepare'))
+        .mockResolvedValueOnce(tokenResponse('tok-fresh'))
+        .mockResolvedValueOnce(tokenResponse('tok-retry'));
+      (provisioningApi.provision as jest.Mock)
+        .mockResolvedValueOnce({ success: false, node_id: 'x', room_name: 'kitchen', message: 'bad request' })
+        .mockResolvedValueOnce({ success: true, node_id: 'x', room_name: 'kitchen', message: 'ok' });
+      const { result } = renderHook(() => useProvisioning());
+      await prepareAndPick(result);
+
+      await act(async () => {
+        await result.current.startProvisioning('pw', 'kitchen', 'hh-1');
+      });
+
+      const calls = (provisioningApi.provision as jest.Mock).mock.calls;
+      expect(calls).toHaveLength(2);
+      expect(calls[0][0].provisioning_token).toBe('tok-fresh');
+      expect(calls[1][0].provisioning_token).toBe('tok-retry');
+      expect(result.current.state).toBe('awaiting_wifi_switch');
+    });
+
+    it('never re-mints after a send that threw — the node may already hold that token', async () => {
+      (commandCenterApi.requestProvisioningToken as jest.Mock)
+        .mockResolvedValueOnce(tokenResponse('tok-prepare'))
+        .mockResolvedValueOnce(tokenResponse('tok-fresh'));
+      (provisioningApi.provision as jest.Mock).mockRejectedValue(new Error('Network Error'));
+      const { result } = renderHook(() => useProvisioning());
+      await prepareAndPick(result);
+
+      await act(async () => {
+        await result.current.startProvisioning('pw', 'kitchen', 'hh-1');
+      });
+
+      expect(provisioningApi.provision).toHaveBeenCalledTimes(1);
+      expect(commandCenterApi.requestProvisioningToken).toHaveBeenCalledTimes(2);
+      expect(result.current.state).toBe('awaiting_wifi_switch');
+    });
+
+    it('does not resend when the node says provisioning is already in progress', async () => {
+      (provisioningApi.provision as jest.Mock).mockResolvedValue({
+        success: false,
+        node_id: 'x',
+        room_name: 'kitchen',
+        message: 'Provisioning already in progress',
+      });
+      const { result } = renderHook(() => useProvisioning());
+      await prepareAndPick(result);
+
+      await act(async () => {
+        await result.current.startProvisioning('pw', 'kitchen', 'hh-1');
+      });
+
+      expect(provisioningApi.provision).toHaveBeenCalledTimes(1);
+      expect(result.current.state).toBe('awaiting_wifi_switch');
+    });
+  });
+
+  describe('token expiry parsing', () => {
+    it('reads a naive server timestamp as UTC, not local time', () => {
+      expect(parseServerTimestamp('2026-10-08T18:54:00')).toBe(Date.parse('2026-10-08T18:54:00Z'));
+      expect(parseServerTimestamp('2026-10-08T18:54:00.123456')).toBe(
+        Date.parse('2026-10-08T18:54:00.123Z'),
+      );
+      expect(parseServerTimestamp('2026-10-08T18:54:00Z')).toBe(Date.parse('2026-10-08T18:54:00Z'));
+      expect(parseServerTimestamp('2026-10-08T14:54:00-04:00')).toBe(
+        Date.parse('2026-10-08T18:54:00Z'),
+      );
+      expect(parseServerTimestamp('garbage')).toBeNull();
+      expect(parseServerTimestamp(null)).toBeNull();
+    });
+
+    it('takes the earlier of expires_in (from receipt) and expires_at', () => {
+      const fetchedAt = Date.parse('2026-10-08T18:54:00Z');
+      expect(
+        tokenExpiresAt({ expires_at: '2026-10-08T19:24:00', expires_in: 600 }, fetchedAt),
+      ).toBe(fetchedAt + 600_000);
+      expect(
+        tokenExpiresAt({ expires_at: '2026-10-08T18:56:00', expires_in: 600 }, fetchedAt),
+      ).toBe(Date.parse('2026-10-08T18:56:00Z'));
+      expect(tokenExpiresAt({ expires_at: '', expires_in: 0 }, fetchedAt)).toBe(
+        fetchedAt + 600_000,
+      );
+    });
+  });
+
+  describe('waiting for the node to register (no infinite spinner)', () => {
+    const emptyConfig = {
+      device_manager: 'jarvis',
+      primary_node_id: '',
+      use_external_devices: false,
+      nodes: [],
+    };
+
+    const provisionAndSwitch = async (result: { current: ReturnType<typeof useProvisioning> }) => {
+      await act(async () => {
+        await result.current.fetchProvisioningToken('hh-1');
+      });
+      await act(async () => {
+        await result.current.connect('192.168.4.1');
+      });
+      await act(async () => {
+        await result.current.fetchNetworks();
+      });
+      act(() => {
+        result.current.selectNetwork(MOCK_NETWORKS[0]);
+      });
+      await act(async () => {
+        await result.current.startProvisioning('pw', 'kitchen', 'hh-1');
+      });
+      expect(result.current.state).toBe('awaiting_wifi_switch');
+      await act(async () => {
+        result.current.confirmWifiSwitched();
+      });
+    };
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('stays in verifying until the node appears in the household, then succeeds', async () => {
+      jest.useFakeTimers();
+      (smartHomeApi.getSmartHomeConfig as jest.Mock)
+        .mockResolvedValueOnce(emptyConfig)
+        .mockResolvedValueOnce(emptyConfig)
+        .mockResolvedValue({
+          ...emptyConfig,
+          nodes: [{ node_id: 'cc-assigned-node-id', room: 'kitchen', online: true, last_seen: null }],
+        });
+      const { result } = renderHook(() => useProvisioning());
+      await provisionAndSwitch(result);
+
+      expect(result.current.state).toBe('verifying');
+      expect(smartHomeApi.getSmartHomeConfig).toHaveBeenCalledWith('hh-1');
+
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(VERIFY_POLL_MS * 2);
+      });
+
+      expect(result.current.state).toBe('success');
+      expect(result.current.progress).toBe(100);
+    });
+
+    it('gives up after the timeout with an actionable error instead of spinning forever', async () => {
+      jest.useFakeTimers();
+      (smartHomeApi.getSmartHomeConfig as jest.Mock).mockResolvedValue(emptyConfig);
+      const { result } = renderHook(() => useProvisioning());
+      await provisionAndSwitch(result);
+
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(VERIFY_TIMEOUT_MS - VERIFY_POLL_MS);
+      });
+      expect(result.current.state).toBe('verifying');
+
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(VERIFY_POLL_MS * 2);
+      });
+      expect(result.current.state).toBe('registration_failed');
+      expect(result.current.error).toBe(REGISTRATION_FAILED_MESSAGE);
+      expect(result.current.failureReason).toBeNull();
+
+      // …and the loop has stopped.
+      const calls = (smartHomeApi.getSmartHomeConfig as jest.Mock).mock.calls.length;
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(VERIFY_POLL_MS * 5);
+      });
+      expect((smartHomeApi.getSmartHomeConfig as jest.Mock).mock.calls.length).toBe(calls);
+    });
+
+    it('fails fast and shows the reason when the node reports registration_failed over its hotspot', async () => {
+      jest.useFakeTimers();
+      (smartHomeApi.getSmartHomeConfig as jest.Mock).mockResolvedValue(emptyConfig);
+      (provisioningApi.getNodeRegistrationStatus as jest.Mock)
+        .mockRejectedValueOnce(new Error('Network Error'))
+        .mockResolvedValue({
+          nodeState: 'AP_MODE',
+          message: 'Waiting for mobile app connection...',
+          registrationFailed: true,
+          failureReason: 'Invalid or expired provisioning token',
+        });
+      const { result } = renderHook(() => useProvisioning());
+      await provisionAndSwitch(result);
+      expect(result.current.state).toBe('verifying');
+
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(VERIFY_POLL_MS);
+      });
+
+      expect(result.current.state).toBe('registration_failed');
+      expect(result.current.failureReason).toBe('Invalid or expired provisioning token');
+    });
+
+    it('keep waiting restarts the poll; reset cancels it', async () => {
+      jest.useFakeTimers();
+      (smartHomeApi.getSmartHomeConfig as jest.Mock).mockResolvedValue(emptyConfig);
+      const { result } = renderHook(() => useProvisioning());
+      await provisionAndSwitch(result);
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(VERIFY_TIMEOUT_MS + VERIFY_POLL_MS);
+      });
+      expect(result.current.state).toBe('registration_failed');
+
+      await act(async () => {
+        result.current.retryVerification();
+      });
+      expect(result.current.state).toBe('verifying');
+      expect(result.current.error).toBeNull();
+
+      act(() => {
+        result.current.reset();
+      });
+      const calls = (smartHomeApi.getSmartHomeConfig as jest.Mock).mock.calls.length;
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(VERIFY_TIMEOUT_MS * 2);
+      });
+      expect((smartHomeApi.getSmartHomeConfig as jest.Mock).mock.calls.length).toBe(calls);
+      expect(result.current.state).toBe('idle');
+    });
+
+    it('checkNodeStatus surfaces the reason the node reports', async () => {
+      jest.useFakeTimers();
+      (smartHomeApi.getSmartHomeConfig as jest.Mock).mockResolvedValue(emptyConfig);
+      const { result } = renderHook(() => useProvisioning());
+      await provisionAndSwitch(result);
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(VERIFY_TIMEOUT_MS + VERIFY_POLL_MS);
+      });
+      expect(result.current.failureReason).toBeNull();
+
+      (provisioningApi.getNodeRegistrationStatus as jest.Mock).mockResolvedValue({
+        nodeState: 'ERROR',
+        message: '',
+        registrationFailed: true,
+        failureReason: 'Failed to connect to HomeNet',
+      });
+      await act(async () => {
+        await result.current.checkNodeStatus();
+      });
+      expect(result.current.failureReason).toBe('Failed to connect to HomeNet');
+      expect(result.current.state).toBe('registration_failed');
     });
   });
 });
