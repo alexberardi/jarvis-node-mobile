@@ -20,6 +20,7 @@ import {
   ApiProvisioningStatus,
   K2ProvisioningRequest,
   K2ProvisioningResponse,
+  NodeRegistrationStatus,
 } from '../types/Provisioning';
 import { getCommandCenterUrl, getServiceConfig } from '../config/serviceConfig';
 
@@ -27,10 +28,10 @@ import { getCommandCenterUrl, getServiceConfig } from '../config/serviceConfig';
 let nodeIp = '192.168.4.1';
 let nodePort = 8080;
 
-const createNodeApi = (): AxiosInstance =>
+const createNodeApi = (timeout: number = 10000): AxiosInstance =>
   axios.create({
     baseURL: `http://${nodeIp}:${nodePort}`,
-    timeout: 10000,
+    timeout,
     headers: {
       'Content-Type': 'application/json',
     },
@@ -153,4 +154,70 @@ export const provisionK2 = async (
   );
 
   return response.data;
+};
+
+const nonEmptyString = (value: unknown): string | null =>
+  typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
+
+/**
+ * Parse the node's `GET /api/v1/status` body defensively.
+ *
+ * Current firmware returns `{state, message, progress_percent, error}`, where a
+ * failed WiFi join or registration lands in `state: "ERROR"` with `error` set.
+ * Newer firmware additionally exposes `registration_failed` (and drops back to
+ * AP mode, so `state` may read `AP_MODE`). The new field is feature-detected:
+ * accepted as a boolean (reason in `registration_error` / `failure_reason` /
+ * `reason` / `error`), a reason string, or an object with a `reason`/`error`.
+ */
+export const parseNodeRegistrationStatus = (raw: unknown): NodeRegistrationStatus => {
+  const body = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const nodeState = nonEmptyString(body.state) ?? 'UNKNOWN';
+  const message = nonEmptyString(body.message) ?? '';
+  const flag = body.registration_failed;
+
+  let registrationFailed = false;
+  let reason: string | null = null;
+
+  if (flag === true) {
+    registrationFailed = true;
+  } else if (typeof flag === 'string' && flag.trim()) {
+    registrationFailed = true;
+    reason = flag.trim();
+  } else if (flag && typeof flag === 'object') {
+    registrationFailed = true;
+    const obj = flag as Record<string, unknown>;
+    reason = nonEmptyString(obj.reason) ?? nonEmptyString(obj.error) ?? nonEmptyString(obj.message);
+  }
+
+  if (registrationFailed && !reason) {
+    reason =
+      nonEmptyString(body.registration_error) ??
+      nonEmptyString(body.failure_reason) ??
+      nonEmptyString(body.reason) ??
+      nonEmptyString(body.error);
+  }
+
+  // Legacy firmware: ERROR + error string is the only failure signal.
+  if (!registrationFailed && nodeState === 'ERROR') {
+    registrationFailed = true;
+    reason = nonEmptyString(body.error) ?? (message || null);
+  }
+
+  return { nodeState, message, registrationFailed, failureReason: reason };
+};
+
+/**
+ * Read the node's provisioning status over its setup hotspot.
+ * Only reachable while the phone is on the node's AP; callers must treat a
+ * throw as "node not reachable right now", not as a failure.
+ */
+export const getNodeRegistrationStatus = async (
+  timeoutMs: number = 3000,
+): Promise<NodeRegistrationStatus> => {
+  if (USE_MOCK) {
+    return { nodeState: 'PROVISIONED', message: '', registrationFailed: false, failureReason: null };
+  }
+  const api = createNodeApi(timeoutMs);
+  const response = await api.get<unknown>('/api/v1/status');
+  return parseNodeRegistrationStatus(response.data);
 };

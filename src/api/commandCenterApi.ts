@@ -147,11 +147,12 @@ export const getInteractiveCallbackStatus = async (
 
 export const requestProvisioningToken = async (
   request: ProvisioningTokenRequest,
+  options: { timeoutMs?: number } = {},
 ): Promise<ProvisioningTokenResponse> => {
-  const response = await apiClient.post<ProvisioningTokenResponse>(
-    `${getCommandCenterUrl()}/api/v0/provisioning/token`,
-    request,
-  );
+  const url = `${getCommandCenterUrl()}/api/v0/provisioning/token`;
+  const response = options.timeoutMs
+    ? await apiClient.post<ProvisioningTokenResponse>(url, request, { timeout: options.timeoutMs })
+    : await apiClient.post<ProvisioningTokenResponse>(url, request);
   return response.data;
 };
 

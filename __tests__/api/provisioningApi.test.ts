@@ -13,6 +13,7 @@ import {
   scanNetworks,
   provision,
   getProvisioningStatus,
+  parseNodeRegistrationStatus,
   setNodeIp,
 } from '../../src/api/provisioningApi';
 import { ProvisioningRequest } from '../../src/types/Provisioning';
@@ -150,5 +151,99 @@ describeWithMock('Provisioning API (requires mock or real node)', () => {
       // This is a configuration function, just verify it doesn't throw
       expect(true).toBe(true);
     });
+  });
+});
+
+describe('parseNodeRegistrationStatus (feature-detects registration_failed)', () => {
+  it('reports no failure for an in-progress node on current firmware', () => {
+    expect(
+      parseNodeRegistrationStatus({
+        state: 'REGISTERING',
+        message: 'Registering with command center...',
+        progress_percent: 70,
+        error: null,
+      }),
+    ).toEqual({
+      nodeState: 'REGISTERING',
+      message: 'Registering with command center...',
+      registrationFailed: false,
+      failureReason: null,
+    });
+  });
+
+  it('maps a legacy ERROR state to a failure with its error string', () => {
+    const parsed = parseNodeRegistrationStatus({
+      state: 'ERROR',
+      message: 'Failed',
+      progress_percent: 70,
+      error: 'Failed to register with command center',
+    });
+    expect(parsed.registrationFailed).toBe(true);
+    expect(parsed.failureReason).toBe('Failed to register with command center');
+  });
+
+  it('reads registration_failed: true with a separate reason field', () => {
+    const parsed = parseNodeRegistrationStatus({
+      state: 'AP_MODE',
+      message: 'Waiting for mobile app connection...',
+      progress_percent: 0,
+      error: null,
+      registration_failed: true,
+      registration_error: 'Invalid or expired provisioning token',
+    });
+    expect(parsed).toEqual({
+      nodeState: 'AP_MODE',
+      message: 'Waiting for mobile app connection...',
+      registrationFailed: true,
+      failureReason: 'Invalid or expired provisioning token',
+    });
+  });
+
+  it('falls back through reason / error for the boolean form', () => {
+    expect(
+      parseNodeRegistrationStatus({ state: 'AP_MODE', registration_failed: true, reason: 'r1' })
+        .failureReason,
+    ).toBe('r1');
+    expect(
+      parseNodeRegistrationStatus({ state: 'AP_MODE', registration_failed: true, error: 'e1' })
+        .failureReason,
+    ).toBe('e1');
+    expect(
+      parseNodeRegistrationStatus({ state: 'AP_MODE', registration_failed: true }).failureReason,
+    ).toBeNull();
+  });
+
+  it('accepts registration_failed as a reason string or an object', () => {
+    expect(
+      parseNodeRegistrationStatus({ state: 'AP_MODE', registration_failed: 'HTTP 401' }),
+    ).toMatchObject({ registrationFailed: true, failureReason: 'HTTP 401' });
+    expect(
+      parseNodeRegistrationStatus({
+        state: 'AP_MODE',
+        registration_failed: { reason: 'Invalid or expired provisioning token', status: 401 },
+      }),
+    ).toMatchObject({
+      registrationFailed: true,
+      failureReason: 'Invalid or expired provisioning token',
+    });
+  });
+
+  it('treats registration_failed: false / null as no failure', () => {
+    expect(
+      parseNodeRegistrationStatus({ state: 'AP_MODE', registration_failed: false }).registrationFailed,
+    ).toBe(false);
+    expect(
+      parseNodeRegistrationStatus({ state: 'AP_MODE', registration_failed: null }).registrationFailed,
+    ).toBe(false);
+  });
+
+  it('tolerates junk bodies', () => {
+    expect(parseNodeRegistrationStatus(null)).toEqual({
+      nodeState: 'UNKNOWN',
+      message: '',
+      registrationFailed: false,
+      failureReason: null,
+    });
+    expect(parseNodeRegistrationStatus('<html>').registrationFailed).toBe(false);
   });
 });
