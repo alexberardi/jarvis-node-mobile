@@ -133,6 +133,31 @@ export const waitForFactoryReset = async (
 };
 
 /**
+ * Remove a node that will never answer its factory reset (the Pi is gone or
+ * dead) — the fallback behind "Remove anyway", never the default path.
+ *
+ * jarvisd's `DELETE /api/v0/admin/nodes/{id}` (internal/modules/cc/reset.go,
+ * handleDeleteNode; power_user in the node's household): publishes a
+ * best-effort untracked reset whose token lives only 5 minutes in memory,
+ * deactivates the node's registration in auth (its key stops working), and
+ * hard-deletes the node row with its sessions, config pushes, settings
+ * requests/snapshots and tasks. Answers `{message: "Deleted"}`; 404/403 as
+ * `{detail: "<message>"}`.
+ */
+export const removeNode = async (nodeId: string): Promise<void> => {
+  await apiClient.delete(`${getCommandCenterUrl()}/api/v0/admin/nodes/${nodeId}`);
+};
+
+/** The server's `{detail: "<message>"}` from a failed call, else the error's own message. */
+export const nodeErrorMessage = (err: unknown, fallback: string): string => {
+  if (axios.isAxiosError(err)) {
+    const d = (err.response?.data as { detail?: unknown } | undefined)?.detail;
+    if (typeof d === 'string' && d.trim()) return d;
+  }
+  return err instanceof Error && err.message ? err.message : fallback;
+};
+
+/**
  * Update a node's config.json settings via MQTT.
  *
  * The node merges the settings into config.json and applies live where

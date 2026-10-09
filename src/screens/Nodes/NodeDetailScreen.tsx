@@ -22,6 +22,8 @@ import { fetchNodeTools } from '../../api/chatApi';
 import {
   getNode,
   NodeInfo,
+  nodeErrorMessage,
+  removeNode,
   startFactoryReset,
   waitForFactoryReset,
 } from '../../api/nodeApi';
@@ -90,7 +92,9 @@ type DeleteStep =
   | { kind: 'running'; state: NodeTaskState | null }
   | { kind: 'done' }
   | { kind: 'queued' }
-  | { kind: 'error'; message: string };
+  | { kind: 'removeConfirm' }
+  | { kind: 'removing' }
+  | { kind: 'error'; message: string; title?: string };
 
 // How long the dialog follows the factory-reset task before handing over to
 // "queued". An online node normally confirms within seconds; an offline one
@@ -167,6 +171,28 @@ export const OverviewTab = ({
       });
     }
   }, [node.node_id, node.online]);
+
+  // "Remove anyway" — for a node that will never pick the reset up (Pi gone).
+  // Hard DELETE: removes the node and revokes its key, without wiping the Pi.
+  const handleRemoveAnyway = useCallback(async () => {
+    setDeleteStep({ kind: 'removing' });
+    try {
+      await removeNode(node.node_id);
+      try {
+        await deleteK2(node.node_id);
+      } catch {}
+      if (unmountedRef.current) return;
+      setDeleteStep({ kind: 'closed' });
+      navigation.navigate('NodeList');
+    } catch (err) {
+      if (unmountedRef.current) return;
+      setDeleteStep({
+        kind: 'error',
+        title: 'Remove failed',
+        message: nodeErrorMessage(err, 'Failed to remove node'),
+      });
+    }
+  }, [node.node_id, navigation]);
 
   const finishDelete = useCallback(() => {
     setDeleteStep({ kind: 'closed' });
@@ -245,8 +271,8 @@ export const OverviewTab = ({
         <Modal
           visible={deleteStep.kind !== 'closed'}
           onDismiss={() => {
-            // Block dismiss while the request is in flight.
-            if (deleteStep.kind !== 'running') {
+            // Block dismiss while a request is in flight.
+            if (deleteStep.kind !== 'running' && deleteStep.kind !== 'removing') {
               setDeleteStep({ kind: 'closed' });
             }
           }}
@@ -320,15 +346,57 @@ export const OverviewTab = ({
                 Until then it stays in your node list.
               </Text>
               <View style={styles.modalActions}>
+                <Button
+                  testID="node-delete-remove-anyway"
+                  textColor={theme.colors.error}
+                  onPress={() => setDeleteStep({ kind: 'removeConfirm' })}
+                >
+                  Remove anyway
+                </Button>
                 <Button testID="node-delete-queued-close" mode="contained" onPress={finishDelete}>OK</Button>
               </View>
             </>
           )}
 
+          {deleteStep.kind === 'removeConfirm' && (
+            <>
+              <Text variant="titleLarge" style={{ fontWeight: '600', marginBottom: 8, color: theme.colors.error }}>
+                Remove without resetting?
+              </Text>
+              <Text variant="bodyMedium" style={{ marginBottom: 12 }}>
+                {nodeName} will be removed from your household right away and its
+                credentials revoked, so it can't connect any more. It won't be wiped.
+              </Text>
+              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 24 }}>
+                Only do this if the device is gone for good. If it ever comes back,
+                factory-reset it by hand before setting it up again.
+              </Text>
+              <View style={styles.modalActions}>
+                <Button testID="node-delete-remove-back" onPress={() => setDeleteStep({ kind: 'queued' })}>Back</Button>
+                <Button
+                  testID="node-delete-remove-confirm"
+                  mode="contained"
+                  buttonColor={theme.colors.error}
+                  textColor={theme.colors.onError}
+                  onPress={handleRemoveAnyway}
+                >
+                  Remove
+                </Button>
+              </View>
+            </>
+          )}
+
+          {deleteStep.kind === 'removing' && (
+            <View testID="node-delete-removing" style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <ActivityIndicator />
+              <Text variant="bodyMedium" style={{ flex: 1 }}>Removing {nodeName}…</Text>
+            </View>
+          )}
+
           {deleteStep.kind === 'error' && (
             <>
               <Text variant="titleLarge" style={{ fontWeight: '600', marginBottom: 12, color: theme.colors.error }}>
-                Reset failed
+                {deleteStep.title ?? 'Reset failed'}
               </Text>
               <Text variant="bodyMedium" style={{ marginBottom: 24 }}>
                 {deleteStep.message}

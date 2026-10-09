@@ -4,7 +4,7 @@ import { PaperProvider } from 'react-native-paper';
 
 import { OverviewTab } from '../../src/screens/Nodes/NodeDetailScreen';
 import { lightTheme } from '../../src/theme';
-import { startFactoryReset, waitForFactoryReset } from '../../src/api/nodeApi';
+import { removeNode, startFactoryReset, waitForFactoryReset } from '../../src/api/nodeApi';
 import { deleteK2 } from '../../src/services/k2Service';
 
 // L1 FLOW INTEGRATION — the node-delete state machine (confirm → running →
@@ -23,6 +23,8 @@ jest.mock('@react-navigation/native', () => ({
 jest.mock('../../src/api/nodeApi', () => ({
   startFactoryReset: jest.fn(),
   waitForFactoryReset: jest.fn(),
+  removeNode: jest.fn(),
+  nodeErrorMessage: (e: any, fb: string) => e?.response?.data?.detail ?? e?.message ?? fb,
 }));
 jest.mock('../../src/services/k2Service', () => ({ deleteK2: jest.fn(), hasK2: jest.fn() }));
 // NodeUpdateSection does its own data fetching; not under test here.
@@ -122,6 +124,62 @@ describe('Node delete — flow integration (OverviewTab tracked factory reset)',
     expect(deleteK2).not.toHaveBeenCalled();
     fireEvent.press(getByTestId('node-delete-queued-close'));
     expect(mockNavigate).toHaveBeenCalledWith('NodeList');
+  });
+
+  it('queued → "Remove anyway" → confirm → hard DELETE + K2 cleanup → NodeList', async () => {
+    (waitForFactoryReset as jest.Mock).mockResolvedValue(task('dispatched'));
+    (removeNode as jest.Mock).mockResolvedValue(undefined);
+    (deleteK2 as jest.Mock).mockResolvedValue(undefined);
+    const { getByTestId, findByText } = renderTab(true, { online: false });
+
+    confirmDelete(getByTestId);
+    await findByText('Reset queued');
+    fireEvent.press(getByTestId('node-delete-remove-anyway'));
+    await findByText('Remove without resetting?');
+    expect(removeNode).not.toHaveBeenCalled();
+    fireEvent.press(getByTestId('node-delete-remove-confirm'));
+
+    await waitFor(() => expect(removeNode).toHaveBeenCalledWith('node-abc'));
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('NodeList'));
+    expect(deleteK2).toHaveBeenCalledWith('node-abc');
+  });
+
+  it('"Remove anyway" → Back returns to the queued state without removing', async () => {
+    (waitForFactoryReset as jest.Mock).mockResolvedValue(task('dispatched'));
+    const { getByTestId, findByText } = renderTab(true, { online: false });
+
+    confirmDelete(getByTestId);
+    await findByText('Reset queued');
+    fireEvent.press(getByTestId('node-delete-remove-anyway'));
+    fireEvent.press(getByTestId('node-delete-remove-back'));
+
+    await findByText('Reset queued');
+    expect(removeNode).not.toHaveBeenCalled();
+  });
+
+  it('shows the server detail when "Remove anyway" fails, and does NOT navigate', async () => {
+    (waitForFactoryReset as jest.Mock).mockResolvedValue(task('dispatched'));
+    (removeNode as jest.Mock).mockRejectedValue({ response: { data: { detail: 'Not a household power user' } } });
+    const { getByTestId, findByText } = renderTab(true, { online: false });
+
+    confirmDelete(getByTestId);
+    await findByText('Reset queued');
+    fireEvent.press(getByTestId('node-delete-remove-anyway'));
+    fireEvent.press(getByTestId('node-delete-remove-confirm'));
+
+    await findByText('Remove failed');
+    await findByText('Not a household power user');
+    expect(mockNavigate).not.toHaveBeenCalled();
+    expect(deleteK2).not.toHaveBeenCalled();
+  });
+
+  it('does not offer "Remove anyway" after a successful reset', async () => {
+    (waitForFactoryReset as jest.Mock).mockResolvedValue(task('success'));
+    const { getByTestId, findByText, queryByTestId } = renderTab();
+
+    confirmDelete(getByTestId);
+    await findByText('Node reset');
+    expect(queryByTestId('node-delete-remove-anyway')).toBeNull();
   });
 
   it('shows the node-reported error when the task fails, and does NOT navigate', async () => {

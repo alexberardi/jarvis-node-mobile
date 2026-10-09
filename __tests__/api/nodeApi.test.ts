@@ -7,7 +7,7 @@
  * until success/failed or the deadline (an offline node never answers).
  */
 import apiClient from '../../src/api/apiClient';
-import { startFactoryReset, waitForFactoryReset } from '../../src/api/nodeApi';
+import { nodeErrorMessage, removeNode, startFactoryReset, waitForFactoryReset } from '../../src/api/nodeApi';
 import { getNodeTask } from '../../src/api/nodeUpdateApi';
 
 jest.mock('../../src/config/serviceConfig', () => ({
@@ -25,6 +25,7 @@ jest.mock('../../src/api/nodeUpdateApi', () => ({
 }));
 
 const mockPost = (apiClient as unknown as { post: jest.Mock }).post;
+const mockDelete = (apiClient as unknown as { delete: jest.Mock }).delete;
 const mockGetTask = getNodeTask as jest.Mock;
 
 const task = (state: string) => ({ id: 't1', node_id: 'n1', kind: 'factory_reset', state, error_message: null });
@@ -100,5 +101,28 @@ describe('waitForFactoryReset', () => {
     const res = await waitForFactoryReset('t1', { timeoutMs: 30_000, isCancelled: () => true, ...clock() });
     expect(res).toBeNull();
     expect(mockGetTask).not.toHaveBeenCalled();
+  });
+});
+
+describe('removeNode (hard delete, "Remove anyway")', () => {
+  it('DELETEs the node', async () => {
+    mockDelete.mockResolvedValue({ data: { message: 'Deleted' } });
+    await removeNode('n1');
+    expect(mockDelete).toHaveBeenCalledWith('http://cc.test/api/v0/admin/nodes/n1');
+  });
+
+  it('propagates failures', async () => {
+    mockDelete.mockRejectedValue(axiosError(404, { detail: 'Node not found' }));
+    await expect(removeNode('n1')).rejects.toThrow('404');
+  });
+});
+
+describe('nodeErrorMessage', () => {
+  it("reads the server's string detail", () => {
+    expect(nodeErrorMessage(axiosError(403, { detail: 'Forbidden here' }), 'fb')).toBe('Forbidden here');
+  });
+  it("falls back to the error's message, then the fallback", () => {
+    expect(nodeErrorMessage(new Error('Network Error'), 'fb')).toBe('Network Error');
+    expect(nodeErrorMessage(undefined, 'fb')).toBe('fb');
   });
 });
