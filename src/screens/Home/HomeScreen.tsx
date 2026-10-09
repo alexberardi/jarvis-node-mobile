@@ -6,6 +6,7 @@ import {
   ActivityIndicator,
   AppState,
   FlatList,
+  Image,
   KeyboardAvoidingView,
   Platform,
   RefreshControl,
@@ -21,7 +22,7 @@ import * as Notifications from 'expo-notifications';
 import { getUnreadCount } from '../../api/inboxApi';
 import { sendNodeAction } from '../../api/commandCenterApi';
 import { getTTSConfig, transcribeAudio } from '../../api/chatApi';
-import type { ChatAction, ChatMessage } from '../../api/chatApi';
+import type { ChatAction, ChatImageErrorCode, ChatMessage } from '../../api/chatApi';
 import { refreshAuthToken } from '../../api/apiClient';
 
 /** Strip markdown + think tags for clean TTS input. */
@@ -50,6 +51,7 @@ import type { NodeOption } from '../../api/smartHomeApi';
 import { usePendingNode } from '../../contexts/PendingNodeContext';
 import { helpCopy } from '../../copy/help';
 import { useChat } from '../../hooks/useChat';
+import { useChatCapabilities } from '../../hooks/useChatCapabilities';
 import { useFirstRun } from '../../hooks/useFirstRun';
 import { useVoiceRecording } from '../../hooks/useVoiceRecording';
 import { RootStackParamList } from '../../navigation/types';
@@ -59,6 +61,12 @@ import {
   subscribePendingIntent,
 } from '../../navigation/deepLinks';
 import { AUTO_PLAY_TTS_KEY, LAST_NODE_KEY } from '../../config/storageKeys';
+import {
+  PendingChatImage,
+  PickSource,
+  pickChatImages,
+  prepareChatImage,
+} from '../../services/chatImageService';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -165,6 +173,36 @@ const HomeScreen = () => {
   }, []);
 
   const [showToolsModal, setShowToolsModal] = useState(false);
+
+  // Image attachments — offered only when the server's chat capabilities say
+  // so (a legacy server 404s the capabilities read → no attach button at all).
+  const {
+    capabilities: chatCaps,
+    refresh: refreshChatCaps,
+    disableImages,
+  } = useChatCapabilities(!!authState.accessToken);
+  const imagesEnabled = chatCaps.images;
+  const [pendingImages, setPendingImages] = useState<PendingChatImage[]>([]);
+  const [showAttachSheet, setShowAttachSheet] = useState(false);
+  const [preparingImages, setPreparingImages] = useState(false);
+
+  // Server turned vision off → drop anything staged so it can't be sent.
+  useEffect(() => {
+    if (!imagesEnabled) setPendingImages([]);
+  }, [imagesEnabled]);
+
+  const handleImagesRejected = useCallback(
+    (code: ChatImageErrorCode) => {
+      if (code === 'images_unavailable') {
+        disableImages();
+        refreshChatCaps().catch(() => {});
+        setSnackbar('Images are turned off on the Jarvis server.');
+      } else {
+        setSnackbar('The server rejected those images. Try fewer or smaller photos.');
+      }
+    },
+    [disableImages, refreshChatCaps],
+  );
   // The selected node is a present + online member of this household. Reported
   // by NodeSelector; false while a just-provisioned node is still coming online
   // (or if it's offline / registered elsewhere) — gates the chat composer so a
@@ -187,6 +225,7 @@ const HomeScreen = () => {
     householdId,
     accessToken: authState.accessToken,
     onAssistantDone: handleAutoPlay,
+    onImagesRejected: handleImagesRejected,
   });
 
   // Tools have been reported by the node (or we've stopped waiting). Until then
@@ -302,12 +341,65 @@ const HomeScreen = () => {
     };
   }, [refreshUnreadCount]);
 
-  const handleSend = useCallback(() => {
+  const handleSend = useCallback(async () => {
     const text = inputText.trim();
-    if (!text) return;
+    const images = imagesEnabled ? pendingImages : [];
+    if (!text && images.length === 0) return;
+
+    if (images.length === 0) {
+      setInputText('');
+      sendMessage(text);
+      return;
+    }
+
+    // Downscale + compress before sending; on failure keep the draft intact.
+    setPreparingImages(true);
+    let payload;
+    try {
+      payload = await Promise.all(
+        images.map((img) => prepareChatImage(img, chatCaps.max_image_bytes)),
+      );
+    } catch (error) {
+      setSnackbar(
+        error instanceof Error && error.message
+          ? error.message
+          : 'Could not prepare the image. Try a different photo.',
+      );
+      return;
+    } finally {
+      setPreparingImages(false);
+    }
+
     setInputText('');
-    sendMessage(text);
-  }, [inputText, sendMessage]);
+    setPendingImages([]);
+    sendMessage(text, {
+      refs: images.map(({ uri, width, height }) => ({ uri, width, height })),
+      payload,
+    });
+  }, [inputText, imagesEnabled, pendingImages, chatCaps.max_image_bytes, sendMessage]);
+
+  const remainingImageSlots = Math.max(0, chatCaps.max_images - pendingImages.length);
+
+  const handlePickImages = useCallback(
+    async (source: PickSource) => {
+      setShowAttachSheet(false);
+      try {
+        const picked = await pickChatImages(source, remainingImageSlots);
+        if (picked.length > 0) {
+          setPendingImages((prev) => [...prev, ...picked].slice(0, chatCaps.max_images));
+        }
+      } catch (error) {
+        setSnackbar(
+          error instanceof Error && error.message ? error.message : 'Could not open the picker.',
+        );
+      }
+    },
+    [remainingImageSlots, chatCaps.max_images],
+  );
+
+  const removePendingImage = useCallback((index: number) => {
+    setPendingImages((prev) => prev.filter((_, i) => i !== index));
+  }, []);
 
   const handleMicPress = useCallback(async () => {
     if (isRecording) {
@@ -613,8 +705,45 @@ const HomeScreen = () => {
         </View>
       )}
 
+      {/* Staged image thumbnails */}
+      {imagesEnabled && pendingImages.length > 0 && (
+        <View style={styles.thumbRow} testID="pending-images">
+          {pendingImages.map((img, i) => (
+            <View key={`${img.uri}-${i}`} style={styles.thumbWrap}>
+              <Image
+                source={{ uri: img.uri }}
+                style={styles.thumb}
+                testID="pending-image-thumb"
+                accessibilityLabel={`Attached image ${i + 1}`}
+              />
+              <IconButton
+                icon="close-circle"
+                size={18}
+                onPress={() => removePendingImage(i)}
+                style={styles.thumbRemove}
+                iconColor={theme.colors.onSurface}
+                containerColor={theme.colors.surface}
+                accessibilityLabel={`Remove image ${i + 1}`}
+                testID={`remove-image-${i}`}
+              />
+            </View>
+          ))}
+        </View>
+      )}
+
       {/* Input bar */}
       <View style={[styles.inputBar, { borderTopColor: theme.colors.outlineVariant }]}>
+        {imagesEnabled && (
+          <IconButton
+            icon="image-plus"
+            size={24}
+            onPress={() => setShowAttachSheet(true)}
+            disabled={!inputReady || isLoading || preparingImages || remainingImageSlots === 0}
+            iconColor={theme.colors.outline}
+            accessibilityLabel="Attach image"
+            testID="attach-image-button"
+          />
+        )}
         <TextInput
           mode="outlined"
           placeholder={
@@ -646,8 +775,14 @@ const HomeScreen = () => {
           icon="send"
           size={24}
           onPress={handleSend}
-          disabled={!inputText.trim() || !inputReady || isLoading}
+          disabled={
+            (!inputText.trim() && !(imagesEnabled && pendingImages.length > 0)) ||
+            !inputReady ||
+            isLoading ||
+            preparingImages
+          }
           iconColor={theme.colors.primary}
+          testID="send-button"
         />
       </View>
 
@@ -660,6 +795,33 @@ const HomeScreen = () => {
       </Snackbar>
 
       <Portal>
+        <Modal
+          visible={showAttachSheet}
+          onDismiss={() => setShowAttachSheet(false)}
+          contentContainerStyle={[styles.attachSheet, { backgroundColor: theme.colors.surface }]}
+        >
+          <Text variant="titleMedium" style={{ fontWeight: '600', marginBottom: 8 }}>
+            Attach an image
+          </Text>
+          <Button
+            icon="camera"
+            mode="text"
+            contentStyle={styles.attachOption}
+            onPress={() => handlePickImages('camera')}
+            testID="attach-camera"
+          >
+            Camera
+          </Button>
+          <Button
+            icon="image-multiple"
+            mode="text"
+            contentStyle={styles.attachOption}
+            onPress={() => handlePickImages('library')}
+            testID="attach-library"
+          >
+            Photo library
+          </Button>
+        </Modal>
         <Modal
           visible={showToolsModal}
           onDismiss={() => setShowToolsModal(false)}
@@ -765,6 +927,36 @@ const styles = StyleSheet.create({
   },
   textInput: {
     flex: 1,
+  },
+  thumbRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingTop: 8,
+  },
+  thumbWrap: {
+    width: 64,
+    height: 64,
+  },
+  thumb: {
+    width: 64,
+    height: 64,
+    borderRadius: 8,
+  },
+  thumbRemove: {
+    position: 'absolute',
+    top: -14,
+    right: -14,
+    margin: 0,
+  },
+  attachSheet: {
+    margin: 20,
+    borderRadius: 16,
+    padding: 20,
+  },
+  attachOption: {
+    justifyContent: 'flex-start',
   },
   inputOutline: {
     borderRadius: 24,

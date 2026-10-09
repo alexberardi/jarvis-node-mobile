@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { LayoutChangeEvent, Pressable, StyleSheet, View } from 'react-native';
+import { Image, LayoutChangeEvent, Pressable, StyleSheet, View } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import { Button, IconButton, Text, useTheme } from 'react-native-paper';
 
@@ -133,12 +133,30 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
           </Text>
         )}
         {isUser ? (
-          <Text
-            variant="bodyMedium"
-            style={{ color: theme.colors.onPrimary }}
-          >
-            {message.content}
-          </Text>
+          <>
+            {message.images && message.images.length > 0 && (
+              <View style={styles.imageGrid} testID="chat-bubble-images">
+                {message.images.map((img, i) => (
+                  <Image
+                    key={`${img.uri}-${i}`}
+                    source={{ uri: img.uri }}
+                    style={message.images!.length === 1 ? styles.imageSingle : styles.imageTile}
+                    resizeMode="cover"
+                    accessibilityLabel={`Attached image ${i + 1}`}
+                    testID="chat-bubble-image"
+                  />
+                ))}
+              </View>
+            )}
+            {message.content.length > 0 && (
+              <Text
+                variant="bodyMedium"
+                style={{ color: theme.colors.onPrimary }}
+              >
+                {message.content}
+              </Text>
+            )}
+          </>
         ) : (
           <>
             {/* Collapsible reasoning section */}
@@ -308,6 +326,22 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
 };
 
 const styles = StyleSheet.create({
+  imageGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+    marginBottom: 4,
+  },
+  imageSingle: {
+    width: 200,
+    height: 200,
+    borderRadius: 10,
+  },
+  imageTile: {
+    width: 96,
+    height: 96,
+    borderRadius: 8,
+  },
   statusContainer: {
     alignItems: 'center',
     paddingVertical: 4,
