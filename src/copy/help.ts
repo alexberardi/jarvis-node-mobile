@@ -70,6 +70,9 @@ export const helpCopy = {
     addVsRerecord: 'Add one keeps your existing samples. Re-record wipes them and rebuilds from scratch.',
     testMatch: 'Records a short sample and checks whether it matches your enrolled profile.',
     confidenceAnchor: 'Above ~70% reliably identifies you. Lower means add more samples from the same node.',
+    recognitionOffTitle: 'Speaker recognition is off for this household',
+    recognitionOff:
+      "Your voice samples are saved, but Jarvis won't recognize who is speaking until an admin turns on Speaker recognition: in the Jarvis admin, Settings → stt → voice.recognition_enabled, or the setup wizard's Privacy step.",
   },
 
   hardware: {
