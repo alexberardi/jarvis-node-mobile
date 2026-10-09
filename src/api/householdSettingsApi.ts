@@ -29,6 +29,18 @@ export interface HouseholdSettings {
    */
   'persona.household_prompt': string;
   /**
+   * Master memory toggle (D19): remember/forget/recall tools AND learning from
+   * voice. Default on.
+   */
+  'memory.enabled': boolean;
+  /**
+   * Learn from voice (D19): log transcripts of turns from a confidently
+   * identified speaker and extract memories from them. Default on; only has an
+   * effect while `memory.enabled` and speaker recognition are on. The
+   * household's opt-out of learning without losing remember/recall.
+   */
+  'memory.extraction_enabled': boolean;
+  /**
    * The household's own Twilio account (AD6), used for the phone calls the
    * assistant places. Write-only: the server answers `"********"` once the
    * SID / auth token are set and `null` when they are not — the values are

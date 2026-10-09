@@ -24,6 +24,7 @@ import {
   getHouseholdSettings,
   getPersonaPresets,
   setHouseholdSetting,
+  settingErrorMessage,
   type PersonaPreset,
 } from '../../api/householdSettingsApi';
 import TwilioSettingsCard, {
@@ -59,6 +60,8 @@ import {
 } from '../../services/presenceService';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'HouseholdEdit'>;
+
+type MemoryKey = 'memory.enabled' | 'memory.extraction_enabled';
 
 interface Member {
   user_id: number;
@@ -97,6 +100,10 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const [webSearchLoading, setWebSearchLoading] = useState(true);
   const [savingWebSearch, setSavingWebSearch] = useState(false);
+  // Memory (D19): master toggle + "learn from voice" opt-out. Both default on.
+  const [memoryEnabled, setMemoryEnabled] = useState(true);
+  const [extractionEnabled, setExtractionEnabled] = useState(true);
+  const [savingMemoryKey, setSavingMemoryKey] = useState<MemoryKey | null>(null);
   const [location, setLocation] = useState('');
   const [savedLocation, setSavedLocation] = useState('');
   const [savingLocation, setSavingLocation] = useState(false);
@@ -187,6 +194,8 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
     try {
       const settings = await getHouseholdSettings(householdId);
       setWebSearchEnabled(!!settings['web_search.enabled']);
+      setMemoryEnabled(settings['memory.enabled'] ?? true);
+      setExtractionEnabled(settings['memory.extraction_enabled'] ?? true);
       const loc = settings['household.location'] ?? '';
       setLocation(loc);
       setSavedLocation(loc);
@@ -514,6 +523,21 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
     }
   }, [householdId]);
 
+  // Toggle a memory setting (optimistic; revert on failure)
+  const handleToggleMemory = useCallback(async (key: MemoryKey, next: boolean) => {
+    const apply = key === 'memory.enabled' ? setMemoryEnabled : setExtractionEnabled;
+    apply(next);
+    setSavingMemoryKey(key);
+    try {
+      await setHouseholdSetting(householdId, key, next);
+    } catch (err: unknown) {
+      apply(!next);
+      Alert.alert('Error', settingErrorMessage(err, 'Failed to update memory setting'));
+    } finally {
+      setSavingMemoryKey(null);
+    }
+  }, [householdId]);
+
   // Save the household's locality. Trimmed; saving the unchanged value is a
   // no-op so leaving the field alone never fires a write.
   const handleSaveLocation = useCallback(async () => {
@@ -826,6 +850,58 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
                   value={webSearchEnabled}
                   onValueChange={handleToggleWebSearch}
                   disabled={!isAdmin || savingWebSearch}
+                />
+              )}
+            </View>
+            {!isAdmin && !webSearchLoading && (
+              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 8 }}>
+                Only a household admin can change this.
+              </Text>
+            )}
+          </Card.Content>
+        </Card>
+
+        {/* Memory (D19) */}
+        <Card style={styles.card}>
+          <Card.Content>
+            <Text variant="titleMedium" style={styles.sectionTitle}>Memory</Text>
+            <View style={styles.toggleRow}>
+              <View style={{ flex: 1, paddingRight: 12 }}>
+                <Text variant="bodyMedium">Use memory</Text>
+                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 2 }}>
+                  Let Jarvis remember things you ask it to, recall them later, and
+                  forget them on request. When off, Jarvis neither stores nor uses
+                  memories for this household.
+                </Text>
+              </View>
+              {webSearchLoading ? (
+                <ActivityIndicator size="small" />
+              ) : (
+                <Switch
+                  testID="household-memory-toggle"
+                  value={memoryEnabled}
+                  onValueChange={(v) => handleToggleMemory('memory.enabled', v)}
+                  disabled={!isAdmin || savingMemoryKey !== null}
+                />
+              )}
+            </View>
+            <View style={[styles.toggleRow, { marginTop: 12 }]}>
+              <View style={{ flex: 1, paddingRight: 12 }}>
+                <Text variant="bodyMedium">Learn from voice</Text>
+                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 2 }}>
+                  Let Jarvis pick up useful facts from what you say to it, not just
+                  what you explicitly ask it to remember. Only applies to speakers it
+                  recognizes, so it also needs Speaker recognition turned on.
+                </Text>
+              </View>
+              {webSearchLoading ? (
+                <ActivityIndicator size="small" />
+              ) : (
+                <Switch
+                  testID="household-memory-extraction-toggle"
+                  value={memoryEnabled && extractionEnabled}
+                  onValueChange={(v) => handleToggleMemory('memory.extraction_enabled', v)}
+                  disabled={!isAdmin || !memoryEnabled || savingMemoryKey !== null}
                 />
               )}
             </View>
