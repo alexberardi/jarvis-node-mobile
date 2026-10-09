@@ -79,7 +79,7 @@ export const provision = async (
     wifi_password: request.password,
     room: request.room_name,
     command_center_url: request.command_center_url || getCommandCenterUrl(),
-    config_service_url: getServiceConfig().configServiceUrl || undefined,
+    config_service_url: request.config_service_url || getServiceConfig().configServiceUrl || undefined,
     household_id: request.household_id,
     node_id: request.node_id,
     provisioning_token: request.provisioning_token,
