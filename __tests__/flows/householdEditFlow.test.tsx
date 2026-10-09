@@ -226,6 +226,63 @@ describe('Household edit — flow integration (rename, roles, members, invites, 
     expect(setSetting).toHaveBeenCalledWith('hh-1', 'web_search.enabled', true);
   });
 
+  // D19: per-household memory opt-out — the master toggle and "learn from voice".
+  it('shows both memory toggles (default on) and an admin can turn learning off', async () => {
+    const setSetting = setHouseholdSetting as jest.Mock;
+    setSetting.mockClear();
+    const utils = renderScreen();
+    const master = await utils.findByTestId('household-memory-toggle');
+    const learn = utils.getByTestId('household-memory-extraction-toggle');
+    expect(master.props.value).toBe(true);
+    expect(learn.props.value).toBe(true);
+
+    await act(async () => {
+      fireEvent(learn, 'valueChange', false);
+    });
+
+    expect(setSetting).toHaveBeenCalledWith('hh-1', 'memory.extraction_enabled', false);
+    expect(utils.getByTestId('household-memory-extraction-toggle').props.value).toBe(false);
+  });
+
+  it('reflects saved memory values; learning is off and locked while memory is off', async () => {
+    (getHouseholdSettings as jest.Mock).mockResolvedValueOnce({
+      'web_search.enabled': false,
+      'household.location': '',
+      'persona.household_prompt': '',
+      'memory.enabled': false,
+      'memory.extraction_enabled': true,
+    });
+    const setSetting = setHouseholdSetting as jest.Mock;
+    setSetting.mockClear();
+    const utils = renderScreen();
+    const master = await utils.findByTestId('household-memory-toggle');
+    await waitFor(() => expect(master.props.value).toBe(false));
+    const learn = utils.getByTestId('household-memory-extraction-toggle');
+    expect(learn.props.value).toBe(false);
+    expect(learn.props.disabled).toBe(true);
+
+    await act(async () => {
+      fireEvent(utils.getByTestId('household-memory-toggle'), 'valueChange', true);
+    });
+    expect(setSetting).toHaveBeenCalledWith('hh-1', 'memory.enabled', true);
+  });
+
+  it('reverts a memory toggle and alerts when the write fails', async () => {
+    const setSetting = setHouseholdSetting as jest.Mock;
+    setSetting.mockRejectedValueOnce({ response: { data: { detail: 'Household admin required' } } });
+    const alertSpy = jest.spyOn(Alert, 'alert');
+    const utils = renderScreen();
+    const master = await utils.findByTestId('household-memory-toggle');
+
+    await act(async () => {
+      fireEvent(master, 'valueChange', false);
+    });
+
+    expect(alertSpy).toHaveBeenCalledWith('Error', 'Household admin required');
+    expect(utils.getByTestId('household-memory-toggle').props.value).toBe(true);
+    alertSpy.mockRestore();
+  });
+
   // Location biases business lookups — a search for "Tony's Pizzeria" once
   // resolved to a Maryland listing for a New Jersey household and the call
   // went to the wrong business.

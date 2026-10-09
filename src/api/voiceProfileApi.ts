@@ -13,6 +13,14 @@ import { getCommandCenterUrl } from '../config/serviceConfig';
 export interface VoiceProfileStatus {
   has_profile: boolean;
   sample_count: number;
+  /**
+   * Whether speaker recognition is on for the household
+   * (`voice.recognition_enabled`, OFF by default). Enrolling does NOT turn it
+   * on, so the enrollment screen says so when this is false. jarvisd adds it
+   * to the status response (internal/modules/cc/voice_profiles.go,
+   * handleVoiceProfileStatus); absent from older servers → unknown.
+   */
+  recognition_enabled?: boolean;
 }
 
 export interface VoiceProfileVerifyResult {
