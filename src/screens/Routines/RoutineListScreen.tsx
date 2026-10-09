@@ -132,7 +132,12 @@ const RoutineListScreen = () => {
         }
       } catch (e) {
         console.error('[RoutineListScreen] run-now failed', e);
-        Alert.alert('Error', 'Could not run the routine.');
+        if ((e as { code?: string })?.code === 'ECONNABORTED') {
+          // Our own (long) client timeout — the routine may still finish on the node.
+          Alert.alert('Still running', 'No result yet. The routine may still finish on the node.');
+        } else {
+          Alert.alert('Error', 'Could not run the routine.');
+        }
       } finally {
         setRunning(null);
       }
@@ -180,7 +185,12 @@ const RoutineListScreen = () => {
               />
               <Text variant="titleMedium" style={{ flex: 1 }}>{item.name}</Text>
               {running === item.id ? (
-                <ActivityIndicator size={20} style={{ marginRight: 8 }} />
+                <View testID={`routine-running-${item.id}`} style={styles.running}>
+                  <ActivityIndicator size={16} />
+                  <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                    Running…
+                  </Text>
+                </View>
               ) : (
                 <Menu
                   visible={runMenuOpen === item.id}
@@ -290,6 +300,7 @@ const styles = StyleSheet.create({
   title: { fontWeight: 'bold', paddingHorizontal: 16, marginBottom: 12 },
   titleFlex: { flex: 1, marginBottom: 0 },
   list: { padding: 16, gap: 12, paddingBottom: 96 },
+  running: { flexDirection: 'row', alignItems: 'center', gap: 6, marginRight: 8 },
   emptyList: { flexGrow: 1, justifyContent: 'center', alignItems: 'center' },
   card: {},
   cardHeader: { flexDirection: 'row', alignItems: 'center' },

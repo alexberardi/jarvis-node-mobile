@@ -75,6 +75,16 @@ export interface RunNowResult {
   failed: number;
 }
 
+/**
+ * How long run-now may take before the phone gives up. The server holds the
+ * request open until the node reports (jarvisd waits up to 60 s —
+ * `routineWait` in internal/modules/cc/routines.go — then answers
+ * `status: "timeout"`), and composing a routine's spoken summary regularly
+ * takes longer than the shared apiClient's 10 s default. 90 s leaves headroom
+ * so the server's own timeout answer arrives instead of an axios abort.
+ */
+export const RUN_NOW_TIMEOUT_MS = 90_000;
+
 export const runRoutineNow = async (
   householdId: string,
   routineId: string,
@@ -83,6 +93,7 @@ export const runRoutineNow = async (
   const res = await apiClient.post<RunNowResult>(
     `${base(householdId)}/${routineId}/run-now`,
     { node_id: nodeId ?? null },
+    { timeout: RUN_NOW_TIMEOUT_MS },
   );
   return res.data;
 };
