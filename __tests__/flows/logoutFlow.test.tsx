@@ -50,9 +50,11 @@ const HOUSEHOLDS = [
 
 // The keys present in AsyncStorage at logout time: two per-user keys that MUST be
 // wiped (a cached node list + a routine binding) and one preference that MUST be
-// preserved (theme), plus an unrelated key the wipe must not touch.
+// preserved (theme), the pinned server URL (an environment choice, not user
+// data), plus an unrelated key the wipe must not touch.
 const STORAGE_KEYS = [
   '@jarvis/theme', // preserved
+  '@jarvis/manual_config_url', // preserved
   '@jarvis/cached_nodes', // wiped
   'routine_bindings:hh-1', // wiped
   'some_other_lib_key', // untouched
@@ -145,6 +147,7 @@ describe('Logout — flow integration (real AuthContext + clearUserData security
       expect.arrayContaining(['@jarvis/cached_nodes', 'routine_bindings:hh-1']),
     );
     expect(removed).not.toContain('@jarvis/theme');
+    expect(removed).not.toContain('@jarvis/manual_config_url');
     expect(removed).not.toContain('some_other_lib_key');
 
     // react-query cache cleared + K2 in-memory userId reset (no cross-user leak).

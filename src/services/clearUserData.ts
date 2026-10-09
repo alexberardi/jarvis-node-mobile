@@ -6,10 +6,16 @@
  * service URLs, react-query cache entries keyed by householdId) bleeds
  * into the next environment the user logs into.
  *
- * Preserves only true UI preferences (theme, auto-play, push toggle).
+ * Preserves true UI preferences (theme, auto-play, push toggle) and the
+ * manual server URL. The URL picks the environment rather than belonging to
+ * a user: wiping it on logout silently dropped discovery back to the dev
+ * build's baked EXPO_PUBLIC_MANUAL_CONFIG_URL (localhost) while the screens
+ * still showed the pinned URL, and provisioning then handed a node
+ * localhost (2026-10-09). Saving a URL in Settings runs this right after
+ * the save, so it was lost there too. Switching or clearing it goes through
+ * ConfigContext.setManualUrl.
  * Everything else — auth tokens, household, cached service config,
- * manual URL override, routine bindings, react-query cache, K2 in-memory
- * userId — is wiped. Triggers a fresh service discovery so the app
+ * routine bindings, react-query cache, K2 in-memory userId — is wiped. Triggers a fresh service discovery so the app
  * immediately reconnects against the new environment.
  *
  * SecureStore holds two kinds of secret: the JWT auth tokens (cleared here
@@ -23,6 +29,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { QueryClient } from '@tanstack/react-query';
 
+import { MANUAL_CONFIG_URL_KEY } from '../config/storageKeys';
 import { setK2UserId } from './k2Service';
 import { clearTokens } from './tokenStorage';
 
@@ -30,6 +37,7 @@ const PRESERVE_KEYS = new Set<string>([
   '@jarvis/theme',
   '@jarvis/auto_play_tts',
   '@jarvis/push_notifications_enabled',
+  MANUAL_CONFIG_URL_KEY,
 ]);
 
 interface ClearUserDataOptions {
