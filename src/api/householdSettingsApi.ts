@@ -14,6 +14,14 @@ export interface HouseholdSettings {
   /** Master toggle for web search (quick_search + deep_research). Default off. */
   'web_search.enabled': boolean;
   /**
+   * Whether this household uses the Pantry (package store + Forge test
+   * installs). Default off: turning it on means the app, the household's nodes
+   * and the server contact the Pantry, which sees their IP address and what is
+   * browsed/installed. ABSENT on the legacy Python stack, which has no such
+   * gate — the app then treats the Pantry as on (see `pantryEnabledFromSettings`).
+   */
+  'pantry.enabled'?: boolean;
+  /**
    * Where the household is, as a free-text locality ("Springfield, IL 62704").
    * Biases business lookups so a phone call reaches the nearby branch —
    * a search for "Tony's Pizzeria" once resolved to Maryland for a New
@@ -98,6 +106,26 @@ export const settingErrorMessage = (error: unknown, fallback: string): string =>
   }
   if (typeof obj.message === 'string' && obj.message.trim()) return obj.message;
   return fallback;
+};
+
+/**
+ * Whether the Pantry is on for a household, from its settings. A server that
+ * doesn't know the key (the legacy Python stack) never gated the Pantry, so an
+ * absent key means on — legacy behaviour is unchanged.
+ */
+export const pantryEnabledFromSettings = (settings: Partial<HouseholdSettings>): boolean =>
+  'pantry.enabled' in settings ? settings['pantry.enabled'] === true : true;
+
+/**
+ * True for the server's refusal to start a package install / Forge test install
+ * because the household's Pantry is off: a 403 whose JSON carries
+ * `code: "pantry_disabled"`.
+ */
+export const isPantryDisabledError = (error: unknown): boolean => {
+  const res = (error as { response?: { status?: number; data?: unknown } })?.response;
+  if (res?.status !== 403) return false;
+  const data = res.data as { code?: unknown } | null | undefined;
+  return typeof data === 'object' && data !== null && data.code === 'pantry_disabled';
 };
 
 /** Values the allowlisted settings can hold. */

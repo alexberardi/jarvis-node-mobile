@@ -14,10 +14,12 @@ import {
 } from 'react-native-paper';
 
 import { listNodes, NodeInfo } from '../../api/nodeApi';
+import { isPantryDisabledError } from '../../api/householdSettingsApi';
 import { requestTestInstall } from '../../api/testInstallApi';
 import { useAuth } from '../../auth/AuthContext';
 import { InfoHelperText } from '../../components/HelpIcon';
 import { helpCopy } from '../../copy/help';
+import { usePantryGate } from '../../components/PantryGate';
 import { StoreStackParamList } from '../../navigation/types';
 
 type Nav = NativeStackNavigationProp<StoreStackParamList>;
@@ -26,6 +28,7 @@ const TestInstallScreen = () => {
   const navigation = useNavigation<Nav>();
   const theme = useTheme();
   const { state: authState } = useAuth();
+  const { markDisabled } = usePantryGate();
 
   const [shareCode, setShareCode] = useState('');
   const [nodes, setNodes] = useState<NodeInfo[]>([]);
@@ -82,6 +85,10 @@ const TestInstallScreen = () => {
         mode: 'test',
       });
     } catch (err: unknown) {
+      if (isPantryDisabledError(err)) {
+        markDisabled();
+        return;
+      }
       const detail =
         (err as { response?: { data?: { detail?: string } } })?.response?.data
           ?.detail ?? 'Failed to start test install';

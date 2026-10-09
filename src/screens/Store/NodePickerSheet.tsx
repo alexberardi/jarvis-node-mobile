@@ -4,7 +4,9 @@ import React, { useMemo, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { Button, Checkbox, Icon, List, Text, useTheme } from 'react-native-paper';
 
+import { isPantryDisabledError } from '../../api/householdSettingsApi';
 import { requestInstall } from '../../api/packageInstallApi';
+import { usePantryGate } from '../../components/PantryGate';
 import { StoreStackParamList } from '../../navigation/types';
 import { compareSemver } from '../../utils/semver';
 import { safeJsonParse } from '../../utils/safeJson';
@@ -21,6 +23,7 @@ type NodeState = 'not-installed' | 'outdated' | 'up-to-date';
 
 const NodePickerSheet = () => {
   const navigation = useNavigation<Nav>();
+  const { markDisabled } = usePantryGate();
   const route = useRoute<Route>();
   const theme = useTheme();
 
@@ -112,6 +115,10 @@ const NodePickerSheet = () => {
         gitTag: gitTag || null,
       });
     } catch (e: unknown) {
+      if (isPantryDisabledError(e)) {
+        markDisabled();
+        return;
+      }
       Alert.alert('Install Error', e instanceof Error ? e.message : 'Failed to start install');
     } finally {
       setInstalling(false);
