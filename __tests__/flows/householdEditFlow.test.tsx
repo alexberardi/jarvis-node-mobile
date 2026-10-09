@@ -483,4 +483,26 @@ describe('Household edit — flow integration (rename, roles, members, invites, 
     expect(await utils.findByText('Asia/Tokyo')).toBeTruthy();
     expect(utils.queryByText('Change')).toBeNull();
   });
+  it('hides the Pantry toggle against a server without pantry.enabled', async () => {
+    const utils = renderScreen();
+    await utils.findByText('bob@test.com');
+    await utils.findByTestId('household-web-search-toggle');
+    expect(utils.queryByTestId('household-pantry-toggle')).toBeNull();
+  });
+
+  it('admin turns the Pantry on → PUT pantry.enabled', async () => {
+    (getHouseholdSettings as jest.Mock).mockResolvedValueOnce({
+      'web_search.enabled': false,
+      'pantry.enabled': false,
+    });
+    const utils = renderScreen();
+    const toggle = await utils.findByTestId('household-pantry-toggle');
+    expect(toggle.props.value).toBe(false);
+
+    await act(async () => {
+      fireEvent(toggle, 'valueChange', true);
+    });
+
+    expect(setHouseholdSetting).toHaveBeenCalledWith('hh-1', 'pantry.enabled', true);
+  });
 });

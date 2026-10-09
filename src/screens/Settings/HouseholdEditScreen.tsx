@@ -101,6 +101,10 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const [webSearchLoading, setWebSearchLoading] = useState(true);
   const [savingWebSearch, setSavingWebSearch] = useState(false);
+  // Pantry (package store) — default off on jarvisd; undefined = the server
+  // doesn't gate it (legacy stack), which hides the card.
+  const [pantryEnabled, setPantryEnabled] = useState<boolean | undefined>(undefined);
+  const [savingPantry, setSavingPantry] = useState(false);
   // Memory (D19): master toggle + "learn from voice" opt-out. Both default on.
   const [memoryEnabled, setMemoryEnabled] = useState(true);
   const [extractionEnabled, setExtractionEnabled] = useState(true);
@@ -198,6 +202,9 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
     try {
       const settings = await getHouseholdSettings(householdId);
       setWebSearchEnabled(!!settings['web_search.enabled']);
+      setPantryEnabled(
+        'pantry.enabled' in settings ? settings['pantry.enabled'] === true : undefined,
+      );
       setMemoryEnabled(settings['memory.enabled'] ?? true);
       setExtractionEnabled(settings['memory.extraction_enabled'] ?? true);
       const loc = settings['household.location'] ?? '';
@@ -512,6 +519,20 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
       ],
     );
   }, [bgEnabled, teardownBackgroundPresence]);
+
+  // Toggle the Pantry (optimistic; revert on failure)
+  const handleTogglePantry = useCallback(async (next: boolean) => {
+    setPantryEnabled(next);
+    setSavingPantry(true);
+    try {
+      await setHouseholdSetting(householdId, 'pantry.enabled', next);
+    } catch (err: unknown) {
+      setPantryEnabled(!next);
+      Alert.alert('Error', settingErrorMessage(err, 'Failed to update Pantry setting'));
+    } finally {
+      setSavingPantry(false);
+    }
+  }, [householdId]);
 
   // Toggle web search (optimistic; revert on failure)
   const handleToggleWebSearch = useCallback(async (next: boolean) => {
@@ -866,6 +887,36 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
             )}
           </Card.Content>
         </Card>
+
+        {/* Pantry (jarvisd only — hidden when the server doesn't gate it) */}
+        {pantryEnabled !== undefined && (
+          <Card style={styles.card}>
+            <Card.Content>
+              <Text variant="titleMedium" style={styles.sectionTitle}>Pantry</Text>
+              <View style={styles.toggleRow}>
+                <View style={{ flex: 1, paddingRight: 12 }}>
+                  <Text variant="bodyMedium">Use the Pantry</Text>
+                  <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 2 }}>
+                    Browse and install packages from the Pantry. When on, this app,
+                    your nodes and your server contact the Pantry, which sees your IP
+                    address and what you browse and install.
+                  </Text>
+                </View>
+                <Switch
+                  testID="household-pantry-toggle"
+                  value={pantryEnabled}
+                  onValueChange={handleTogglePantry}
+                  disabled={!isAdmin || savingPantry}
+                />
+              </View>
+              {!isAdmin && (
+                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 8 }}>
+                  Only a household admin can change this.
+                </Text>
+              )}
+            </Card.Content>
+          </Card>
+        )}
 
         {/* Memory (D19) */}
         <Card style={styles.card}>
