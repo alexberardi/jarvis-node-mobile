@@ -27,6 +27,7 @@ import {
   settingErrorMessage,
   type PersonaPreset,
 } from '../../api/householdSettingsApi';
+import HouseholdTimezoneCard from '../../components/HouseholdTimezoneCard';
 import TwilioSettingsCard, {
   twilioStateFromSettings,
   type TwilioState,
@@ -107,6 +108,9 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
   const [location, setLocation] = useState('');
   const [savedLocation, setSavedLocation] = useState('');
   const [savingLocation, setSavingLocation] = useState(false);
+  // household.timezone ("" = automatic); undefined = the server doesn't have it
+  // (legacy stack), which hides the Time zone card.
+  const [timezone, setTimezone] = useState<string | undefined>(undefined);
 
   // Voice persona (household speaking style — shapes TONE only, not tools)
   const [persona, setPersona] = useState('');
@@ -199,6 +203,8 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
       const loc = settings['household.location'] ?? '';
       setLocation(loc);
       setSavedLocation(loc);
+      const tz = settings['household.timezone'];
+      setTimezone(typeof tz === 'string' ? tz : undefined);
       const voice = settings['persona.household_prompt'] ?? '';
       setPersona(voice);
       setSavedPersona(voice);
@@ -960,6 +966,15 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
             )}
           </Card.Content>
         </Card>
+
+        {/* Time zone (jarvisd only; hidden against the legacy server) */}
+        <HouseholdTimezoneCard
+          householdId={householdId}
+          value={timezone}
+          loading={webSearchLoading}
+          canEdit={isAdmin}
+          onChanged={loadHouseholdSettings}
+        />
 
         {/* Phone calls — the household's own Twilio account (write-only) */}
         <TwilioSettingsCard

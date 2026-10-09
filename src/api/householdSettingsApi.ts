@@ -41,6 +41,13 @@ export interface HouseholdSettings {
    */
   'memory.extraction_enabled': boolean;
   /**
+   * The household's IANA time zone (jarvisd only). `""` = automatic: the zone
+   * the household's most recently seen node reports. ABSENT on a server that
+   * doesn't support it (the legacy Python stack) — the app then hides the
+   * Time zone row. The server rejects unknown zones with a 400 `detail`.
+   */
+  'household.timezone'?: string;
+  /**
    * The household's own Twilio account (AD6), used for the phone calls the
    * assistant places. Write-only: the server answers `"********"` once the
    * SID / auth token are set and `null` when they are not — the values are
@@ -150,6 +157,32 @@ export const getPersonaPresets = async (
 ): Promise<PersonaPresets> => {
   const res = await apiClient.get<PersonaPresets>(
     `${getCommandCenterUrl()}/api/v0/mobile/household/${householdId}/persona/presets`,
+  );
+  return res.data;
+};
+
+/** Where a household's effective time zone came from. */
+export type HouseholdTimezoneSource = 'setting' | 'node' | 'default';
+
+/** `GET .../timezone` (jarvisd only; 404 on the legacy stack). */
+export interface HouseholdTimezoneInfo {
+  household_id: string;
+  /** The zone in effect ("" = none known; the server then uses UTC). */
+  timezone: string;
+  source: HouseholdTimezoneSource;
+  /** The zone the household's most recently seen node reported ("" = none). */
+  node_timezone: string;
+}
+
+/**
+ * The household's effective time zone and the node-derived one (what
+ * "Automatic" resolves to). Any member may read.
+ */
+export const getHouseholdTimezone = async (
+  householdId: string,
+): Promise<HouseholdTimezoneInfo> => {
+  const res = await apiClient.get<HouseholdTimezoneInfo>(
+    `${getCommandCenterUrl()}/api/v0/mobile/household/${householdId}/timezone`,
   );
   return res.data;
 };
