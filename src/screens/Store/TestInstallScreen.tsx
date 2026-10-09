@@ -181,6 +181,23 @@ const TestInstallScreen = () => {
           </Text>
         </View>
 
+        {/* Unverified-code warning: a share code can come from anyone, and
+            the draft runs on the node like any installed command (no sandbox,
+            no Pantry review). */}
+        <View
+          testID="unverified-warning"
+          style={[styles.infoBanner, { backgroundColor: theme.colors.errorContainer }]}
+        >
+          <Icon source="alert-outline" size={18} color={theme.colors.onErrorContainer} />
+          <Text variant="bodySmall" style={{ flex: 1, color: theme.colors.onErrorContainer, marginLeft: 8 }}>
+            <Text variant="bodySmall" style={{ fontWeight: 'bold', color: theme.colors.onErrorContainer }}>
+              Unverified code.{' '}
+            </Text>
+            This draft hasn't been reviewed by Pantry. It runs on your node with the same access as
+            any installed command. Only install codes you created or trust.
+          </Text>
+        </View>
+
         {/* Install button */}
         <Button
           testID="install-button"
