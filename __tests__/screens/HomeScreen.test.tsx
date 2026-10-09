@@ -48,8 +48,14 @@ const setUseChat = (overrides: Record<string, unknown>) => {
   mockUseChatState = { ...mockUseChatBase, ...overrides };
 };
 
+// The options HomeScreen passed to useChat on the latest render (lets tests
+// fire onImagesRejected as the hook would on a 422).
+let mockUseChatOpts: Record<string, any> = {};
 jest.mock('../../src/hooks/useChat', () => ({
-  useChat: () => mockUseChatState,
+  useChat: (opts: Record<string, any>) => {
+    mockUseChatOpts = opts;
+    return mockUseChatState;
+  },
 }));
 
 const mockStartRecording = jest.fn().mockResolvedValue(true);
@@ -71,9 +77,23 @@ jest.mock('../../src/api/commandCenterApi', () => ({
   sendNodeAction: jest.fn(),
 }));
 
+const NO_CAPS = { images: false, max_images: 0, max_image_bytes: 0 };
+const IMAGE_CAPS = { images: true, max_images: 4, max_image_bytes: 2097152 };
+// Default: a legacy server (capabilities read failed/404 → no images).
+const mockFetchChatCapabilities = jest.fn().mockResolvedValue(NO_CAPS);
 jest.mock('../../src/api/chatApi', () => ({
   getTTSConfig: jest.fn(),
   transcribeAudio: jest.fn(),
+  fetchChatCapabilities: (...args: any[]) => mockFetchChatCapabilities(...args),
+  getCachedChatCapabilities: () => null,
+  NO_CHAT_CAPABILITIES: { images: false, max_images: 0, max_image_bytes: 0 },
+}));
+
+const mockPickChatImages = jest.fn();
+const mockPrepareChatImage = jest.fn();
+jest.mock('../../src/services/chatImageService', () => ({
+  pickChatImages: (...args: any[]) => mockPickChatImages(...args),
+  prepareChatImage: (...args: any[]) => mockPrepareChatImage(...args),
 }));
 
 jest.mock('expo-av', () => ({
@@ -156,6 +176,12 @@ describe('HomeScreen', () => {
     jest.clearAllMocks();
     setUseChat({});
     mockNodeReady = true;
+    mockFetchChatCapabilities.mockResolvedValue(NO_CAPS);
+    mockPickChatImages.mockResolvedValue([]);
+    mockPrepareChatImage.mockImplementation(async (img: { uri: string }) => ({
+      mime: 'image/jpeg',
+      data: `b64:${img.uri}`,
+    }));
     mockGetUnreadCount.mockResolvedValue(0);
     mockStartRecording.mockResolvedValue(true);
     setPendingIntent(null);
@@ -352,5 +378,141 @@ describe('HomeScreen', () => {
     });
 
     expect(await findByText('Living Room is ready — say hi to Jarvis!')).toBeTruthy();
+  });
+
+  describe('image attachments', () => {
+    const PHOTO = { uri: 'file:///photo-1.jpg', width: 4000, height: 3000 };
+    const PHOTO2 = { uri: 'file:///photo-2.jpg', width: 800, height: 600 };
+
+    // Render with a node selected + tools ready, and let the capabilities read land.
+    const renderReadyChat = async () => {
+      setUseChat({ warmupState: 'ready', toolCount: 3, toolsPending: false });
+      const utils = render(<HomeScreen />, { wrapper });
+      fireEvent.press(utils.getByTestId('node-selector'));
+      await waitFor(() => expect(mockFetchChatCapabilities).toHaveBeenCalled());
+      return utils;
+    };
+
+    const attachFromLibrary = async (utils: ReturnType<typeof render>) => {
+      fireEvent.press(utils.getByTestId('attach-image-button'));
+      fireEvent.press(await utils.findByTestId('attach-library'));
+    };
+
+    it('hides the attach button on a legacy server (no images capability)', async () => {
+      const { queryByTestId } = await renderReadyChat();
+      expect(queryByTestId('attach-image-button')).toBeNull();
+    });
+
+    it('hides the attach button when the server reports images: false', async () => {
+      mockFetchChatCapabilities.mockResolvedValue({ ...IMAGE_CAPS, images: false });
+      const { queryByTestId } = await renderReadyChat();
+      expect(queryByTestId('attach-image-button')).toBeNull();
+    });
+
+    it('shows the attach button when the server supports images', async () => {
+      mockFetchChatCapabilities.mockResolvedValue(IMAGE_CAPS);
+      const { findByTestId } = await renderReadyChat();
+      expect(await findByTestId('attach-image-button')).toBeTruthy();
+    });
+
+    it('picks from the library with the remaining slot count, then shows and removes thumbnails', async () => {
+      mockFetchChatCapabilities.mockResolvedValue(IMAGE_CAPS);
+      mockPickChatImages.mockResolvedValueOnce([PHOTO, PHOTO2]);
+      const utils = await renderReadyChat();
+      await utils.findByTestId('attach-image-button');
+
+      await attachFromLibrary(utils);
+
+      expect(mockPickChatImages).toHaveBeenCalledWith('library', 4);
+      await waitFor(() => expect(utils.getAllByTestId('pending-image-thumb')).toHaveLength(2));
+
+      fireEvent.press(utils.getByTestId('remove-image-0'));
+      const thumbs = utils.getAllByTestId('pending-image-thumb');
+      expect(thumbs).toHaveLength(1);
+      expect(thumbs[0].props.source).toEqual({ uri: PHOTO2.uri });
+    });
+
+    it('offers the camera as a source', async () => {
+      mockFetchChatCapabilities.mockResolvedValue(IMAGE_CAPS);
+      const utils = await renderReadyChat();
+      fireEvent.press(await utils.findByTestId('attach-image-button'));
+      fireEvent.press(await utils.findByTestId('attach-camera'));
+      await waitFor(() => expect(mockPickChatImages).toHaveBeenCalledWith('camera', 4));
+    });
+
+    it('sends an image with no text: resizes each image, then sends refs + payload', async () => {
+      mockFetchChatCapabilities.mockResolvedValue(IMAGE_CAPS);
+      mockPickChatImages.mockResolvedValueOnce([PHOTO]);
+      const utils = await renderReadyChat();
+      await utils.findByTestId('attach-image-button');
+      await attachFromLibrary(utils);
+      await utils.findByTestId('pending-image-thumb');
+
+      await act(async () => {
+        fireEvent.press(utils.getByTestId('send-button'));
+      });
+
+      expect(mockPrepareChatImage).toHaveBeenCalledWith(PHOTO, IMAGE_CAPS.max_image_bytes);
+      expect(mockSendMessage).toHaveBeenCalledWith('', {
+        refs: [{ uri: PHOTO.uri, width: PHOTO.width, height: PHOTO.height }],
+        payload: [{ mime: 'image/jpeg', data: `b64:${PHOTO.uri}` }],
+      });
+      expect(utils.queryByTestId('pending-image-thumb')).toBeNull();
+    });
+
+    it('refuses to send and keeps the draft when an image cannot be shrunk enough', async () => {
+      mockFetchChatCapabilities.mockResolvedValue(IMAGE_CAPS);
+      mockPickChatImages.mockResolvedValueOnce([PHOTO]);
+      mockPrepareChatImage.mockRejectedValueOnce(new Error('This image is too large to send.'));
+      const utils = await renderReadyChat();
+      await utils.findByTestId('attach-image-button');
+      await attachFromLibrary(utils);
+      await utils.findByTestId('pending-image-thumb');
+
+      await act(async () => {
+        fireEvent.press(utils.getByTestId('send-button'));
+      });
+
+      expect(mockSendMessage).not.toHaveBeenCalled();
+      expect(await utils.findByText('This image is too large to send.')).toBeTruthy();
+      expect(utils.getByTestId('pending-image-thumb')).toBeTruthy();
+    });
+
+    it('on a 422 images_unavailable: hides the button, re-reads capabilities, tells the user', async () => {
+      mockFetchChatCapabilities.mockResolvedValue(IMAGE_CAPS);
+      const utils = await renderReadyChat();
+      await utils.findByTestId('attach-image-button');
+      mockFetchChatCapabilities.mockClear();
+      mockFetchChatCapabilities.mockResolvedValue({ ...IMAGE_CAPS, images: false });
+
+      act(() => mockUseChatOpts.onImagesRejected('images_unavailable'));
+
+      expect(utils.queryByTestId('attach-image-button')).toBeNull();
+      expect(mockFetchChatCapabilities).toHaveBeenCalledTimes(1);
+      expect(await utils.findByText('Images are turned off on the Jarvis server.')).toBeTruthy();
+    });
+
+    it('on a 422 images_invalid: keeps images available and shows a clear message', async () => {
+      mockFetchChatCapabilities.mockResolvedValue(IMAGE_CAPS);
+      const utils = await renderReadyChat();
+      await utils.findByTestId('attach-image-button');
+
+      act(() => mockUseChatOpts.onImagesRejected('images_invalid'));
+
+      expect(
+        await utils.findByText('The server rejected those images. Try fewer or smaller photos.'),
+      ).toBeTruthy();
+      expect(utils.getByTestId('attach-image-button')).toBeTruthy();
+    });
+
+    it('legacy server: text send is unchanged (no images argument)', async () => {
+      const utils = await renderReadyChat();
+      fireEvent.changeText(utils.getByPlaceholderText('Message Jarvis...'), 'hello');
+      await act(async () => {
+        fireEvent.press(utils.getByTestId('send-button'));
+      });
+      expect(mockSendMessage).toHaveBeenCalledWith('hello');
+      expect(mockPrepareChatImage).not.toHaveBeenCalled();
+    });
   });
 });

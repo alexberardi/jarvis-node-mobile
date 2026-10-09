@@ -46,6 +46,39 @@ jest.mock('expo-notifications', () => ({
   AndroidImportance: { MAX: 5, HIGH: 4, DEFAULT: 3, LOW: 2, MIN: 1 },
 }));
 
+// Mock expo-image-picker / expo-image-manipulator (chat image attachments).
+// Both load native modules at import time, so HomeScreen and the chat image
+// service would throw under jest-expo without these. Defaults: the user cancels
+// any picker, and the manipulator returns a tiny JPEG. Tests override per case.
+jest.mock('expo-image-picker', () => ({
+  requestCameraPermissionsAsync: jest.fn().mockResolvedValue({ granted: true, status: 'granted' }),
+  requestMediaLibraryPermissionsAsync: jest.fn().mockResolvedValue({ granted: true, status: 'granted' }),
+  launchCameraAsync: jest.fn().mockResolvedValue({ canceled: true, assets: null }),
+  launchImageLibraryAsync: jest.fn().mockResolvedValue({ canceled: true, assets: null }),
+}));
+
+jest.mock('expo-image-manipulator', () => {
+  const mockSaveAsync = jest.fn().mockResolvedValue({
+    uri: 'file:///manipulated.jpg',
+    width: 1024,
+    height: 768,
+    base64: 'AAAA',
+  });
+  const mockRenderAsync = jest.fn().mockResolvedValue({
+    width: 1024,
+    height: 768,
+    saveAsync: mockSaveAsync,
+  });
+  const mockContext = { resize: jest.fn(), renderAsync: mockRenderAsync };
+  mockContext.resize.mockReturnValue(mockContext);
+  return {
+    ImageManipulator: { manipulate: jest.fn(() => mockContext) },
+    SaveFormat: { JPEG: 'jpeg', PNG: 'png', WEBP: 'webp' },
+    manipulateAsync: jest.fn(),
+    __mock: { context: mockContext, renderAsync: mockRenderAsync, saveAsync: mockSaveAsync },
+  };
+});
+
 // Mock jarvis-crypto native module.
 // IMPORTANT: keep these method names in sync with modules/jarvis-crypto/index.ts.
 // The real module exports AES-256-GCM (aesGcmEncrypt/aesGcmDecrypt) + argon2id +
