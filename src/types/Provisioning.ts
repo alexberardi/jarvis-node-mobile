@@ -98,6 +98,8 @@ export interface ProvisioningRequest {
   password: string;
   room_name: string;
   command_center_url?: string;
+  /** Defaults to the phone's discovered config-service URL. */
+  config_service_url?: string;
   household_id: string;
   node_id: string;
   provisioning_token: string;

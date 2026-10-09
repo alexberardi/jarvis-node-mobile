@@ -18,7 +18,7 @@ import {
   setNodeIp,
 } from '../api/provisioningApi';
 import { getSmartHomeConfig } from '../api/smartHomeApi';
-import { getCommandCenterUrl } from '../config/serviceConfig';
+import { getCommandCenterUrl, getServiceConfig } from '../config/serviceConfig';
 import {
   NodeInfo,
   Network,
@@ -27,6 +27,7 @@ import {
   ProvisioningResult,
 } from '../types/Provisioning';
 import { generateK2, storeK2, K2KeyPair } from '../services/k2Service';
+import { assertNodeReachableUrl } from '../utils/nodeUrl';
 
 /**
  * A provisioning token must still have at least this long to live when it is
@@ -145,6 +146,8 @@ export const useProvisioning = (): UseProvisioningReturn => {
   // Capture command center URL at token fetch time (when on home WiFi)
   // so it's still available after switching to node WiFi
   const [cachedCommandCenterUrl, setCachedCommandCenterUrl] = useState<string | null>(null);
+  // The config-service URL for the node, captured with the CC URL in phase 1.
+  const cachedConfigServiceUrlRef = useRef<string | null>(null);
   // What the post-send verification polls for: this node in this household.
   const verifyTargetRef = useRef<{ householdId: string; nodeId: string } | null>(null);
   // Bumped to cancel an in-flight verification loop (reset, retry, unmount).
@@ -254,10 +257,14 @@ export const useProvisioning = (): UseProvisioningReturn => {
         }
 
         applyToken(response);
-        // Capture the command center URL now (while on home WiFi)
-        // so it's available later when we're on node WiFi
-        const ccUrl = getCommandCenterUrl();
+        // Capture the URLs for the node now (while on home WiFi) so they're
+        // available later when we're on node WiFi. Prefer the ones the server
+        // says a LAN node should use (jarvisd): the phone's own may be
+        // localhost when it reaches the server over USB `adb reverse`.
+        const ccUrl = response.node_command_center_url || getCommandCenterUrl();
         setCachedCommandCenterUrl(ccUrl);
+        cachedConfigServiceUrlRef.current =
+          response.node_config_service_url || getServiceConfig().configServiceUrl || null;
         console.debug('[useProvisioning] cached command center URL:', ccUrl);
         return true;
       } catch (err) {
@@ -394,6 +401,20 @@ export const useProvisioning = (): UseProvisioningReturn => {
         }
         const nodeId = token.nodeId;
 
+        // The URLs the node will use. Use the ones cached during Phase 1 (home
+        // WiFi), since getCommandCenterUrl() may be empty now (we're on node
+        // WiFi). Checked before anything touches the node: a loopback URL would
+        // make the node register against itself and fall back to AP mode.
+        const commandCenterUrl = cachedCommandCenterUrl || getCommandCenterUrl();
+        const configServiceUrl =
+          cachedConfigServiceUrlRef.current || getServiceConfig().configServiceUrl || undefined;
+        console.debug('[useProvisioning] command_center_url for node:', commandCenterUrl);
+        if (!commandCenterUrl) {
+          throw new Error('Command center URL not available. Go back to home WiFi and tap Prepare again.');
+        }
+        assertNodeReachableUrl(commandCenterUrl);
+        assertNodeReachableUrl(configServiceUrl);
+
         setProgress(5);
         setStatusMessage('Generating encryption key...');
 
@@ -423,20 +444,13 @@ export const useProvisioning = (): UseProvisioningReturn => {
         setStatusMessage('Configuring WiFi credentials...');
 
         // Step 4: Send WiFi credentials with provisioning token
-        // Use the command center URL we cached during Phase 1 (home WiFi),
-        // since getCommandCenterUrl() may be empty now (we're on node WiFi)
-        const commandCenterUrl = cachedCommandCenterUrl || getCommandCenterUrl();
-        console.debug('[useProvisioning] command_center_url for node:', commandCenterUrl);
-        if (!commandCenterUrl) {
-          throw new Error('Command center URL not available. Go back to home WiFi and tap Prepare again.');
-        }
-
         const send = (provisioningToken: string) =>
           provision({
             ssid: selectedNetwork.ssid,
             password,
             room_name: roomName,
             command_center_url: commandCenterUrl,
+            config_service_url: configServiceUrl,
             household_id: householdId,
             node_id: nodeId,
             provisioning_token: provisioningToken,
@@ -618,6 +632,7 @@ export const useProvisioning = (): UseProvisioningReturn => {
     setCcNodeId(null);
     setFailureReason(null);
     setCachedCommandCenterUrl(null);
+    cachedConfigServiceUrlRef.current = null;
   }, []);
 
   return {

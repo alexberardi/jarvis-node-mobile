@@ -10,6 +10,9 @@ import {
   VERIFY_POLL_MS,
   VERIFY_TIMEOUT_MS,
 } from '../../src/hooks/useProvisioning';
+import { getServiceConfig, setServiceConfig } from '../../src/config/serviceConfig';
+import * as serviceConfig from '../../src/config/serviceConfig';
+import { LOOPBACK_NODE_URL_MESSAGE } from '../../src/utils/nodeUrl';
 import { MOCK_NODE, MOCK_NETWORKS, resetMockState } from '../../src/api/mockProvisioningApi';
 import * as provisioningApi from '../../src/api/provisioningApi';
 import * as k2Service from '../../src/services/k2Service';
@@ -594,6 +597,110 @@ describe('useProvisioning', () => {
 
       expect(provisioningApi.provision).toHaveBeenCalledTimes(1);
       expect(result.current.state).toBe('awaiting_wifi_switch');
+    });
+  });
+
+  describe('node URLs (2026-10-09: a USB-tunnelled phone handed the node http://localhost:7703)', () => {
+    const LAN_CC = 'http://192.168.1.50:7703';
+    const savedConfig = getServiceConfig();
+    afterEach(() => {
+      setServiceConfig(savedConfig);
+      (serviceConfig.getCommandCenterUrl as jest.Mock).mockReturnValue(LAN_CC);
+    });
+
+    const phoneReachesServerAs = (cc: string, config: string | null) => {
+      (serviceConfig.getCommandCenterUrl as jest.Mock).mockReturnValue(cc);
+      setServiceConfig({ ...savedConfig, commandCenterUrl: cc, configServiceUrl: config });
+    };
+
+    const tokenWith = (extra: Record<string, string>) => ({
+      token: 'tok',
+      node_id: 'cc-assigned-node-id',
+      expires_at: new Date(Date.now() + 1800_000).toISOString(),
+      expires_in: 1800,
+      ...extra,
+    });
+
+    const run = async () => {
+      const { result } = renderHook(() => useProvisioning());
+      await act(async () => {
+        await result.current.fetchProvisioningToken('hh-1');
+      });
+      await act(async () => {
+        await result.current.connect('192.168.4.1');
+      });
+      await act(async () => {
+        await result.current.fetchNetworks();
+      });
+      act(() => {
+        result.current.selectNetwork(MOCK_NETWORKS[0]);
+      });
+      await act(async () => {
+        await result.current.startProvisioning('pw', 'kitchen', 'hh-1');
+      });
+      return result;
+    };
+
+    it("sends the server's node URLs instead of the phone's localhost ones", async () => {
+      phoneReachesServerAs('http://localhost:7703', 'http://localhost:7700');
+      (commandCenterApi.requestProvisioningToken as jest.Mock).mockResolvedValue(
+        tokenWith({
+          node_command_center_url: 'http://10.0.0.122:7703',
+          node_config_service_url: 'http://10.0.0.122:7700',
+        }),
+      );
+
+      const result = await run();
+
+      expect(result.current.error).toBeNull();
+      expect(result.current.state).toBe('awaiting_wifi_switch');
+      expect(provisioningApi.provision).toHaveBeenCalledWith(
+        expect.objectContaining({
+          command_center_url: 'http://10.0.0.122:7703',
+          config_service_url: 'http://10.0.0.122:7700',
+        }),
+      );
+    });
+
+    it('refuses a loopback command center URL (legacy server, no node URL) before touching the node', async () => {
+      phoneReachesServerAs('http://localhost:7703', null);
+      (commandCenterApi.requestProvisioningToken as jest.Mock).mockResolvedValue(tokenWith({}));
+
+      const result = await run();
+
+      expect(result.current.state).toBe('error');
+      expect(result.current.error).toBe(LOOPBACK_NODE_URL_MESSAGE);
+      expect(provisioningApi.provisionK2).not.toHaveBeenCalled();
+      expect(provisioningApi.provision).not.toHaveBeenCalled();
+    });
+
+    it('refuses a loopback config-service URL too', async () => {
+      phoneReachesServerAs('http://localhost:7703', 'http://127.0.0.1:7700');
+      // jarvisd knew the CC URL but (say) not the config one.
+      (commandCenterApi.requestProvisioningToken as jest.Mock).mockResolvedValue(
+        tokenWith({ node_command_center_url: 'http://10.0.0.122:7703' }),
+      );
+
+      const result = await run();
+
+      expect(result.current.error).toBe(LOOPBACK_NODE_URL_MESSAGE);
+      expect(provisioningApi.provisionK2).not.toHaveBeenCalled();
+      expect(provisioningApi.provision).not.toHaveBeenCalled();
+    });
+
+    it("keeps working with the legacy server: the phone's LAN URLs are sent as before", async () => {
+      phoneReachesServerAs(LAN_CC, 'http://192.168.1.50:7700');
+      (commandCenterApi.requestProvisioningToken as jest.Mock).mockResolvedValue(tokenWith({}));
+
+      const result = await run();
+
+      expect(result.current.error).toBeNull();
+      expect(provisioningApi.provision).toHaveBeenCalledWith(
+        expect.objectContaining({
+          command_center_url: LAN_CC,
+          config_service_url: 'http://192.168.1.50:7700',
+        }),
+      );
     });
   });
 

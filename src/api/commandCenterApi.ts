@@ -13,6 +13,13 @@ export interface ProvisioningTokenResponse {
   node_id: string;
   expires_at: string;
   expires_in: number;
+  /**
+   * jarvisd only: the URLs a node on the LAN should use. They differ from the
+   * phone's own when it reaches the server through localhost (USB `adb
+   * reverse`). Absent on the legacy server, or when jarvisd can't tell.
+   */
+  node_command_center_url?: string;
+  node_config_service_url?: string;
 }
 
 export interface SendActionRequest {
