@@ -119,7 +119,7 @@ export const helpCopy = {
     hardwareTab: 'Physical settings: mic, speakers, LEDs, Bluetooth. Hidden for Docker-hosted nodes.',
     packagesEmpty: 'Install commands from the Pantry tab to expand what this node can do.',
     activityTab: 'Recent routine runs on this node. Voice commands show up in Recent Commands instead.',
-    deleteNode: 'Wipes credentials and reflashes a still-online node back to factory setup. Use also if the Pi is gone.',
+    deleteNode: 'Factory-resets the node: it wipes itself, leaves the household and reboots into setup. An offline node resets when it reconnects.',
     missingCog: 'Settings hidden because this node was paired on a different phone. Import its encryption key to manage.',
   },
 

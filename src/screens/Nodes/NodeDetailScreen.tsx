@@ -1,6 +1,6 @@
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { FlatList, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import {
   ActivityIndicator,
@@ -19,7 +19,13 @@ import {
 } from 'react-native-paper';
 
 import { fetchNodeTools } from '../../api/chatApi';
-import { deleteNode, getNode, NodeInfo } from '../../api/nodeApi';
+import {
+  getNode,
+  NodeInfo,
+  startFactoryReset,
+  waitForFactoryReset,
+} from '../../api/nodeApi';
+import type { NodeTaskState } from '../../api/nodeUpdateApi';
 import { NodeUpdateSection } from '../../components/NodeUpdateSection';
 import { helpCopy } from '../../copy/help';
 import { HardwareTab } from './HardwareTab';
@@ -81,8 +87,27 @@ interface CommandInfo {
 type DeleteStep =
   | { kind: 'closed' }
   | { kind: 'confirm' }
-  | { kind: 'running' }
+  | { kind: 'running'; state: NodeTaskState | null }
+  | { kind: 'done' }
+  | { kind: 'queued' }
   | { kind: 'error'; message: string };
+
+// How long the dialog follows the factory-reset task before handing over to
+// "queued". An online node normally confirms within seconds; an offline one
+// can't, so don't make the user stare at a spinner for it.
+const RESET_WAIT_ONLINE_MS = 45_000;
+const RESET_WAIT_OFFLINE_MS = 8_000;
+
+const resetProgressText = (state: NodeTaskState | null, name: string): string => {
+  switch (state) {
+    case 'dispatched':
+      return `Waiting for ${name} to start the reset…`;
+    case 'in_progress':
+      return `${name} is wiping itself…`;
+    default:
+      return 'Sending the reset to the node…';
+  }
+};
 
 // Exported for L1 flow-integration testing of the delete state machine
 // (__tests__/flows/nodeDeleteFlow.test.tsx) without the full screen's route/tabs.
@@ -96,24 +121,57 @@ export const OverviewTab = ({
   const theme = useTheme();
   const navigation = useNavigation<Nav>();
   const [deleteStep, setDeleteStep] = useState<DeleteStep>({ kind: 'closed' });
+  const nodeName = node.room ?? 'The node';
 
+  // Stop polling the reset task if the screen goes away mid-wait.
+  const unmountedRef = useRef(false);
+  useEffect(() => () => {
+    unmountedRef.current = true;
+  }, []);
+
+  // Tracked factory reset (jarvisd D10): start the task, follow it until the
+  // node confirms or fails, or until it's clear the node isn't picking it up.
   const handleDelete = useCallback(async () => {
-    setDeleteStep({ kind: 'running' });
+    setDeleteStep({ kind: 'running', state: null });
     try {
-      await deleteNode(node.node_id);
-      // Best-effort local K2 cleanup — failure here doesn't block navigation.
-      try {
-        await deleteK2(node.node_id);
-      } catch {}
-      setDeleteStep({ kind: 'closed' });
-      navigation.navigate('NodeList');
+      const { taskId } = await startFactoryReset(node.node_id);
+      const task = await waitForFactoryReset(taskId, {
+        timeoutMs: node.online ? RESET_WAIT_ONLINE_MS : RESET_WAIT_OFFLINE_MS,
+        isCancelled: () => unmountedRef.current,
+        onUpdate: (t) => {
+          if (!unmountedRef.current) setDeleteStep({ kind: 'running', state: t.state });
+        },
+      });
+      if (unmountedRef.current) return;
+      if (task?.state === 'success') {
+        // Best-effort local K2 cleanup — the node is wiped, its key is useless.
+        try {
+          await deleteK2(node.node_id);
+        } catch {}
+        setDeleteStep({ kind: 'done' });
+      } else if (task?.state === 'failed') {
+        setDeleteStep({
+          kind: 'error',
+          message: task.error_message || 'The node reported that the reset failed.',
+        });
+      } else {
+        // Still pending/dispatched/in_progress (or unreadable): the reset stays
+        // queued server-side and completes when the node reconnects.
+        setDeleteStep({ kind: 'queued' });
+      }
     } catch (err) {
+      if (unmountedRef.current) return;
       setDeleteStep({
         kind: 'error',
-        message: err instanceof Error ? err.message : 'Failed to delete node',
+        message: err instanceof Error ? err.message : 'Failed to reset node',
       });
     }
-  }, [node.node_id, navigation]);
+  }, [node.node_id, node.online]);
+
+  const finishDelete = useCallback(() => {
+    setDeleteStep({ kind: 'closed' });
+    navigation.navigate('NodeList');
+  }, [navigation]);
 
   return (
     <>
@@ -165,9 +223,9 @@ export const OverviewTab = ({
           </View>
           <Surface style={[styles.dangerCard, { borderColor: theme.colors.error }]} elevation={0}>
             <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 12 }}>
-              Deletes this node from your household. If it's still online,
-              it'll be wiped and rebooted into provisioning mode. Safe to use
-              even if the node has already been reset or reflashed.
+              Factory-resets this node: it wipes itself, leaves your household
+              and reboots into provisioning mode. If it's offline, the reset
+              waits and runs as soon as it reconnects.
             </Text>
             <Button
               testID="node-delete-button"
@@ -200,9 +258,11 @@ export const OverviewTab = ({
                 Delete {node.room ?? 'Node'}?
               </Text>
               <Text variant="bodyMedium" style={{ marginBottom: 16 }}>
-                This removes the node from your household and revokes its
-                credentials. If the node is online, it will also be wiped and
-                rebooted into provisioning mode.
+                The node will be wiped, removed from your household, have its
+                credentials revoked, and reboot into provisioning mode.
+                {node.online
+                  ? ''
+                  : " It's offline right now, so the reset will run when it reconnects."}
               </Text>
               <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 24 }}>
                 This action cannot be undone.
@@ -223,16 +283,52 @@ export const OverviewTab = ({
           )}
 
           {deleteStep.kind === 'running' && (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <View testID="node-delete-progress" style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               <ActivityIndicator />
-              <Text variant="bodyMedium">Deleting node…</Text>
+              <Text variant="bodyMedium" style={{ flex: 1 }}>
+                {resetProgressText(deleteStep.state, nodeName)}
+              </Text>
             </View>
+          )}
+
+          {deleteStep.kind === 'done' && (
+            <>
+              <Text variant="titleLarge" style={{ fontWeight: '600', marginBottom: 12 }}>
+                Node reset
+              </Text>
+              <Text variant="bodyMedium" style={{ marginBottom: 24 }}>
+                {nodeName} has been wiped and removed from your household. It
+                will reboot into provisioning mode.
+              </Text>
+              <View style={styles.modalActions}>
+                <Button testID="node-delete-done" mode="contained" onPress={finishDelete}>Done</Button>
+              </View>
+            </>
+          )}
+
+          {deleteStep.kind === 'queued' && (
+            <>
+              <Text variant="titleLarge" style={{ fontWeight: '600', marginBottom: 12 }}>
+                Reset queued
+              </Text>
+              <Text variant="bodyMedium" style={{ marginBottom: 12 }}>
+                {nodeName} hasn't picked up the reset yet — it looks offline.
+                It will wipe itself and leave your household as soon as it
+                reconnects (the request stays open for 7 days).
+              </Text>
+              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 24 }}>
+                Until then it stays in your node list.
+              </Text>
+              <View style={styles.modalActions}>
+                <Button testID="node-delete-queued-close" mode="contained" onPress={finishDelete}>OK</Button>
+              </View>
+            </>
           )}
 
           {deleteStep.kind === 'error' && (
             <>
               <Text variant="titleLarge" style={{ fontWeight: '600', marginBottom: 12, color: theme.colors.error }}>
-                Delete failed
+                Reset failed
               </Text>
               <Text variant="bodyMedium" style={{ marginBottom: 24 }}>
                 {deleteStep.message}

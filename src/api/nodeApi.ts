@@ -1,5 +1,8 @@
+import axios from 'axios';
+
 import { getCommandCenterUrl } from '../config/serviceConfig';
 import apiClient from './apiClient';
+import { getNodeTask, isTerminalState, type NodeTask } from './nodeUpdateApi';
 
 export interface NodeInfo {
   node_id: string;
@@ -44,15 +47,89 @@ export const getNode = async (nodeId: string): Promise<NodeInfo> => {
 };
 
 /**
- * Delete a node from the household. Best-effort publishes a factory-reset
- * MQTT to wipe the device, then unconditionally removes the household and
- * auth records — so it succeeds even when the node is offline or has
- * already been reflashed.
+ * Factory reset (the "Delete node" action) — jarvisd's tracked flow (D10).
+ *
+ * `POST /api/v0/admin/nodes/{id}/factory-reset` creates a persisted
+ * `factory_reset` task (one in flight per node) and publishes the reset to the
+ * node; the node reports progress against that task and, on success, is marked
+ * inactive (dropped from the node list) and its auth revoked. The phone polls
+ * the task with `GET /api/v0/tasks/{task_id}`. An offline node keeps the task
+ * open (the reset token is persisted) and completes it when it reconnects;
+ * jarvisd fails it after 7 days. See jarvis-server internal/modules/cc/reset.go.
+ *
+ * Replaces the old `DELETE /admin/nodes/{id}` + untracked verify-reset flow.
  */
-export const deleteNode = async (nodeId: string): Promise<void> => {
-  await apiClient.delete(
-    `${getCommandCenterUrl()}/api/v0/admin/nodes/${nodeId}`,
-  );
+export interface FactoryResetStart {
+  taskId: string;
+  /** True when a reset was already in flight and we resumed tracking it (409). */
+  alreadyInFlight: boolean;
+}
+
+export const startFactoryReset = async (nodeId: string): Promise<FactoryResetStart> => {
+  try {
+    const res = await apiClient.post<{ task_id: string }>(
+      `${getCommandCenterUrl()}/api/v0/admin/nodes/${nodeId}/factory-reset`,
+    );
+    return { taskId: res.data.task_id, alreadyInFlight: false };
+  } catch (err) {
+    // 409 {detail: {message, task_id, state}}: one is already in flight — track it.
+    if (axios.isAxiosError(err) && err.response?.status === 409) {
+      const detail = (err.response.data as { detail?: { task_id?: unknown } } | undefined)?.detail;
+      if (detail && typeof detail.task_id === 'string') {
+        return { taskId: detail.task_id, alreadyInFlight: true };
+      }
+    }
+    throw err;
+  }
+};
+
+export interface WaitForFactoryResetOptions {
+  /** Stop polling after this long and return the last state seen. */
+  timeoutMs: number;
+  intervalMs?: number;
+  /** Called with every task state read. */
+  onUpdate?: (task: NodeTask) => void;
+  /** Return true to stop polling early (e.g. the screen unmounted). */
+  isCancelled?: () => boolean;
+  /** Injectable for tests. */
+  sleep?: (ms: number) => Promise<void>;
+  now?: () => number;
+}
+
+const defaultSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/**
+ * Poll a factory-reset task until it reaches `success`/`failed` or the
+ * deadline passes. Returns the last task read — still `pending`/`dispatched`
+ * on a timeout, which means the node hasn't picked the reset up (usually
+ * offline) — or null if no read ever succeeded. Transient read errors are
+ * retried until the deadline.
+ */
+export const waitForFactoryReset = async (
+  taskId: string,
+  {
+    timeoutMs,
+    intervalMs = 2000,
+    onUpdate,
+    isCancelled = () => false,
+    sleep = defaultSleep,
+    now = Date.now,
+  }: WaitForFactoryResetOptions,
+): Promise<NodeTask | null> => {
+  const deadline = now() + timeoutMs;
+  let last: NodeTask | null = null;
+  for (;;) {
+    if (isCancelled()) return last;
+    try {
+      last = await getNodeTask(taskId);
+      onUpdate?.(last);
+      if (isTerminalState(last.state)) return last;
+    } catch {
+      // transient — keep polling until the deadline
+    }
+    if (now() + intervalMs > deadline) return last;
+    await sleep(intervalMs);
+  }
 };
 
 /**
