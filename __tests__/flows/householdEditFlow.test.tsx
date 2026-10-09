@@ -34,6 +34,9 @@ jest.mock('../../src/api/householdSettingsApi', () => ({
     }),
   ),
   setHouseholdSetting: jest.fn(() => Promise.resolve()),
+  getHouseholdTimezone: jest.fn(() =>
+    Promise.resolve({ household_id: 'hh-1', timezone: 'America/Chicago', source: 'node', node_timezone: 'America/Chicago' }),
+  ),
   getPersonaPresets: jest.fn(() =>
     Promise.resolve({
       presets: [
@@ -448,5 +451,36 @@ describe('Household edit — flow integration (rename, roles, members, invites, 
     await utils.findByText('bob@test.com');
     await utils.findByTestId('twilio-status');
     expect(utils.queryByTestId('twilio-edit')).toBeNull();
+  });
+
+  it('hides the time zone row against a server without household.timezone', async () => {
+    const utils = renderScreen();
+    await utils.findByText('bob@test.com');
+    await utils.findByTestId('twilio-card');
+    expect(utils.queryByTestId('household-timezone-card')).toBeNull();
+  });
+
+  it('admin picks a time zone → PUT household.timezone, then re-reads settings', async () => {
+    const getSettings = getHouseholdSettings as jest.Mock;
+    getSettings.mockResolvedValueOnce({ 'web_search.enabled': false, 'household.timezone': '' });
+    const utils = renderScreen();
+    await utils.findByText('bob@test.com');
+    expect(await utils.findByText('Automatic — America/Chicago (from your nodes)')).toBeTruthy();
+    const loadsBefore = getSettings.mock.calls.length;
+    fireEvent.press(utils.getByTestId('household-timezone-row'));
+    fireEvent.changeText(await utils.findByTestId('household-timezone-search'), 'berlin');
+    await act(async () => {
+      fireEvent.press(await utils.findByTestId('household-timezone-option-Europe/Berlin'));
+    });
+    expect(setHouseholdSetting).toHaveBeenCalledWith('hh-1', 'household.timezone', 'Europe/Berlin');
+    await waitFor(() => expect(getSettings.mock.calls.length).toBeGreaterThan(loadsBefore));
+  });
+
+  it('a plain member sees the time zone read-only', async () => {
+    (getHouseholdSettings as jest.Mock).mockResolvedValueOnce({ 'household.timezone': 'Asia/Tokyo' });
+    const utils = renderScreen([{ ...ME, role: 'member' }, BOB]);
+    await utils.findByText('bob@test.com');
+    expect(await utils.findByText('Asia/Tokyo')).toBeTruthy();
+    expect(utils.queryByText('Change')).toBeNull();
   });
 });
