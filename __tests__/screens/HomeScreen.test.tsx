@@ -423,13 +423,24 @@ describe('HomeScreen', () => {
 
       await attachFromLibrary(utils);
 
-      expect(mockPickChatImages).toHaveBeenCalledWith('library', 4);
+      await waitFor(() => expect(mockPickChatImages).toHaveBeenCalledWith('library', 4));
       await waitFor(() => expect(utils.getAllByTestId('pending-image-thumb')).toHaveLength(2));
 
       fireEvent.press(utils.getByTestId('remove-image-0'));
       const thumbs = utils.getAllByTestId('pending-image-thumb');
       expect(thumbs).toHaveLength(1);
       expect(thumbs[0].props.source).toEqual({ uri: PHOTO2.uri });
+    });
+
+    it('waits for the attach sheet to close before opening the picker (iOS "Unable to Load Photos")', async () => {
+      mockFetchChatCapabilities.mockResolvedValue(IMAGE_CAPS);
+      const utils = await renderReadyChat();
+      await utils.findByTestId('attach-image-button');
+      await attachFromLibrary(utils);
+
+      // Not in the same tick as the tap: the sheet is still animating out.
+      expect(mockPickChatImages).not.toHaveBeenCalled();
+      await waitFor(() => expect(mockPickChatImages).toHaveBeenCalledWith('library', 4));
     });
 
     it('offers the camera as a source', async () => {
