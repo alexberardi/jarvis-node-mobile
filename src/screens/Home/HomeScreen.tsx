@@ -7,6 +7,8 @@ import {
   AppState,
   FlatList,
   Image,
+  InteractionManager,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   RefreshControl,
@@ -69,6 +71,14 @@ import {
 } from '../../services/chatImageService';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
+
+// Longer than react-native-paper's Modal hide animation (~220 ms), after any
+// running interactions, so the native picker presents from a settled screen.
+const SHEET_CLOSE_DELAY_MS = 350;
+const waitForSheetToClose = () =>
+  new Promise<void>((resolve) => {
+    InteractionManager.runAfterInteractions(() => setTimeout(resolve, SHEET_CLOSE_DELAY_MS));
+  });
 
 const HomeScreen = () => {
   const navigation = useNavigation<Nav>();
@@ -383,6 +393,11 @@ const HomeScreen = () => {
   const handlePickImages = useCallback(
     async (source: PickSource) => {
       setShowAttachSheet(false);
+      // iOS's photo picker shows "Unable to Load Photos" when it is presented
+      // while another transition is still running (the attach sheet animating
+      // out, the keyboard going down). Let both finish first.
+      Keyboard.dismiss();
+      await waitForSheetToClose();
       try {
         const picked = await pickChatImages(source, remainingImageSlots);
         if (picked.length > 0) {
