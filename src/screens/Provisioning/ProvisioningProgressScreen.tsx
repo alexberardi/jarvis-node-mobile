@@ -1,7 +1,7 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { Appbar, Button, ProgressBar, Text } from 'react-native-paper';
+import { ActivityIndicator, Appbar, Button, ProgressBar, Text } from 'react-native-paper';
 
 import { useProvisioningContext } from '../../contexts/ProvisioningContext';
 import { ProvisioningStackParamList } from '../../navigation/types';
@@ -9,8 +9,19 @@ import { ProvisioningStackParamList } from '../../navigation/types';
 type Props = NativeStackScreenProps<ProvisioningStackParamList, 'ProvisioningProgress'>;
 
 const ProvisioningProgressScreen = ({ navigation }: Props) => {
-  const { state, progress, statusMessage, error, reset, confirmWifiSwitched, selectedNetwork } =
-    useProvisioningContext();
+  const {
+    state,
+    progress,
+    statusMessage,
+    error,
+    reset,
+    confirmWifiSwitched,
+    selectedNetwork,
+    failureReason,
+    retryVerification,
+    checkNodeStatus,
+  } = useProvisioningContext();
+  const [checkingNode, setCheckingNode] = useState(false);
 
   useEffect(() => {
     if (state === 'success') {
@@ -23,8 +34,19 @@ const ProvisioningProgressScreen = ({ navigation }: Props) => {
     navigation.navigate('ScanForNodes');
   };
 
-  const isError = state === 'error';
+  const handleCheckNode = async () => {
+    setCheckingNode(true);
+    try {
+      await checkNodeStatus();
+    } finally {
+      setCheckingNode(false);
+    }
+  };
+
+  const isRegistrationFailed = state === 'registration_failed';
+  const isError = state === 'error' || isRegistrationFailed;
   const isAwaitingWifiSwitch = state === 'awaiting_wifi_switch';
+  const isVerifying = state === 'verifying';
 
   return (
     <>
@@ -68,7 +90,55 @@ const ProvisioningProgressScreen = ({ navigation }: Props) => {
             </View>
           )}
 
-          {error && (
+          {isVerifying && (
+            <View testID="verifying-indicator" style={styles.wifiSwitchContainer}>
+              <ActivityIndicator />
+              <Text variant="bodyMedium" style={[styles.wifiSwitchText, styles.verifyingText]}>
+                This usually takes a minute or two.
+              </Text>
+            </View>
+          )}
+
+          {isRegistrationFailed && (
+            <View testID="registration-failed" style={styles.errorContainer}>
+              <Text variant="bodyMedium" style={styles.errorText}>
+                {error}
+              </Text>
+              {failureReason && (
+                <Text testID="node-failure-reason" variant="bodyMedium" style={styles.reasonText}>
+                  The node reported: {failureReason}
+                </Text>
+              )}
+              <Button
+                testID="start-over-button"
+                mode="contained"
+                onPress={handleRetry}
+                style={styles.retryButton}
+              >
+                Try Again
+              </Button>
+              <Button
+                testID="check-node-button"
+                mode="outlined"
+                onPress={handleCheckNode}
+                loading={checkingNode}
+                disabled={checkingNode}
+                style={styles.retryButton}
+              >
+                Check Node Status
+              </Button>
+              <Button
+                testID="keep-waiting-button"
+                mode="text"
+                onPress={retryVerification}
+                style={styles.retryButton}
+              >
+                Keep Waiting
+              </Button>
+            </View>
+          )}
+
+          {error && !isRegistrationFailed && (
             <View style={styles.errorContainer}>
               <Text variant="bodyMedium" style={styles.errorText}>
                 {error}
@@ -119,6 +189,14 @@ const styles = StyleSheet.create({
   },
   retryButton: {
     marginTop: 8,
+  },
+  reasonText: {
+    textAlign: 'center',
+    marginBottom: 16,
+    opacity: 0.8,
+  },
+  verifyingText: {
+    marginTop: 12,
   },
   wifiSwitchContainer: {
     marginTop: 32,

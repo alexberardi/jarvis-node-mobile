@@ -4,6 +4,7 @@ import { useProvisioning } from '../hooks/useProvisioning';
 import {
   NodeInfo,
   Network,
+  NodeRegistrationStatus,
   ProvisioningState,
   ProvisioningResult,
 } from '../types/Provisioning';
@@ -23,6 +24,7 @@ interface ProvisioningContextValue {
   k2KeyPair: K2KeyPair | null;
   provisioningToken: string | null;
   ccNodeId: string | null;
+  failureReason: string | null;
 
   // Actions
   connect: (ip: string, port?: number) => Promise<boolean>;
@@ -30,6 +32,8 @@ interface ProvisioningContextValue {
   selectNetwork: (network: Network) => void;
   startProvisioning: (password: string, roomName: string, householdId: string) => Promise<void>;
   confirmWifiSwitched: () => void;
+  retryVerification: () => void;
+  checkNodeStatus: () => Promise<NodeRegistrationStatus | null>;
   reset: () => void;
   setError: (error: string | null) => void;
   fetchProvisioningToken: (householdId: string, room?: string) => Promise<boolean>;

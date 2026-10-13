@@ -23,7 +23,12 @@ jest.mock('../../src/auth/AuthContext', () => ({
 }));
 
 const mockConnect = jest.fn().mockResolvedValue(true);
-const mockFetchProvisioningToken = jest.fn().mockResolvedValue(true);
+// The screen derives "token ready" from the context's provisioningToken.
+let mockProvisioningToken: string | null = null;
+const mockFetchProvisioningToken = jest.fn().mockImplementation(async () => {
+  mockProvisioningToken = 'tok-1';
+  return true;
+});
 
 jest.mock('../../src/contexts/ProvisioningContext', () => ({
   ...jest.requireActual('../../src/contexts/ProvisioningContext'),
@@ -33,6 +38,7 @@ jest.mock('../../src/contexts/ProvisioningContext', () => ({
     isLoading: false,
     error: null,
     setError: jest.fn(),
+    provisioningToken: mockProvisioningToken,
   }),
 }));
 
@@ -52,6 +58,7 @@ jest.mock('../../src/theme/ThemeProvider', () => {
 describe('ScanForNodesScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockProvisioningToken = null;
   });
 
   it('should render prepare button initially', () => {
@@ -102,6 +109,24 @@ describe('ScanForNodesScreen', () => {
       expect(getByTestId('connect-button')).toBeTruthy();
       expect(getByText(/Token ready/)).toBeTruthy();
     });
+  });
+
+  it('asks for Prepare again once the context token is cleared (e.g. after reset)', () => {
+    mockProvisioningToken = 'tok-1';
+    const ui = () => (
+      <PaperProvider theme={lightTheme}>
+        <HelpProvider>
+          <ScanForNodesScreen navigation={mockNavigation} route={{} as any} />
+        </HelpProvider>
+      </PaperProvider>
+    );
+    const { getByTestId, queryByTestId, rerender } = render(ui());
+    expect(getByTestId('connect-button')).toBeTruthy();
+
+    mockProvisioningToken = null;
+    rerender(ui());
+    expect(getByTestId('prepare-button')).toBeTruthy();
+    expect(queryByTestId('connect-button')).toBeNull();
   });
 
   it('should have developer options toggle', () => {
