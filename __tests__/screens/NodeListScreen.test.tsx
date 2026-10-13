@@ -130,6 +130,32 @@ describe('NodeListScreen', () => {
     });
   });
 
+  it('reads a naive UTC last_seen as UTC and never says "Just now" when offline', async () => {
+    // Fake only Date: the clock is pinned, real timers keep waitFor working.
+    jest.useFakeTimers({
+      now: new Date('2026-10-12T18:00:00Z'),
+      doNotFake: [
+        'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval',
+        'setImmediate', 'clearImmediate', 'nextTick', 'queueMicrotask',
+        'requestAnimationFrame', 'cancelAnimationFrame', 'hrtime', 'performance',
+      ],
+    });
+    try {
+      mockListNodes.mockResolvedValue([
+        { ...sampleNodes[1], last_seen: '2026-10-12T14:59:00.123456' },
+      ]);
+
+      const { getByText, queryByText } = render(<NodeListScreen />, { wrapper });
+
+      await waitFor(() => {
+        expect(getByText('Offline \u00B7 Last seen 3h ago')).toBeTruthy();
+      });
+      expect(queryByText(/Just now/)).toBeNull();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('should show the FAB with "Add Node" label', async () => {
     const { getByText } = render(<NodeListScreen />, { wrapper });
 

@@ -28,6 +28,7 @@ import {
 } from '../types/Provisioning';
 import { generateK2, storeK2, K2KeyPair } from '../services/k2Service';
 import { assertNodeReachableUrl } from '../utils/nodeUrl';
+import { parseServerTimestamp } from '../utils/serverTime';
 
 /**
  * A provisioning token must still have at least this long to live when it is
@@ -55,17 +56,8 @@ export const TOKEN_EXPIRED_MESSAGE =
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-/**
- * Parse a server timestamp. The command center emits naive UTC ISO strings
- * (no `Z`), which `new Date()` would read as *local* time — pushing the expiry
- * hours into the future in US time zones, so a stale token looked valid.
- */
-export const parseServerTimestamp = (value: string | null | undefined): number | null => {
-  if (!value) return null;
-  const hasZone = /([zZ]|[+-]\d{2}:?\d{2})$/.test(value.trim());
-  const ms = Date.parse(hasZone ? value : `${value.trim()}Z`);
-  return Number.isNaN(ms) ? null : ms;
-};
+// Re-exported for existing importers; the parser lives in utils/serverTime.
+export { parseServerTimestamp };
 
 interface TokenInfo {
   token: string;

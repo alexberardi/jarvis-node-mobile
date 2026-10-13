@@ -13,6 +13,7 @@ import {
 import { listNodes, NodeInfo } from '../../api/nodeApi';
 import { useAuth } from '../../auth/AuthContext';
 import { NodesStackParamList } from '../../navigation/types';
+import { formatLastSeen } from '../../utils/serverTime';
 
 type Nav = NativeStackNavigationProp<NodesStackParamList>;
 
@@ -47,19 +48,6 @@ const NodeListScreen = () => {
     setRefreshing(false);
   }, [loadNodes]);
 
-  const formatLastSeen = (lastSeen: string | null): string => {
-    if (!lastSeen) return 'Never';
-    const date = new Date(lastSeen);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    const diffHours = Math.floor(diffMins / 60);
-    if (diffHours < 24) return `${diffHours}h ago`;
-    return date.toLocaleDateString();
-  };
-
   const renderNode = ({ item }: { item: NodeInfo }) => (
     <Card
       style={styles.card}
@@ -81,7 +69,7 @@ const NodeListScreen = () => {
           variant="bodySmall"
           style={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}
         >
-          {item.online ? 'Online' : `Offline \u00B7 Last seen ${formatLastSeen(item.last_seen)}`}
+          {item.online ? 'Online' : `Offline \u00B7 Last seen ${formatLastSeen(item.last_seen, false)}`}
         </Text>
         <Text
           variant="bodySmall"
