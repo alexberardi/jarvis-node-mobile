@@ -26,18 +26,19 @@ import { FirstRunCard } from '../../components/FirstRunCard';
 import { helpCopy } from '../../copy/help';
 import { useFirstRun } from '../../hooks/useFirstRun';
 import { InboxStackParamList } from '../../navigation/types';
+import { categoryChipColors, CHIP_FILLS } from '../../theme/categoryChip';
 
 type Nav = NativeStackNavigationProp<InboxStackParamList>;
 
 const CATEGORY_COLORS: Record<string, string> = {
-  deep_research: '#6366f1',
-  alert: '#ef4444',
-  reminder: '#f59e0b',
-  confirmation: '#3b82f6',
-  adapter_proposal: '#10b981',
-  adapter_deployed: '#0ea5e9',
-  adapter_reverted: '#64748b',
-  interactive_list: '#8b5cf6',
+  deep_research: CHIP_FILLS.indigo,
+  alert: CHIP_FILLS.red,
+  reminder: CHIP_FILLS.amber,
+  confirmation: CHIP_FILLS.blue,
+  adapter_proposal: CHIP_FILLS.emerald,
+  adapter_deployed: CHIP_FILLS.sky,
+  adapter_reverted: CHIP_FILLS.slate,
+  interactive_list: CHIP_FILLS.violet,
 };
 
 const routeForCategory = (category: string): keyof InboxStackParamList => {
@@ -223,6 +224,7 @@ const InboxListScreen = () => {
 
   const renderCard = (item: InboxItem) => {
     const isSelected = selectedIds.has(item.id);
+    const categoryColors = categoryChipColors(item.category, CATEGORY_COLORS, theme);
     return (
       <Card
         testID={`inbox-item-${item.id}`}
@@ -266,11 +268,8 @@ const InboxListScreen = () => {
               <View style={styles.cardHeader}>
                 <Chip
                   compact
-                  textStyle={styles.chipText}
-                  style={[
-                    styles.chip,
-                    { backgroundColor: CATEGORY_COLORS[item.category] ?? theme.colors.secondaryContainer },
-                  ]}
+                  textStyle={[styles.chipText, { color: categoryColors.color }]}
+                  style={[styles.chip, { backgroundColor: categoryColors.backgroundColor }]}
                 >
                   {item.category.replace(/_/g, ' ')}
                 </Chip>

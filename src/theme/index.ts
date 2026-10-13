@@ -27,3 +27,13 @@ export const darkTheme: MD3Theme = {
 };
 
 export default lightTheme;
+
+/**
+ * Page-title text style: the bold headlineMedium used by the tab screens that
+ * draw their own header (Nodes, Routines, Inbox, Settings). Pass it as
+ * `Appbar.Content`'s `titleStyle` so Appbar-based pages match them.
+ */
+export const pageTitleStyle = (theme: MD3Theme) => ({
+  ...theme.fonts.headlineMedium,
+  fontWeight: 'bold' as const,
+});
