@@ -22,6 +22,7 @@ const LoginScreen = ({ navigation }: Props) => {
     state,
   } = useAuth();
   const biometricEnabled = state?.biometricEnabled ?? false;
+  const signOutNotice = state?.signOutNotice ?? null;
   const theme = useTheme();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -84,6 +85,11 @@ const LoginScreen = ({ navigation }: Props) => {
         <Appbar.Content title="Log In" />
       </Appbar.Header>
       <View style={styles.container}>
+        {signOutNotice ? (
+          <HelperText testID="sign-out-notice" type="info" visible>
+            {signOutNotice}
+          </HelperText>
+        ) : null}
         <TextInput
           testID="email-input"
           label="Email"

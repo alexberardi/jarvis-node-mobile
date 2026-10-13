@@ -15,7 +15,7 @@ import { useConfig } from '../contexts/ConfigContext';
 
 import { AppState, Platform } from 'react-native';
 
-import { configureApiClient, refreshAuthToken } from '../api/apiClient';
+import { configureApiClient, ForceLogoutReason, refreshAuthToken } from '../api/apiClient';
 import authApi from '../api/authApi';
 import { deleteAccount as deleteAccountApi } from '../api/accountApi';
 
@@ -49,7 +49,20 @@ export interface AuthState {
   /** Session was opened with an admin-issued temporary password — the app is
    *  gated behind ForcePasswordChangeScreen until a real one is set. */
   mustChangePassword: boolean;
+  /** Why the app last signed the user out on its own (shown on the login
+   *  screen). Null after a manual logout and once the user signs in again. */
+  signOutNotice: string | null;
+  /** Bumped every time a session is (re)established — login, register,
+   *  password change, cold-boot restore — so per-session side effects such as
+   *  push-token registration can re-run. */
+  sessionEpoch: number;
 }
+
+/** Login-screen notices for a sign-out the app did on its own. */
+export const SIGN_OUT_NOTICES: Record<ForceLogoutReason, string> = {
+  password_reset: 'Your password was reset. Sign in to set a new one.',
+  session_expired: 'Your session has ended. Please sign in again.',
+};
 
 type AuthResponse = {
   access_token: string;
@@ -89,6 +102,8 @@ const initialState: AuthState = {
   activeHouseholdId: null,
   biometricEnabled: false,
   mustChangePassword: false,
+  signOutNotice: null,
+  sessionEpoch: 0,
 };
 
 const REFRESH_INTERVAL_MS = 10 * 60 * 1000;
@@ -155,14 +170,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const tempPasswordRef = React.useRef<string | null>(null);
 
   const persistAuth = useCallback(
-    async (payload: { accessToken: string; refreshToken: string; user: AuthUser }) => {
-      const { accessToken, refreshToken, user } = payload;
+    async (payload: {
+      accessToken: string;
+      refreshToken: string;
+      user: AuthUser;
+      mustChangePassword?: boolean;
+    }) => {
+      const { accessToken, refreshToken, user, mustChangePassword = false } = payload;
+      // One state update: a temp-password session must never render (even
+      // once) as authenticated-and-ungated, or the main app mounts and fires
+      // queries that 403 password_change_required.
       setState((prev) => ({
         ...prev,
         user,
         accessToken,
         refreshToken,
         isAuthenticated: true,
+        mustChangePassword,
+        signOutNotice: null,
+        sessionEpoch: prev.sessionEpoch + 1,
       }));
       // Scope K2 storage to current user so different users on the
       // same device cannot read each other's node encryption keys.
@@ -201,14 +227,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (opts && typeof opts.enableBiometric === 'boolean') {
         await setBiometricLoginEnabled(opts.enableBiometric);
       }
+      const mustChange = !!res.data.must_change_password;
+      tempPasswordRef.current = mustChange ? password : null;
       await persistAuth({
         accessToken: res.data.access_token,
         refreshToken: res.data.refresh_token,
         user: res.data.user,
+        mustChangePassword: mustChange,
       });
-      const mustChange = !!res.data.must_change_password;
-      tempPasswordRef.current = mustChange ? password : null;
-      setState((prev) => ({ ...prev, mustChangePassword: mustChange }));
       // Persisted so a kill/cold-boot mid-flow still lands on the gate.
       if (mustChange) {
         await AsyncStorage.setItem(MUST_CHANGE_PASSWORD_KEY, 'true');
@@ -242,7 +268,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         user: res.data.user,
       });
       tempPasswordRef.current = null;
-      setState((prev) => ({ ...prev, mustChangePassword: false }));
       await AsyncStorage.removeItem(MUST_CHANGE_PASSWORD_KEY);
     },
     [persistAuth],
@@ -269,7 +294,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     [persistAuth, setActiveHousehold],
   );
 
-  const logout = useCallback(async () => {
+  // `signOutNotice` explains an app-initiated sign-out on the login screen;
+  // the user's own "Log Out" passes null. (Kept off the public `logout` so it
+  // can stay a bare `onPress` handler.)
+  const endSession = useCallback(async (signOutNotice: string | null) => {
     // Wipe all per-user / per-environment caches before resetting state.
     // Without this, dev-environment node IDs, K2 keys, cached service URLs,
     // and react-query data (devices/rooms/smartHomeConfig keyed by
@@ -292,12 +320,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (e) {
       console.warn('[AuthContext] logout cache wipe failed; logging out anyway:', e);
     } finally {
-      setState({
+      // sessionEpoch stays monotonic so the next session never reuses a number.
+      setState((prev) => ({
         ...initialState,
         isLoading: false,
-      });
+        signOutNotice,
+        sessionEpoch: prev.sessionEpoch,
+      }));
     }
   }, [queryClient, rediscover]);
+
+  const logout = useCallback(() => endSession(null), [endSession]);
 
   const deleteAccount = useCallback(
     async (password: string) => {
@@ -314,14 +347,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         await clearUserData({ queryClient, rediscover });
       } finally {
-        setState({
+        setState((prev) => ({
           ...initialState,
           isLoading: false,
-        });
+          sessionEpoch: prev.sessionEpoch,
+        }));
       }
     },
     [queryClient, rediscover],
   );
+
+  // Always the latest endSession, so the bridge below is wired exactly once:
+  // re-running configureApiClient would reset its forced-logout dedupe.
+  const endSessionRef = React.useRef(endSession);
+  endSessionRef.current = endSession;
 
   // Wire up the API client interceptor so all apiClient requests
   // automatically attach the current token and retry on 401.
@@ -336,11 +375,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // fire — otherwise a kill/cold-boot could replay the rotated token.
         await setTokens(access, refresh);
       },
-      onForceLogout: () => {
-        logout();
+      // The API client decided the session is over (dead refresh token, or a
+      // temp-password reset). It dedupes bursts; we sign out and explain why.
+      onForceLogout: (reason: ForceLogoutReason) => {
+        endSessionRef.current(SIGN_OUT_NOTICES[reason]);
       },
+      isPasswordChangePending: () =>
+        stateRef.current.isAuthenticated && stateRef.current.mustChangePassword,
     });
-  }, [logout]);
+  }, []);
 
   // Delegate to the shared single-flight in apiClient so the background timer,
   // the AppState-resume refresh, and the 401 interceptor can never double-spend
@@ -393,7 +436,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (accessToken && refreshToken && user) {
         setK2UserId(String(user.id));
-        setState({
+        setState((prev) => ({
           user,
           accessToken,
           refreshToken,
@@ -403,7 +446,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           activeHouseholdId,
           biometricEnabled: true,
           mustChangePassword,
-        });
+          signOutNotice: null,
+          sessionEpoch: prev.sessionEpoch + 1,
+        }));
         return true;
       }
       return false;
@@ -467,7 +512,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (accessToken && refreshToken && user) {
         setK2UserId(String(user.id));
-        setState({
+        setState((prev) => ({
           user,
           accessToken,
           refreshToken,
@@ -477,7 +522,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           activeHouseholdId,
           biometricEnabled,
           mustChangePassword,
-        });
+          signOutNotice: null,
+          sessionEpoch: prev.sessionEpoch + 1,
+        }));
       } else {
         // Unauthenticated (or biometric cancelled). Keep biometricEnabled so the
         // login screen offers an "Unlock" retry instead of only a password form.

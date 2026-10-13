@@ -1,5 +1,5 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Alert, StyleSheet, View } from 'react-native';
 import {
   Banner,
@@ -13,6 +13,7 @@ import {
 } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useAuth } from '../../auth/AuthContext';
 import { useConfig } from '../../contexts/ConfigContext';
 import { AuthStackParamList } from '../../navigation/types';
 import { useThemePreference } from '../../theme/ThemeProvider';
@@ -24,6 +25,14 @@ const LandingScreen = ({ navigation }: Props) => {
   const { fallbackMessage, config, manualUrl, setManualUrl, rediscover } = useConfig();
   const insets = useSafeAreaInsets();
   const theme = useTheme();
+  const signOutNotice = useAuth().state.signOutNotice;
+
+  // The app signed the user out on its own (password reset, dead session):
+  // skip the landing page and put them on Login, where the notice explains
+  // why. Once per notice, so backing out to Landing isn't bounced again.
+  useEffect(() => {
+    if (signOutNotice) navigation.navigate('Login');
+  }, [signOutNotice, navigation]);
 
   const [dialogVisible, setDialogVisible] = useState(false);
   const [urlInput, setUrlInput] = useState('');
