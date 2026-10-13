@@ -12,6 +12,7 @@ import {
 import { deriveHAUrls } from '../../services/haDiscoveryService';
 import { performOAuthFlow } from '../../services/oauthService';
 import { SmartHomeSetupParamList } from '../../navigation/types';
+import KeyboardSafeView from '../../components/KeyboardSafeView';
 
 type Props = NativeStackScreenProps<SmartHomeSetupParamList, 'HAAuth'>;
 
@@ -77,7 +78,7 @@ const HAAuthScreen = ({ navigation, route }: Props) => {
   };
 
   return (
-    <View style={styles.container}>
+    <KeyboardSafeView style={styles.container}>
       <Text variant="headlineSmall" style={styles.title}>
         Connect to Home Assistant
       </Text>
@@ -134,7 +135,7 @@ const HAAuthScreen = ({ navigation, route }: Props) => {
       <Button mode="text" onPress={() => navigation.goBack()} style={styles.backButton}>
         Back
       </Button>
-    </View>
+    </KeyboardSafeView>
   );
 };
 

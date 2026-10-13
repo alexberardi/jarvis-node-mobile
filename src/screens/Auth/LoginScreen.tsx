@@ -5,6 +5,7 @@ import { Appbar, Button, Checkbox, HelperText, TextInput, useTheme } from 'react
 
 import { useAuth } from '../../auth/AuthContext';
 import { AuthStackParamList } from '../../navigation/types';
+import KeyboardSafeView from '../../components/KeyboardSafeView';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Login'>;
 
@@ -77,7 +78,7 @@ const LoginScreen = ({ navigation }: Props) => {
   };
 
   return (
-    <>
+    <KeyboardSafeView>
       <Appbar.Header>
         <Appbar.BackAction onPress={() => navigation.goBack()} color={theme.colors.onSurface} />
         <Appbar.Content title="Log In" />
@@ -142,7 +143,7 @@ const LoginScreen = ({ navigation }: Props) => {
           Need an account? Create one
         </Button>
       </View>
-    </>
+    </KeyboardSafeView>
   );
 };
 

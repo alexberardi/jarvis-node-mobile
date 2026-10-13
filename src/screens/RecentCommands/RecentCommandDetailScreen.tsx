@@ -6,6 +6,7 @@ import { Button, Card, Divider, IconButton, Text, TextInput, useTheme } from 're
 
 import { listRecentTranscripts, rateTranscript, Rating, Transcript } from '../../api/transcriptsApi';
 import { RecentCommandsStackParamList } from '../../navigation/types';
+import KeyboardSafeView from '../../components/KeyboardSafeView';
 
 type Nav = NativeStackNavigationProp<RecentCommandsStackParamList>;
 type Rt = RouteProp<RecentCommandsStackParamList, 'RecentCommandDetail'>;
@@ -67,67 +68,69 @@ const RecentCommandDetailScreen = () => {
   const downActive = item.user_rating === -1;
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Card style={styles.card}>
-        <Card.Content>
-          <Text style={styles.label}>You said</Text>
-          <Text style={styles.userMessage}>{item.user_message}</Text>
+    <KeyboardSafeView>
+      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        <Card style={styles.card}>
+          <Card.Content>
+            <Text style={styles.label}>You said</Text>
+            <Text style={styles.userMessage}>{item.user_message}</Text>
 
-          <Divider style={styles.divider} />
-          <Text style={styles.label}>Jarvis did</Text>
-          {item.tool_calls && item.tool_calls.length > 0 ? (
-            item.tool_calls.map((tc, idx) => (
-              <View key={idx} style={styles.toolBlock}>
-                <Text style={styles.toolName}>{String(tc.name)}</Text>
-                {tc.arguments ? (
-                  <Text style={styles.toolArgs}>{JSON.stringify(tc.arguments, null, 2)}</Text>
-                ) : null}
-              </View>
-            ))
-          ) : item.assistant_message ? (
-            <Text style={styles.assistantMsg}>{item.assistant_message}</Text>
-          ) : (
-            <Text style={{ color: theme.colors.onSurfaceVariant }}>No tool call recorded.</Text>
-          )}
+            <Divider style={styles.divider} />
+            <Text style={styles.label}>Jarvis did</Text>
+            {item.tool_calls && item.tool_calls.length > 0 ? (
+              item.tool_calls.map((tc, idx) => (
+                <View key={idx} style={styles.toolBlock}>
+                  <Text style={styles.toolName}>{String(tc.name)}</Text>
+                  {tc.arguments ? (
+                    <Text style={styles.toolArgs}>{JSON.stringify(tc.arguments, null, 2)}</Text>
+                  ) : null}
+                </View>
+              ))
+            ) : item.assistant_message ? (
+              <Text style={styles.assistantMsg}>{item.assistant_message}</Text>
+            ) : (
+              <Text style={{ color: theme.colors.onSurfaceVariant }}>No tool call recorded.</Text>
+            )}
 
-          <Divider style={styles.divider} />
-          <Text style={styles.label}>Your rating</Text>
-          <View style={styles.ratingRow}>
-            <IconButton
-              icon={upActive ? 'thumb-up' : 'thumb-up-outline'}
-              size={28}
-              iconColor={upActive ? theme.colors.primary : theme.colors.onSurfaceVariant}
+            <Divider style={styles.divider} />
+            <Text style={styles.label}>Your rating</Text>
+            <View style={styles.ratingRow}>
+              <IconButton
+                icon={upActive ? 'thumb-up' : 'thumb-up-outline'}
+                size={28}
+                iconColor={upActive ? theme.colors.primary : theme.colors.onSurfaceVariant}
+                disabled={saving}
+                onPress={() => save(1)}
+              />
+              <IconButton
+                icon={downActive ? 'thumb-down' : 'thumb-down-outline'}
+                size={28}
+                iconColor={downActive ? theme.colors.error : theme.colors.onSurfaceVariant}
+                disabled={saving}
+                onPress={() => save(-1)}
+              />
+            </View>
+
+            <TextInput
+              mode="outlined"
+              label="Notes (optional)"
+              value={notes}
+              onChangeText={setNotes}
+              multiline
+              numberOfLines={3}
+              style={styles.notes}
               disabled={saving}
-              onPress={() => save(1)}
             />
-            <IconButton
-              icon={downActive ? 'thumb-down' : 'thumb-down-outline'}
-              size={28}
-              iconColor={downActive ? theme.colors.error : theme.colors.onSurfaceVariant}
-              disabled={saving}
-              onPress={() => save(-1)}
-            />
-          </View>
 
-          <TextInput
-            mode="outlined"
-            label="Notes (optional)"
-            value={notes}
-            onChangeText={setNotes}
-            multiline
-            numberOfLines={3}
-            style={styles.notes}
-            disabled={saving}
-          />
+            {error ? <Text style={{ color: theme.colors.error }}>{error}</Text> : null}
+          </Card.Content>
+        </Card>
 
-          {error ? <Text style={{ color: theme.colors.error }}>{error}</Text> : null}
-        </Card.Content>
-      </Card>
-
-      <Button mode="text" onPress={() => navigation.goBack()} style={styles.back}>
-        Done
-      </Button>
-    </ScrollView>
+        <Button mode="text" onPress={() => navigation.goBack()} style={styles.back}>
+          Done
+        </Button>
+      </ScrollView>
+    </KeyboardSafeView>
   );
 };
 

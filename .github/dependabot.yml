@@ -45,6 +45,10 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "typescript"
         update-types: ["version-update:semver-major"]
+      # Expo pins @types/react to the SDK's React minor (~19.1 for SDK 54);
+      # `npx expo install --check` flags anything newer.
+      - dependency-name: "@types/react"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:

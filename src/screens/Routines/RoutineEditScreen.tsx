@@ -5,8 +5,6 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Dimensions,
-  KeyboardAvoidingView,
-  Platform,
   ScrollView,
   StyleSheet,
   View,
@@ -50,6 +48,7 @@ import type {
   ScheduleType,
 } from '../../types/Routine';
 import { ALL_DAYS, INTERVAL_PRESETS, WEEKDAYS, WEEKENDS } from '../../types/Routine';
+import KeyboardSafeView from '../../components/KeyboardSafeView';
 
 type Nav = NativeStackNavigationProp<RoutinesStackParamList>;
 type Route = RouteProp<RoutinesStackParamList, 'RoutineEdit'>;
@@ -530,7 +529,7 @@ const RoutineEditScreen = () => {
   }
 
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardSafeView style={styles.container} iosBehavior="padding">
       <View style={[styles.fixedHeader, { backgroundColor: theme.colors.background, borderBottomColor: theme.colors.outlineVariant }]}>
         <IconButton icon="arrow-left" onPress={() => navigation.goBack()} />
         <Text variant="headlineSmall" style={{ fontWeight: 'bold', flex: 1 }}>
@@ -726,7 +725,7 @@ const RoutineEditScreen = () => {
           </Button>
         </View>
       </ScrollView>
-    </KeyboardAvoidingView>
+    </KeyboardSafeView>
   );
 };
 

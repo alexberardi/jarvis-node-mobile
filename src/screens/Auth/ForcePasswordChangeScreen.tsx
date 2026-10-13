@@ -3,6 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import { Appbar, Button, HelperText, Text, TextInput, useTheme } from 'react-native-paper';
 
 import { useAuth } from '../../auth/AuthContext';
+import KeyboardSafeView from '../../components/KeyboardSafeView';
 
 /**
  * Full-screen gate shown when the session was opened with an admin-issued
@@ -64,7 +65,7 @@ const ForcePasswordChangeScreen = () => {
   const showInlineError = error || passwordError;
 
   return (
-    <>
+    <KeyboardSafeView>
       <Appbar.Header>
         <Appbar.Content title="Set a New Password" />
       </Appbar.Header>
@@ -127,7 +128,7 @@ const ForcePasswordChangeScreen = () => {
           Log Out
         </Button>
       </View>
-    </>
+    </KeyboardSafeView>
   );
 };
 

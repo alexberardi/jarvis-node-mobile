@@ -56,6 +56,7 @@ import type { AuthenticationConfig } from '../../types/SmartHome';
 import { requestUninstall, pollUninstallStatus } from '../../api/packageInstallApi';
 import { configErrorBadge, needsSetupLabel } from '../../utils/packageStatus';
 import { userSecretDisplayValue } from '../../utils/userSecret';
+import KeyboardSafeView from '../../components/KeyboardSafeView';
 
 type ScreenRoute = RouteProp<NodesStackParamList, 'NodeSettings'>;
 
@@ -1885,7 +1886,7 @@ const NodeSettingsScreen: React.FC = () => {
   };
 
   return (
-    <View style={styles.container}>
+    <KeyboardSafeView style={styles.container}>
       <Appbar.Header>
         <Appbar.BackAction onPress={() => navigation.goBack()} />
         <Appbar.Content title={headerTitle} />
@@ -2087,7 +2088,7 @@ const NodeSettingsScreen: React.FC = () => {
       >
         This setting is personal — each household member configures their own.
       </Snackbar>
-    </View>
+    </KeyboardSafeView>
   );
 };
 

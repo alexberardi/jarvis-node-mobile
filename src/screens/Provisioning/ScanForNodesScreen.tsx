@@ -10,6 +10,7 @@ import { helpCopy } from '../../copy/help';
 import { ProvisioningStackParamList } from '../../navigation/types';
 import { SIMULATED_NODE_IP, NODE_PORT, DEV_MODE } from '../../config/env';
 import { useThemePreference } from '../../theme/ThemeProvider';
+import KeyboardSafeView from '../../components/KeyboardSafeView';
 
 type Props = NativeStackScreenProps<ProvisioningStackParamList, 'ScanForNodes'>;
 
@@ -96,7 +97,7 @@ const ScanForNodesScreen = ({ navigation }: Props) => {
   };
 
   return (
-    <>
+    <KeyboardSafeView>
       <Appbar.Header>
         <Appbar.Content title="Add Node" />
         <Appbar.Action
@@ -248,7 +249,7 @@ const ScanForNodesScreen = ({ navigation }: Props) => {
           </Card>
         )}
       </View>
-    </>
+    </KeyboardSafeView>
   );
 };
 

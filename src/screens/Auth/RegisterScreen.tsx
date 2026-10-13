@@ -7,6 +7,7 @@ import { useAuth } from '../../auth/AuthContext';
 import authApi from '../../api/authApi';
 import { AuthStackParamList } from '../../navigation/types';
 import { setPushNotificationsEnabled } from '../../services/pushNotificationService';
+import KeyboardSafeView from '../../components/KeyboardSafeView';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Register'>;
 
@@ -84,7 +85,7 @@ const RegisterScreen = ({ navigation }: Props) => {
   const showInlineError = error || (!isValidEmail && email ? 'Enter a valid email.' : passwordError);
 
   return (
-    <>
+    <KeyboardSafeView>
       <Appbar.Header>
         <Appbar.BackAction onPress={() => navigation.goBack()} color={theme.colors.onSurface} />
         <Appbar.Content title="Create Account" />
@@ -175,7 +176,7 @@ const RegisterScreen = ({ navigation }: Props) => {
           Back to Log In
         </Button>
       </View>
-    </>
+    </KeyboardSafeView>
   );
 };
 

@@ -46,6 +46,8 @@ import {
 } from '../../services/pushNotificationService';
 import { clearUserData } from '../../services/clearUserData';
 import { getVoiceProfileStatus } from '../../api/voiceProfileApi';
+import DisplayNameEditor from '../../components/DisplayNameEditor';
+import KeyboardSafeView from '../../components/KeyboardSafeView';
 
 const THEME_BUTTONS = [
   { value: 'light', label: 'Light', icon: 'white-balance-sunny' },
@@ -317,7 +319,7 @@ const SettingsScreen = () => {
   return (
     <Portal.Host>
     <HelpProvider>
-    <View style={[styles.container, { backgroundColor: paperTheme.colors.background, paddingTop: topInset }]}>
+    <KeyboardSafeView style={[styles.container, { backgroundColor: paperTheme.colors.background, paddingTop: topInset }]}>
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={[styles.header, { marginTop: HEADER_TOP_MARGIN - topInset }]}>
         <Text variant="headlineMedium" style={styles.title}>
@@ -334,9 +336,7 @@ const SettingsScreen = () => {
           <Text variant="titleMedium" style={styles.sectionTitle}>
             Account
           </Text>
-          <Text variant="bodyMedium" style={styles.label}>
-            {authState.user?.username || authState.user?.email}
-          </Text>
+          <DisplayNameEditor />
           <Button
             mode="outlined"
             onPress={logout}
@@ -819,7 +819,7 @@ const SettingsScreen = () => {
       </Text>
 
     </ScrollView>
-    </View>
+    </KeyboardSafeView>
 
     {/* Delete Account confirmation dialog */}
     <Portal>
@@ -899,7 +899,6 @@ const styles = StyleSheet.create({
   title: { fontWeight: 'bold' },
   card: { marginBottom: 16 },
   sectionTitle: { fontWeight: '600', marginBottom: 8 },
-  label: { opacity: 0.7, marginBottom: 8 },
   logoutButton: { alignSelf: 'flex-start', marginTop: 4 },
   dangerZone: {
     marginTop: 20,

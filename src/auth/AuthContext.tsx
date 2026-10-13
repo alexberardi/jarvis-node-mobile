@@ -23,6 +23,8 @@ export interface AuthUser {
   id: number;
   email: string;
   username?: string;
+  /** Optional friendly name (jarvisd). Missing or null on older servers. */
+  display_name?: string | null;
 }
 
 export type HouseholdRole = 'admin' | 'power_user' | 'member';
@@ -106,6 +108,9 @@ type AuthContextValue = {
   logout: () => Promise<void>;
   deleteAccount: (password: string) => Promise<void>;
   refreshAccessToken: () => Promise<string | null>;
+  /** Merge server-confirmed profile fields (e.g. display_name) into the
+   *  signed-in user and persist them. */
+  updateUser: (patch: Partial<AuthUser>) => Promise<void>;
   bootstrapAuth: () => Promise<void>;
   fetchHouseholds: () => Promise<Household[]>;
   setActiveHousehold: (householdId: string | null) => Promise<void>;
@@ -170,6 +175,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     },
     [],
   );
+
+  const updateUser = useCallback(async (patch: Partial<AuthUser>): Promise<void> => {
+    const current = stateRef.current.user;
+    if (!current) return;
+    const user = { ...current, ...patch };
+    setState((prev) => ({ ...prev, user }));
+    await AsyncStorage.setItem(USER_KEY, JSON.stringify(user));
+  }, []);
 
   const setActiveHousehold = useCallback(async (householdId: string | null): Promise<void> => {
     setState((prev) => ({ ...prev, activeHouseholdId: householdId }));
@@ -560,6 +573,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       logout,
       deleteAccount,
       refreshAccessToken,
+      updateUser,
       bootstrapAuth,
       fetchHouseholds,
       setActiveHousehold,
@@ -569,7 +583,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setBackgroundPresence,
       biometricAvailable,
     }),
-    [bootstrapAuth, changePassword, hasTempPassword, deleteAccount, fetchHouseholds, login, logout, refreshAccessToken, register, setActiveHousehold, switchHousehold, unlockWithBiometrics, setBiometricEnabled, setBackgroundPresence, biometricAvailable, state],
+    [bootstrapAuth, updateUser, changePassword, hasTempPassword, deleteAccount, fetchHouseholds, login, logout, refreshAccessToken, register, setActiveHousehold, switchHousehold, unlockWithBiometrics, setBiometricEnabled, setBackgroundPresence, biometricAvailable, state],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -21,6 +21,7 @@ import {
   ImportResult,
 } from '../../services/qrImportService';
 import { QRPayload, EncryptedQRPayload } from '../../services/qrPayloadService';
+import KeyboardSafeView from '../../components/KeyboardSafeView';
 
 type ScanState = 'scanning' | 'password' | 'importing' | 'success' | 'error';
 
@@ -346,7 +347,7 @@ const ImportKeyScreen: React.FC<ImportKeyScreenProps> = ({
 
   // Scanner screen
   return (
-    <View style={styles.container}>
+    <KeyboardSafeView style={styles.container}>
       <Appbar.Header>
         <Appbar.BackAction onPress={onCancel} />
         <Appbar.Content title="Scan Backup QR" />
@@ -379,7 +380,7 @@ const ImportKeyScreen: React.FC<ImportKeyScreenProps> = ({
       </View>
 
       {devPasteBlock}
-    </View>
+    </KeyboardSafeView>
   );
 };
 
