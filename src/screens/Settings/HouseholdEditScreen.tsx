@@ -59,6 +59,7 @@ import {
   MIN_RADIUS_METERS,
   type HomeGeofence,
 } from '../../services/presenceService';
+import { parseServerDate } from '../../utils/serverTime';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'HouseholdEdit'>;
 
@@ -728,7 +729,7 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
   }, [householdId, headers]);
 
   const formatExpiry = (iso: string) => {
-    const date = new Date(iso);
+    const date = parseServerDate(iso) ?? new Date(iso);
     const now = new Date();
     if (date < now) return 'Expired';
     const days = Math.ceil((date.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));

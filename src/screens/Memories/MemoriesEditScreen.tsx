@@ -23,6 +23,7 @@ import {
 } from '../../api/memoriesApi';
 import { useAuth } from '../../auth/AuthContext';
 import type { MemoriesStackParamList } from '../../navigation/types';
+import { parseServerDate } from '../../utils/serverTime';
 
 type Props = NativeStackScreenProps<MemoriesStackParamList, 'MemoryEdit'>;
 
@@ -232,7 +233,7 @@ const MemoriesEditScreen = ({ navigation, route }: Props) => {
               Source: {existing.source}
             </Text>
             <Text variant="bodySmall" style={styles.meta}>
-              Updated: {new Date(existing.updated_at).toLocaleString()}
+              Updated: {(parseServerDate(existing.updated_at) ?? new Date(existing.updated_at)).toLocaleString()}
             </Text>
           </View>
         )}

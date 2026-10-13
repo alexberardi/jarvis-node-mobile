@@ -55,16 +55,6 @@ const formatUptime = (seconds: number | null): string => {
   return parts.join(' ');
 };
 
-const formatTimestamp = (iso: string): string => {
-  const date = new Date(iso);
-  const now = new Date();
-  const diffDays = Math.floor((now.getTime() - date.getTime()) / 86400000);
-  const time = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-  if (diffDays === 0) return `Today ${time}`;
-  if (diffDays === 1) return `Yesterday ${time}`;
-  return `${date.toLocaleDateString([], { month: 'short', day: 'numeric' })} ${time}`;
-};
-
 interface CommandInfo {
   name: string;
   description: string;

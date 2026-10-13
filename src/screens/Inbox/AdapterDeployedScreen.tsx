@@ -23,6 +23,7 @@ import { revertDeployment } from '../../api/adaptersApi';
 import { getInboxItem, InboxItem } from '../../api/inboxApi';
 import { useAuth } from '../../auth/AuthContext';
 import { InboxStackParamList } from '../../navigation/types';
+import { parseServerDate } from '../../utils/serverTime';
 
 type Nav = NativeStackNavigationProp<InboxStackParamList>;
 type DeployedRoute = RouteProp<InboxStackParamList, 'AdapterDeployed'>;
@@ -155,7 +156,7 @@ const AdapterDeployedScreen = () => {
           variant="labelSmall"
           style={{ color: theme.colors.onSurfaceVariant, marginBottom: 16 }}
         >
-          Deployed {new Date(item.created_at).toLocaleString()}
+          Deployed {(parseServerDate(item.created_at) ?? new Date(item.created_at)).toLocaleString()}
         </Text>
 
         <Divider style={{ marginBottom: 16 }} />

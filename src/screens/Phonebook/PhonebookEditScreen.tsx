@@ -23,6 +23,7 @@ import {
 import { useAuth } from '../../auth/AuthContext';
 import type { PhonebookStackParamList } from '../../navigation/types';
 import { formatPhoneNumber, validateContactDraft } from '../../utils/phoneContacts';
+import { parseServerDate } from '../../utils/serverTime';
 
 type Props = NativeStackScreenProps<PhonebookStackParamList, 'PhonebookEdit'>;
 
@@ -283,7 +284,7 @@ const PhonebookEditScreen = ({ navigation, route }: Props) => {
               </Text>
             )}
             <Text variant="bodySmall" style={styles.meta}>
-              Added: {new Date(existing.created_at).toLocaleDateString()}
+              Added: {(parseServerDate(existing.created_at) ?? new Date(existing.created_at)).toLocaleDateString()}
             </Text>
           </View>
         )}

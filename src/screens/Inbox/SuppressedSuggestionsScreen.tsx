@@ -22,6 +22,7 @@ import {
 import { useAuth } from '../../auth/AuthContext';
 import { InboxStackParamList } from '../../navigation/types';
 import type { ProposalSuppression } from '../../types/ProposalSuppression';
+import { parseServerDate } from '../../utils/serverTime';
 
 type Nav = NativeStackNavigationProp<InboxStackParamList>;
 
@@ -63,7 +64,7 @@ const SuppressedSuggestionsScreen = () => {
     s.descriptor || s.source_key || s.command;
 
   const formatDate = (iso: string): string => {
-    const d = new Date(iso);
+    const d = parseServerDate(iso) ?? new Date(iso);
     if (Number.isNaN(d.getTime())) return '';
     return d.toLocaleDateString(undefined, {
       month: 'short',
