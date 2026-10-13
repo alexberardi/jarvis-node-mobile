@@ -33,6 +33,7 @@ import { helpCopy } from '../../copy/help';
 import { HardwareTab } from './HardwareTab';
 import { NodesStackParamList } from '../../navigation/types';
 import { deleteK2, hasK2 } from '../../services/k2Service';
+import { formatLastSeen } from '../../utils/serverTime';
 
 type Nav = NativeStackNavigationProp<NodesStackParamList>;
 type Route = RouteProp<NodesStackParamList, 'NodeDetail'>;
@@ -52,19 +53,6 @@ const formatUptime = (seconds: number | null): string => {
   if (hours > 0) parts.push(`${hours}h`);
   parts.push(`${minutes}m`);
   return parts.join(' ');
-};
-
-const formatLastSeen = (lastSeen: string | null): string => {
-  if (!lastSeen) return 'Never';
-  const date = new Date(lastSeen);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  if (diffMins < 1) return 'Just now';
-  if (diffMins < 60) return `${diffMins}m ago`;
-  const diffHours = Math.floor(diffMins / 60);
-  if (diffHours < 24) return `${diffHours}h ago`;
-  return date.toLocaleDateString();
 };
 
 const formatTimestamp = (iso: string): string => {
@@ -210,7 +198,7 @@ export const OverviewTab = ({
           </Text>
         </View>
         <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 2 }}>
-          Last seen {formatLastSeen(node.last_seen)}
+          Last seen {formatLastSeen(node.last_seen, node.online)}
         </Text>
       </View>
 

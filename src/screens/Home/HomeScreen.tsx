@@ -550,9 +550,14 @@ const HomeScreen = () => {
   );
 
   return (
+    // 'padding' on Android too: the app is edge-to-edge (app.json
+    // edgeToEdgeEnabled), and under edge-to-edge the system no longer resizes
+    // the window for the keyboard (adjustResize is a no-op), so without this the
+    // keyboard draws over the composer. If a device does resize, the view's
+    // frame already ends above the keyboard and the padding computes to 0.
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior="padding"
       keyboardVerticalOffset={0}
     >
       {/* Header */}

@@ -2,7 +2,7 @@ import React from 'react';
 import { render } from '@testing-library/react-native';
 import { PaperProvider } from 'react-native-paper';
 
-import ChatBubble from '../../src/components/ChatBubble';
+import ChatBubble, { formatHops } from '../../src/components/ChatBubble';
 import { lightTheme } from '../../src/theme';
 import type { ChatMessage } from '../../src/api/chatApi';
 
@@ -13,6 +13,9 @@ jest.mock('react-native-markdown-display', () => {
     default: ({ children }: { children: string }) => <Text>{children}</Text>,
   };
 });
+
+// Pin the build flag so the default-hidden case doesn't depend on a local .env.
+jest.mock('../../src/config/env', () => ({ DEV_MODE: false }));
 
 const wrapper = ({ children }: { children: React.ReactNode }) => (
   <PaperProvider theme={lightTheme}>{children}</PaperProvider>
@@ -152,5 +155,44 @@ describe('ChatBubble', () => {
     const msg = makeMessage({ role: 'user', content: 'Hi there' });
     const { queryByTestId } = render(<ChatBubble message={msg} />, { wrapper });
     expect(queryByTestId('chat-bubble-images')).toBeNull();
+  });
+
+  describe('debug details', () => {
+    const hop = { service: 'llm', duration_ms: 300, status: 'ok', steps: [] };
+    const debugMsg = makeMessage({
+      roundTripMs: 369,
+      traceSummary: { total_duration_ms: 369, span_count: 1, status: 'ok', service_hops: [hop] },
+    });
+
+    it('hides round-trip time and the trace by default (DEV_MODE off)', () => {
+      const { queryByText } = render(<ChatBubble message={debugMsg} onPlayTTS={jest.fn()} />, {
+        wrapper,
+      });
+      expect(queryByText('369ms')).toBeNull();
+      expect(queryByText(/Show trace/)).toBeNull();
+    });
+
+    it('hides an errored trace too when debug details are off', () => {
+      const msg = makeMessage({
+        traceSummary: { total_duration_ms: 10, span_count: 1, status: 'error', service_hops: [hop] },
+      });
+      const { queryByText } = render(<ChatBubble message={msg} showDebugDetails={false} />, {
+        wrapper,
+      });
+      expect(queryByText(/trace/i)).toBeNull();
+      expect(queryByText('llm')).toBeNull();
+    });
+
+    it('shows them when debug details are on', () => {
+      const { getByText } = render(<ChatBubble message={debugMsg} showDebugDetails />, { wrapper });
+      expect(getByText('369ms')).toBeTruthy();
+      expect(getByText('Show trace (1 hop)')).toBeTruthy();
+    });
+
+    it('pluralizes hops', () => {
+      expect(formatHops(0)).toBe('0 hops');
+      expect(formatHops(1)).toBe('1 hop');
+      expect(formatHops(3)).toBe('3 hops');
+    });
   });
 });
