@@ -26,6 +26,7 @@ import { FirstRunCard } from '../../components/FirstRunCard';
 import { helpCopy } from '../../copy/help';
 import { useFirstRun } from '../../hooks/useFirstRun';
 import { InboxStackParamList } from '../../navigation/types';
+import { parseServerDate } from '../../utils/serverTime';
 
 type Nav = NativeStackNavigationProp<InboxStackParamList>;
 
@@ -198,7 +199,7 @@ const InboxListScreen = () => {
   }, [selectedIds, exitSelectMode]);
 
   const formatDate = (iso: string) => {
-    const date = new Date(iso);
+    const date = parseServerDate(iso) ?? new Date(iso);
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
     const diffMins = Math.abs(Math.round(diffMs / (1000 * 60)));
