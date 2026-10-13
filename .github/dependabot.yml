@@ -32,6 +32,19 @@ updates:
       - dependency-name: "@react-native-community/*"
       - dependency-name: "@react-native-async-storage/*"
       - dependency-name: "@react-navigation/*"
+      # The test/build toolchain is pinned to the Expo SDK too: jest-expo 54 is
+      # built on Jest 29, babel-preset-expo tracks the SDK, and Expo pins
+      # TypeScript ~5.9. Majors come in with an SDK upgrade; minors still flow.
+      - dependency-name: "jest"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/jest"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "jest-expo"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "babel-preset-expo"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
