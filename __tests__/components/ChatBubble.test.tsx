@@ -128,4 +128,29 @@ describe('ChatBubble', () => {
     // TTS icon-button should not be present when actions are shown
     expect(queryByTestId('icon-button')).toBeNull();
   });
+
+  it('renders attached images on a user bubble from their local URIs', () => {
+    const msg = makeMessage({
+      role: 'user',
+      content: 'what is this?',
+      images: [{ uri: 'file:///a.jpg' }, { uri: 'file:///b.jpg' }],
+    });
+    const { getAllByTestId, getByText } = render(<ChatBubble message={msg} />, { wrapper });
+    const imgs = getAllByTestId('chat-bubble-image');
+    expect(imgs.map((i) => i.props.source)).toEqual([{ uri: 'file:///a.jpg' }, { uri: 'file:///b.jpg' }]);
+    expect(getByText('what is this?')).toBeTruthy();
+  });
+
+  it('renders an image-only user bubble without an empty text line', () => {
+    const msg = makeMessage({ role: 'user', content: '', images: [{ uri: 'file:///a.jpg' }] });
+    const { getAllByTestId, toJSON } = render(<ChatBubble message={msg} />, { wrapper });
+    expect(getAllByTestId('chat-bubble-image')).toHaveLength(1);
+    expect(JSON.stringify(toJSON())).not.toContain('"children":[""]');
+  });
+
+  it('renders no image grid for a text-only user message', () => {
+    const msg = makeMessage({ role: 'user', content: 'Hi there' });
+    const { queryByTestId } = render(<ChatBubble message={msg} />, { wrapper });
+    expect(queryByTestId('chat-bubble-images')).toBeNull();
+  });
 });

@@ -209,6 +209,15 @@ describe('Test Install — flow integration (load/auto-select, validation gates,
     expect(utils.getByTestId('install-button').props.accessibilityState?.disabled).toBe(true);
   });
 
+  it('warns that the share-code draft is unverified before installing', async () => {
+    const utils = renderScreen();
+
+    await utils.findByText('Kitchen');
+    expect(utils.getByTestId('unverified-warning')).toBeTruthy();
+    expect(utils.getByText(/Unverified code\./)).toBeTruthy();
+    expect(utils.getByText(/Only install codes you created or trust\./)).toBeTruthy();
+  });
+
   it('back button invokes navigation.goBack', async () => {
     const utils = renderScreen();
     await utils.findByText('Kitchen');

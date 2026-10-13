@@ -14,10 +14,12 @@ import {
 } from 'react-native-paper';
 
 import { listNodes, NodeInfo } from '../../api/nodeApi';
+import { isPantryDisabledError } from '../../api/householdSettingsApi';
 import { requestTestInstall } from '../../api/testInstallApi';
 import { useAuth } from '../../auth/AuthContext';
 import { InfoHelperText } from '../../components/HelpIcon';
 import { helpCopy } from '../../copy/help';
+import { usePantryGate } from '../../components/PantryGate';
 import { StoreStackParamList } from '../../navigation/types';
 
 type Nav = NativeStackNavigationProp<StoreStackParamList>;
@@ -26,6 +28,7 @@ const TestInstallScreen = () => {
   const navigation = useNavigation<Nav>();
   const theme = useTheme();
   const { state: authState } = useAuth();
+  const { markDisabled } = usePantryGate();
 
   const [shareCode, setShareCode] = useState('');
   const [nodes, setNodes] = useState<NodeInfo[]>([]);
@@ -82,6 +85,10 @@ const TestInstallScreen = () => {
         mode: 'test',
       });
     } catch (err: unknown) {
+      if (isPantryDisabledError(err)) {
+        markDisabled();
+        return;
+      }
       const detail =
         (err as { response?: { data?: { detail?: string } } })?.response?.data
           ?.detail ?? 'Failed to start test install';
@@ -178,6 +185,23 @@ const TestInstallScreen = () => {
           <Icon source="information-outline" size={18} color={theme.colors.primary} />
           <Text variant="bodySmall" style={{ flex: 1, color: theme.colors.onSurfaceVariant, marginLeft: 8 }}>
             Test installs are temporary — they auto-expire after 20 minutes.
+          </Text>
+        </View>
+
+        {/* Unverified-code warning: a share code can come from anyone, and
+            the draft runs on the node like any installed command (no sandbox,
+            no Pantry review). */}
+        <View
+          testID="unverified-warning"
+          style={[styles.infoBanner, { backgroundColor: theme.colors.errorContainer }]}
+        >
+          <Icon source="alert-outline" size={18} color={theme.colors.onErrorContainer} />
+          <Text variant="bodySmall" style={{ flex: 1, color: theme.colors.onErrorContainer, marginLeft: 8 }}>
+            <Text variant="bodySmall" style={{ fontWeight: 'bold', color: theme.colors.onErrorContainer }}>
+              Unverified code.{' '}
+            </Text>
+            This draft hasn't been reviewed by Pantry. It runs on your node with the same access as
+            any installed command. Only install codes you created or trust.
           </Text>
         </View>
 

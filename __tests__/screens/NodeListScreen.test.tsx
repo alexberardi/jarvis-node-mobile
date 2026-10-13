@@ -35,11 +35,9 @@ jest.mock('../../src/auth/AuthContext', () => ({
 }));
 
 const mockListNodes = jest.fn();
-const mockDeleteNode = jest.fn();
 
 jest.mock('../../src/api/nodeApi', () => ({
   listNodes: (...args: any[]) => mockListNodes(...args),
-  deleteNode: (...args: any[]) => mockDeleteNode(...args),
 }));
 
 const wrapper = ({ children }: { children: React.ReactNode }) => (

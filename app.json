@@ -21,7 +21,8 @@
         "applinks:docs.jarvisautomation.dev"
       ],
       "infoPlist": {
-        "NSCameraUsageDescription": "Camera access is required to scan QR codes for node pairing",
+        "NSCameraUsageDescription": "Camera access is used to scan QR codes for node pairing and to take photos you send to Jarvis in chat.",
+        "NSPhotoLibraryUsageDescription": "Photo library access lets you choose photos to send to Jarvis in chat.",
         "NSMicrophoneUsageDescription": "Microphone access is required to send voice commands to Jarvis.",
         "NSLocalNetworkUsageDescription": "Jarvis needs local network access to discover your self-hosted server.",
         "NSLocationWhenInUseUsageDescription": "Jarvis uses your location while the app is open to tell whether you're home, so it can respond to your presence. Your precise location stays on this device — only 'home' or 'away' is ever sent.",
@@ -81,7 +82,14 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera to scan QR codes"
+          "cameraPermission": "Camera access is used to scan QR codes for node pairing and to take photos you send to Jarvis in chat."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Photo library access lets you choose photos to send to Jarvis in chat.",
+          "cameraPermission": "Camera access is used to scan QR codes for node pairing and to take photos you send to Jarvis in chat."
         }
       ],
       [

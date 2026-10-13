@@ -20,13 +20,16 @@ const AP_MODE_PORT = 8080;
 const ScanForNodesScreen = ({ navigation }: Props) => {
   const { state: authState } = useAuth();
   const { logout } = useAuth();
-  const { connect, isLoading, error, fetchProvisioningToken, setError } = useProvisioningContext();
+  const { connect, isLoading, error, fetchProvisioningToken, setError, provisioningToken } =
+    useProvisioningContext();
   const { isDark, toggleTheme, paperTheme } = useThemePreference();
   const [showDevMode, setShowDevMode] = useState(DEV_MODE);
   const [devIp, setDevIp] = useState(SIMULATED_NODE_IP);
   const [devPort, setDevPort] = useState(String(NODE_PORT));
-  // Track whether we've already fetched the provisioning token
-  const [tokenReady, setTokenReady] = useState(false);
+  // Derived from the context (not local state) so a reset() — e.g. "Try Again"
+  // after a failed registration — sends the user back through Prepare for a
+  // fresh token instead of showing "Token ready!" with no token behind it.
+  const tokenReady = !!provisioningToken;
   const [fetchingToken, setFetchingToken] = useState(false);
 
   // Phase 1: Fetch provisioning token while still on home WiFi
@@ -37,14 +40,8 @@ const ScanForNodesScreen = ({ navigation }: Props) => {
     }
 
     setFetchingToken(true);
-    const tokenSuccess = await fetchProvisioningToken(
-      authState.activeHouseholdId,
-    );
+    await fetchProvisioningToken(authState.activeHouseholdId);
     setFetchingToken(false);
-
-    if (tokenSuccess) {
-      setTokenReady(true);
-    }
   };
 
   // Phase 2: Connect to node (token already cached, user is now on node WiFi)
@@ -144,7 +141,7 @@ const ScanForNodesScreen = ({ navigation }: Props) => {
             ) : (
               <>
                 <Text variant="bodyMedium" style={styles.instructions}>
-                  Token ready! Now:{'\n'}
+                  Token ready! It's only valid for a few minutes, so go straight on:{'\n'}
                   1. Connect to the node's WiFi (Jarvis-XXXX){'\n'}
                   2. Tap "Connect to Node" below
                 </Text>
