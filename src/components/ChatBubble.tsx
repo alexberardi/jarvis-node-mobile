@@ -6,6 +6,7 @@ import { Button, IconButton, Text, useTheme } from 'react-native-paper';
 const COLLAPSE_HEIGHT = 400;
 
 import type { ChatAction, ChatMessage } from '../api/chatApi';
+import { DEV_MODE } from '../config/env';
 import TraceWaterfall from './TraceWaterfall';
 
 /** Strip <think>...</think> blocks from LLM output (Qwen3 reasoning traces). */
@@ -36,7 +37,12 @@ interface ChatBubbleProps {
   onPlayTTS?: (text: string) => void;
   isSpeaking?: boolean;
   onAction?: (action: ChatAction, commandName: string, context: Record<string, unknown>) => Promise<void>;
+  /** Show developer diagnostics (round-trip time, request trace). Off unless
+   *  the build sets EXPO_PUBLIC_DEV_MODE=true. */
+  showDebugDetails?: boolean;
 }
+
+export const formatHops = (count: number): string => `${count} ${count === 1 ? 'hop' : 'hops'}`;
 
 const ChatBubble: React.FC<ChatBubbleProps> = ({
   message,
@@ -44,6 +50,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
   onPlayTTS,
   isSpeaking = false,
   onAction,
+  showDebugDetails = DEV_MODE,
 }) => {
   const theme = useTheme();
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
@@ -86,6 +93,8 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
   // replaced by the real response when delta events arrive.
   const isUser = message.role === 'user';
   const hasActions = !isUser && !isStreaming && message.actions && message.actions.length > 0 && !completionText;
+  const roundTripMs = showDebugDetails ? message.roundTripMs : undefined;
+  const showTTS = !hasActions && !!onPlayTTS;
 
   const handleActionPress = async (action: ChatAction) => {
     if (!onAction || !message.actionContext) return;
@@ -272,19 +281,19 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
           </View>
         )}
 
-        {!isUser && message.content.length > 0 && !isStreaming && (
+        {!isUser && message.content.length > 0 && !isStreaming && (roundTripMs != null || showTTS) && (
           <View style={styles.ttsRow}>
-            {message.roundTripMs != null && (
+            {roundTripMs != null && (
               <Text
                 variant="labelSmall"
                 style={[styles.roundTrip, { color: theme.colors.outline }]}
               >
-                {message.roundTripMs < 1000
-                  ? `${message.roundTripMs}ms`
-                  : `${(message.roundTripMs / 1000).toFixed(1)}s`}
+                {roundTripMs < 1000
+                  ? `${roundTripMs}ms`
+                  : `${(roundTripMs / 1000).toFixed(1)}s`}
               </Text>
             )}
-            {!hasActions && onPlayTTS && (
+            {showTTS && (
               <IconButton
                 icon={isSpeaking ? 'stop' : 'volume-high'}
                 size={16}
@@ -297,7 +306,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
         )}
 
         {/* Trace toggle + waterfall */}
-        {!isUser && !isStreaming && message.traceSummary && (
+        {showDebugDetails && !isUser && !isStreaming && message.traceSummary && (
           <View style={styles.traceSection}>
             <Pressable
               onPress={() => setTraceExpanded((v) => !v)}
@@ -307,7 +316,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
                 variant="labelSmall"
                 style={{ color: theme.colors.outline, fontStyle: 'italic' }}
               >
-                {traceExpanded ? 'Hide trace' : `Show trace (${message.traceSummary.service_hops.length} hops)`}
+                {traceExpanded ? 'Hide trace' : `Show trace (${formatHops(message.traceSummary.service_hops.length)})`}
               </Text>
             </Pressable>
             {(traceExpanded || message.traceSummary.status === 'error') && (
