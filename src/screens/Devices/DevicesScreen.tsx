@@ -26,6 +26,7 @@ import { listNodes, NodeInfo } from '../../api/nodeApi';
 import { useAuth } from '../../auth/AuthContext';
 import type { DeviceListItem, ExternalDeviceItem, Room } from '../../types/SmartHome';
 import type { DevicesStackParamList } from '../../navigation/types';
+import { pageTitleStyle } from '../../theme';
 
 type Nav = NativeStackNavigationProp<DevicesStackParamList>;
 
@@ -274,15 +275,13 @@ const DevicesScreen = () => {
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <Appbar.Header>
-        <Appbar.Content title="Devices" />
+        <Appbar.Content title="Devices" titleStyle={pageTitleStyle(theme)} />
         {!useExternal && (
-          <>
-            <Appbar.Action
-              icon="door"
-              onPress={() => navigation.navigate('RoomManagement')}
-            />
-            <Appbar.Action icon="plus" onPress={startScan} />
-          </>
+          <Appbar.Action
+            icon="door"
+            accessibilityLabel="Rooms"
+            onPress={() => navigation.navigate('RoomManagement')}
+          />
         )}
       </Appbar.Header>
 
@@ -405,6 +404,7 @@ const DevicesScreen = () => {
       {!useExternal && (
         <FAB
           icon="plus"
+          accessibilityLabel="Add device"
           style={[styles.fab, { backgroundColor: theme.colors.primary }]}
           color={theme.colors.onPrimary}
           onPress={startScan}
