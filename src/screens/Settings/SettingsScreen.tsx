@@ -22,6 +22,7 @@ import {
   TouchableRipple,
   useTheme,
 } from 'react-native-paper';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '../../auth/AuthContext';
 import authApi from '../../api/authApi';
@@ -52,9 +53,17 @@ const THEME_BUTTONS = [
   { value: 'system', label: 'System', icon: 'cellphone' },
 ] as const;
 
+/** Gap above the "Settings" title, measured from the top of the screen. */
+const HEADER_TOP_MARGIN = 48;
+
 const SettingsScreen = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const theme = useTheme();
+  // Android shows this modal full-screen under a transparent (edge-to-edge)
+  // status bar, so keep the scroll area below it — otherwise content scrolls
+  // up over the clock. The iOS page sheet already starts below the status bar.
+  const insets = useSafeAreaInsets();
+  const topInset = Platform.OS === 'android' ? Math.min(insets.top, HEADER_TOP_MARGIN) : 0;
   const {
     state: authState,
     logout,
@@ -308,8 +317,9 @@ const SettingsScreen = () => {
   return (
     <Portal.Host>
     <HelpProvider>
-    <ScrollView style={[styles.container, { backgroundColor: paperTheme.colors.background }]} contentContainerStyle={styles.content}>
-      <View style={styles.header}>
+    <View style={[styles.container, { backgroundColor: paperTheme.colors.background, paddingTop: topInset }]}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <View style={[styles.header, { marginTop: HEADER_TOP_MARGIN - topInset }]}>
         <Text variant="headlineMedium" style={styles.title}>
           Settings
         </Text>
@@ -809,6 +819,7 @@ const SettingsScreen = () => {
       </Text>
 
     </ScrollView>
+    </View>
 
     {/* Delete Account confirmation dialog */}
     <Portal>
@@ -882,7 +893,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 48,
     marginBottom: 16,
   },
   closeButton: { padding: 4 },

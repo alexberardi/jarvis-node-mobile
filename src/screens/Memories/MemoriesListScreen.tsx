@@ -23,15 +23,17 @@ import {
 } from '../../api/memoriesApi';
 import { useAuth } from '../../auth/AuthContext';
 import { MemoriesStackParamList } from '../../navigation/types';
+import { categoryChipColors, CHIP_FILLS } from '../../theme/categoryChip';
+import { pageTitleStyle } from '../../theme';
 
 type Nav = NativeStackNavigationProp<MemoriesStackParamList, 'MemoriesList'>;
 
 const CATEGORY_COLORS: Record<string, string> = {
-  preference: '#6366f1',
-  fact: '#10b981',
-  note: '#f59e0b',
-  general: '#64748b',
-  agent_context: '#0ea5e9',
+  preference: CHIP_FILLS.indigo,
+  fact: CHIP_FILLS.emerald,
+  note: CHIP_FILLS.amber,
+  general: CHIP_FILLS.slate,
+  agent_context: CHIP_FILLS.sky,
 };
 
 const MemoriesListScreen = () => {
@@ -113,6 +115,7 @@ const MemoriesListScreen = () => {
 
   const renderCard = (memory: Memory) => {
     const isAgent = memory.source === 'agent' || memory.category === 'agent_context';
+    const categoryColors = categoryChipColors(memory.category, CATEGORY_COLORS, theme);
     return (
       <Card
         testID={`memory-card-${memory.id}`}
@@ -126,14 +129,8 @@ const MemoriesListScreen = () => {
             <View style={styles.chipRow}>
               <Chip
                 compact
-                textStyle={styles.chipText}
-                style={[
-                  styles.chip,
-                  {
-                    backgroundColor:
-                      CATEGORY_COLORS[memory.category] ?? theme.colors.secondaryContainer,
-                  },
-                ]}
+                textStyle={[styles.chipText, { color: categoryColors.color }]}
+                style={[styles.chip, { backgroundColor: categoryColors.backgroundColor }]}
               >
                 {memory.category.replace(/_/g, ' ')}
               </Chip>
@@ -142,7 +139,7 @@ const MemoriesListScreen = () => {
                   compact
                   icon="pin"
                   textStyle={styles.chipText}
-                  style={[styles.chip, { backgroundColor: '#dc2626' }]}
+                  style={[styles.chip, { backgroundColor: CHIP_FILLS.red }]}
                 >
                   pinned
                 </Chip>
@@ -152,7 +149,7 @@ const MemoriesListScreen = () => {
                   compact
                   icon="robot"
                   textStyle={styles.chipText}
-                  style={[styles.chip, { backgroundColor: '#0ea5e9' }]}
+                  style={[styles.chip, { backgroundColor: CHIP_FILLS.sky }]}
                 >
                   agent
                 </Chip>
@@ -162,7 +159,7 @@ const MemoriesListScreen = () => {
                   compact
                   icon="lock"
                   textStyle={styles.chipText}
-                  style={[styles.chip, { backgroundColor: '#64748b' }]}
+                  style={[styles.chip, { backgroundColor: CHIP_FILLS.slate }]}
                 >
                   read-only
                 </Chip>
@@ -237,7 +234,7 @@ const MemoriesListScreen = () => {
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <Appbar.Header mode="small">
         <Appbar.BackAction onPress={() => navigation.goBack()} />
-        <Appbar.Content title="Memories" />
+        <Appbar.Content title="Memories" titleStyle={pageTitleStyle(theme)} />
       </Appbar.Header>
 
       <FlatList

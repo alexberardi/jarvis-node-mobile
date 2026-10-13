@@ -817,12 +817,15 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
                   mode="outlined"
                   value={persona}
                   onChangeText={setPersona}
+                  // No numberOfLines: the box grows to fit the whole text. A
+                  // fixed-height box opened scrolled to the cursor at the end
+                  // (mid-sentence) on Android.
                   multiline
-                  numberOfLines={5}
                   maxLength={personaMaxChars}
                   placeholder="Describe how Jarvis should sound…"
                   disabled={!isAdmin}
                   style={styles.personaInput}
+                  contentStyle={styles.personaInputContent}
                 />
                 <View style={styles.personaFooter}>
                   <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
@@ -1424,7 +1427,10 @@ const styles = StyleSheet.create({
   toggleRow: { flexDirection: 'row', alignItems: 'center' },
   presetRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
   presetChip: { marginRight: 0 },
-  personaInput: { minHeight: 96 },
+  // bodyMedium size, matching the surrounding card text (TextInput defaults to 16).
+  personaInput: { minHeight: 96, fontSize: 14 },
+  // Without a label, Paper's outlined multiline puts the text flush against the border.
+  personaInputContent: { paddingTop: 12, paddingBottom: 12 },
   personaFooter: {
     flexDirection: 'row',
     alignItems: 'center',
