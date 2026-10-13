@@ -34,6 +34,8 @@
  * exists to prevent.
  */
 
+import { parseServerDate } from './serverTime';
+
 export type EditorFieldType = 'text' | 'multiline' | 'tel' | 'datetime';
 
 const KNOWN_FIELD_TYPES: readonly string[] = ['text', 'multiline', 'tel', 'datetime'];
@@ -150,8 +152,8 @@ export const parseExpiresAt = (
 ): Date | null => {
   const raw = metadata?.expires_at;
   if (typeof raw !== 'string' || raw.length === 0) return null;
-  const parsed = new Date(raw);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
+  // Server-produced: a zone-less value is UTC (command-center's legacy format).
+  return parseServerDate(raw);
 };
 
 /** True when a callback rejection means the underlying plan/job expired. */

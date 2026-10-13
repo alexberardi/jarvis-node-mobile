@@ -32,6 +32,7 @@ import {
   parseInboxEditors,
   type EditorField,
 } from '../../utils/inboxEditors';
+import { parseServerDate } from '../../utils/serverTime';
 
 type DetailRoute = RouteProp<InboxStackParamList, 'InboxDetail'>;
 
@@ -313,7 +314,7 @@ const InboxDetailScreen = () => {
   const inboxAudio = parseInboxAudio(item.metadata);
 
   const formatDate = (iso: string) => {
-    const d = new Date(iso);
+    const d = parseServerDate(iso) ?? new Date(iso);
     return d.toLocaleString();
   };
 
