@@ -13,6 +13,17 @@ const mockNavigation = {
 
 const mockToggleTheme = jest.fn();
 
+// Set when the app signed the user out on its own (e.g. a password reset).
+let mockSignOutNotice: string | null = null;
+
+jest.mock('../../src/auth/AuthContext', () => ({
+  useAuth: () => ({
+    get state() {
+      return { signOutNotice: mockSignOutNotice };
+    },
+  }),
+}));
+
 jest.mock('../../src/contexts/ConfigContext', () => ({
   useConfig: () => ({
     fallbackMessage: null,
@@ -36,6 +47,27 @@ const wrapper = ({ children }: { children: React.ReactNode }) => (
 describe('LandingScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockSignOutNotice = null;
+  });
+
+  it('stays on Landing after an ordinary sign-out', () => {
+    render(<LandingScreen navigation={mockNavigation} route={{} as any} />, { wrapper });
+
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('goes straight to Login (once) after an app-initiated sign-out', () => {
+    mockSignOutNotice = 'Your password was reset. Sign in to set a new one.';
+
+    const { rerender } = render(
+      <LandingScreen navigation={mockNavigation} route={{} as any} />,
+      { wrapper },
+    );
+    rerender(<LandingScreen navigation={mockNavigation} route={{} as any} />);
+
+    // Once per notice, so backing out of Login to Landing isn't bounced again.
+    expect(mockNavigate).toHaveBeenCalledTimes(1);
+    expect(mockNavigate).toHaveBeenCalledWith('Login');
   });
 
   it('should render app title', () => {

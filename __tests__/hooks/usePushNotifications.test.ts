@@ -34,6 +34,21 @@ const mockAuthState = {
   isLoading: false,
   households: [],
   activeHouseholdId: null,
+  mustChangePassword: false,
+  sessionEpoch: 0,
+};
+
+// Settle the hook's promise chain (enabled → token → register) without timers.
+const flush = async () => {
+  await act(async () => {
+    for (let i = 0; i < 10; i += 1) await Promise.resolve();
+  });
+};
+
+const authed = (overrides: Partial<typeof mockAuthState> = {}) => {
+  (useAuth as jest.Mock).mockReturnValue({
+    state: { ...mockAuthState, isAuthenticated: true, accessToken: 'tok-1', sessionEpoch: 1, ...overrides },
+  });
 };
 
 jest.mock('../../src/auth/AuthContext', () => ({
@@ -108,9 +123,7 @@ describe('usePushNotifications', () => {
     expect(getExpoPushToken).toHaveBeenCalled();
 
     // Wait for the promise chain to resolve
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
+    await flush();
 
     expect(registerPushToken).toHaveBeenCalledWith(
       'test-access-token',
@@ -132,9 +145,7 @@ describe('usePushNotifications', () => {
     renderHook(() => usePushNotifications());
 
     // Wait for the async getExpoPushToken promise chain to settle
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
+    await flush();
 
     expect(getExpoPushToken).toHaveBeenCalled();
     expect(registerPushToken).not.toHaveBeenCalled();
@@ -156,9 +167,7 @@ describe('usePushNotifications', () => {
     renderHook(() => usePushNotifications());
 
     // Flush the arePushNotificationsEnabled().then(...) microtask chain.
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
+    await flush();
 
     expect(arePushNotificationsEnabled).toHaveBeenCalled();
     expect(getExpoPushToken).not.toHaveBeenCalled();
@@ -218,5 +227,89 @@ describe('usePushNotifications', () => {
         },
       });
     }).not.toThrow();
+  });
+
+  describe('re-registration per session (temp-password reset)', () => {
+    beforeEach(() => {
+      (getExpoPushToken as jest.Mock).mockResolvedValue('ExponentPushToken[dev]');
+    });
+
+    it('does not register during a temp-password session (the server would 403)', async () => {
+      authed({ mustChangePassword: true, accessToken: 'temp-tok' });
+      renderHook(() => usePushNotifications());
+      await flush();
+
+      expect(registerPushToken).not.toHaveBeenCalled();
+    });
+
+    it('registers after the forced password change succeeds', async () => {
+      authed({ mustChangePassword: true, accessToken: 'temp-tok', sessionEpoch: 1 });
+      const { rerender } = renderHook(() => usePushNotifications());
+      await flush();
+
+      authed({ mustChangePassword: false, accessToken: 'fresh-tok', sessionEpoch: 2 });
+      rerender({});
+      await flush();
+
+      expect(registerPushToken).toHaveBeenCalledTimes(1);
+      expect(registerPushToken).toHaveBeenCalledWith('fresh-tok', 'ExponentPushToken[dev]');
+    });
+
+    it('registers once per session: a token refresh does not re-register', async () => {
+      authed({ accessToken: 'tok-1', sessionEpoch: 1 });
+      const { rerender } = renderHook(() => usePushNotifications());
+      await flush();
+
+      authed({ accessToken: 'tok-2', sessionEpoch: 1 }); // background refresh
+      rerender({});
+      await flush();
+
+      expect(registerPushToken).toHaveBeenCalledTimes(1);
+    });
+
+    it('registers again on a new session (e.g. a later login)', async () => {
+      authed({ accessToken: 'tok-1', sessionEpoch: 1 });
+      const { rerender } = renderHook(() => usePushNotifications());
+      await flush();
+
+      authed({ accessToken: 'tok-9', sessionEpoch: 2 });
+      rerender({});
+      await flush();
+
+      expect(registerPushToken).toHaveBeenCalledTimes(2);
+      expect(registerPushToken).toHaveBeenLastCalledWith('tok-9', 'ExponentPushToken[dev]');
+    });
+
+    it('a failed registration is retried on the next token, then stops', async () => {
+      (registerPushToken as jest.Mock).mockResolvedValueOnce(false);
+      authed({ accessToken: 'tok-1', sessionEpoch: 1 });
+      const { rerender } = renderHook(() => usePushNotifications());
+      await flush();
+
+      authed({ accessToken: 'tok-2', sessionEpoch: 1 });
+      rerender({});
+      await flush();
+      authed({ accessToken: 'tok-3', sessionEpoch: 1 });
+      rerender({});
+      await flush();
+
+      expect(registerPushToken).toHaveBeenCalledTimes(2);
+      expect(registerPushToken).toHaveBeenLastCalledWith('tok-2', 'ExponentPushToken[dev]');
+    });
+
+    it('re-registers after a sign-out and sign-in', async () => {
+      authed({ accessToken: 'tok-1', sessionEpoch: 1 });
+      const { rerender } = renderHook(() => usePushNotifications());
+      await flush();
+
+      (useAuth as jest.Mock).mockReturnValue({ state: { ...mockAuthState, sessionEpoch: 1 } });
+      rerender({});
+      await flush();
+      authed({ accessToken: 'tok-2', sessionEpoch: 2 });
+      rerender({});
+      await flush();
+
+      expect(registerPushToken).toHaveBeenCalledTimes(2);
+    });
   });
 });
