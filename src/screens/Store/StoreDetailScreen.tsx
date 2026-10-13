@@ -20,6 +20,7 @@ import type { InstalledPackage } from '../../api/chatApi';
 import { useAuth } from '../../auth/AuthContext';
 import { HelpIcon } from '../../components/HelpIcon';
 import { getDownloadInfo, getPackageDetail } from '../../api/pantryApi';
+import { isPantryDisabledError } from '../../api/householdSettingsApi';
 import {
   pollRevertStatus,
   requestCCInstall,
@@ -28,6 +29,7 @@ import {
 } from '../../api/packageInstallApi';
 import { getServiceConfig } from '../../config/serviceConfig';
 import { helpCopy } from '../../copy/help';
+import { usePantryGate } from '../../components/PantryGate';
 import { StoreStackParamList } from '../../navigation/types';
 import type { PackageDetail } from '../../types/Package';
 import { anyHealthFailed, getRevertTarget, isTerminalInstallStatus } from '../../utils/packageStatus';
@@ -88,6 +90,7 @@ const StoreDetailScreen = () => {
   // Bumped after a revert completes so the version-discovery effect re-runs.
   const [refreshTick, setRefreshTick] = useState(0);
 
+  const { markDisabled } = usePantryGate();
   const activeHousehold = authState.households.find(
     (h) => h.id === authState.activeHouseholdId,
   );
@@ -374,6 +377,10 @@ const StoreDetailScreen = () => {
         });
       }
     } catch (e: unknown) {
+      if (isPantryDisabledError(e)) {
+        markDisabled();
+        return;
+      }
       Alert.alert('Install Error', e instanceof Error ? e.message : 'Failed to start install');
     } finally {
       setInstalling(false);

@@ -106,6 +106,50 @@ describe('Routines list — flow integration (load, run, delete, create)', () =>
     alertSpy.mockRestore();
   });
 
+  it('shows a working state while run-now is in flight, then clears it', async () => {
+    (getSmartHomeConfig as jest.Mock).mockResolvedValue({
+      nodes: [{ node_id: 'n1', room: 'Living Room' }],
+      primary_node_id: 'n1',
+    });
+    let resolveRun: (v: unknown) => void = () => {};
+    (runRoutineNow as jest.Mock).mockReturnValue(new Promise((r) => { resolveRun = r; }));
+    const alertSpy = jest.spyOn(Alert, 'alert');
+    const { findByText, getByTestId, findByTestId, queryByTestId } = renderScreen();
+    await findByText('Movie night');
+
+    fireEvent.press(getByTestId('routine-run-r1'));
+
+    await findByTestId('routine-running-r1');
+    expect(queryByTestId('routine-run-r1')).toBeNull();
+
+    await act(async () => {
+      resolveRun({ success: true, status: 'success', message: 'Lights dimmed' });
+    });
+    await waitFor(() => expect(queryByTestId('routine-running-r1')).toBeNull());
+    expect(getByTestId('routine-run-r1')).toBeTruthy();
+    alertSpy.mockRestore();
+  });
+
+  it('says the routine may still be running when our own long timeout fires', async () => {
+    (getSmartHomeConfig as jest.Mock).mockResolvedValue({
+      nodes: [{ node_id: 'n1', room: 'Living Room' }],
+      primary_node_id: 'n1',
+    });
+    (runRoutineNow as jest.Mock).mockRejectedValue(
+      Object.assign(new Error('timeout of 90000ms exceeded'), { code: 'ECONNABORTED' }),
+    );
+    const alertSpy = jest.spyOn(Alert, 'alert');
+    const errSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const { findByText, getByTestId } = renderScreen();
+    await findByText('Movie night');
+
+    fireEvent.press(getByTestId('routine-run-r1'));
+
+    await waitFor(() => expect(alertSpy).toHaveBeenCalledWith('Still running', expect.any(String)));
+    alertSpy.mockRestore();
+    errSpy.mockRestore();
+  });
+
   it('swipe-delete → Alert confirm → deleteRoutine → refetch', async () => {
     const alertSpy = jest.spyOn(Alert, 'alert');
     const { findByText, getByTestId } = renderScreen();

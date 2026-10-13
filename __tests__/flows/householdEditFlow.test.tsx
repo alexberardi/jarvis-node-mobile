@@ -6,7 +6,7 @@ import { PaperProvider } from 'react-native-paper';
 import HouseholdEditScreen from '../../src/screens/Settings/HouseholdEditScreen';
 import { lightTheme } from '../../src/theme';
 import authApi from '../../src/api/authApi';
-import { setHouseholdSetting } from '../../src/api/householdSettingsApi';
+import { getHouseholdSettings, setHouseholdSetting } from '../../src/api/householdSettingsApi';
 
 const DEFAULT_VOICE = 'Warm and folksy default voice.';
 
@@ -25,6 +25,7 @@ jest.mock('../../src/api/authApi', () => ({
 
 jest.mock('../../src/api/householdSettingsApi', () => ({
   __esModule: true,
+  ...jest.requireActual('../../src/api/householdSettingsApi'),
   getHouseholdSettings: jest.fn(() =>
     Promise.resolve({
       'web_search.enabled': false,
@@ -33,6 +34,9 @@ jest.mock('../../src/api/householdSettingsApi', () => ({
     }),
   ),
   setHouseholdSetting: jest.fn(() => Promise.resolve()),
+  getHouseholdTimezone: jest.fn(() =>
+    Promise.resolve({ household_id: 'hh-1', timezone: 'America/Chicago', source: 'node', node_timezone: 'America/Chicago' }),
+  ),
   getPersonaPresets: jest.fn(() =>
     Promise.resolve({
       presets: [
@@ -225,6 +229,63 @@ describe('Household edit — flow integration (rename, roles, members, invites, 
     expect(setSetting).toHaveBeenCalledWith('hh-1', 'web_search.enabled', true);
   });
 
+  // D19: per-household memory opt-out — the master toggle and "learn from voice".
+  it('shows both memory toggles (default on) and an admin can turn learning off', async () => {
+    const setSetting = setHouseholdSetting as jest.Mock;
+    setSetting.mockClear();
+    const utils = renderScreen();
+    const master = await utils.findByTestId('household-memory-toggle');
+    const learn = utils.getByTestId('household-memory-extraction-toggle');
+    expect(master.props.value).toBe(true);
+    expect(learn.props.value).toBe(true);
+
+    await act(async () => {
+      fireEvent(learn, 'valueChange', false);
+    });
+
+    expect(setSetting).toHaveBeenCalledWith('hh-1', 'memory.extraction_enabled', false);
+    expect(utils.getByTestId('household-memory-extraction-toggle').props.value).toBe(false);
+  });
+
+  it('reflects saved memory values; learning is off and locked while memory is off', async () => {
+    (getHouseholdSettings as jest.Mock).mockResolvedValueOnce({
+      'web_search.enabled': false,
+      'household.location': '',
+      'persona.household_prompt': '',
+      'memory.enabled': false,
+      'memory.extraction_enabled': true,
+    });
+    const setSetting = setHouseholdSetting as jest.Mock;
+    setSetting.mockClear();
+    const utils = renderScreen();
+    const master = await utils.findByTestId('household-memory-toggle');
+    await waitFor(() => expect(master.props.value).toBe(false));
+    const learn = utils.getByTestId('household-memory-extraction-toggle');
+    expect(learn.props.value).toBe(false);
+    expect(learn.props.disabled).toBe(true);
+
+    await act(async () => {
+      fireEvent(utils.getByTestId('household-memory-toggle'), 'valueChange', true);
+    });
+    expect(setSetting).toHaveBeenCalledWith('hh-1', 'memory.enabled', true);
+  });
+
+  it('reverts a memory toggle and alerts when the write fails', async () => {
+    const setSetting = setHouseholdSetting as jest.Mock;
+    setSetting.mockRejectedValueOnce({ response: { data: { detail: 'Household admin required' } } });
+    const alertSpy = jest.spyOn(Alert, 'alert');
+    const utils = renderScreen();
+    const master = await utils.findByTestId('household-memory-toggle');
+
+    await act(async () => {
+      fireEvent(master, 'valueChange', false);
+    });
+
+    expect(alertSpy).toHaveBeenCalledWith('Error', 'Household admin required');
+    expect(utils.getByTestId('household-memory-toggle').props.value).toBe(true);
+    alertSpy.mockRestore();
+  });
+
   // Location biases business lookups — a search for "Tony's Pizzeria" once
   // resolved to a Maryland listing for a New Jersey household and the call
   // went to the wrong business.
@@ -345,5 +406,103 @@ describe('Household edit — flow integration (rename, roles, members, invites, 
     });
     expect(alertSpy).toHaveBeenCalledWith('Error', 'Persona is too long (2001 chars); max is 2000.');
     alertSpy.mockRestore();
+  });
+
+  // AD6: the household's own Twilio account. The GET masks the SID and token;
+  // the screen shows only whether they are set, and only an admin may edit.
+  it('shows the household Twilio account as set without revealing secrets', async () => {
+    (getHouseholdSettings as jest.Mock).mockResolvedValueOnce({
+      'web_search.enabled': false,
+      'household.location': '',
+      'persona.household_prompt': '',
+      'phone.twilio_account_sid': '********',
+      'phone.twilio_auth_token': '********',
+      'phone.twilio_from_number': '+15551234567',
+    });
+    const utils = renderScreen();
+    await utils.findByTestId('twilio-edit');
+    expect(utils.getByTestId('twilio-status').props.children).toBe(
+      'Set up — calls are placed from +15551234567.',
+    );
+    expect(utils.queryByText(/\*\*\*\*/)).toBeNull();
+  });
+
+  it('admin sets up Twilio from the household screen → PUTs, then re-reads settings', async () => {
+    const setSetting = setHouseholdSetting as jest.Mock;
+    setSetting.mockClear();
+    const getSettings = getHouseholdSettings as jest.Mock;
+    const utils = renderScreen();
+    fireEvent.press(await utils.findByTestId('twilio-edit'));
+    const loadsBefore = getSettings.mock.calls.length;
+    fireEvent.changeText(utils.getByTestId('twilio-sid-input'), 'AC123');
+    fireEvent.changeText(utils.getByTestId('twilio-token-input'), 'tok');
+    fireEvent.changeText(utils.getByTestId('twilio-from-input'), '+15551234567');
+    await act(async () => {
+      fireEvent.press(utils.getByTestId('twilio-save'));
+    });
+    expect(setSetting).toHaveBeenCalledWith('hh-1', 'phone.twilio_account_sid', 'AC123');
+    expect(setSetting).toHaveBeenCalledWith('hh-1', 'phone.twilio_auth_token', 'tok');
+    expect(setSetting).toHaveBeenCalledWith('hh-1', 'phone.twilio_from_number', '+15551234567');
+    expect(getSettings.mock.calls.length).toBeGreaterThan(loadsBefore);
+  });
+
+  it('a plain member sees the Twilio status but cannot edit it', async () => {
+    const utils = renderScreen([{ ...ME, role: 'member' }, BOB]);
+    await utils.findByText('bob@test.com');
+    await utils.findByTestId('twilio-status');
+    expect(utils.queryByTestId('twilio-edit')).toBeNull();
+  });
+
+  it('hides the time zone row against a server without household.timezone', async () => {
+    const utils = renderScreen();
+    await utils.findByText('bob@test.com');
+    await utils.findByTestId('twilio-card');
+    expect(utils.queryByTestId('household-timezone-card')).toBeNull();
+  });
+
+  it('admin picks a time zone → PUT household.timezone, then re-reads settings', async () => {
+    const getSettings = getHouseholdSettings as jest.Mock;
+    getSettings.mockResolvedValueOnce({ 'web_search.enabled': false, 'household.timezone': '' });
+    const utils = renderScreen();
+    await utils.findByText('bob@test.com');
+    expect(await utils.findByText('Automatic — America/Chicago (from your nodes)')).toBeTruthy();
+    const loadsBefore = getSettings.mock.calls.length;
+    fireEvent.press(utils.getByTestId('household-timezone-row'));
+    fireEvent.changeText(await utils.findByTestId('household-timezone-search'), 'berlin');
+    await act(async () => {
+      fireEvent.press(await utils.findByTestId('household-timezone-option-Europe/Berlin'));
+    });
+    expect(setHouseholdSetting).toHaveBeenCalledWith('hh-1', 'household.timezone', 'Europe/Berlin');
+    await waitFor(() => expect(getSettings.mock.calls.length).toBeGreaterThan(loadsBefore));
+  });
+
+  it('a plain member sees the time zone read-only', async () => {
+    (getHouseholdSettings as jest.Mock).mockResolvedValueOnce({ 'household.timezone': 'Asia/Tokyo' });
+    const utils = renderScreen([{ ...ME, role: 'member' }, BOB]);
+    await utils.findByText('bob@test.com');
+    expect(await utils.findByText('Asia/Tokyo')).toBeTruthy();
+    expect(utils.queryByText('Change')).toBeNull();
+  });
+  it('hides the Pantry toggle against a server without pantry.enabled', async () => {
+    const utils = renderScreen();
+    await utils.findByText('bob@test.com');
+    await utils.findByTestId('household-web-search-toggle');
+    expect(utils.queryByTestId('household-pantry-toggle')).toBeNull();
+  });
+
+  it('admin turns the Pantry on → PUT pantry.enabled', async () => {
+    (getHouseholdSettings as jest.Mock).mockResolvedValueOnce({
+      'web_search.enabled': false,
+      'pantry.enabled': false,
+    });
+    const utils = renderScreen();
+    const toggle = await utils.findByTestId('household-pantry-toggle');
+    expect(toggle.props.value).toBe(false);
+
+    await act(async () => {
+      fireEvent(toggle, 'valueChange', true);
+    });
+
+    expect(setHouseholdSetting).toHaveBeenCalledWith('hh-1', 'pantry.enabled', true);
   });
 });

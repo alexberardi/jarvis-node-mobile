@@ -14,6 +14,14 @@ export interface HouseholdSettings {
   /** Master toggle for web search (quick_search + deep_research). Default off. */
   'web_search.enabled': boolean;
   /**
+   * Whether this household uses the Pantry (package store + Forge test
+   * installs). Default off: turning it on means the app, the household's nodes
+   * and the server contact the Pantry, which sees their IP address and what is
+   * browsed/installed. ABSENT on the legacy Python stack, which has no such
+   * gate — the app then treats the Pantry as on (see `pantryEnabledFromSettings`).
+   */
+  'pantry.enabled'?: boolean;
+  /**
    * Where the household is, as a free-text locality ("Springfield, IL 62704").
    * Biases business lookups so a phone call reaches the nearby branch —
    * a search for "Tony's Pizzeria" once resolved to Maryland for a New
@@ -28,7 +36,97 @@ export interface HouseholdSettings {
    * clears the voice layer back to the plain assistant.
    */
   'persona.household_prompt': string;
+  /**
+   * Master memory toggle (D19): remember/forget/recall tools AND learning from
+   * voice. Default on.
+   */
+  'memory.enabled': boolean;
+  /**
+   * Learn from voice (D19): log transcripts of turns from a confidently
+   * identified speaker and extract memories from them. Default on; only has an
+   * effect while `memory.enabled` and speaker recognition are on. The
+   * household's opt-out of learning without losing remember/recall.
+   */
+  'memory.extraction_enabled': boolean;
+  /**
+   * The household's IANA time zone (jarvisd only). `""` = automatic: the zone
+   * the household's most recently seen node reports. ABSENT on a server that
+   * doesn't support it (the legacy Python stack) — the app then hides the
+   * Time zone row. The server rejects unknown zones with a 400 `detail`.
+   */
+  'household.timezone'?: string;
+  /**
+   * The household's own Twilio account (AD6), used for the phone calls the
+   * assistant places. Write-only: the server answers `"********"` once the
+   * SID / auth token are set and `null` when they are not — the values are
+   * never read back. Each key reads the household's OWN row only (never the
+   * install's default account). PUT `""` (or `null`) clears one.
+   */
+  'phone.twilio_account_sid': string | null;
+  'phone.twilio_auth_token': string | null;
+  /** The Twilio number calls are placed from, E.164 (`+15551234567`); not secret. */
+  'phone.twilio_from_number': string | null;
 }
+
+/** The three Twilio keys, which only work as a set (one account). */
+export const TWILIO_KEYS = [
+  'phone.twilio_account_sid',
+  'phone.twilio_auth_token',
+  'phone.twilio_from_number',
+] as const;
+
+/** What a secret household setting reads back as once it is set. */
+export const MASKED_SECRET = '********';
+
+/**
+ * E.164, exactly as the server checks the from number
+ * (jarvisd `internal/modules/cc/household_settings.go`).
+ */
+export const E164_PATTERN = /^\+[1-9][0-9]{6,14}$/;
+
+/**
+ * The user-facing message from a failed household-settings write: the server's
+ * `detail` string, a FastAPI-style 422 `detail: [{msg}]`, or CC's validation
+ * envelope `{message, details: [...]}`. Falls back to `fallback`.
+ */
+export const settingErrorMessage = (error: unknown, fallback: string): string => {
+  const data = (error as { response?: { data?: unknown } })?.response?.data;
+  if (typeof data === 'string' && data.trim()) return data;
+  const obj = (data ?? {}) as { detail?: unknown; message?: unknown; details?: unknown };
+  if (typeof obj.detail === 'string' && obj.detail.trim()) return obj.detail;
+  if (Array.isArray(obj.detail)) {
+    const msg = obj.detail
+      .map((d) => (d as { msg?: unknown })?.msg)
+      .find((m) => typeof m === 'string' && m.trim());
+    if (typeof msg === 'string') return msg;
+  }
+  if (Array.isArray(obj.details)) {
+    const first = obj.details.find((d) => typeof d === 'string' && d.trim());
+    if (typeof first === 'string') return first;
+  }
+  if (typeof obj.message === 'string' && obj.message.trim()) return obj.message;
+  return fallback;
+};
+
+/**
+ * Whether the Pantry is on for a household, from its settings. A server that
+ * doesn't know the key (the legacy Python stack) never gated the Pantry, so an
+ * absent key means on — legacy behaviour is unchanged.
+ */
+export const pantryEnabledFromSettings = (settings: Partial<HouseholdSettings>): boolean =>
+  'pantry.enabled' in settings ? settings['pantry.enabled'] === true : true;
+
+/**
+ * True for the server's refusal to start a package install / Forge test install
+ * because the household's Pantry is off: a 403 whose JSON carries
+ * `code: "pantry_disabled"`.
+ */
+export const isPantryDisabledError = (error: unknown): boolean => {
+  const res = (error as { response?: { status?: number; data?: unknown } })?.response;
+  if (res?.status !== 403) return false;
+  const data = res.data as { code?: unknown } | null | undefined;
+  return typeof data === 'object' && data !== null && data.code === 'pantry_disabled';
+};
 
 /** Values the allowlisted settings can hold. */
 export type HouseholdSettingValue = HouseholdSettings[keyof HouseholdSettings];
@@ -87,6 +185,32 @@ export const getPersonaPresets = async (
 ): Promise<PersonaPresets> => {
   const res = await apiClient.get<PersonaPresets>(
     `${getCommandCenterUrl()}/api/v0/mobile/household/${householdId}/persona/presets`,
+  );
+  return res.data;
+};
+
+/** Where a household's effective time zone came from. */
+export type HouseholdTimezoneSource = 'setting' | 'node' | 'default';
+
+/** `GET .../timezone` (jarvisd only; 404 on the legacy stack). */
+export interface HouseholdTimezoneInfo {
+  household_id: string;
+  /** The zone in effect ("" = none known; the server then uses UTC). */
+  timezone: string;
+  source: HouseholdTimezoneSource;
+  /** The zone the household's most recently seen node reported ("" = none). */
+  node_timezone: string;
+}
+
+/**
+ * The household's effective time zone and the node-derived one (what
+ * "Automatic" resolves to). Any member may read.
+ */
+export const getHouseholdTimezone = async (
+  householdId: string,
+): Promise<HouseholdTimezoneInfo> => {
+  const res = await apiClient.get<HouseholdTimezoneInfo>(
+    `${getCommandCenterUrl()}/api/v0/mobile/household/${householdId}/timezone`,
   );
   return res.data;
 };

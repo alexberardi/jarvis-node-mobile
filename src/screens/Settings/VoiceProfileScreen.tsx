@@ -108,6 +108,9 @@ const VoiceProfileScreen = () => {
   const [confidence, setConfidence] = useState(0);
   const [matched, setMatched] = useState(false);
   const [sampleCount, setSampleCount] = useState(0);
+  // Household's voice.recognition_enabled (off by default; enrolling does not
+  // turn it on). null = unknown (older server that doesn't report it).
+  const [recognitionEnabled, setRecognitionEnabled] = useState<boolean | null>(null);
 
   // Multi-take wizard state. Null when not in a wizard.
   // Mirrored in a ref so async polling closures can read the latest value
@@ -160,6 +163,9 @@ const VoiceProfileScreen = () => {
     try {
       const status = await getVoiceProfileStatus(householdId);
       setSampleCount(status.sample_count);
+      setRecognitionEnabled(
+        typeof status.recognition_enabled === 'boolean' ? status.recognition_enabled : null,
+      );
       setPhase(status.has_profile ? 'enrolled' : 'idle');
     } catch (e) {
       console.error('[VoiceProfile] status check failed:', e);
@@ -397,6 +403,30 @@ const VoiceProfileScreen = () => {
   }, [householdId]);
 
   // --- Render helpers ---
+
+  // Shown above every phase once the status says recognition is off, so it's
+  // visible before AND after enrolling. Enrollment stays fully usable.
+  const renderRecognitionOffNotice = () => (
+    <Card
+      testID="voice-recognition-off-notice"
+      style={[styles.card, { backgroundColor: paperTheme.colors.secondaryContainer }]}
+    >
+      <Card.Content>
+        <View style={styles.noticeRow}>
+          <Icon source="information-outline" size={24} color={paperTheme.colors.onSecondaryContainer} />
+          <Text
+            variant="titleSmall"
+            style={[styles.noticeTitle, { color: paperTheme.colors.onSecondaryContainer }]}
+          >
+            {helpCopy.voiceProfile.recognitionOffTitle}
+          </Text>
+        </View>
+        <Text variant="bodySmall" style={{ color: paperTheme.colors.onSecondaryContainer }}>
+          {helpCopy.voiceProfile.recognitionOff}
+        </Text>
+      </Card.Content>
+    </Card>
+  );
 
   const renderLoading = () => (
     <View style={styles.center}>
@@ -727,6 +757,7 @@ const VoiceProfileScreen = () => {
             {error}
           </Text>
         )}
+        {recognitionEnabled === false && phase !== 'loading' && renderRecognitionOffNotice()}
         {renderPhase()}
       </View>
     </View>
@@ -781,6 +812,16 @@ const styles = StyleSheet.create({
   error: {
     textAlign: 'center',
     marginBottom: 12,
+  },
+  noticeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+  },
+  noticeTitle: {
+    flex: 1,
+    fontWeight: '600',
   },
 });
 
