@@ -24,6 +24,7 @@ import { useAuth } from '../../auth/AuthContext';
 import type { PhonebookStackParamList } from '../../navigation/types';
 import { formatPhoneNumber, validateContactDraft } from '../../utils/phoneContacts';
 import { parseServerDate } from '../../utils/serverTime';
+import KeyboardSafeView from '../../components/KeyboardSafeView';
 
 type Props = NativeStackScreenProps<PhonebookStackParamList, 'PhonebookEdit'>;
 
@@ -164,7 +165,7 @@ const PhonebookEditScreen = ({ navigation, route }: Props) => {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <KeyboardSafeView style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <Appbar.Header mode="small">
         <Appbar.BackAction onPress={() => navigation.goBack()} />
         <Appbar.Content title={isNew ? 'Add Business' : 'Edit Business'} />
@@ -300,7 +301,7 @@ const PhonebookEditScreen = ({ navigation, route }: Props) => {
           {isNew ? 'Save' : 'Update'}
         </Button>
       </ScrollView>
-    </View>
+    </KeyboardSafeView>
   );
 };
 

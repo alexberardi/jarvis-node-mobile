@@ -10,6 +10,7 @@ import {
 
 import { discoverHomeAssistant } from '../../services/haDiscoveryService';
 import { SmartHomeSetupParamList } from '../../navigation/types';
+import KeyboardSafeView from '../../components/KeyboardSafeView';
 
 type Props = NativeStackScreenProps<SmartHomeSetupParamList, 'HADiscovery'>;
 
@@ -50,7 +51,7 @@ const HADiscoveryScreen = ({ navigation }: Props) => {
   };
 
   return (
-    <View style={styles.container}>
+    <KeyboardSafeView style={styles.container}>
       <Text variant="headlineSmall" style={styles.title}>
         Find Home Assistant
       </Text>
@@ -146,7 +147,7 @@ const HADiscoveryScreen = ({ navigation }: Props) => {
           Back
         </Button>
       </View>
-    </View>
+    </KeyboardSafeView>
   );
 };
 

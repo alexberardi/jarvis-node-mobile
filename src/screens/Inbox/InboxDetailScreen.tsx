@@ -33,6 +33,7 @@ import {
   type EditorField,
 } from '../../utils/inboxEditors';
 import { parseServerDate } from '../../utils/serverTime';
+import KeyboardSafeView from '../../components/KeyboardSafeView';
 
 type DetailRoute = RouteProp<InboxStackParamList, 'InboxDetail'>;
 
@@ -328,7 +329,7 @@ const InboxDetailScreen = () => {
       : null;
 
   return (
-    <View style={styles.container}>
+    <KeyboardSafeView style={styles.container}>
       <View style={[styles.header, { backgroundColor: theme.colors.background }]}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
@@ -608,7 +609,7 @@ const InboxDetailScreen = () => {
       )}
 
       </ScrollView>
-    </View>
+    </KeyboardSafeView>
   );
 };
 

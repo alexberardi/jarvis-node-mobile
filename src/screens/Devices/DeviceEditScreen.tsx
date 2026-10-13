@@ -28,6 +28,7 @@ import {
 import DeviceControlPanel from '../../components/device-controls/DeviceControlPanel';
 import type { DeviceListItem, JarvisButton, Room } from '../../types/SmartHome';
 import type { DevicesStackParamList } from '../../navigation/types';
+import KeyboardSafeView from '../../components/KeyboardSafeView';
 
 type Props = NativeStackScreenProps<DevicesStackParamList, 'DeviceEdit'>;
 
@@ -186,7 +187,7 @@ const DeviceEditScreen = ({ navigation, route }: Props) => {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <KeyboardSafeView style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <Appbar.Header>
         <Appbar.BackAction onPress={() => navigation.goBack()} />
         <Appbar.Content title="Edit Device" />
@@ -337,7 +338,7 @@ const DeviceEditScreen = ({ navigation, route }: Props) => {
           </Dialog.Actions>
         </Dialog>
       </Portal>
-    </View>
+    </KeyboardSafeView>
   );
 };
 

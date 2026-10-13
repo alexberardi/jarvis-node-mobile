@@ -27,6 +27,7 @@ import {
 } from '../../api/commandDataApi';
 import { creatableFields, seedDefaults } from '../../utils/commandDataForm';
 import type { CommandDataStackParamList } from '../../navigation/types';
+import KeyboardSafeView from '../../components/KeyboardSafeView';
 
 type Nav = NativeStackNavigationProp<CommandDataStackParamList, 'DataBrowserEdit'>;
 type Route = RouteProp<CommandDataStackParamList, 'DataBrowserEdit'>;
@@ -149,7 +150,7 @@ const RecordEditScreen = () => {
   ]);
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <KeyboardSafeView style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <Appbar.Header>
         <Appbar.BackAction onPress={() => navigation.goBack()} />
         <Appbar.Content title={isCreate ? 'Add Record' : 'Edit Record'} />
@@ -196,7 +197,7 @@ const RecordEditScreen = () => {
           {error ?? 'Schema unavailable.'}
         </Text>
       )}
-    </View>
+    </KeyboardSafeView>
   );
 };
 

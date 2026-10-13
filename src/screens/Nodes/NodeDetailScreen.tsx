@@ -34,6 +34,7 @@ import { HardwareTab } from './HardwareTab';
 import { NodesStackParamList } from '../../navigation/types';
 import { deleteK2, hasK2 } from '../../services/k2Service';
 import { formatLastSeen } from '../../utils/serverTime';
+import KeyboardSafeView from '../../components/KeyboardSafeView';
 
 type Nav = NativeStackNavigationProp<NodesStackParamList>;
 type Route = RouteProp<NodesStackParamList, 'NodeDetail'>;
@@ -559,7 +560,7 @@ const NodeDetailScreen = () => {
   if (!node) return null;
 
   return (
-    <View style={styles.container}>
+    <KeyboardSafeView style={styles.container}>
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: theme.colors.outlineVariant }]}>
         <IconButton icon="arrow-left" onPress={() => navigation.goBack()} />
@@ -607,7 +608,7 @@ const NodeDetailScreen = () => {
 
       {tab === 'activity' && <ActivityTab nodeId={nodeId} />}
 
-    </View>
+    </KeyboardSafeView>
   );
 };
 

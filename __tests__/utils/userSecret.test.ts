@@ -14,6 +14,12 @@ describe('memberDisplayName', () => {
   it('falls back to email when username is empty', () => {
     expect(memberDisplayName(members[1])).toBe('sam@example.com');
   });
+
+  it('prefers a display name when the server sends one', () => {
+    expect(memberDisplayName({ ...members[0], display_name: 'Alex B' })).toBe('Alex B');
+    expect(memberDisplayName({ ...members[0], display_name: null })).toBe('alex');
+    expect(memberDisplayName({ ...members[0], display_name: '  ' })).toBe('alex');
+  });
 });
 
 describe('userSecretDisplayValue', () => {

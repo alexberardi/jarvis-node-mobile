@@ -43,3 +43,47 @@ export const deleteAccount = async (
     throw new Error('Could not complete deletion. Please try again.');
   }
 };
+
+/** The current user as returned by GET/PATCH /auth/me. */
+export interface MeResponse {
+  id: number;
+  email: string;
+  username?: string;
+  display_name?: string | null;
+}
+
+/**
+ * Set (or clear, with an empty string) the signed-in user's display name via
+ * jarvis-auth's `PATCH /auth/me`. Returns the updated user.
+ *
+ * Errors: 422 (invalid name, e.g. control characters) surfaces the server's
+ * detail; a 404/405 means the server predates display names.
+ */
+export const updateMyDisplayName = async (
+  displayName: string,
+  accessToken: string,
+): Promise<MeResponse> => {
+  try {
+    const res = await authApi.patch<MeResponse>(
+      '/auth/me',
+      { display_name: displayName.trim() },
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    );
+    return res.data;
+  } catch (err: unknown) {
+    const response = (err as {
+      response?: { status?: number; data?: { detail?: unknown } };
+    })?.response;
+    const status = response?.status;
+    const detail = response?.data?.detail;
+    if (status === 422) {
+      throw new Error(
+        typeof detail === 'string' ? detail : 'That display name isn’t allowed.',
+      );
+    }
+    if (status === 404 || status === 405) {
+      throw new Error('This server doesn’t support display names yet.');
+    }
+    throw new Error('Could not save your display name. Please try again.');
+  }
+};

@@ -21,6 +21,7 @@ import { InfoHelperText } from '../../components/HelpIcon';
 import { helpCopy } from '../../copy/help';
 import { usePantryGate } from '../../components/PantryGate';
 import { StoreStackParamList } from '../../navigation/types';
+import KeyboardSafeView from '../../components/KeyboardSafeView';
 
 type Nav = NativeStackNavigationProp<StoreStackParamList>;
 
@@ -101,7 +102,7 @@ const TestInstallScreen = () => {
   const codeValid = shareCode.trim().length === 6;
 
   return (
-    <View style={styles.container}>
+    <KeyboardSafeView style={styles.container}>
       <View style={[styles.header, { borderBottomColor: theme.colors.outlineVariant }]}>
         <IconButton testID="back-button" icon="arrow-left" onPress={() => navigation.goBack()} />
         <Text variant="headlineSmall" style={{ fontWeight: 'bold', flex: 1 }}>
@@ -217,7 +218,7 @@ const TestInstallScreen = () => {
           Test Install
         </Button>
       </ScrollView>
-    </View>
+    </KeyboardSafeView>
   );
 };
 

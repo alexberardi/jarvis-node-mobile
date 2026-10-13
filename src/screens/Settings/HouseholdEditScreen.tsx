@@ -59,7 +59,9 @@ import {
   MIN_RADIUS_METERS,
   type HomeGeofence,
 } from '../../services/presenceService';
+import { displayNameOf, secondaryNameLine } from '../../utils/displayName';
 import { parseServerDate } from '../../utils/serverTime';
+import KeyboardSafeView from '../../components/KeyboardSafeView';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'HouseholdEdit'>;
 
@@ -68,6 +70,7 @@ type MemoryKey = 'memory.enabled' | 'memory.extraction_enabled';
 interface Member {
   user_id: number;
   username: string;
+  display_name?: string | null;
   email: string;
   role: string;
 }
@@ -739,7 +742,7 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <KeyboardSafeView style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <Appbar.Header>
         <Appbar.BackAction onPress={() => navigation.goBack()} />
         <Appbar.Content title="Household Settings" />
@@ -1243,10 +1246,12 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
             {!membersLoading && !membersError && members.map((m) => (
               <View key={m.user_id} style={styles.memberRow}>
                 <View style={{ flex: 1 }}>
-                  <Text variant="bodyMedium">{m.username || m.email}</Text>
-                  <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                    {m.email}
-                  </Text>
+                  <Text variant="bodyMedium">{displayNameOf(m)}</Text>
+                  {!!secondaryNameLine(m) && (
+                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                      {secondaryNameLine(m)}
+                    </Text>
+                  )}
                 </View>
                 {isAdmin && m.user_id !== currentUser?.id ? (
                   <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -1415,7 +1420,7 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
         </Dialog>
       </Portal>
       </Portal.Host>
-    </View>
+    </KeyboardSafeView>
   );
 };
 
