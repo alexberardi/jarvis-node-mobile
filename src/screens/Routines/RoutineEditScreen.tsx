@@ -49,6 +49,8 @@ import type {
 } from '../../types/Routine';
 import { ALL_DAYS, INTERVAL_PRESETS, WEEKDAYS, WEEKENDS } from '../../types/Routine';
 import KeyboardSafeView from '../../components/KeyboardSafeView';
+import { NodeKindIcon } from '../../components/NodeKindIcon';
+import { useNodeKinds } from '../../hooks/useNodeKinds';
 
 type Nav = NativeStackNavigationProp<RoutinesStackParamList>;
 type Route = RouteProp<RoutinesStackParamList, 'RoutineEdit'>;
@@ -164,6 +166,7 @@ const RoutineEditScreen = () => {
     enabled: !!householdId,
   });
   const nodes = smartHomeConfig?.nodes ?? [];
+  const nodeKinds = useNodeKinds(householdId, nodes.map((n) => n.node_id));
   const primaryNodeId = smartHomeConfig?.primary_node_id || null;
   const [nodeMenuVisible, setNodeMenuVisible] = useState(false);
 
@@ -584,8 +587,10 @@ const RoutineEditScreen = () => {
                 }>
                 {nodes.map((n) => (
                   <Menu.Item key={n.node_id}
-                    leadingIcon={n.online ? 'circle' : 'circle-outline'}
-                    title={n.room ? `${n.room}${n.online ? '' : ' (offline)'}` : n.node_id}
+                    leadingIcon={({ size, color }) => (
+                      <NodeKindIcon node={nodeKinds[n.node_id]} size={size} color={color} />
+                    )}
+                    title={`${n.room || n.node_id}${n.online ? '' : ' (offline)'}`}
                     onPress={() => { setCatalogNodeId(n.node_id); setCatalogMenuVisible(false); }} />
                 ))}
               </Menu>

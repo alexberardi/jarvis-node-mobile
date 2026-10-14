@@ -14,6 +14,7 @@ import {
 } from 'react-native-paper';
 
 import { listNodes, NodeInfo } from '../../api/nodeApi';
+import { NodeKindIcon } from '../../components/NodeKindIcon';
 import { isPantryDisabledError } from '../../api/householdSettingsApi';
 import { requestTestInstall } from '../../api/testInstallApi';
 import { useAuth } from '../../auth/AuthContext';
@@ -166,6 +167,11 @@ const TestInstallScreen = () => {
                           styles.dot,
                           { backgroundColor: node.online ? '#22c55e' : theme.colors.outline },
                         ]} />
+                        <NodeKindIcon
+                          node={node}
+                          size={18}
+                          testID={`test-install-node-kind-${node.node_id}`}
+                        />
                         <Text variant="bodyMedium" style={{ fontWeight: '500' }}>
                           {node.room || node.node_id.slice(0, 8)}
                         </Text>

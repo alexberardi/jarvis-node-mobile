@@ -29,6 +29,10 @@ import { getK2 } from '../../services/k2Service';
 import type { K2KeyPair } from '../../services/k2Service';
 
 import { useAuth } from '../../auth/AuthContext';
+import { NodeKindIcon } from '../../components/NodeKindIcon';
+import { useNodeKinds } from '../../hooks/useNodeKinds';
+import { isDesktopAgent } from '../../utils/nodeKind';
+import { storedDataErrorMessage } from '../../utils/storedDataError';
 import { NodesStackParamList, RootStackParamList } from '../../navigation/types';
 import {
   requestSettingsSnapshot,
@@ -145,6 +149,11 @@ const NodeSettingsScreen: React.FC = () => {
 
   // Export K2 flow
   const [exportKeyPair, setExportKeyPair] = useState<K2KeyPair | null>(null);
+
+  // This node's kind (desktop agent or Pi) — for the Stored Data error wording.
+  const thisNodeKinds = useNodeKinds(authState.activeHouseholdId, [nodeId]);
+  const isDesktopRef = useRef(false);
+  isDesktopRef.current = isDesktopAgent(thisNodeKinds[nodeId]);
 
   // Stored Data tab state
   const [storedDataCommands, setStoredDataCommands] = useState<CommandSummary[] | null>(null);
@@ -432,22 +441,26 @@ const NodeSettingsScreen: React.FC = () => {
       setStoredDataCommands(commands);
     } catch (err) {
       console.error('[NodeSettings] listCommandDataCommands failed', err);
-      const status = (err as { response?: { status?: number } })?.response?.status;
-      if (status === 504) {
-        setStoredDataError('Node did not respond. It may be offline.');
-      } else {
-        setStoredDataError('Could not load stored data.');
-      }
+      setStoredDataError(
+        storedDataErrorMessage(err, isDesktopRef.current, 'Could not load stored data.'),
+      );
     } finally {
       setStoredDataLoading(false);
     }
   }, [nodeId]);
 
+  // Only the first open loads on its own. After a failure it waits for Retry:
+  // re-firing here would re-ask a node that isn't answering every 10 s, forever.
   useEffect(() => {
-    if (tab === 'stored_data' && storedDataCommands === null && !storedDataLoading) {
+    if (
+      tab === 'stored_data' &&
+      storedDataCommands === null &&
+      !storedDataLoading &&
+      storedDataError === null
+    ) {
       loadStoredDataCommands();
     }
-  }, [tab, storedDataCommands, storedDataLoading, loadStoredDataCommands]);
+  }, [tab, storedDataCommands, storedDataLoading, storedDataError, loadStoredDataCommands]);
 
   // Any "user"-type secret in the snapshot needs the household members list
   // (picker options + id → name previews).
@@ -1940,6 +1953,12 @@ const NodeSettingsScreen: React.FC = () => {
                     status={selectedNodeIds.has(n.node_id) ? 'checked' : 'unchecked'}
                     onPress={() => n.hasK2 && toggleNodeSelection(n.node_id)}
                     disabled={!n.hasK2}
+                  />
+                  <NodeKindIcon
+                    node={n}
+                    size={20}
+                    testID={`sync-node-kind-${n.node_id}`}
+                    style={{ marginRight: 8 }}
                   />
                   <View style={{ flex: 1 }}>
                     <Text variant="bodyMedium">{n.room || n.node_id.slice(0, 8)}</Text>

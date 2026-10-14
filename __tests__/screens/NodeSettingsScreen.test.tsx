@@ -65,8 +65,15 @@ jest.mock('../../src/services/configPushService', () => ({
 }));
 
 // --- Other API mocks ---
+const mockListNodes = jest.fn();
 jest.mock('../../src/api/nodeApi', () => ({
-  listNodes: jest.fn(),
+  listNodes: (...args: unknown[]) => mockListNodes(...args),
+}));
+
+// --- Stored Data (command-data over MQTT) ---
+const mockListCommandData = jest.fn();
+jest.mock('../../src/api/commandDataApi', () => ({
+  listCommands: (...args: unknown[]) => mockListCommandData(...args),
 }));
 
 jest.mock('../../src/api/packageInstallApi', () => ({
@@ -735,3 +742,96 @@ describe('NodeSettingsScreen — agent secrets inherited from the parent service
     });
   });
 });
+
+describe('NodeSettingsScreen — desktop agents', () => {
+  const DESKTOP_ROW = { node_id: 'node-abc', room: 'kitchen', node_kind: 'desktop', install_mode: 'desktop-agent' };
+  const PI_ROW = { node_id: 'pi-2', room: 'Bedroom', node_kind: null, install_mode: 'tarball' };
+  const AGENT_ROW = { node_id: 'agent-3', room: 'Office PC', node_kind: 'desktop', install_mode: 'desktop-agent' };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('Stored Data on a computer that does not answer says so in computer terms', async () => {
+    mockListNodes.mockResolvedValue([DESKTOP_ROW]);
+    mockListCommandData.mockRejectedValue({ response: { status: 504, data: {} } });
+    const view = await renderLoaded(snapshotWithAgents());
+    await waitFor(() => expect(mockListNodes).toHaveBeenCalledWith('hh-1'));
+
+    await act(async () => {
+      fireEvent.press(view.getByText('Data'));
+    });
+
+    await view.findByText(/This computer didn't answer/);
+    expect(mockListCommandData).toHaveBeenCalledWith('node-abc');
+    // It does not keep re-asking a computer that isn't answering…
+    expect(mockListCommandData).toHaveBeenCalledTimes(1);
+
+    // …until the user taps Retry.
+    mockListCommandData.mockResolvedValue([]);
+    await act(async () => {
+      fireEvent.press(view.getByText('Retry'));
+    });
+    await view.findByText('No commands on this node expose stored data.');
+    expect(mockListCommandData).toHaveBeenCalledTimes(2);
+  });
+
+  it('Stored Data keeps the Pi wording for a Pi', async () => {
+    mockListNodes.mockResolvedValue([{ ...DESKTOP_ROW, node_kind: null, install_mode: 'tarball' }]);
+    mockListCommandData.mockRejectedValue({ response: { status: 504, data: {} } });
+    const view = await renderLoaded(snapshotWithAgents());
+    await waitFor(() => expect(mockListNodes).toHaveBeenCalled());
+
+    await act(async () => {
+      fireEvent.press(view.getByText('Data'));
+    });
+
+    await view.findByText('Node did not respond. It may be offline.');
+  });
+
+  it('the Sync node picker shows the robot for a computer and the Raspberry Pi for a Pi', async () => {
+    mockListNodes.mockResolvedValue([DESKTOP_ROW, PI_ROW, AGENT_ROW]);
+    const snapshot = {
+      ...snapshotWithAgents(),
+      commands: [
+        {
+          command_name: 'get_weather',
+          description: 'Weather',
+          associated_service: 'Weather',
+          enabled: true,
+          secrets: [
+            {
+              key: 'WEATHER_API_KEY',
+              scope: 'integration',
+              value_type: 'string',
+              is_sensitive: true,
+              required: true,
+              is_set: true,
+              description: 'API key',
+            },
+          ],
+        },
+      ],
+      agents: [],
+    };
+    const view = await renderLoaded(snapshot as any);
+
+    await act(async () => {
+      fireEvent.press(view.getByText('Services'));
+    });
+    await view.findByText('Weather');
+    // The group's overflow menu → "Sync to other nodes".
+    const anchors = view.UNSAFE_getAllByProps({ source: 'dots-vertical' });
+    await act(async () => {
+      fireEvent.press(anchors[0]);
+    });
+    await act(async () => {
+      fireEvent.press(await view.findByText('Sync to other nodes'));
+    });
+
+    const agent = await view.findByTestId('sync-node-kind-agent-3');
+    expect(agent.props.accessibilityLabel).toBe('Computer');
+    expect(view.getByTestId('sync-node-kind-pi-2').props.accessibilityLabel).toBe('Raspberry Pi');
+  });
+});
+

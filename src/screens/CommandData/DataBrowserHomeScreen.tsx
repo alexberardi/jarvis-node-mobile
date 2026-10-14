@@ -24,6 +24,10 @@ import {
   listNodes,
 } from '../../api/commandDataApi';
 import type { CommandDataStackParamList } from '../../navigation/types';
+import { useAuth } from '../../auth/AuthContext';
+import { useNodeKinds } from '../../hooks/useNodeKinds';
+import { isDesktopAgent, nodeKindIcon, nodeKindLabel } from '../../utils/nodeKind';
+import { storedDataErrorMessage } from '../../utils/storedDataError';
 
 type Nav = NativeStackNavigationProp<CommandDataStackParamList, 'DataBrowserHome'>;
 type Route = RouteProp<CommandDataStackParamList, 'DataBrowserHome'>;
@@ -32,6 +36,7 @@ const DataBrowserHomeScreen = () => {
   const navigation = useNavigation<Nav>();
   const route = useRoute<Route>();
   const theme = useTheme();
+  const { state: authState } = useAuth();
 
   // When entering from a node-scoped surface (NodeSettings options menu),
   // skip the picker and pin to the supplied node.
@@ -43,6 +48,17 @@ const DataBrowserHomeScreen = () => {
   const [loadingNodes, setLoadingNodes] = useState(!pinnedNodeId);
   const [loadingCommands, setLoadingCommands] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [commandsError, setCommandsError] = useState<unknown>(null);
+
+  // command-data's node list carries no node_kind: look it up for the icons
+  // and for the selected node's error wording.
+  const kinds = useNodeKinds(
+    authState.activeHouseholdId,
+    selectedNodeId && !nodes.some((n) => n.node_id === selectedNodeId)
+      ? [...nodes.map((n) => n.node_id), selectedNodeId]
+      : nodes.map((n) => n.node_id),
+  );
+  const selectedIsDesktop = !!selectedNodeId && isDesktopAgent(kinds[selectedNodeId]);
 
   useEffect(() => {
     if (pinnedNodeId) return;  // Skip node enumeration when pinned.
@@ -77,6 +93,7 @@ const DataBrowserHomeScreen = () => {
     let mounted = true;
     setLoadingCommands(true);
     setError(null);
+    setCommandsError(null);
     listCommands(selectedNodeId)
       .then((cmds) => {
         if (!mounted) return;
@@ -85,12 +102,7 @@ const DataBrowserHomeScreen = () => {
       .catch((err) => {
         if (!mounted) return;
         console.error('[DataBrowserHome] listCommands failed', err);
-        const status = (err as { response?: { status?: number } })?.response?.status;
-        if (status === 504) {
-          setError('Node did not respond. It may be offline.');
-        } else {
-          setError('Could not load commands.');
-        }
+        setCommandsError(err);
       })
       .finally(() => {
         if (mounted) setLoadingCommands(false);
@@ -128,6 +140,8 @@ const DataBrowserHomeScreen = () => {
                     key={n.node_id}
                     testID={`data-browser-node-${n.node_id}-chip`}
                     selected={selectedNodeId === n.node_id}
+                    icon={nodeKindIcon(kinds[n.node_id])}
+                    accessibilityLabel={`${n.room || n.node_id}, ${nodeKindLabel(kinds[n.node_id])}`}
                     onPress={() => setSelectedNodeId(n.node_id)}
                     style={styles.chip}
                   >
@@ -140,12 +154,13 @@ const DataBrowserHomeScreen = () => {
         )}
 
         {/* Commands list */}
-        {error && (
+        {(error !== null || commandsError !== null) && (
           <Text
             testID="data-browser-error-banner"
             style={[styles.error, { color: theme.colors.error }]}
           >
-            {error}
+            {error ??
+              storedDataErrorMessage(commandsError, selectedIsDesktop, 'Could not load commands.')}
           </Text>
         )}
         {selectedNodeId && (

@@ -205,3 +205,31 @@ describe('NodeListScreen', () => {
     });
   });
 });
+
+describe('NodeListScreen — node kind icons', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('shows the Raspberry Pi icon for a Pi and the robot for a desktop agent', async () => {
+    mockListNodes.mockResolvedValue([
+      { ...sampleNodes[0], install_mode: 'tarball', node_kind: null },
+      {
+        ...sampleNodes[1],
+        node_id: 'agent-1',
+        room: 'Office PC',
+        install_mode: 'desktop-agent',
+        node_kind: 'desktop',
+      },
+    ]);
+    const { findByTestId, getByTestId, getByText, queryByText } = render(<NodeListScreen />, { wrapper });
+
+    const pi = await findByTestId('node-kind-icon-node-1');
+    expect(pi.props.accessibilityLabel).toBe('Raspberry Pi');
+    const agent = getByTestId('node-kind-icon-agent-1');
+    expect(agent.props.accessibilityLabel).toBe('Computer');
+    // A computer has no Pi voice mode; it says what it is instead.
+    expect(getByText('Mode: push-to-talk')).toBeTruthy();
+    expect(queryByText('Mode: wake-word')).toBeNull();
+    expect(getByText('Jarvis Automation agent')).toBeTruthy();
+  });
+});
+

@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { PaperProvider } from 'react-native-paper';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -13,6 +13,13 @@ import { getSmartHomeConfig } from '../../src/api/smartHomeApi';
 
 jest.mock('../../src/api/smartHomeApi', () => ({
   getSmartHomeConfig: jest.fn(),
+}));
+
+// The smart-home config carries no node_kind; NodeSelector looks the kinds up
+// from the node list (useNodeKinds) for its robot / Raspberry Pi icons.
+const mockListNodes = jest.fn();
+jest.mock('../../src/api/nodeApi', () => ({
+  listNodes: (...args: unknown[]) => mockListNodes(...args),
 }));
 
 // useFocusEffect needs a navigation context; emulate it as a one-shot effect
@@ -61,6 +68,7 @@ const renderWithPending = (props: any) =>
 describe('NodeSelector', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
+    mockListNodes.mockResolvedValue([]);
     mockFocusCb = null;
     pendingCtx = null;
     await AsyncStorage.clear();
@@ -291,4 +299,33 @@ describe('NodeSelector', () => {
       expect(mockedGetConfig.mock.calls.length).toBeGreaterThan(callsAfterMount);
     });
   });
+
+  it('shows the robot for a desktop agent and the Raspberry Pi for a Pi in the menu', async () => {
+    mockedGetConfig.mockResolvedValue(
+      config([
+        { node_id: 'node-1', room: 'Kitchen', online: true, last_seen: null },
+        { node_id: 'agent-1', room: 'Office PC', online: true, last_seen: null },
+        { node_id: 'node-2', room: 'Bedroom', online: true, last_seen: null },
+      ]),
+    );
+    mockListNodes.mockResolvedValue([
+      { node_id: 'node-1', node_kind: null, install_mode: 'tarball' },
+      { node_id: 'agent-1', node_kind: 'desktop', install_mode: 'desktop-agent' },
+      { node_id: 'node-2', node_kind: null, install_mode: 'tarball' },
+    ]);
+
+    const { findByText, findByTestId, getByTestId, queryByTestId } = render(
+      <NodeSelector householdId="hh-1" selectedNodeId="node-1" onSelectNode={jest.fn()} />,
+      { wrapper },
+    );
+    await waitFor(() => expect(mockListNodes).toHaveBeenCalledWith('hh-1'));
+    fireEvent.press(await findByText('Kitchen'));
+
+    const agent = await findByTestId('node-selector-kind-agent-1');
+    expect(agent.props.accessibilityLabel).toBe('Computer');
+    expect(getByTestId('node-selector-kind-node-2').props.accessibilityLabel).toBe('Raspberry Pi');
+    // The selected row keeps its check mark instead.
+    expect(queryByTestId('node-selector-kind-node-1')).toBeNull();
+  });
 });
+

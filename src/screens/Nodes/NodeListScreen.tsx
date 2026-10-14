@@ -14,6 +14,8 @@ import { listNodes, NodeInfo } from '../../api/nodeApi';
 import { useAuth } from '../../auth/AuthContext';
 import { NodesStackParamList } from '../../navigation/types';
 import { formatLastSeen } from '../../utils/serverTime';
+import { isDesktopAgent } from '../../utils/nodeKind';
+import { NodeKindIcon } from '../../components/NodeKindIcon';
 
 type Nav = NativeStackNavigationProp<NodesStackParamList>;
 
@@ -63,6 +65,7 @@ const NodeListScreen = () => {
             width: 10, height: 10, borderRadius: 5,
             backgroundColor: item.online ? '#4CAF50' : theme.colors.outline,
           }} />
+          <NodeKindIcon node={item} size={20} testID={`node-kind-icon-${item.node_id}`} />
           <Text variant="titleMedium">{item.room || item.node_id}</Text>
         </View>
         <Text
@@ -75,7 +78,7 @@ const NodeListScreen = () => {
           variant="bodySmall"
           style={{ color: theme.colors.onSurfaceVariant }}
         >
-          Mode: {item.voice_mode}
+          {isDesktopAgent(item) ? 'Jarvis Automation agent' : `Mode: ${item.voice_mode}`}
         </Text>
       </Card.Content>
     </Card>

@@ -10,6 +10,7 @@ import { usePantryGate } from '../../components/PantryGate';
 import { StoreStackParamList } from '../../navigation/types';
 import { compareSemver } from '../../utils/semver';
 import { safeJsonParse } from '../../utils/safeJson';
+import { NodeKindIcon } from '../../components/NodeKindIcon';
 
 type Nav = NativeStackNavigationProp<StoreStackParamList>;
 type Route = RouteProp<StoreStackParamList, 'NodePickerSheet'>;
@@ -17,6 +18,8 @@ type Route = RouteProp<StoreStackParamList, 'NodePickerSheet'>;
 interface NodeInfo {
   node_id: string;
   room: string | null;
+  node_kind?: string | null;
+  install_mode?: string | null;
 }
 
 type NodeState = 'not-installed' | 'outdated' | 'up-to-date';
@@ -178,6 +181,15 @@ const NodePickerSheet = () => {
               title={node.room || node.node_id.slice(0, 8)}
               description={desc.text}
               descriptionStyle={desc.color ? { color: desc.color } : undefined}
+              right={(props) => (
+                <NodeKindIcon
+                  node={node}
+                  size={20}
+                  color={props.color}
+                  testID={`node-picker-kind-${node.node_id}`}
+                  style={[props.style, { justifyContent: 'center' }]}
+                />
+              )}
               style={isUpToDate ? { opacity: 0.6 } : undefined}
               left={(props) =>
                 isUpToDate ? (
