@@ -22,6 +22,7 @@ import { getSmartHomeConfig } from '../../api/smartHomeApi';
 import { deleteRoutine, listRoutines, runRoutineNow } from '../../api/routineApi';
 import { useAuth } from '../../auth/AuthContext';
 import { RoutinesStackParamList } from '../../navigation/types';
+import { fabListPaddingBottom, fabStyle } from '../../theme/fab';
 import type { Routine, RoutineSchedule } from '../../types/Routine';
 
 type Nav = NativeStackNavigationProp<RoutinesStackParamList>;
@@ -285,7 +286,7 @@ const RoutineListScreen = () => {
       <FAB
         testID="routine-add-fab"
         icon="plus"
-        style={styles.fab}
+        style={[styles.fab, { backgroundColor: theme.colors.primary }]}
         onPress={() => navigation.navigate('RoutineEdit', {})}
         color={theme.colors.onPrimary}
       />
@@ -299,17 +300,18 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', paddingRight: 8 },
   title: { fontWeight: 'bold', paddingHorizontal: 16, marginBottom: 12 },
   titleFlex: { flex: 1, marginBottom: 0 },
-  list: { padding: 16, gap: 12, paddingBottom: 96 },
+  list: { padding: 16, gap: 12, paddingBottom: fabListPaddingBottom },
   running: { flexDirection: 'row', alignItems: 'center', gap: 6, marginRight: 8 },
   emptyList: { flexGrow: 1, justifyContent: 'center', alignItems: 'center' },
   card: {},
   cardHeader: { flexDirection: 'row', alignItems: 'center' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8, marginBottom: 6 },
-  chip: { height: 30, paddingHorizontal: 2 },
+  // minHeight, not height: a fixed height clips descenders at a large font scale.
+  chip: { minHeight: 30, paddingHorizontal: 2 },
   chipText: { fontSize: 11 },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
-  scheduleBadge: { height: 26 },
-  fab: { position: 'absolute', right: 16, bottom: 24 },
+  scheduleBadge: { minHeight: 26 },
+  fab: fabStyle,
   deleteAction: {
     backgroundColor: '#ef4444', justifyContent: 'center', alignItems: 'center',
     width: 72, borderRadius: 12, marginLeft: 8,
