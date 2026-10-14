@@ -234,6 +234,12 @@ describe('SettingsScreen', () => {
     expect(rediscoverBtn).toBeTruthy();
   });
 
+  it('separates the Call details row with a divider like the rows above it', () => {
+    const { getByTestId } = render(<SettingsScreen />, { wrapper });
+    expect(getByTestId('settings-call-context-divider')).toBeTruthy();
+    expect(getByTestId('settings-call-context-row')).toBeTruthy();
+  });
+
   it('should render Settings header', () => {
     const { getByText } = render(<SettingsScreen />, { wrapper });
 

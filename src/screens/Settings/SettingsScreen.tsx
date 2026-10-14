@@ -543,7 +543,7 @@ const SettingsScreen = () => {
                 <Icon source="chevron-right" size={24} />
               </View>
             </TouchableRipple>
-
+            <Divider testID="settings-call-context-divider" style={{ marginVertical: 4 }} />
             <TouchableRipple
               testID="settings-call-context-row"
               onPress={() => navigation.navigate('CallContext')}
