@@ -7,7 +7,7 @@
  * until success/failed or the deadline (an offline node never answers).
  */
 import apiClient from '../../src/api/apiClient';
-import { nodeErrorMessage, removeNode, startFactoryReset, waitForFactoryReset } from '../../src/api/nodeApi';
+import { nodeErrorMessage, removeNode, signOutNode, startFactoryReset, waitForFactoryReset } from '../../src/api/nodeApi';
 import { getNodeTask } from '../../src/api/nodeUpdateApi';
 
 jest.mock('../../src/config/serviceConfig', () => ({
@@ -124,5 +124,31 @@ describe('nodeErrorMessage', () => {
   it("falls back to the error's message, then the fallback", () => {
     expect(nodeErrorMessage(new Error('Network Error'), 'fb')).toBe('Network Error');
     expect(nodeErrorMessage(undefined, 'fb')).toBe('fb');
+  });
+});
+
+describe('signOutNode (desktop agent sign-out)', () => {
+  it('POSTs the sign-out route, not the factory reset', async () => {
+    mockPost.mockResolvedValue({ data: { message: 'Signed out', node_id: 'n1' } });
+    await signOutNode('n1');
+    expect(mockPost).toHaveBeenCalledTimes(1);
+    expect(mockPost).toHaveBeenCalledWith('http://cc.test/api/v0/nodes/n1/sign-out');
+  });
+
+  it('escapes the node id', async () => {
+    mockPost.mockResolvedValue({ data: {} });
+    await signOutNode('a/b');
+    expect(mockPost).toHaveBeenCalledWith('http://cc.test/api/v0/nodes/a%2Fb/sign-out');
+  });
+
+  it('propagates a 403 with the server message', async () => {
+    const err = axiosError(403, {
+      detail: 'Only the member who added this device, or a household admin, can sign it out',
+    });
+    mockPost.mockRejectedValue(err);
+    await expect(signOutNode('n1')).rejects.toBe(err);
+    expect(nodeErrorMessage(err, 'x')).toBe(
+      'Only the member who added this device, or a household admin, can sign it out',
+    );
   });
 });

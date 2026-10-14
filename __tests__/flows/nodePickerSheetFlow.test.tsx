@@ -208,3 +208,21 @@ describe('NodePicker sheet — flow integration (select, lockout, install fan-ou
     expect(mockGoBack).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('NodePicker sheet — node kind icons', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('shows the robot for a computer and the Raspberry Pi for a Pi', () => {
+    const params = {
+      ...baseParams(),
+      nodes: JSON.stringify([
+        { node_id: 'kitchen-aaaaaaaa', room: 'Kitchen', install_mode: 'tarball' },
+        { node_id: 'agent-1', room: 'Office PC', node_kind: 'desktop', install_mode: 'desktop-agent' },
+      ]),
+    };
+    const { getByTestId } = renderScreen(params);
+    expect(getByTestId('node-picker-kind-agent-1').props.accessibilityLabel).toBe('Computer');
+    expect(getByTestId('node-picker-kind-kitchen-aaaaaaaa').props.accessibilityLabel).toBe('Raspberry Pi');
+  });
+});
+

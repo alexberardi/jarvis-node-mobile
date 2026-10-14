@@ -27,6 +27,11 @@ export interface NodeInfo {
   // True when the node has no K2 secrets-encryption key yet — gates the
   // settings gear so the user can pair K2 even on a fresh device.
   needs_k2: boolean;
+  // jarvisd additions (install plan 1.8, device sign-out). Missing on older
+  // servers. node_kind is "desktop" for the Jarvis Automation agent on a
+  // computer; owner_user_id is the member who paired the node.
+  node_kind?: string | null;
+  owner_user_id?: number | null;
 }
 
 export const listNodes = async (householdId?: string): Promise<NodeInfo[]> => {
@@ -146,6 +151,24 @@ export const waitForFactoryReset = async (
  */
 export const removeNode = async (nodeId: string): Promise<void> => {
   await apiClient.delete(`${getCommandCenterUrl()}/api/v0/admin/nodes/${nodeId}`);
+};
+
+/**
+ * Sign a desktop agent out — the "Delete" for a computer (decision
+ * 2026-10-14, device sign-out).
+ *
+ * jarvisd's `POST /api/v0/nodes/{id}/sign-out` (internal/modules/cc/signout.go,
+ * handleSignOutNode): allowed for the member who paired the node while still a
+ * member of its household, or a household admin. It revokes the node's
+ * credentials and removes it, then nudges the agent with "signed-out"; there
+ * is never a factory reset (a desktop agent answers `factory-reset` with 400).
+ * The agent keeps its settings on the computer. Answers
+ * `{message: "Signed out", node_id}`; 403/404 as `{detail: "<message>"}`.
+ */
+export const signOutNode = async (nodeId: string): Promise<void> => {
+  await apiClient.post(
+    `${getCommandCenterUrl()}/api/v0/nodes/${encodeURIComponent(nodeId)}/sign-out`,
+  );
 };
 
 /** The server's `{detail: "<message>"}` from a failed call, else the error's own message. */

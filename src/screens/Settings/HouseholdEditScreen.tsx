@@ -1219,7 +1219,7 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
             <Button
               testID="open-signal-automations"
               mode="outlined"
-              icon="robot"
+              icon="flash-outline"
               onPress={() => navigation.navigate('SignalAutomations', { householdId })}
             >
               Manage automations

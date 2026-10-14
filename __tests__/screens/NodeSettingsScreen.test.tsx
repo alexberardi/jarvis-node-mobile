@@ -65,8 +65,15 @@ jest.mock('../../src/services/configPushService', () => ({
 }));
 
 // --- Other API mocks ---
+const mockListNodes = jest.fn();
 jest.mock('../../src/api/nodeApi', () => ({
-  listNodes: jest.fn(),
+  listNodes: (...args: unknown[]) => mockListNodes(...args),
+}));
+
+// --- Stored Data (command-data over MQTT) ---
+const mockListCommandData = jest.fn();
+jest.mock('../../src/api/commandDataApi', () => ({
+  listCommands: (...args: unknown[]) => mockListCommandData(...args),
 }));
 
 jest.mock('../../src/api/packageInstallApi', () => ({
@@ -735,3 +742,212 @@ describe('NodeSettingsScreen — agent secrets inherited from the parent service
     });
   });
 });
+
+describe('NodeSettingsScreen — desktop agents', () => {
+  const DESKTOP_ROW = { node_id: 'node-abc', room: 'kitchen', node_kind: 'desktop', install_mode: 'desktop-agent' };
+  const PI_ROW = { node_id: 'pi-2', room: 'Bedroom', node_kind: null, install_mode: 'tarball' };
+  const AGENT_ROW = { node_id: 'agent-3', room: 'Office PC', node_kind: 'desktop', install_mode: 'desktop-agent' };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('Stored Data on a computer that does not answer says so in computer terms', async () => {
+    mockListNodes.mockResolvedValue([DESKTOP_ROW]);
+    mockListCommandData.mockRejectedValue({ response: { status: 504, data: {} } });
+    const view = await renderLoaded(snapshotWithAgents());
+    await waitFor(() => expect(mockListNodes).toHaveBeenCalledWith('hh-1'));
+
+    await act(async () => {
+      fireEvent.press(view.getByText('Data'));
+    });
+
+    await view.findByText(/This computer didn't answer/);
+    expect(mockListCommandData).toHaveBeenCalledWith('node-abc');
+    // It does not keep re-asking a computer that isn't answering…
+    expect(mockListCommandData).toHaveBeenCalledTimes(1);
+
+    // …until the user taps Retry.
+    mockListCommandData.mockResolvedValue([]);
+    await act(async () => {
+      fireEvent.press(view.getByText('Retry'));
+    });
+    await view.findByText('No commands on this node expose stored data.');
+    expect(mockListCommandData).toHaveBeenCalledTimes(2);
+  });
+
+  it('Stored Data keeps the Pi wording for a Pi', async () => {
+    mockListNodes.mockResolvedValue([{ ...DESKTOP_ROW, node_kind: null, install_mode: 'tarball' }]);
+    mockListCommandData.mockRejectedValue({ response: { status: 504, data: {} } });
+    const view = await renderLoaded(snapshotWithAgents());
+    await waitFor(() => expect(mockListNodes).toHaveBeenCalled());
+
+    await act(async () => {
+      fireEvent.press(view.getByText('Data'));
+    });
+
+    await view.findByText('Node did not respond. It may be offline.');
+  });
+
+  it('the Sync node picker shows the robot for a computer and the Raspberry Pi for a Pi', async () => {
+    mockListNodes.mockResolvedValue([DESKTOP_ROW, PI_ROW, AGENT_ROW]);
+    const snapshot = {
+      ...snapshotWithAgents(),
+      commands: [
+        {
+          command_name: 'get_weather',
+          description: 'Weather',
+          associated_service: 'Weather',
+          enabled: true,
+          secrets: [
+            {
+              key: 'WEATHER_API_KEY',
+              scope: 'integration',
+              value_type: 'string',
+              is_sensitive: true,
+              required: true,
+              is_set: true,
+              description: 'API key',
+            },
+          ],
+        },
+      ],
+      agents: [],
+    };
+    const view = await renderLoaded(snapshot as any);
+
+    await act(async () => {
+      fireEvent.press(view.getByText('Services'));
+    });
+    await view.findByText('Weather');
+    // The group's overflow menu → "Sync to other nodes".
+    const anchors = view.UNSAFE_getAllByProps({ source: 'dots-vertical' });
+    await act(async () => {
+      fireEvent.press(anchors[0]);
+    });
+    await act(async () => {
+      fireEvent.press(await view.findByText('Sync to other nodes'));
+    });
+
+    const agent = await view.findByTestId('sync-node-kind-agent-3');
+    expect(agent.props.accessibilityLabel).toBe('Computer');
+    expect(view.getByTestId('sync-node-kind-pi-2').props.accessibilityLabel).toBe('Raspberry Pi');
+  });
+});
+
+describe('NodeSettingsScreen — Sync of a mixed service', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('sends shared secrets without a user and personal secrets tagged with the user, as two pushes', async () => {
+    mockListNodes.mockResolvedValue([
+      { node_id: 'node-abc', room: 'kitchen', install_mode: 'tarball' },
+      { node_id: 'pi-2', room: 'Bedroom', install_mode: 'tarball' },
+    ]);
+    mockEncryptAndPushConfig.mockResolvedValue(undefined);
+    const alertSpy = jest.spyOn(require('react-native').Alert, 'alert').mockImplementation(() => {});
+    const snapshot = {
+      ...snapshotWithAgents(),
+      agents: [],
+      commands: [
+        {
+          command_name: 'get_calendar',
+          description: 'Calendar',
+          associated_service: 'Calendar',
+          enabled: true,
+          secrets: [
+            { key: 'CAL_URL', scope: 'integration', value_type: 'string', is_sensitive: false,
+              required: true, is_set: true, value: 'https://cal', description: 'Server' },
+            { key: 'CAL_PASSWORD', scope: 'user', value_type: 'string', is_sensitive: false,
+              required: true, is_set: true, value: 'pw', description: 'Password' },
+          ],
+        },
+      ],
+    };
+    const view = await renderLoaded(snapshot as any);
+
+    await act(async () => {
+      fireEvent.press(view.getByText('Services'));
+    });
+    await view.findByText('Calendar');
+    await act(async () => {
+      fireEvent.press(view.UNSAFE_getAllByProps({ source: 'dots-vertical' })[0]);
+    });
+    await act(async () => {
+      fireEvent.press(await view.findByText('Sync to other nodes'));
+    });
+    await view.findByTestId('sync-node-kind-pi-2');
+    await act(async () => {
+      fireEvent.press(view.getByText('Next'));
+    });
+    await act(async () => {
+      fireEvent.press(await view.findByText('Sync'));
+    });
+
+    await waitFor(() => expect(mockEncryptAndPushConfig).toHaveBeenCalledTimes(2));
+    expect(mockEncryptAndPushConfig).toHaveBeenNthCalledWith(1, 'pi-2', 'settings:secrets', {
+      CAL_URL: 'https://cal',
+    });
+    expect(mockEncryptAndPushConfig).toHaveBeenNthCalledWith(2, 'pi-2', 'settings:secrets', {
+      CAL_PASSWORD: 'pw',
+      __user_id__: '7',
+    });
+    expect(alertSpy).toHaveBeenCalledWith('Sync Complete', 'Settings synced to 1 node.');
+    alertSpy.mockRestore();
+  });
+
+  it('applying preset defaults splits shared and personal keys the same way', async () => {
+    mockEncryptAndPushConfig.mockResolvedValue(undefined);
+    const alertSpy = jest.spyOn(require('react-native').Alert, 'alert').mockImplementation(() => {});
+    const snapshot = {
+      ...snapshotWithAgents(),
+      agents: [],
+      commands: [
+        {
+          command_name: 'get_mail',
+          description: 'Mail',
+          associated_service: 'Mail',
+          enabled: true,
+          secrets: [
+            { key: 'MAIL_PROVIDER', friendly_name: 'Provider', scope: 'user', value_type: 'string',
+              is_sensitive: false, required: true, is_set: true, value: 'gmail', description: 'Provider',
+              enum_values: ['gmail'],
+              presets: { gmail: { MAIL_HOST: 'imap.gmail.com', MAIL_USER_FOLDER: 'INBOX' } } },
+            { key: 'MAIL_HOST', scope: 'integration', value_type: 'string', is_sensitive: false,
+              required: true, is_set: false, description: 'Host' },
+            { key: 'MAIL_USER_FOLDER', scope: 'user', value_type: 'string', is_sensitive: false,
+              required: true, is_set: false, description: 'Folder' },
+          ],
+        },
+      ],
+    };
+    const view = await renderLoaded(snapshot as any);
+    await act(async () => {
+      fireEvent.press(view.getByText('Services'));
+    });
+    await act(async () => {
+      fireEvent.press(await view.findByText('Provider'));
+    });
+    await act(async () => {
+      fireEvent.press(view.getByText('Save'));
+    });
+    await waitFor(() =>
+      expect(alertSpy).toHaveBeenCalledWith('Apply Defaults?', expect.any(String), expect.any(Array)),
+    );
+    mockEncryptAndPushConfig.mockClear();
+    const buttons = alertSpy.mock.calls.find((c) => c[0] === 'Apply Defaults?')![2] as any[];
+    await act(async () => {
+      await buttons.find((b) => b.text === 'Apply').onPress();
+    });
+
+    expect(mockEncryptAndPushConfig).toHaveBeenCalledTimes(2);
+    expect(mockEncryptAndPushConfig).toHaveBeenNthCalledWith(1, 'node-abc', 'settings:secrets', {
+      MAIL_HOST: 'imap.gmail.com',
+    });
+    expect(mockEncryptAndPushConfig).toHaveBeenNthCalledWith(2, 'node-abc', 'settings:secrets', {
+      MAIL_USER_FOLDER: 'INBOX',
+      __user_id__: '7',
+    });
+    alertSpy.mockRestore();
+  });
+});
+

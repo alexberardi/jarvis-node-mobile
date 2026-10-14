@@ -95,6 +95,12 @@ jest.mock('../../src/api/smartHomeApi', () => ({
   updateSmartHomeConfig: jest.fn(),
 }));
 
+// Kinds for the Primary Node picker's icons (smart-home config carries none).
+const mockListNodes = jest.fn();
+jest.mock('../../src/api/nodeApi', () => ({
+  listNodes: (...args: unknown[]) => mockListNodes(...args),
+}));
+
 jest.mock('../../src/api/voiceProfileApi', () => ({
   getVoiceProfileStatus: jest.fn(),
 }));
@@ -155,6 +161,10 @@ describe('Settings — flow integration (households, delete-account, smart-home 
       refreshToken: null,
     };
     getSH.mockResolvedValue(SMART_HOME);
+    mockListNodes.mockResolvedValue([
+      { node_id: 'node-1', install_mode: 'tarball', node_kind: null },
+      { node_id: 'node-2', install_mode: 'desktop-agent', node_kind: 'desktop' },
+    ]);
     updateSH.mockResolvedValue(SMART_HOME);
     getVP.mockResolvedValue({ has_profile: true, sample_count: 3 });
     (arePushNotificationsEnabled as jest.Mock).mockResolvedValue(true);
@@ -353,4 +363,14 @@ describe('Settings — flow integration (households, delete-account, smart-home 
 
     expect(updateSH).toHaveBeenCalledWith('hh-1', { primary_node_id: 'node-2' });
   });
+
+  it('Primary Node rows show the Raspberry Pi for a Pi and the robot for a computer', async () => {
+    const utils = renderScreen();
+    await waitFor(() => expect(mockListNodes).toHaveBeenCalledWith('hh-1'));
+    await waitFor(() =>
+      expect(utils.getByTestId('primary-node-kind-node-2').props.accessibilityLabel).toBe('Computer'),
+    );
+    expect(utils.getByTestId('primary-node-kind-node-1').props.accessibilityLabel).toBe('Raspberry Pi');
+  });
 });
+

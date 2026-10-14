@@ -29,6 +29,11 @@ import { getK2 } from '../../services/k2Service';
 import type { K2KeyPair } from '../../services/k2Service';
 
 import { useAuth } from '../../auth/AuthContext';
+import { NodeKindIcon } from '../../components/NodeKindIcon';
+import { useNodeKinds } from '../../hooks/useNodeKinds';
+import { isDesktopAgent } from '../../utils/nodeKind';
+import { storedDataErrorMessage } from '../../utils/storedDataError';
+import { buildSyncPushes } from '../../services/syncPushes';
 import { NodesStackParamList, RootStackParamList } from '../../navigation/types';
 import {
   requestSettingsSnapshot,
@@ -145,6 +150,11 @@ const NodeSettingsScreen: React.FC = () => {
 
   // Export K2 flow
   const [exportKeyPair, setExportKeyPair] = useState<K2KeyPair | null>(null);
+
+  // This node's kind (desktop agent or Pi) — for the Stored Data error wording.
+  const thisNodeKinds = useNodeKinds(authState.activeHouseholdId, [nodeId]);
+  const isDesktopRef = useRef(false);
+  isDesktopRef.current = isDesktopAgent(thisNodeKinds[nodeId]);
 
   // Stored Data tab state
   const [storedDataCommands, setStoredDataCommands] = useState<CommandSummary[] | null>(null);
@@ -432,22 +442,26 @@ const NodeSettingsScreen: React.FC = () => {
       setStoredDataCommands(commands);
     } catch (err) {
       console.error('[NodeSettings] listCommandDataCommands failed', err);
-      const status = (err as { response?: { status?: number } })?.response?.status;
-      if (status === 504) {
-        setStoredDataError('Node did not respond. It may be offline.');
-      } else {
-        setStoredDataError('Could not load stored data.');
-      }
+      setStoredDataError(
+        storedDataErrorMessage(err, isDesktopRef.current, 'Could not load stored data.'),
+      );
     } finally {
       setStoredDataLoading(false);
     }
   }, [nodeId]);
 
+  // Only the first open loads on its own. After a failure it waits for Retry:
+  // re-firing here would re-ask a node that isn't answering every 10 s, forever.
   useEffect(() => {
-    if (tab === 'stored_data' && storedDataCommands === null && !storedDataLoading) {
+    if (
+      tab === 'stored_data' &&
+      storedDataCommands === null &&
+      !storedDataLoading &&
+      storedDataError === null
+    ) {
       loadStoredDataCommands();
     }
-  }, [tab, storedDataCommands, storedDataLoading, loadStoredDataCommands]);
+  }, [tab, storedDataCommands, storedDataLoading, storedDataError, loadStoredDataCommands]);
 
   // Any "user"-type secret in the snapshot needs the household members list
   // (picker options + id → name previews).
@@ -542,11 +556,19 @@ const NodeSettingsScreen: React.FC = () => {
             text: 'Apply',
             onPress: async () => {
               try {
-                const payload = { ...presetValues };
-                if (authState.user?.id) {
-                  payload.__user_id__ = String(authState.user.id);
+                // Shared and personal keys go out separately (syncPushes.ts):
+                // a user-tagged push would file shared keys as this user's.
+                const pushes = buildSyncPushes(
+                  entries.map(([key]) => ({
+                    key,
+                    scope: allSecrets.find((s) => s.key === key)?.scope,
+                  })),
+                  presetValues,
+                  authState.user?.id,
+                );
+                for (const push of pushes) {
+                  await encryptAndPushConfig(nodeId, 'settings:secrets', push);
                 }
-                await encryptAndPushConfig(nodeId, 'settings:secrets', payload);
                 cleanup();
                 loadSettings();
               } catch {
@@ -905,26 +927,27 @@ const NodeSettingsScreen: React.FC = () => {
       }
     }
 
-    if (Object.keys(secretsMap).length === 0) {
+    // Shared and personal secrets go out as separate pushes: a push tagged
+    // with __user_id__ is filed entirely as that user's (see syncPushes.ts).
+    const pushes = buildSyncPushes(
+      syncGroup.secrets.filter((s) => selectedSecretKeys.has(s.key)),
+      secretsMap,
+      authState.user?.id,
+    );
+    if (pushes.length === 0) {
       Alert.alert('Nothing to Sync', 'No secret values available to sync.');
       setSyncing(false);
       return;
     }
 
-    // Include __user_id__ if any selected secrets are user-scoped
-    const hasUserScoped = syncGroup.secrets.some(
-      (s) => selectedSecretKeys.has(s.key) && s.scope === 'user',
-    );
-    if (hasUserScoped && authState.user?.id) {
-      secretsMap.__user_id__ = String(authState.user.id);
-    }
-
-    // Push to each selected node
+    // Push to each selected node; a node counts once all its pushes landed.
     let successCount = 0;
     let failCount = 0;
     for (const targetNodeId of selectedNodeIds) {
       try {
-        await encryptAndPushConfig(targetNodeId, 'settings:secrets', secretsMap);
+        for (const push of pushes) {
+          await encryptAndPushConfig(targetNodeId, 'settings:secrets', push);
+        }
         successCount++;
       } catch (err) {
         console.error(`Sync to ${targetNodeId} failed:`, err);
@@ -941,7 +964,7 @@ const NodeSettingsScreen: React.FC = () => {
     } else {
       Alert.alert('Sync Partial', `${successCount} succeeded, ${failCount} failed. Nodes without imported K2 keys cannot receive synced settings.`);
     }
-  }, [syncGroup, selectedNodeIds, selectedSecretKeys, nodeId]);
+  }, [syncGroup, selectedNodeIds, selectedSecretKeys, nodeId, authState.user?.id]);
 
   const toggleNodeSelection = (nid: string) => {
     setSelectedNodeIds((prev) => {
@@ -1940,6 +1963,12 @@ const NodeSettingsScreen: React.FC = () => {
                     status={selectedNodeIds.has(n.node_id) ? 'checked' : 'unchecked'}
                     onPress={() => n.hasK2 && toggleNodeSelection(n.node_id)}
                     disabled={!n.hasK2}
+                  />
+                  <NodeKindIcon
+                    node={n}
+                    size={20}
+                    testID={`sync-node-kind-${n.node_id}`}
+                    style={{ marginRight: 8 }}
                   />
                   <View style={{ flex: 1 }}>
                     <Text variant="bodyMedium">{n.room || n.node_id.slice(0, 8)}</Text>

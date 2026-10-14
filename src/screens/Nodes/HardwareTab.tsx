@@ -8,6 +8,11 @@
  * - Voice Settings: NodeVoiceSettings component moved from Overview
  * - Speaker HAT: ReSpeaker LED + button controls (only shown when detected).
  * - Maintenance: daily restart + RSS ceiling.
+ *
+ * A desktop agent (the Jarvis Automation agent on a computer) has none of the
+ * Pi hardware: it shows only Voice Recognition and Device Info. It needs no
+ * voice enrollment either: on a computer Jarvis treats the account signed in
+ * to the agent as the speaker, as mobile chat does with the logged-in user.
  */
 
 import { useNavigation } from '@react-navigation/native';
@@ -35,6 +40,7 @@ import { SpeakerHATCard } from '../../components/SpeakerHATCard';
 import { useAuth } from '../../auth/AuthContext';
 import { helpCopy } from '../../copy/help';
 import { RootStackParamList } from '../../navigation/types';
+import { isDesktopAgent } from '../../utils/nodeKind';
 
 type RootNav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -50,9 +56,11 @@ export const HardwareTab = ({ nodeId, node }: Props) => {
   const householdId = authState.activeHouseholdId;
   const [hasVoiceProfile, setHasVoiceProfile] = useState<boolean | null>(null);
   const [copied, setCopied] = useState(false);
+  const desktop = isDesktopAgent(node);
 
   useEffect(() => {
-    checkVoiceProfile();
+    // A computer needs no voice profile: Jarvis uses the agent's account.
+    if (!desktop) checkVoiceProfile();
   }, []);
 
   const checkVoiceProfile = useCallback(async () => {
@@ -73,10 +81,10 @@ export const HardwareTab = ({ nodeId, node }: Props) => {
 
   return (
     <ScrollView contentContainerStyle={styles.scroll}>
-      <InfoHelperText text={helpCopy.hardware.tabIntro} />
+      <InfoHelperText text={desktop ? helpCopy.hardware.desktopTabIntro : helpCopy.hardware.tabIntro} />
 
-      {/* Bluetooth */}
-      <BluetoothSection nodeId={nodeId} />
+      {/* Bluetooth (Pi only) */}
+      {!desktop && <BluetoothSection nodeId={nodeId} />}
 
       {/* Voice Recognition */}
       <Card style={styles.card}>
@@ -85,22 +93,30 @@ export const HardwareTab = ({ nodeId, node }: Props) => {
           left={(props) => <Icon {...props} source="account-voice" size={24} />}
         />
         <Card.Content>
-          <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
-            {hasVoiceProfile === null
-              ? 'Checking enrollment status...'
-              : hasVoiceProfile
-                ? 'Voice profile enrolled. Jarvis can identify you.'
-                : 'No voice profile yet. Enroll so Jarvis can identify you.'}
-          </Text>
-          <Button
-            testID="voice-recognition-enroll-btn"
-            mode={hasVoiceProfile ? 'outlined' : 'contained'}
-            icon={hasVoiceProfile ? 'account-check' : 'account-plus'}
-            onPress={() => navigation.navigate('VoiceProfile')}
-            style={{ marginTop: 12 }}
-          >
-            {hasVoiceProfile ? 'Manage Profile' : 'Enroll Voice'}
-          </Button>
+          {desktop ? (
+            <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
+              {helpCopy.hardware.desktopVoiceIdentity}
+            </Text>
+          ) : (
+            <>
+              <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
+                {hasVoiceProfile === null
+                  ? 'Checking enrollment status...'
+                  : hasVoiceProfile
+                    ? 'Voice profile enrolled. Jarvis can identify you.'
+                    : 'No voice profile yet. Enroll so Jarvis can identify you.'}
+              </Text>
+              <Button
+                testID="voice-recognition-enroll-btn"
+                mode={hasVoiceProfile ? 'outlined' : 'contained'}
+                icon={hasVoiceProfile ? 'account-check' : 'account-plus'}
+                onPress={() => navigation.navigate('VoiceProfile')}
+                style={{ marginTop: 12 }}
+              >
+                {hasVoiceProfile ? 'Manage Profile' : 'Enroll Voice'}
+              </Button>
+            </>
+          )}
         </Card.Content>
       </Card>
 
@@ -111,12 +127,14 @@ export const HardwareTab = ({ nodeId, node }: Props) => {
           left={(props) => <Icon {...props} source="information-outline" size={24} />}
         />
         <Card.Content>
-          <List.Item
-            title="Voice Mode"
-            description={node.voice_mode || 'brief'}
-            left={(props) => <List.Icon {...props} icon="microphone" />}
-            right={() => <HelpIcon text={helpCopy.hardware.voiceMode} size={16} />}
-          />
+          {!desktop && (
+            <List.Item
+              title="Voice Mode"
+              description={node.voice_mode || 'brief'}
+              left={(props) => <List.Icon {...props} icon="microphone" />}
+              right={() => <HelpIcon text={helpCopy.hardware.voiceMode} size={16} />}
+            />
+          )}
           {node.platform && (
             <List.Item
               title="Platform"
@@ -156,18 +174,22 @@ export const HardwareTab = ({ nodeId, node }: Props) => {
         </Card.Content>
       </Card>
 
-      {/* Voice Settings (sliders) */}
-      <View style={styles.voiceSettingsWrapper}>
-        <NodeVoiceSettings nodeId={nodeId} />
-      </View>
+      {!desktop && (
+        <>
+          {/* Voice Settings (sliders + ambient calibration) */}
+          <View style={styles.voiceSettingsWrapper}>
+            <NodeVoiceSettings nodeId={nodeId} />
+          </View>
 
-      {/* Speaker HAT (only renders when node reports hat_detected). */}
-      <SpeakerHATCard nodeId={nodeId} />
+          {/* Speaker HAT (only renders when node reports hat_detected). */}
+          <SpeakerHATCard nodeId={nodeId} />
 
-      {/* Maintenance: daily restart + RSS ceiling */}
-      <View style={styles.voiceSettingsWrapper}>
-        <NodeMaintenanceSettings nodeId={nodeId} />
-      </View>
+          {/* Maintenance: daily restart + RSS ceiling */}
+          <View style={styles.voiceSettingsWrapper}>
+            <NodeMaintenanceSettings nodeId={nodeId} />
+          </View>
+        </>
+      )}
     </ScrollView>
   );
 };

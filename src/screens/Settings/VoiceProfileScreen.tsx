@@ -39,6 +39,8 @@ import {
   startNodeVerification,
 } from '../../api/voiceProfileApi';
 import { listNodes, type NodeInfo } from '../../api/nodeApi';
+import { NodeKindIcon } from '../../components/NodeKindIcon';
+import { isDesktopAgent } from '../../utils/nodeKind';
 
 // --- Types ---
 
@@ -506,16 +508,35 @@ const VoiceProfileScreen = () => {
             </Text>
           ) : (
             <View>
-              {nodes.map((node) => (
-                <List.Item
-                  key={node.node_id}
-                  title={node.room || 'Unnamed node'}
-                  description={node.user || node.node_id.substring(0, 8)}
-                  left={(props) => <List.Icon {...props} icon="speaker" />}
-                  onPress={() => onPickNode(node)}
-                  style={styles.nodeRow}
-                />
-              ))}
+              {nodes.map((node) => {
+                // A computer needs no enrollment (Jarvis uses the account
+                // signed in to the agent), and the agent has no enroll_voice /
+                // verify_voice handler, so a pick would wait out the 60 s poll.
+                const desktop = isDesktopAgent(node);
+                return (
+                  <List.Item
+                    key={node.node_id}
+                    title={node.room || 'Unnamed node'}
+                    description={
+                      desktop
+                        ? 'Not needed: Jarvis uses the account signed in to the agent'
+                        : node.user || node.node_id.substring(0, 8)
+                    }
+                    left={(props) => (
+                      <NodeKindIcon
+                        node={node}
+                        size={24}
+                        color={props.color}
+                        testID={`voice-target-kind-${node.node_id}`}
+                        style={[props.style, { justifyContent: 'center' }]}
+                      />
+                    )}
+                    onPress={desktop ? undefined : () => onPickNode(node)}
+                    disabled={desktop}
+                    style={[styles.nodeRow, desktop && { opacity: 0.5 }]}
+                  />
+                );
+              })}
             </View>
           )}
 

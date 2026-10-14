@@ -24,6 +24,7 @@ import {
   NodeInfo,
   nodeErrorMessage,
   removeNode,
+  signOutNode,
   startFactoryReset,
   waitForFactoryReset,
 } from '../../api/nodeApi';
@@ -34,6 +35,9 @@ import { HardwareTab } from './HardwareTab';
 import { NodesStackParamList } from '../../navigation/types';
 import { deleteK2, hasK2 } from '../../services/k2Service';
 import { formatLastSeen } from '../../utils/serverTime';
+import { canSignOutDesktopAgent, isDesktopAgent } from '../../utils/nodeKind';
+import { NodeKindIcon } from '../../components/NodeKindIcon';
+import { useAuth } from '../../auth/AuthContext';
 import KeyboardSafeView from '../../components/KeyboardSafeView';
 
 type Nav = NativeStackNavigationProp<NodesStackParamList>;
@@ -73,6 +77,10 @@ type DeleteStep =
   | { kind: 'queued' }
   | { kind: 'removeConfirm' }
   | { kind: 'removing' }
+  // Desktop agent: sign-out instead of the factory reset (decision 2026-10-14).
+  | { kind: 'signOutConfirm' }
+  | { kind: 'signingOut' }
+  | { kind: 'signedOut' }
   | { kind: 'error'; message: string; title?: string };
 
 // How long the dialog follows the factory-reset task before handing over to
@@ -104,7 +112,8 @@ export const OverviewTab = ({
   const theme = useTheme();
   const navigation = useNavigation<Nav>();
   const [deleteStep, setDeleteStep] = useState<DeleteStep>({ kind: 'closed' });
-  const nodeName = node.room ?? 'The node';
+  const desktop = isDesktopAgent(node);
+  const nodeName = node.room ?? (desktop ? 'This computer' : 'The node');
 
   // Stop polling the reset task if the screen goes away mid-wait.
   const unmountedRef = useRef(false);
@@ -173,6 +182,28 @@ export const OverviewTab = ({
     }
   }, [node.node_id, navigation]);
 
+  // Desktop agent: sign it out. The server revokes it and removes it from the
+  // household; the agent keeps its settings on the computer and never wipes.
+  const handleSignOut = useCallback(async () => {
+    setDeleteStep({ kind: 'signingOut' });
+    try {
+      await signOutNode(node.node_id);
+      // Best-effort: a new sign-in on that computer is a new node with a new key.
+      try {
+        await deleteK2(node.node_id);
+      } catch {}
+      if (unmountedRef.current) return;
+      setDeleteStep({ kind: 'signedOut' });
+    } catch (err) {
+      if (unmountedRef.current) return;
+      setDeleteStep({
+        kind: 'error',
+        title: 'Sign-out failed',
+        message: nodeErrorMessage(err, 'Could not sign this computer out'),
+      });
+    }
+  }, [node.node_id]);
+
   const finishDelete = useCallback(() => {
     setDeleteStep({ kind: 'closed' });
     navigation.navigate('NodeList');
@@ -226,6 +257,25 @@ export const OverviewTab = ({
               Danger Zone
             </Text>
           </View>
+          {desktop ? (
+          <Surface style={[styles.dangerCard, { borderColor: theme.colors.error }]} elevation={0}>
+            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 12 }}>
+              Sign out this computer: it will stop working with Jarvis
+              Automation until someone signs in on it again. Its settings on
+              the computer are kept.
+            </Text>
+            <Button
+              testID="node-signout-button"
+              mode="outlined"
+              icon="logout"
+              textColor={theme.colors.error}
+              style={{ borderColor: theme.colors.error }}
+              onPress={() => setDeleteStep({ kind: 'signOutConfirm' })}
+            >
+              Sign out this computer
+            </Button>
+          </Surface>
+          ) : (
           <Surface style={[styles.dangerCard, { borderColor: theme.colors.error }]} elevation={0}>
             <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 12 }}>
               Factory-resets this node: it wipes itself, leaves your household
@@ -243,6 +293,7 @@ export const OverviewTab = ({
               Delete Node
             </Button>
           </Surface>
+          )}
         </>
       )}
 
@@ -251,7 +302,11 @@ export const OverviewTab = ({
           visible={deleteStep.kind !== 'closed'}
           onDismiss={() => {
             // Block dismiss while a request is in flight.
-            if (deleteStep.kind !== 'running' && deleteStep.kind !== 'removing') {
+            if (
+              deleteStep.kind !== 'running' &&
+              deleteStep.kind !== 'removing' &&
+              deleteStep.kind !== 'signingOut'
+            ) {
               setDeleteStep({ kind: 'closed' });
             }
           }}
@@ -283,6 +338,55 @@ export const OverviewTab = ({
                 >
                   Delete
                 </Button>
+              </View>
+            </>
+          )}
+
+          {deleteStep.kind === 'signOutConfirm' && (
+            <>
+              <Text variant="titleLarge" style={{ fontWeight: '600', marginBottom: 8, color: theme.colors.error }}>
+                Sign out {node.room ?? 'this computer'}?
+              </Text>
+              <Text variant="bodyMedium" style={{ marginBottom: 16 }}>
+                It will stop working with Jarvis Automation until someone signs in on it again,
+                and it leaves your household's device list. Its settings on the computer are kept.
+                {node.online
+                  ? ''
+                  : " It's offline right now, so it finds out the next time it connects."}
+              </Text>
+              <View style={styles.modalActions}>
+                <Button testID="node-signout-cancel" onPress={() => setDeleteStep({ kind: 'closed' })}>Cancel</Button>
+                <Button
+                  testID="node-signout-confirm"
+                  mode="contained"
+                  buttonColor={theme.colors.error}
+                  textColor={theme.colors.onError}
+                  onPress={handleSignOut}
+                >
+                  Sign out
+                </Button>
+              </View>
+            </>
+          )}
+
+          {deleteStep.kind === 'signingOut' && (
+            <View testID="node-signout-progress" style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <ActivityIndicator />
+              <Text variant="bodyMedium" style={{ flex: 1 }}>Signing {nodeName} out…</Text>
+            </View>
+          )}
+
+          {deleteStep.kind === 'signedOut' && (
+            <>
+              <Text variant="titleLarge" style={{ fontWeight: '600', marginBottom: 12 }}>
+                Signed out
+              </Text>
+              <Text variant="bodyMedium" style={{ marginBottom: 24 }}>
+                {nodeName} has been signed out and removed from your household. To use it
+                again, sign in from the Jarvis Automation agent on that computer.
+              </Text>
+              <View style={styles.modalActions}>
+                <Button testID="node-signout-done" mode="contained" onPress={finishDelete}>Done</Button>
               </View>
             </>
           )}
@@ -497,6 +601,7 @@ const NodeDetailScreen = () => {
   const navigation = useNavigation<Nav>();
   const route = useRoute<Route>();
   const theme = useTheme();
+  const { state: authState } = useAuth();
   const { nodeId, initialTab } = route.params;
 
   const [node, setNode] = useState<NodeInfo | null>(null);
@@ -559,11 +664,20 @@ const NodeDetailScreen = () => {
 
   if (!node) return null;
 
+  const desktop = isDesktopAgent(node);
+  // A Pi's Delete needs its K2 on this phone (the factory reset is for whoever
+  // set it up). A desktop agent's sign-out follows cc's rule instead: the
+  // member who paired it, or a household admin.
+  const canDelete = desktop
+    ? canSignOutDesktopAgent(node, authState.user?.id, authState.households ?? [])
+    : hasSettingsAccess === true;
+
   return (
     <KeyboardSafeView style={styles.container}>
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: theme.colors.outlineVariant }]}>
         <IconButton icon="arrow-left" onPress={() => navigation.goBack()} />
+        <NodeKindIcon node={node} testID="node-kind-icon" style={{ marginRight: 8 }} />
         <Text variant="headlineSmall" style={{ fontWeight: 'bold', flex: 1 }}>
           {node.room || 'Node'}
         </Text>
@@ -598,7 +712,7 @@ const NodeDetailScreen = () => {
           contentContainerStyle={styles.scroll}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         >
-          <OverviewTab node={node} canDelete={hasSettingsAccess === true} />
+          <OverviewTab node={node} canDelete={canDelete} />
         </ScrollView>
       )}
 

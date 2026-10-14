@@ -35,6 +35,11 @@ jest.mock('../../src/api/routineApi', () => ({
   runRoutineNow: jest.fn(),
 }));
 jest.mock('../../src/api/smartHomeApi', () => ({ getSmartHomeConfig: jest.fn() }));
+// Kinds for the run-on-node menu's icons (smart-home config carries none).
+const mockListNodes = jest.fn().mockResolvedValue([]);
+jest.mock('../../src/api/nodeApi', () => ({
+  listNodes: (...args: unknown[]) => mockListNodes(...args),
+}));
 
 // Expose the swipe delete action without a real gesture (same pattern as memories).
 jest.mock('react-native-gesture-handler/ReanimatedSwipeable', () => {
@@ -186,3 +191,34 @@ describe('Routines list — flow integration (load, run, delete, create)', () =>
     await findByText('Movie night');
   });
 });
+
+describe('Routines list — run-on-node menu kinds', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (listRoutines as jest.Mock).mockResolvedValue([ROUTINE]);
+  });
+
+  it('shows the robot for a computer and the Raspberry Pi for a Pi', async () => {
+    (getSmartHomeConfig as jest.Mock).mockResolvedValue({
+      nodes: [
+        { node_id: 'n1', room: 'Living Room' },
+        { node_id: 'agent-1', room: 'Office PC' },
+      ],
+      primary_node_id: null,
+    });
+    mockListNodes.mockResolvedValue([
+      { node_id: 'n1', install_mode: 'tarball', node_kind: null },
+      { node_id: 'agent-1', install_mode: 'desktop-agent', node_kind: 'desktop' },
+    ]);
+    const { findByText, getByTestId, findByTestId } = renderScreen();
+    await findByText('Movie night');
+    await waitFor(() => expect(mockListNodes).toHaveBeenCalledWith('hh-1'));
+
+    fireEvent.press(getByTestId('routine-run-r1'));
+
+    const agent = await findByTestId('routine-run-node-kind-agent-1');
+    expect(agent.props.accessibilityLabel).toBe('Computer');
+    expect(getByTestId('routine-run-node-kind-n1').props.accessibilityLabel).toBe('Raspberry Pi');
+  });
+});
+

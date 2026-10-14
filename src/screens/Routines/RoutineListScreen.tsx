@@ -24,6 +24,8 @@ import { useAuth } from '../../auth/AuthContext';
 import { RoutinesStackParamList } from '../../navigation/types';
 import { fabListPaddingBottom, fabStyle } from '../../theme/fab';
 import type { Routine, RoutineSchedule } from '../../types/Routine';
+import { NodeKindIcon } from '../../components/NodeKindIcon';
+import { useNodeKinds } from '../../hooks/useNodeKinds';
 
 type Nav = NativeStackNavigationProp<RoutinesStackParamList>;
 type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
@@ -85,6 +87,7 @@ const RoutineListScreen = () => {
   });
   const nodes = smartHomeConfig?.nodes ?? [];
   const primaryNodeId = smartHomeConfig?.primary_node_id || null;
+  const nodeKinds = useNodeKinds(householdId, nodes.map((n) => n.node_id));
 
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
   const [runMenuOpen, setRunMenuOpen] = useState<string | null>(null);
@@ -203,7 +206,14 @@ const RoutineListScreen = () => {
                   {nodes.map((n) => (
                     <Menu.Item key={n.node_id}
                       title={n.room ? `${n.room}` : n.node_id}
-                      leadingIcon="play"
+                      leadingIcon={({ size, color }) => (
+                        <NodeKindIcon
+                          node={nodeKinds[n.node_id]}
+                          size={size}
+                          color={color}
+                          testID={`routine-run-node-kind-${n.node_id}`}
+                        />
+                      )}
                       onPress={() => runOnNode(item, n.node_id)} />
                   ))}
                 </Menu>

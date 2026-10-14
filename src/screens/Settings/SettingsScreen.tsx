@@ -48,6 +48,8 @@ import { clearUserData } from '../../services/clearUserData';
 import { getVoiceProfileStatus } from '../../api/voiceProfileApi';
 import DisplayNameEditor from '../../components/DisplayNameEditor';
 import KeyboardSafeView from '../../components/KeyboardSafeView';
+import { NodeKindIcon } from '../../components/NodeKindIcon';
+import { useNodeKinds } from '../../hooks/useNodeKinds';
 
 const THEME_BUTTONS = [
   { value: 'light', label: 'Light', icon: 'white-balance-sunny' },
@@ -187,6 +189,10 @@ const SettingsScreen = () => {
   const [hasVoiceProfile, setHasVoiceProfile] = useState<boolean | null>(null);
 
   const householdId = authState.activeHouseholdId;
+  const nodeKinds = useNodeKinds(
+    householdId,
+    smartHomeConfig?.nodes.map((n) => n.node_id) ?? [],
+  );
 
   // Load settings
   useEffect(() => {
@@ -726,7 +732,13 @@ const SettingsScreen = () => {
                                 size={22}
                                 color={isSelected ? theme.colors.primary : theme.colors.onSurfaceVariant}
                               />
-                              <Text variant="bodyMedium" style={{ flex: 1, marginLeft: 12, fontWeight: '500' }}>
+                              <NodeKindIcon
+                                node={nodeKinds[node.node_id]}
+                                size={20}
+                                testID={`primary-node-kind-${node.node_id}`}
+                                style={{ marginLeft: 12 }}
+                              />
+                              <Text variant="bodyMedium" style={{ flex: 1, marginLeft: 8, fontWeight: '500' }}>
                                 {label}
                               </Text>
                             </View>

@@ -14,6 +14,9 @@ import { Button, Menu, Text, useTheme } from 'react-native-paper';
 import { getSmartHomeConfig, NodeOption } from '../api/smartHomeApi';
 import { LAST_NODE_KEY } from '../config/storageKeys';
 import { usePendingNode } from '../contexts/PendingNodeContext';
+import { useNodeKinds } from '../hooks/useNodeKinds';
+import { nodeKindIcon } from '../utils/nodeKind';
+import { NodeKindIcon } from './NodeKindIcon';
 
 /** While a freshly-provisioned node is booting, re-check the node list this often. */
 const PENDING_POLL_MS = 4000;
@@ -181,6 +184,7 @@ const NodeSelector = forwardRef<NodeSelectorHandle, NodeSelectorProps>(
       return () => clearInterval(id);
     }, [householdId, waitingForNewNode, loadConfig]);
 
+    const kinds = useNodeKinds(householdId, nodes.map((n) => n.node_id));
     const selectedNode = nodes.find((n) => n.node_id === selectedNodeId);
     const selectedOffline = selectedNode && !selectedNode.online;
 
@@ -223,7 +227,13 @@ const NodeSelector = forwardRef<NodeSelectorHandle, NodeSelectorProps>(
             <Button
               mode="outlined"
               compact
-              icon={selectedOffline ? 'access-point-off' : 'access-point'}
+              icon={
+                selectedOffline
+                  ? 'access-point-off'
+                  : selectedNode
+                    ? nodeKindIcon(kinds[selectedNode.node_id])
+                    : 'access-point'
+              }
               onPress={() => setMenuVisible(true)}
               style={styles.button}
               labelStyle={{ fontSize: 13 }}
@@ -237,7 +247,18 @@ const NodeSelector = forwardRef<NodeSelectorHandle, NodeSelectorProps>(
             <Menu.Item
               key={node.node_id}
               title={`${node.room ?? node.node_id.slice(0, 8)}${node.online ? '' : ' (offline)'}`}
-              leadingIcon={node.node_id === selectedNodeId ? 'check' : node.online ? 'circle-small' : 'circle-off-outline'}
+              leadingIcon={
+                node.node_id === selectedNodeId
+                  ? 'check'
+                  : ({ size, color }) => (
+                      <NodeKindIcon
+                        node={kinds[node.node_id]}
+                        size={size}
+                        color={color}
+                        testID={`node-selector-kind-${node.node_id}`}
+                      />
+                    )
+              }
               onPress={() => {
                 onSelectNode(node.node_id);
                 setMenuVisible(false);

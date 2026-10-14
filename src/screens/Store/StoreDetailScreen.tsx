@@ -42,6 +42,9 @@ interface NodeInfo {
   node_id: string;
   room: string | null;
   household_id: string | null;
+  // Passed through to the node picker for its robot / Raspberry Pi icon.
+  node_kind?: string | null;
+  install_mode?: string | null;
 }
 
 const DANGER_LABELS: Record<number, string> = {
@@ -62,7 +65,7 @@ const DANGER_COLORS: Record<number, string> = {
 
 const COMPONENT_ICONS: Record<string, string> = {
   command: 'console-line',
-  agent: 'robot',
+  agent: 'timer-cog-outline',
   device_protocol: 'access-point',
   device_manager: 'devices',
   prompt_provider: 'brain',
