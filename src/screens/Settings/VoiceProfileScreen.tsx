@@ -509,8 +509,9 @@ const VoiceProfileScreen = () => {
           ) : (
             <View>
               {nodes.map((node) => {
-                // The desktop agent has no enroll_voice / verify_voice handler
-                // yet, so a pick would wait out the 60 s poll for nothing.
+                // A computer needs no enrollment (Jarvis uses the account
+                // signed in to the agent), and the agent has no enroll_voice /
+                // verify_voice handler, so a pick would wait out the 60 s poll.
                 const desktop = isDesktopAgent(node);
                 return (
                   <List.Item
@@ -518,7 +519,7 @@ const VoiceProfileScreen = () => {
                     title={node.room || 'Unnamed node'}
                     description={
                       desktop
-                        ? "Computers can't record voice samples yet"
+                        ? 'Not needed: Jarvis uses the account signed in to the agent'
                         : node.user || node.node_id.substring(0, 8)
                     }
                     left={(props) => (

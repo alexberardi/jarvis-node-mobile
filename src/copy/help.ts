@@ -79,8 +79,8 @@ export const helpCopy = {
     tabIntro: 'Physical settings: mic, speakers, LEDs, Bluetooth. Hidden for Docker-hosted nodes.',
     desktopTabIntro:
       'This computer runs the Jarvis Automation agent. Its microphone, speakers and Bluetooth are set up on the computer itself.',
-    desktopEnrollNote:
-      "Your voice profile is shared by your household's devices. Samples are recorded on a Raspberry Pi node; this computer can't record them yet.",
+    desktopVoiceIdentity:
+      "Jarvis knows it's you on this computer: it uses the account signed in to the agent",
     voiceMode: 'How chatty Jarvis is by default. "Brief" answers in a sentence; "conversational" adds context.',
     adapterHash: 'Identifier for the language-model fine-tune this node uses. Useful when reporting bugs.',
     wakeAckAudio: 'The "On it" sound after the wake word. Turn off if you find it slows down quick commands.',

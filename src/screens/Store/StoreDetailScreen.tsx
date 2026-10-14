@@ -65,7 +65,7 @@ const DANGER_COLORS: Record<number, string> = {
 
 const COMPONENT_ICONS: Record<string, string> = {
   command: 'console-line',
-  agent: 'robot',
+  agent: 'timer-cog-outline',
   device_protocol: 'access-point',
   device_manager: 'devices',
   prompt_provider: 'brain',

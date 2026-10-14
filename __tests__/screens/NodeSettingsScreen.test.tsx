@@ -835,3 +835,119 @@ describe('NodeSettingsScreen — desktop agents', () => {
   });
 });
 
+describe('NodeSettingsScreen — Sync of a mixed service', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('sends shared secrets without a user and personal secrets tagged with the user, as two pushes', async () => {
+    mockListNodes.mockResolvedValue([
+      { node_id: 'node-abc', room: 'kitchen', install_mode: 'tarball' },
+      { node_id: 'pi-2', room: 'Bedroom', install_mode: 'tarball' },
+    ]);
+    mockEncryptAndPushConfig.mockResolvedValue(undefined);
+    const alertSpy = jest.spyOn(require('react-native').Alert, 'alert').mockImplementation(() => {});
+    const snapshot = {
+      ...snapshotWithAgents(),
+      agents: [],
+      commands: [
+        {
+          command_name: 'get_calendar',
+          description: 'Calendar',
+          associated_service: 'Calendar',
+          enabled: true,
+          secrets: [
+            { key: 'CAL_URL', scope: 'integration', value_type: 'string', is_sensitive: false,
+              required: true, is_set: true, value: 'https://cal', description: 'Server' },
+            { key: 'CAL_PASSWORD', scope: 'user', value_type: 'string', is_sensitive: false,
+              required: true, is_set: true, value: 'pw', description: 'Password' },
+          ],
+        },
+      ],
+    };
+    const view = await renderLoaded(snapshot as any);
+
+    await act(async () => {
+      fireEvent.press(view.getByText('Services'));
+    });
+    await view.findByText('Calendar');
+    await act(async () => {
+      fireEvent.press(view.UNSAFE_getAllByProps({ source: 'dots-vertical' })[0]);
+    });
+    await act(async () => {
+      fireEvent.press(await view.findByText('Sync to other nodes'));
+    });
+    await view.findByTestId('sync-node-kind-pi-2');
+    await act(async () => {
+      fireEvent.press(view.getByText('Next'));
+    });
+    await act(async () => {
+      fireEvent.press(await view.findByText('Sync'));
+    });
+
+    await waitFor(() => expect(mockEncryptAndPushConfig).toHaveBeenCalledTimes(2));
+    expect(mockEncryptAndPushConfig).toHaveBeenNthCalledWith(1, 'pi-2', 'settings:secrets', {
+      CAL_URL: 'https://cal',
+    });
+    expect(mockEncryptAndPushConfig).toHaveBeenNthCalledWith(2, 'pi-2', 'settings:secrets', {
+      CAL_PASSWORD: 'pw',
+      __user_id__: '7',
+    });
+    expect(alertSpy).toHaveBeenCalledWith('Sync Complete', 'Settings synced to 1 node.');
+    alertSpy.mockRestore();
+  });
+
+  it('applying preset defaults splits shared and personal keys the same way', async () => {
+    mockEncryptAndPushConfig.mockResolvedValue(undefined);
+    const alertSpy = jest.spyOn(require('react-native').Alert, 'alert').mockImplementation(() => {});
+    const snapshot = {
+      ...snapshotWithAgents(),
+      agents: [],
+      commands: [
+        {
+          command_name: 'get_mail',
+          description: 'Mail',
+          associated_service: 'Mail',
+          enabled: true,
+          secrets: [
+            { key: 'MAIL_PROVIDER', friendly_name: 'Provider', scope: 'user', value_type: 'string',
+              is_sensitive: false, required: true, is_set: true, value: 'gmail', description: 'Provider',
+              enum_values: ['gmail'],
+              presets: { gmail: { MAIL_HOST: 'imap.gmail.com', MAIL_USER_FOLDER: 'INBOX' } } },
+            { key: 'MAIL_HOST', scope: 'integration', value_type: 'string', is_sensitive: false,
+              required: true, is_set: false, description: 'Host' },
+            { key: 'MAIL_USER_FOLDER', scope: 'user', value_type: 'string', is_sensitive: false,
+              required: true, is_set: false, description: 'Folder' },
+          ],
+        },
+      ],
+    };
+    const view = await renderLoaded(snapshot as any);
+    await act(async () => {
+      fireEvent.press(view.getByText('Services'));
+    });
+    await act(async () => {
+      fireEvent.press(await view.findByText('Provider'));
+    });
+    await act(async () => {
+      fireEvent.press(view.getByText('Save'));
+    });
+    await waitFor(() =>
+      expect(alertSpy).toHaveBeenCalledWith('Apply Defaults?', expect.any(String), expect.any(Array)),
+    );
+    mockEncryptAndPushConfig.mockClear();
+    const buttons = alertSpy.mock.calls.find((c) => c[0] === 'Apply Defaults?')![2] as any[];
+    await act(async () => {
+      await buttons.find((b) => b.text === 'Apply').onPress();
+    });
+
+    expect(mockEncryptAndPushConfig).toHaveBeenCalledTimes(2);
+    expect(mockEncryptAndPushConfig).toHaveBeenNthCalledWith(1, 'node-abc', 'settings:secrets', {
+      MAIL_HOST: 'imap.gmail.com',
+    });
+    expect(mockEncryptAndPushConfig).toHaveBeenNthCalledWith(2, 'node-abc', 'settings:secrets', {
+      MAIL_USER_FOLDER: 'INBOX',
+      __user_id__: '7',
+    });
+    alertSpy.mockRestore();
+  });
+});
+

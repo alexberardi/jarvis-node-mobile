@@ -121,7 +121,7 @@ describe('VoiceProfileScreen — node picker kinds', () => {
     const pi = await findByTestId('voice-target-kind-pi-1');
     expect(pi.props.accessibilityLabel).toBe('Raspberry Pi');
     expect(getByTestId('voice-target-kind-agent-1').props.accessibilityLabel).toBe('Computer');
-    expect(getByText("Computers can't record voice samples yet")).toBeTruthy();
+    expect(getByText('Not needed: Jarvis uses the account signed in to the agent')).toBeTruthy();
 
     // The agent has no enroll_voice handler: picking it must not start a
     // 60-second wait for a recording that never comes.

@@ -64,7 +64,7 @@ const MainTabNavigator = () => {
         options={{
           tabBarLabel: 'Routines',
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="robot" color={color} size={size} />
+            <MaterialCommunityIcons name="playlist-play" color={color} size={size} />
           ),
         }}
       />

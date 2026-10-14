@@ -10,7 +10,9 @@
  * - Maintenance: daily restart + RSS ceiling.
  *
  * A desktop agent (the Jarvis Automation agent on a computer) has none of the
- * Pi hardware: it shows only Voice Recognition and Device Info.
+ * Pi hardware: it shows only Voice Recognition and Device Info. It needs no
+ * voice enrollment either: on a computer Jarvis treats the account signed in
+ * to the agent as the speaker, as mobile chat does with the logged-in user.
  */
 
 import { useNavigation } from '@react-navigation/native';
@@ -57,7 +59,8 @@ export const HardwareTab = ({ nodeId, node }: Props) => {
   const desktop = isDesktopAgent(node);
 
   useEffect(() => {
-    checkVoiceProfile();
+    // A computer needs no voice profile: Jarvis uses the agent's account.
+    if (!desktop) checkVoiceProfile();
   }, []);
 
   const checkVoiceProfile = useCallback(async () => {
@@ -90,29 +93,29 @@ export const HardwareTab = ({ nodeId, node }: Props) => {
           left={(props) => <Icon {...props} source="account-voice" size={24} />}
         />
         <Card.Content>
-          <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
-            {hasVoiceProfile === null
-              ? 'Checking enrollment status...'
-              : hasVoiceProfile
-                ? 'Voice profile enrolled. Jarvis can identify you.'
-                : 'No voice profile yet. Enroll so Jarvis can identify you.'}
-          </Text>
-          <Button
-            testID="voice-recognition-enroll-btn"
-            mode={hasVoiceProfile ? 'outlined' : 'contained'}
-            icon={hasVoiceProfile ? 'account-check' : 'account-plus'}
-            onPress={() => navigation.navigate('VoiceProfile')}
-            style={{ marginTop: 12 }}
-          >
-            {hasVoiceProfile ? 'Manage Profile' : 'Enroll Voice'}
-          </Button>
-          {desktop && (
-            <Text
-              variant="bodySmall"
-              style={{ color: theme.colors.onSurfaceVariant, marginTop: 8 }}
-            >
-              {helpCopy.hardware.desktopEnrollNote}
+          {desktop ? (
+            <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
+              {helpCopy.hardware.desktopVoiceIdentity}
             </Text>
+          ) : (
+            <>
+              <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
+                {hasVoiceProfile === null
+                  ? 'Checking enrollment status...'
+                  : hasVoiceProfile
+                    ? 'Voice profile enrolled. Jarvis can identify you.'
+                    : 'No voice profile yet. Enroll so Jarvis can identify you.'}
+              </Text>
+              <Button
+                testID="voice-recognition-enroll-btn"
+                mode={hasVoiceProfile ? 'outlined' : 'contained'}
+                icon={hasVoiceProfile ? 'account-check' : 'account-plus'}
+                onPress={() => navigation.navigate('VoiceProfile')}
+                style={{ marginTop: 12 }}
+              >
+                {hasVoiceProfile ? 'Manage Profile' : 'Enroll Voice'}
+              </Button>
+            </>
           )}
         </Card.Content>
       </Card>

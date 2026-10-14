@@ -147,7 +147,7 @@ const MemoriesListScreen = () => {
               {isAgent && (
                 <Chip
                   compact
-                  icon="robot"
+                  icon="timer-cog-outline"
                   textStyle={styles.chipText}
                   style={[styles.chip, { backgroundColor: CHIP_FILLS.sky }]}
                 >
