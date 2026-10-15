@@ -27,6 +27,7 @@ import { useAuth } from '../../auth/AuthContext';
 import type { DeviceListItem, ExternalDeviceItem, Room } from '../../types/SmartHome';
 import type { DevicesStackParamList } from '../../navigation/types';
 import { pageTitleStyle } from '../../theme';
+import { nodeDisplayName } from '../../utils/nodeKind';
 
 type Nav = NativeStackNavigationProp<DevicesStackParamList>;
 
@@ -252,7 +253,7 @@ const DevicesScreen = () => {
       const targetNode = nodes.find((n) => n.node_id === primaryNodeId) ?? nodes[0];
       navigation.navigate('DeviceDiscovery', { nodeId: targetNode.node_id });
       if (nodes.length > 1) {
-        setSnackbar(`Scanning with node: ${targetNode.room || targetNode.node_id}`);
+        setSnackbar(`Scanning with node: ${nodeDisplayName(targetNode, targetNode.node_id)}`);
       }
     } catch {
       setSnackbar('Failed to fetch nodes');

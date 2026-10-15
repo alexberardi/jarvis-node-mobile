@@ -15,7 +15,7 @@ import { getSmartHomeConfig, NodeOption } from '../api/smartHomeApi';
 import { LAST_NODE_KEY } from '../config/storageKeys';
 import { usePendingNode } from '../contexts/PendingNodeContext';
 import { useNodeKinds } from '../hooks/useNodeKinds';
-import { nodeKindIcon } from '../utils/nodeKind';
+import { nodeDisplayName, nodeKindIcon, withKnownKind } from '../utils/nodeKind';
 import { NodeKindIcon } from './NodeKindIcon';
 
 /** While a freshly-provisioned node is booting, re-check the node list this often. */
@@ -197,8 +197,9 @@ const NodeSelector = forwardRef<NodeSelectorHandle, NodeSelectorProps>(
     useEffect(() => {
       onSelectedNodeReadyChangeRef.current?.(selectedNodeReady);
     }, [selectedNodeReady]);
+    const nodeLabel = (n: NodeOption) => nodeDisplayName(withKnownKind(n, kinds[n.node_id]));
     const label = selectedNode
-      ? `${selectedNode.room ?? selectedNodeId?.slice(0, 8)}${selectedOffline ? ' (offline)' : ''}`
+      ? `${nodeLabel(selectedNode)}${selectedOffline ? ' (offline)' : ''}`
       : selectedNodeId?.slice(0, 8) ?? 'Select node';
 
     const pendingIndicator = (
@@ -246,7 +247,7 @@ const NodeSelector = forwardRef<NodeSelectorHandle, NodeSelectorProps>(
           {nodes.map((node) => (
             <Menu.Item
               key={node.node_id}
-              title={`${node.room ?? node.node_id.slice(0, 8)}${node.online ? '' : ' (offline)'}`}
+              title={`${nodeLabel(node)}${node.online ? '' : ' (offline)'}`}
               leadingIcon={
                 node.node_id === selectedNodeId
                   ? 'check'

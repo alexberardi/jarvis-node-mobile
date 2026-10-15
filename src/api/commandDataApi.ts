@@ -56,6 +56,8 @@ export interface NodeSummary {
   node_id: string;
   household_id: string;
   room: string | null;
+  /** Not sent by the server; filled from the household node list (useNodeKinds). */
+  name?: string | null;
 }
 
 export interface CommandSummary {

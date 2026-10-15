@@ -24,6 +24,47 @@ export const nodeKindIcon = (node: NodeKindFields | null | undefined): string =>
 export const nodeKindLabel = (node: NodeKindFields | null | undefined): string =>
   isDesktopAgent(node) ? 'Computer' : 'Raspberry Pi';
 
+export interface NodeNameFields extends NodeKindFields {
+  node_id: string;
+  room?: string | null;
+  /**
+   * The node's registered name (jarvisd 2026-10-15): a desktop agent's
+   * computer name. Null when registered without one; missing on older servers.
+   */
+  name?: string | null;
+}
+
+/**
+ * The label for a node in lists and pickers. Every desktop agent's room is
+ * "desktop", so a computer is named by its registered name, then its room,
+ * then `fallback` (the short node id by default). A Pi keeps its room label
+ * even when it has a name (jarvis-server
+ * docs/decisions/2026-10-15-computers-labelled-by-name.md; the admin web app's
+ * `nodeLabel` follows the same rule).
+ */
+export const nodeDisplayName = (node: NodeNameFields, fallback?: string): string => {
+  const name = isDesktopAgent(node) ? node.name?.trim() : '';
+  if (name) return name;
+  const room = node.room?.trim();
+  if (room) return room;
+  return fallback ?? node.node_id.slice(0, 8);
+};
+
+/**
+ * A node from an API that doesn't carry kind or name (the command-data node
+ * list, older servers' smart-home options), filled in from the household node
+ * list's entry (`useNodeKinds`). Fields the node has (null included) win.
+ */
+export const withKnownKind = <T extends NodeNameFields>(
+  node: T,
+  known: (NodeKindFields & { name?: string | null }) | null | undefined,
+): T => ({
+  ...node,
+  node_kind: node.node_kind !== undefined ? node.node_kind : known?.node_kind,
+  install_mode: node.install_mode !== undefined ? node.install_mode : known?.install_mode,
+  name: node.name !== undefined ? node.name : known?.name,
+});
+
 /**
  * Pis first, computers after, each group in its original order. The primary
  * node finds smart-home devices and runs routines that have no node of their

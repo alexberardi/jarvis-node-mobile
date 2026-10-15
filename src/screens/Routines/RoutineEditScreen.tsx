@@ -25,7 +25,7 @@ import {
   useTheme,
 } from 'react-native-paper';
 
-import { getSmartHomeConfig } from '../../api/smartHomeApi';
+import { getSmartHomeConfig, type NodeOption } from '../../api/smartHomeApi';
 import {
   createRoutine,
   deleteRoutine,
@@ -51,6 +51,7 @@ import { ALL_DAYS, INTERVAL_PRESETS, WEEKDAYS, WEEKENDS } from '../../types/Rout
 import KeyboardSafeView from '../../components/KeyboardSafeView';
 import { NodeKindIcon } from '../../components/NodeKindIcon';
 import { useNodeKinds } from '../../hooks/useNodeKinds';
+import { nodeDisplayName, withKnownKind } from '../../utils/nodeKind';
 
 type Nav = NativeStackNavigationProp<RoutinesStackParamList>;
 type Route = RouteProp<RoutinesStackParamList, 'RoutineEdit'>;
@@ -522,9 +523,13 @@ const RoutineEditScreen = () => {
   };
 
   const [intervalMenuVisible, setIntervalMenuVisible] = useState(false);
+  // A node's name in the pickers: a computer's name, else its room (nodeDisplayName).
+  const nodeLabel = (n: NodeOption): string => nodeDisplayName(withKnownKind(n, nodeKinds[n.node_id]), '');
+  const targetNode = nodes.find((n) => n.node_id === targetNodeId);
+  const catalogNode = nodes.find((n) => n.node_id === catalogNodeId);
   const targetNodeLabel =
-    nodes.find((n) => n.node_id === targetNodeId)?.room
-      ? `${nodes.find((n) => n.node_id === targetNodeId)?.room} (${targetNodeId})`
+    targetNode && nodeLabel(targetNode)
+      ? `${nodeLabel(targetNode)} (${targetNodeId})`
       : targetNodeId || 'Select node…';
   const dayPreset = dayPresetFor(cronDays);
 
@@ -587,7 +592,7 @@ const RoutineEditScreen = () => {
                   <Button mode="outlined" compact icon="cellphone-link" onPress={() => setCatalogMenuVisible(true)} labelStyle={{ fontSize: 12 }}>
                     {commandsLoading
                       ? 'Loading…'
-                      : (nodes.find((n) => n.node_id === catalogNodeId)?.room || 'Select node')}
+                      : (catalogNode && nodeLabel(catalogNode)) || 'Select node'}
                   </Button>
                 }>
                 {nodes.map((n) => (
@@ -595,7 +600,7 @@ const RoutineEditScreen = () => {
                     leadingIcon={({ size, color }) => (
                       <NodeKindIcon node={nodeKinds[n.node_id]} size={size} color={color} />
                     )}
-                    title={`${n.room || n.node_id}${n.online ? '' : ' (offline)'}`}
+                    title={`${nodeLabel(n) || n.node_id}${n.online ? '' : ' (offline)'}`}
                     onPress={() => { setCatalogNodeId(n.node_id); setCatalogMenuVisible(false); }} />
                 ))}
               </Menu>
@@ -725,7 +730,7 @@ const RoutineEditScreen = () => {
                   }>
                   {nodes.map((n) => (
                     <Menu.Item key={n.node_id}
-                      title={n.room ? `${n.room} (${n.node_id})` : n.node_id}
+                      title={nodeLabel(n) ? `${nodeLabel(n)} (${n.node_id})` : n.node_id}
                       onPress={() => { setTargetNodeId(n.node_id); setNodeMenuVisible(false); }} />
                   ))}
                 </Menu>

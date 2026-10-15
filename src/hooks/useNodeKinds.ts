@@ -3,10 +3,10 @@ import { useEffect, useRef, useState } from 'react';
 import { listNodes } from '../api/nodeApi';
 import type { NodeKindFields } from '../utils/nodeKind';
 
-export type NodeKindMap = Record<string, NodeKindFields>;
+export type NodeKindMap = Record<string, NodeKindFields & { name?: string | null }>;
 
 /**
- * Kind fields (node_kind, install_mode) for nodes listed by an API that
+ * Kind fields (node_kind, install_mode) and the registered name for nodes listed by an API that
  * doesn't carry them — the chat node selector's smart-home config and the
  * command-data node list. Looked up from the household's node list, again
  * only when an id shows up that it hasn't seen. Best effort: on a failure
@@ -32,7 +32,7 @@ export const useNodeKinds = (
         if (cancelled || !Array.isArray(nodes)) return;
         const next: NodeKindMap = {};
         for (const n of nodes) {
-          next[n.node_id] = { node_kind: n.node_kind, install_mode: n.install_mode };
+          next[n.node_id] = { node_kind: n.node_kind, install_mode: n.install_mode, name: n.name };
         }
         setKinds(next);
       })

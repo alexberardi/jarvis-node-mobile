@@ -110,6 +110,21 @@ describe('NodeListScreen', () => {
     });
   });
 
+  it('names a computer by its registered name and a Pi by its room', async () => {
+    mockListNodes.mockResolvedValue([
+      { ...sampleNodes[0], name: 'pi-zero' },
+      { ...sampleNodes[0], node_id: 'agent-1', room: 'desktop', node_kind: 'desktop', name: 'omarchy' },
+    ]);
+
+    const { getByText, queryByText } = render(<NodeListScreen />, { wrapper });
+
+    await waitFor(() => {
+      expect(getByText('Kitchen')).toBeTruthy();
+      expect(getByText('omarchy')).toBeTruthy();
+    });
+    expect(queryByText('pi-zero')).toBeNull();
+  });
+
   it('should show online status for online nodes', async () => {
     mockListNodes.mockResolvedValue(sampleNodes);
 

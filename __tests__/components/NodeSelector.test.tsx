@@ -327,5 +327,30 @@ describe('NodeSelector', () => {
     // The selected row keeps its check mark instead.
     expect(queryByTestId('node-selector-kind-node-1')).toBeNull();
   });
-});
 
+  it('labels computers by their name and Pis by room', async () => {
+    mockedGetConfig.mockResolvedValue(
+      config([
+        { node_id: 'node-1', room: 'Kitchen', online: true, last_seen: null, node_kind: null, name: 'pi-zero' },
+        // A server that sends the name with the option.
+        { node_id: 'agent-1', room: 'desktop', online: true, last_seen: null, node_kind: 'desktop', name: 'omarchy' },
+        // An older server: kind and name come from the household node list.
+        { node_id: 'agent-2', room: 'desktop', online: false, last_seen: null },
+      ], 'agent-1'),
+    );
+    mockListNodes.mockResolvedValue([
+      { node_id: 'node-1', node_kind: null, install_mode: 'tarball', name: 'pi-zero' },
+      { node_id: 'agent-1', node_kind: 'desktop', install_mode: 'desktop-agent', name: 'omarchy' },
+      { node_id: 'agent-2', node_kind: 'desktop', install_mode: 'desktop-agent', name: 'macbook' },
+    ]);
+
+    const { findByText, queryByText } = render(
+      <NodeSelector householdId="hh-1" selectedNodeId="agent-1" onSelectNode={jest.fn()} />,
+      { wrapper },
+    );
+    fireEvent.press(await findByText('omarchy'));
+    expect(await findByText('macbook (offline)')).toBeTruthy();
+    expect(await findByText('Kitchen')).toBeTruthy();
+    expect(queryByText('pi-zero')).toBeNull();
+  });
+});

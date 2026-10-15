@@ -14,7 +14,7 @@ import { listNodes, NodeInfo } from '../../api/nodeApi';
 import { useAuth } from '../../auth/AuthContext';
 import { NodesStackParamList } from '../../navigation/types';
 import { formatLastSeen } from '../../utils/serverTime';
-import { isDesktopAgent } from '../../utils/nodeKind';
+import { isDesktopAgent, nodeDisplayName } from '../../utils/nodeKind';
 import { NodeKindIcon } from '../../components/NodeKindIcon';
 import { FAB_OFFSET, FAB_SIZE, fabListPaddingBottom } from '../../theme/fab';
 
@@ -69,7 +69,7 @@ const NodeListScreen = () => {
             backgroundColor: item.online ? '#4CAF50' : theme.colors.outline,
           }} />
           <NodeKindIcon node={item} size={20} testID={`node-kind-icon-${item.node_id}`} />
-          <Text variant="titleMedium">{item.room || item.node_id}</Text>
+          <Text variant="titleMedium">{nodeDisplayName(item, item.node_id)}</Text>
         </View>
         <Text
           variant="bodySmall"

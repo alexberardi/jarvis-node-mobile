@@ -15,6 +15,7 @@ import {
 
 import { listNodes, NodeInfo } from '../../api/nodeApi';
 import { NodeKindIcon } from '../../components/NodeKindIcon';
+import { nodeDisplayName } from '../../utils/nodeKind';
 import { isPantryDisabledError } from '../../api/householdSettingsApi';
 import { requestTestInstall } from '../../api/testInstallApi';
 import { useAuth } from '../../auth/AuthContext';
@@ -77,7 +78,7 @@ const TestInstallScreen = () => {
           {
             requestId: result.id,
             nodeId: selectedNodeId,
-            nodeName: node?.room || selectedNodeId.slice(0, 8),
+            nodeName: node ? nodeDisplayName(node) : selectedNodeId.slice(0, 8),
           },
         ]),
         packageName: result.package_name,
@@ -173,7 +174,7 @@ const TestInstallScreen = () => {
                           testID={`test-install-node-kind-${node.node_id}`}
                         />
                         <Text variant="bodyMedium" style={{ fontWeight: '500' }}>
-                          {node.room || node.node_id.slice(0, 8)}
+                          {nodeDisplayName(node)}
                         </Text>
                       </View>
                       {selected && (

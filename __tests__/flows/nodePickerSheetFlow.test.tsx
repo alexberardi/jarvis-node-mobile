@@ -226,3 +226,37 @@ describe('NodePicker sheet — node kind icons', () => {
   });
 });
 
+describe('NodePicker sheet — node names', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    installMock.mockImplementation((nodeId: string) =>
+      Promise.resolve({ id: `req-${nodeId}`, status: 'pending', created_at: 'now' }),
+    );
+  });
+
+  // Every desktop agent's room is "desktop": computers are told apart by name.
+  it('labels computers by name and Pis by room, and passes the label to InstallProgress', async () => {
+    const params = {
+      ...baseParams(),
+      nodes: JSON.stringify([
+        { node_id: 'kitchen-aaaaaaaa', room: 'Kitchen', name: 'pi-zero', install_mode: 'tarball' },
+        { node_id: 'agent-1', room: 'desktop', name: 'omarchy', node_kind: 'desktop' },
+        { node_id: 'agent-2', room: 'desktop', name: 'macbook', node_kind: 'desktop' },
+      ]),
+      installedVersions: JSON.stringify({}),
+      installedNodeIds: JSON.stringify([]),
+    };
+    const { getByText, queryByText, getByTestId } = renderScreen(params);
+    expect(getByText('Kitchen')).toBeTruthy();
+    expect(getByText('omarchy')).toBeTruthy();
+    expect(getByText('macbook')).toBeTruthy();
+    expect(queryByText('pi-zero')).toBeNull();
+
+    await act(async () => {
+      fireEvent.press(getByTestId('node-picker-install-button'));
+    });
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledTimes(1));
+    const installs = JSON.parse(mockReplace.mock.calls[0][1].installs);
+    expect(installs.map((i: { nodeName: string }) => i.nodeName).sort()).toEqual(['Kitchen', 'macbook', 'omarchy']);
+  });
+});

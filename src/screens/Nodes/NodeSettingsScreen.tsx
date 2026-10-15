@@ -31,7 +31,7 @@ import type { K2KeyPair } from '../../services/k2Service';
 import { useAuth } from '../../auth/AuthContext';
 import { NodeKindIcon } from '../../components/NodeKindIcon';
 import { useNodeKinds } from '../../hooks/useNodeKinds';
-import { isDesktopAgent } from '../../utils/nodeKind';
+import { isDesktopAgent, nodeDisplayName } from '../../utils/nodeKind';
 import { storedDataErrorMessage } from '../../utils/storedDataError';
 import { buildSyncPushes } from '../../services/syncPushes';
 import { NodesStackParamList, RootStackParamList } from '../../navigation/types';
@@ -1971,7 +1971,7 @@ const NodeSettingsScreen: React.FC = () => {
                     style={{ marginRight: 8 }}
                   />
                   <View style={{ flex: 1 }}>
-                    <Text variant="bodyMedium">{n.room || n.node_id.slice(0, 8)}</Text>
+                    <Text variant="bodyMedium">{nodeDisplayName(n)}</Text>
                     {!n.hasK2 && (
                       <Text variant="bodySmall" style={{ color: theme.colors.error }}>
                         K2 not imported — import key first

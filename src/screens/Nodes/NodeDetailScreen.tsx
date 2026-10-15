@@ -35,7 +35,7 @@ import { HardwareTab } from './HardwareTab';
 import { NodesStackParamList } from '../../navigation/types';
 import { deleteK2, hasK2 } from '../../services/k2Service';
 import { formatLastSeen } from '../../utils/serverTime';
-import { canSignOutDesktopAgent, isDesktopAgent } from '../../utils/nodeKind';
+import { canSignOutDesktopAgent, isDesktopAgent, nodeDisplayName } from '../../utils/nodeKind';
 import { NodeKindIcon } from '../../components/NodeKindIcon';
 import { useAuth } from '../../auth/AuthContext';
 import { useSpeaksAs } from '../../hooks/useSpeaksAs';
@@ -118,7 +118,7 @@ export const OverviewTab = ({
   const navigation = useNavigation<Nav>();
   const [deleteStep, setDeleteStep] = useState<DeleteStep>({ kind: 'closed' });
   const desktop = isDesktopAgent(node);
-  const nodeName = node.room ?? (desktop ? 'This computer' : 'The node');
+  const nodeName = nodeDisplayName(node, desktop ? 'This computer' : 'The node');
   const speaksAsText = desktop && speaksAs ? speaksAsLabel(speaksAs) : null;
 
   // Stop polling the reset task if the screen goes away mid-wait.
@@ -337,7 +337,7 @@ export const OverviewTab = ({
           {deleteStep.kind === 'confirm' && (
             <>
               <Text variant="titleLarge" style={{ fontWeight: '600', marginBottom: 8, color: theme.colors.error }}>
-                Delete {node.room ?? 'Node'}?
+                Delete {nodeDisplayName(node, 'Node')}?
               </Text>
               <Text variant="bodyMedium" style={{ marginBottom: 16 }}>
                 The node will be wiped, removed from your household, have its
@@ -367,7 +367,7 @@ export const OverviewTab = ({
           {deleteStep.kind === 'signOutConfirm' && (
             <>
               <Text variant="titleLarge" style={{ fontWeight: '600', marginBottom: 8, color: theme.colors.error }}>
-                Sign out {node.room ?? 'this computer'}?
+                Sign out {nodeDisplayName(node, 'this computer')}?
               </Text>
               <Text variant="bodyMedium" style={{ marginBottom: 16 }}>
                 It will stop working with Jarvis Automation until someone signs in on it again,
@@ -702,12 +702,12 @@ const NodeDetailScreen = () => {
         <IconButton icon="arrow-left" onPress={() => navigation.goBack()} />
         <NodeKindIcon node={node} testID="node-kind-icon" style={{ marginRight: 8 }} />
         <Text variant="headlineSmall" style={{ fontWeight: 'bold', flex: 1 }}>
-          {node.room || (desktop ? 'This computer' : 'Node')}
+          {nodeDisplayName(node, desktop ? 'This computer' : 'Node')}
         </Text>
         {(hasSettingsAccess || node.needs_k2) && (
           <IconButton
             icon="cog-outline"
-            onPress={() => navigation.navigate('NodeSettings', { nodeId, room: node.room })}
+            onPress={() => navigation.navigate('NodeSettings', { nodeId, room: nodeDisplayName(node, '') || null })}
           />
         )}
       </View>
