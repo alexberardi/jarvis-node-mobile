@@ -74,6 +74,7 @@
   },
   "jest": {
     "preset": "jest-expo",
+    "maxWorkers": "25%",
     "setupFilesAfterEnv": [
       "@testing-library/jest-native/extend-expect",
       "<rootDir>/jest.setup.js"
