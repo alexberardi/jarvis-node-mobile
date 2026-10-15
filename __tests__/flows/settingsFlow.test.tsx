@@ -372,5 +372,42 @@ describe('Settings — flow integration (households, delete-account, smart-home 
     );
     expect(utils.getByTestId('primary-node-kind-node-1').props.accessibilityLabel).toBe('Raspberry Pi');
   });
+
+  it('Primary Node lists Pis before computers and notes what a computer cannot do (server sends node_kind)', async () => {
+    getSH.mockResolvedValue({
+      ...SMART_HOME,
+      nodes: [
+        { node_id: 'mac-1', room: 'Office', online: true, last_seen: null, node_kind: 'desktop' },
+        { node_id: 'pi-1', room: 'Kitchen', online: true, last_seen: null, node_kind: null },
+      ],
+    });
+    mockListNodes.mockRejectedValue(new Error('offline'));
+    const utils = renderScreen();
+    await utils.findByText('Office (mac-1…)');
+
+    const rows = utils.getAllByTestId(/^primary-node-row-/).map((r) => r.props.testID);
+    expect(rows).toEqual(['primary-node-row-pi-1', 'primary-node-row-mac-1']);
+    expect(utils.getByTestId('primary-node-note-mac-1')).toHaveTextContent(
+      "Can't find smart-home devices · runs routines only while it's on",
+    );
+    expect(utils.queryByTestId('primary-node-note-pi-1')).toBeNull();
+  });
+
+  it('Primary Node keeps the server order and shows no note when nothing reports a kind (older server)', async () => {
+    getSH.mockResolvedValue({
+      ...SMART_HOME,
+      nodes: [
+        { node_id: 'mac-1', room: 'Office', online: true, last_seen: null },
+        { node_id: 'pi-1', room: 'Kitchen', online: true, last_seen: null },
+      ],
+    });
+    mockListNodes.mockRejectedValue(new Error('404'));
+    const utils = renderScreen();
+    await utils.findByText('Office (mac-1…)');
+
+    const rows = utils.getAllByTestId(/^primary-node-row-/).map((r) => r.props.testID);
+    expect(rows).toEqual(['primary-node-row-mac-1', 'primary-node-row-pi-1']);
+    expect(utils.queryByTestId(/^primary-node-note-/)).toBeNull();
+  });
 });
 

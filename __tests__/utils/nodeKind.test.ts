@@ -3,6 +3,7 @@ import {
   isDesktopAgent,
   nodeKindIcon,
   nodeKindLabel,
+  sortPisFirst,
 } from '../../src/utils/nodeKind';
 
 describe('isDesktopAgent', () => {
@@ -73,5 +74,26 @@ describe('canSignOutDesktopAgent (mirrors cc canSignOut)', () => {
   it('refuses without a signed-in user or a household', () => {
     expect(canSignOutDesktopAgent(node('hh-1', 7), null, households)).toBe(false);
     expect(canSignOutDesktopAgent(node(null, 7), 7, households)).toBe(false);
+  });
+});
+
+describe('sortPisFirst', () => {
+  const kinds: Record<string, { node_kind?: string | null; install_mode?: string | null }> = {
+    mac: { node_kind: 'desktop' },
+    oldmac: { install_mode: 'desktop-agent' },
+    pi1: { node_kind: null },
+  };
+  const kindOf = (n: { node_id: string }) => kinds[n.node_id];
+
+  it('puts Pis before computers and keeps each group in its original order', () => {
+    const nodes = ['mac', 'pi1', 'oldmac', 'pi2'].map((node_id) => ({ node_id }));
+    expect(sortPisFirst(nodes, kindOf).map((n) => n.node_id)).toEqual(['pi1', 'pi2', 'mac', 'oldmac']);
+  });
+
+  it('treats a node with unknown kind as a Pi and leaves the input alone', () => {
+    const nodes = [{ node_id: 'x' }, { node_id: 'y' }];
+    const sorted = sortPisFirst(nodes, () => undefined);
+    expect(sorted.map((n) => n.node_id)).toEqual(['x', 'y']);
+    expect(sorted).not.toBe(nodes);
   });
 });
