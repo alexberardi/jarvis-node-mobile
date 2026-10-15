@@ -299,7 +299,7 @@ const AddComputerScreen = () => {
           </Button>
           <Button
             testID="add-computer-open-link"
-            mode="text"
+            mode="outlined"
             icon="open-in-new"
             compact
             onPress={() => {
