@@ -14,11 +14,11 @@ import {
   ServiceConfig,
   clearCachedConfig,
   saveManualConfigUrl,
-  loadManualConfigUrl,
 } from '../config/serviceConfig';
 import {
   DiscoveryResult,
   discoverConfigService,
+  loadPinnedUrl,
 } from '../services/configDiscoveryService';
 
 interface ConfigContextValue {
@@ -45,16 +45,16 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({
     setResult(discovered);
   }, []);
 
-  const runDiscovery = useCallback(async (skipNetworkScan = false) => {
-    const discovered = await discoverConfigService(skipNetworkScan);
+  const runDiscovery = useCallback(async () => {
+    const discovered = await discoverConfigService();
     applyResult(discovered);
   }, [applyResult]);
 
+  // Re-check the server URL (no network scan).
   const rediscover = useCallback(async () => {
     setResult(null);
     await clearCachedConfig();
-    // User-initiated rediscovery always scans the network
-    await runDiscovery(false);
+    await runDiscovery();
   }, [runDiscovery]);
 
   const setManualUrl = useCallback(async (url: string | null) => {
@@ -62,18 +62,13 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({
     setManualUrlState(url);
     setResult(null);
     await clearCachedConfig();
-    await runDiscovery(false);
+    await runDiscovery();
   }, [runDiscovery]);
 
   useEffect(() => {
     const init = async () => {
-      const manual = await loadManualConfigUrl();
-      setManualUrlState(manual);
-      // On first launch (no manual URL, no cache), skip the network scan
-      // to avoid racing the iOS local network permission dialog.
-      // The user can trigger discovery from the landing screen.
-      // On subsequent launches, cached config or manual URL handles it.
-      await runDiscovery(!manual);
+      setManualUrlState(await loadPinnedUrl());
+      await runDiscovery();
     };
     init();
   }, [runDiscovery]);
@@ -95,7 +90,7 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({
       <View style={styles.loading}>
         <ActivityIndicator size="large" />
         <Text variant="bodyLarge" style={styles.loadingText}>
-          Discovering Jarvis services...
+          Connecting...
         </Text>
       </View>
     );

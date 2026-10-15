@@ -58,7 +58,7 @@ export const helpCopy = {
     primaryNode: "One node speaks to your smart-home gear on behalf of all others. Pick whichever's most reliable.",
     primaryNodeComputer: "Can't find smart-home devices · runs routines only while it's on",
     useExternalDevices: "Pull live state from Home Assistant or another hub instead of Jarvis's local copy.",
-    rediscoverServices: 'Re-scan your network for Jarvis services. Use after changing WiFi or moving to a new router.',
+    recheckConnection: 'Reconnect to your server URL and reload the service addresses. Use after changing WiFi.',
     configServiceUrl: 'Switches environments. Saving logs you out and clears local data — be ready to re-sign-in.',
     statusChip: 'Local = Jarvis running on your network. Cloud = a hosted Jarvis at jarvis.live.',
     pushNotifications: "When off, the app won't be reachable from outside your WiFi for alerts.",

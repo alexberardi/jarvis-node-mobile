@@ -36,7 +36,7 @@ jarvis-node-mobile/
 │   │   └── Settings/      # App settings
 │   ├── navigation/        # RootNavigator, tab layout
 │   ├── services/
-│   │   ├── configDiscoveryService.ts   # Find jarvis-config-service on network
+│   │   ├── configDiscoveryService.ts   # Resolve service URLs from the user-entered server URL
 │   │   ├── configPushService.ts        # Push config to nodes
 │   │   ├── haApiService.ts             # Home Assistant API
 │   │   ├── haDiscoveryService.ts       # HA auto-discovery
@@ -70,7 +70,7 @@ jarvis-node-mobile/
 - **QR Code Provisioning**: Scan QR to pair Pi Zero nodes
 - **WiFi Configuration**: Push WiFi credentials to headless nodes
 - **Home Assistant**: Device discovery and control
-- **Config Discovery**: Auto-find jarvis-config-service on local network
+- **Server URL**: the user enters the jarvis-config-service URL on the landing screen (no network discovery); the app resolves the other service URLs from it
 - **Secure Storage**: JWTs (access + refresh) live in the OS keychain via SecureStore (`src/services/tokenStorage.ts`), NOT AsyncStorage — only the non-secret user blob + active-household id are in AsyncStorage (`src/config/storageKeys.ts`). Both token stores are cleared by `src/services/clearUserData.ts`. K2 node-encryption keys also use SecureStore (kept across logout, user-scoped).
 - **Home presence** (opt-in): the phone reports only `home`/`away` — the precise home coordinate stays on-device (`src/services/presenceService.ts`). Foreground sampling (`usePresence` → `reportIfChanged`, While-Using location) runs on **both** platforms. True background geofencing (`src/services/backgroundPresenceTask.ts`, Always-location) is **iOS-only**: the Android build ships without `ACCESS_BACKGROUND_LOCATION` — Play gates it behind a per-release declaration + demo-video review, which blocks submission. `app.json` both omits it and lists it under `android.blockedPermissions` (a `tools:node="remove"` that survives manifest merge and an incremental `expo prebuild`, which is otherwise **additive** for permissions). Every runtime path is gated on the single constant `BACKGROUND_PRESENCE_SUPPORTED`; the Android switch is hidden and `rearmIfNeeded` tears down whatever an older build left armed. Don't re-add the permission without the Play declaration.
 - **Biometric login** (opt-in): the durable refresh token is rewritten with SecureStore `requireAuthentication: true`, so cold-boot session restore (`AuthContext.bootstrapAuth`) requires Face ID / Touch ID. Only the refresh token is gated (access token + K2 stay ungated for unattended refresh / device-control). A failure/cancel always falls back to email+password — there is no OS passcode fallback in the keychain prompt, so the password path is the sole safety net by design. Enable via the Login-screen checkbox or Settings → Security.

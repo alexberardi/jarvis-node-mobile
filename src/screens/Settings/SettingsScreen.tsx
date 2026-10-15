@@ -704,9 +704,9 @@ const SettingsScreen = () => {
               onPress={rediscover}
               icon="refresh"
             >
-              Re-discover Services
+              Re-check Connection
             </Button>
-            <HelpIcon text={helpCopy.settings.rediscoverServices} size={16} />
+            <HelpIcon text={helpCopy.settings.recheckConnection} size={16} />
           </View>
         </Card.Content>
       </Card>

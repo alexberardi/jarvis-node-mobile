@@ -1,24 +1,9 @@
 import { discoverConfigService } from '../../src/services/configDiscoveryService';
 import * as serviceConfig from '../../src/config/serviceConfig';
 
-// react-native-zeroconf is a native module — stub it so the module under test
-// can be imported. With the manual-URL-authoritative behavior it should never
-// actually be exercised when a manual URL is pinned.
-jest.mock('react-native-zeroconf', () =>
-  jest.fn().mockImplementation(() => ({
-    on: jest.fn(),
-    scan: jest.fn(),
-    stop: jest.fn(),
-    removeAllListeners: jest.fn(),
-  })),
-);
-
-jest.mock('expo-network', () => ({
-  getIpAddressAsync: jest.fn().mockResolvedValue('192.168.1.50'),
-}));
-
 jest.mock('../../src/config/serviceConfig', () => ({
   loadManualConfigUrl: jest.fn(),
+  saveManualConfigUrl: jest.fn().mockResolvedValue(undefined),
   loadCachedConfig: jest.fn().mockResolvedValue(null),
   cacheConfig: jest.fn().mockResolvedValue(undefined),
   setServiceConfig: jest.fn(),
@@ -39,10 +24,10 @@ describe('discoverConfigService — pinned manual URL is authoritative', () => {
     // The /services fetch fails → manual URL is momentarily unreachable.
     mockFetch.mockRejectedValue(new Error('network down'));
 
-    const result = await discoverConfigService(false);
+    const result = await discoverConfigService();
 
-    // Regression: the OLD code fell through to mDNS/LAN scan and could land on a
-    // different server while still labeling it as the pinned URL. Now it must
+    // Regression: older code fell through to mDNS/LAN scan and could land on a
+    // different server while still labeling it as the pinned URL. It must
     // report the pinned URL itself, with empty service URLs and an error.
     expect(result.config.configServiceUrl).toBe(MANUAL);
     expect(result.config.authBaseUrl).toBe('');
@@ -65,7 +50,7 @@ describe('discoverConfigService — pinned manual URL is authoritative', () => {
       }),
     });
 
-    const result = await discoverConfigService(false);
+    const result = await discoverConfigService();
 
     expect(result.config.configServiceUrl).toBe(MANUAL);
     expect(result.config.authBaseUrl).toBe('https://auth.jarvisautomation.io');
@@ -94,7 +79,7 @@ describe('discoverConfigService — external URL style (mobile reachability)', (
       }),
     });
 
-    const result = await discoverConfigService(false);
+    const result = await discoverConfigService();
 
     // must ask for the external (off-docker) style, or the phone gets container coords
     expect(mockFetch).toHaveBeenCalledWith(
@@ -104,5 +89,104 @@ describe('discoverConfigService — external URL style (mobile reachability)', (
     // and the localhost sentinel must be rewritten to the reachable config host
     expect(result.config.authBaseUrl).toBe('http://config.jarvisautomation.io:7701');
     expect(result.config.commandCenterUrl).toBe('http://config.jarvisautomation.io:7703');
+  });
+});
+
+const reachable = {
+  ok: true,
+  json: async () => ({
+    services: [
+      { name: 'jarvis-auth', url: 'http://localhost:7701', host: 'localhost', port: 7701 },
+      { name: 'jarvis-command-center', url: 'http://localhost:7703', host: 'localhost', port: 7703 },
+    ],
+  }),
+};
+
+const cachedFor = (configServiceUrl: string) => ({
+  authBaseUrl: 'http://10.0.0.5:7701',
+  commandCenterUrl: 'http://10.0.0.5:7703',
+  configServiceUrl,
+  notificationsUrl: '',
+  pantryUrl: '',
+});
+
+describe('discoverConfigService — no network discovery', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    global.fetch = mockFetch as unknown as typeof global.fetch;
+    mockedSC.loadCachedConfig.mockResolvedValue(null);
+  });
+
+  it('returns an empty config without probing anything when no URL is set', async () => {
+    mockedSC.loadManualConfigUrl.mockResolvedValue(null);
+
+    const result = await discoverConfigService();
+
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(result.config.configServiceUrl).toBeNull();
+    expect(result.config.authBaseUrl).toBe('');
+    // The landing screen asks for the URL itself; no banner for a blank URL.
+    expect(result.fallbackMessage).toBeNull();
+    expect(mockedSC.saveManualConfigUrl).not.toHaveBeenCalled();
+  });
+
+  it('caches the config of a reachable pinned URL', async () => {
+    mockedSC.loadManualConfigUrl.mockResolvedValue('http://10.0.0.5:7700');
+    mockFetch.mockResolvedValue(reachable);
+
+    const result = await discoverConfigService();
+
+    expect(mockedSC.cacheConfig).toHaveBeenCalledWith(result.config);
+  });
+
+  it('the unreachable warning no longer offers a network search', async () => {
+    mockedSC.loadManualConfigUrl.mockResolvedValue(MANUAL);
+    mockFetch.mockRejectedValue(new Error('network down'));
+
+    const result = await discoverConfigService();
+
+    expect(result.fallbackMessage).toBe(
+      `Can't reach the server at ${MANUAL}. Check the URL or your connection.`,
+    );
+  });
+
+  it('falls back to the cached URLs of the same pinned server when it is unreachable', async () => {
+    const pinned = 'http://10.0.0.5:7700';
+    mockedSC.loadManualConfigUrl.mockResolvedValue(pinned);
+    mockedSC.loadCachedConfig.mockResolvedValue(cachedFor(pinned));
+    mockFetch.mockRejectedValue(new Error('on the node hotspot'));
+
+    const result = await discoverConfigService();
+
+    expect(result.config).toEqual(cachedFor(pinned));
+    expect(result.fallbackMessage).toMatch(/can't reach/i);
+    expect(mockedSC.setServiceConfig).toHaveBeenCalledWith(cachedFor(pinned));
+  });
+
+  it('ignores a cache from a different server', async () => {
+    mockedSC.loadManualConfigUrl.mockResolvedValue(MANUAL);
+    mockedSC.loadCachedConfig.mockResolvedValue(cachedFor('http://10.0.0.5:7700'));
+    mockFetch.mockRejectedValue(new Error('network down'));
+
+    const result = await discoverConfigService();
+
+    expect(result.config.configServiceUrl).toBe(MANUAL);
+    expect(result.config.authBaseUrl).toBe('');
+  });
+
+  it('pins the URL an older version discovered, so existing installs keep their server', async () => {
+    const discovered = 'http://10.0.0.5:7700';
+    mockedSC.loadManualConfigUrl.mockResolvedValue(null);
+    mockedSC.loadCachedConfig.mockResolvedValue(cachedFor(discovered));
+    mockFetch.mockResolvedValue(reachable);
+
+    const result = await discoverConfigService();
+
+    expect(mockedSC.saveManualConfigUrl).toHaveBeenCalledWith(discovered);
+    expect(mockFetch).toHaveBeenCalledWith(
+      `${discovered}/services?style=external`,
+      expect.anything(),
+    );
+    expect(result.config.configServiceUrl).toBe(discovered);
   });
 });
