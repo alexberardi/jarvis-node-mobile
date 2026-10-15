@@ -189,7 +189,12 @@ const RoutineEditScreen = () => {
     description: string;
     parameters?: CommandParameterEntry[];
   }
-  const { snapshot: cmdSnapshot, state: cmdState, error: commandsError } = useSettingsSnapshot({
+  const {
+    snapshot: cmdSnapshot,
+    state: cmdState,
+    error: commandsError,
+    provisionKey: provisionCatalogKey,
+  } = useSettingsSnapshot({
     nodeId: catalogNodeId ?? undefined,
     enabled: !!authState.accessToken && !!catalogNodeId,
   });
@@ -596,7 +601,18 @@ const RoutineEditScreen = () => {
               </Menu>
             </View>
           )}
-          {commandsError && (
+          {commandsError && cmdState === 'needs_k2' && (
+            <View style={{ marginBottom: 8 }} testID="routine-catalog-needs-k2">
+              <Text variant="bodySmall" style={{ color: theme.colors.error }}>
+                {commandsError} Set one up to list its commands, or pick a different node with “Commands from” above.
+              </Text>
+              <Button mode="outlined" icon="key-variant" compact onPress={provisionCatalogKey}
+                style={{ alignSelf: 'flex-start', marginTop: 6 }}>
+                Set up encryption key
+              </Button>
+            </View>
+          )}
+          {commandsError && cmdState !== 'needs_k2' && (
             <View style={{ marginBottom: 8 }}>
               <Text variant="bodySmall" style={{ color: theme.colors.error }}>
                 {commandsError} Pick a different node with “Commands from” above.

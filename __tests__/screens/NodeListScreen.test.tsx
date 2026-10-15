@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { PaperProvider } from 'react-native-paper';
 
 import NodeListScreen from '../../src/screens/Nodes/NodeListScreen';
@@ -231,5 +231,14 @@ describe('NodeListScreen — node kind icons', () => {
     expect(queryByText('Mode: wake-word')).toBeNull();
     expect(getByText('Jarvis Automation agent')).toBeTruthy();
   });
-});
 
+  it('offers "Add a computer" next to "Add Node", opening the pairing screen', async () => {
+    mockListNodes.mockResolvedValue([]);
+    const { findByTestId, getByText } = render(<NodeListScreen />, { wrapper });
+    const btn = await findByTestId('node-add-computer-fab');
+    expect(btn).toHaveTextContent(/Add a computer/);
+    expect(getByText('Add Node')).toBeTruthy();
+    fireEvent.press(btn);
+    expect(mockNavigate).toHaveBeenCalledWith('AddComputer');
+  });
+});
