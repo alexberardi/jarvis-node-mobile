@@ -32,6 +32,10 @@ export interface NodeInfo {
   // computer; owner_user_id is the member who paired the node.
   node_kind?: string | null;
   owner_user_id?: number | null;
+  // Registered name (jarvisd 2026-10-15): a desktop agent's computer name.
+  // Null when registered without one; missing on older servers. Label nodes
+  // with nodeDisplayName (utils/nodeKind), which uses it for computers only.
+  name?: string | null;
 }
 
 export const listNodes = async (householdId?: string): Promise<NodeInfo[]> => {

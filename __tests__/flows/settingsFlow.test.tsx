@@ -409,5 +409,21 @@ describe('Settings — flow integration (households, delete-account, smart-home 
     expect(rows).toEqual(['primary-node-row-mac-1', 'primary-node-row-pi-1']);
     expect(utils.queryByTestId(/^primary-node-note-/)).toBeNull();
   });
-});
 
+  it('Primary Node names computers by their name and keeps the room for a Pi', async () => {
+    getSH.mockResolvedValue({
+      ...SMART_HOME,
+      nodes: [
+        { node_id: 'pi-1', room: 'Kitchen', online: true, last_seen: null, node_kind: null, name: 'pi-zero' },
+        { node_id: 'mac-1', room: 'desktop', online: true, last_seen: null, node_kind: 'desktop', name: 'omarchy' },
+        // Older server: the name comes from the household node list.
+        { node_id: 'mac-2', room: 'desktop', online: true, last_seen: null, node_kind: 'desktop' },
+      ],
+    });
+    mockListNodes.mockResolvedValue([{ node_id: 'mac-2', node_kind: 'desktop', name: 'macbook' }]);
+    const utils = renderScreen();
+    await utils.findByText('omarchy (mac-1…)');
+    await utils.findByText('macbook (mac-2…)');
+    expect(utils.getByText('Kitchen (pi-1…)')).toBeTruthy();
+  });
+});

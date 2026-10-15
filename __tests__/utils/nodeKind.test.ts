@@ -2,9 +2,11 @@ import {
   canSignOutDesktopAgent,
   computerCanRun,
   isDesktopAgent,
+  nodeDisplayName,
   nodeKindIcon,
   nodeKindLabel,
   sortPisFirst,
+  withKnownKind,
 } from '../../src/utils/nodeKind';
 
 describe('isDesktopAgent', () => {
@@ -125,5 +127,45 @@ describe('computerCanRun', () => {
 
   it('ignores a malformed targets field rather than guessing', () => {
     expect(computerCanRun({ targets: 'node' })).toBe(true);
+  });
+});
+
+describe('nodeDisplayName', () => {
+  const id = 'abcdef1234567890';
+
+  it('names a computer by its registered name', () => {
+    expect(nodeDisplayName({ node_id: id, room: 'desktop', name: 'omarchy', node_kind: 'desktop' })).toBe('omarchy');
+    expect(
+      nodeDisplayName({ node_id: id, room: 'desktop', name: ' laptop ', install_mode: 'desktop-agent' }),
+    ).toBe('laptop');
+  });
+
+  it('falls back to the room, then the short id, for a computer without a name', () => {
+    expect(nodeDisplayName({ node_id: id, room: 'desktop', name: null, node_kind: 'desktop' })).toBe('desktop');
+    expect(nodeDisplayName({ node_id: id, room: '', name: '  ', node_kind: 'desktop' })).toBe('abcdef12');
+  });
+
+  it('keeps the room for a Pi even when it has a name', () => {
+    expect(nodeDisplayName({ node_id: id, room: 'kitchen', name: 'pi-zero-1' })).toBe('kitchen');
+    expect(nodeDisplayName({ node_id: id, room: null, name: 'pi-zero-1', node_kind: null })).toBe('abcdef12');
+  });
+
+  it('uses the caller fallback instead of the short id when given', () => {
+    expect(nodeDisplayName({ node_id: id, room: null }, 'This computer')).toBe('This computer');
+    expect(nodeDisplayName({ node_id: id, room: 'den' }, 'This computer')).toBe('den');
+  });
+});
+
+describe('withKnownKind', () => {
+  it('fills kind and name the node lacks from the household node list', () => {
+    const n = withKnownKind({ node_id: 'd1', room: 'desktop' }, { node_kind: 'desktop', name: 'omarchy' });
+    expect(nodeDisplayName(n)).toBe('omarchy');
+  });
+
+  it("keeps the node's own fields and copes with no entry", () => {
+    expect(withKnownKind({ node_id: 'p1', room: 'kitchen', node_kind: null, name: 'x' }, undefined)).toEqual({
+      node_id: 'p1', room: 'kitchen', node_kind: null, install_mode: undefined, name: 'x',
+    });
+    expect(withKnownKind({ node_id: 'd1', node_kind: 'desktop', name: 'own' }, { name: 'list' }).name).toBe('own');
   });
 });

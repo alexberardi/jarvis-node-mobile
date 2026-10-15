@@ -26,7 +26,7 @@ import {
 import type { CommandDataStackParamList } from '../../navigation/types';
 import { useAuth } from '../../auth/AuthContext';
 import { useNodeKinds } from '../../hooks/useNodeKinds';
-import { isDesktopAgent, nodeKindIcon, nodeKindLabel } from '../../utils/nodeKind';
+import { isDesktopAgent, nodeDisplayName, nodeKindIcon, nodeKindLabel, withKnownKind } from '../../utils/nodeKind';
 import { storedDataErrorMessage } from '../../utils/storedDataError';
 
 type Nav = NativeStackNavigationProp<CommandDataStackParamList, 'DataBrowserHome'>;
@@ -128,7 +128,7 @@ const DataBrowserHomeScreen = () => {
           </Text>
         ) : nodes.length === 1 ? (
           <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
-            {nodes[0].room || nodes[0].node_id}
+            {nodeDisplayName(withKnownKind(nodes[0], kinds[nodes[0].node_id]), nodes[0].node_id)}
           </Text>
         ) : (
           <Card style={styles.section}>
@@ -141,11 +141,11 @@ const DataBrowserHomeScreen = () => {
                     testID={`data-browser-node-${n.node_id}-chip`}
                     selected={selectedNodeId === n.node_id}
                     icon={nodeKindIcon(kinds[n.node_id])}
-                    accessibilityLabel={`${n.room || n.node_id}, ${nodeKindLabel(kinds[n.node_id])}`}
+                    accessibilityLabel={`${nodeDisplayName(withKnownKind(n, kinds[n.node_id]), n.node_id)}, ${nodeKindLabel(kinds[n.node_id])}`}
                     onPress={() => setSelectedNodeId(n.node_id)}
                     style={styles.chip}
                   >
-                    {n.room || n.node_id}
+                    {nodeDisplayName(withKnownKind(n, kinds[n.node_id]), n.node_id)}
                   </Chip>
                 ))}
               </View>

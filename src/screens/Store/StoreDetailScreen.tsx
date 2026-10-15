@@ -33,7 +33,7 @@ import { usePantryGate } from '../../components/PantryGate';
 import { StoreStackParamList } from '../../navigation/types';
 import type { PackageDetail } from '../../types/Package';
 import { anyHealthFailed, getRevertTarget, isTerminalInstallStatus } from '../../utils/packageStatus';
-import { computerCanRun, isDesktopAgent } from '../../utils/nodeKind';
+import { computerCanRun, isDesktopAgent, nodeDisplayName } from '../../utils/nodeKind';
 import { compareSemver, isUpdateAvailable } from '../../utils/semver';
 
 type Nav = NativeStackNavigationProp<StoreStackParamList>;
@@ -43,9 +43,11 @@ interface NodeInfo {
   node_id: string;
   room: string | null;
   household_id: string | null;
-  // Passed through to the node picker for its robot / Raspberry Pi icon.
+  // Passed through to the node picker for its robot / Raspberry Pi icon and
+  // its label (a computer is named by its registered name: nodeDisplayName).
   node_kind?: string | null;
   install_mode?: string | null;
+  name?: string | null;
 }
 
 const DANGER_LABELS: Record<number, string> = {
@@ -365,7 +367,7 @@ const StoreDetailScreen = () => {
             {
               requestId: result.id,
               nodeId: node.node_id,
-              nodeName: node.room || node.node_id.slice(0, 8),
+              nodeName: nodeDisplayName(node),
             },
           ]),
           packageName: detail.display_name || detail.command_name,

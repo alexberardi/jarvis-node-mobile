@@ -11,6 +11,7 @@ import { StoreStackParamList } from '../../navigation/types';
 import { compareSemver } from '../../utils/semver';
 import { safeJsonParse } from '../../utils/safeJson';
 import { NodeKindIcon } from '../../components/NodeKindIcon';
+import { nodeDisplayName } from '../../utils/nodeKind';
 
 type Nav = NativeStackNavigationProp<StoreStackParamList>;
 type Route = RouteProp<StoreStackParamList, 'NodePickerSheet'>;
@@ -18,6 +19,7 @@ type Route = RouteProp<StoreStackParamList, 'NodePickerSheet'>;
 interface NodeInfo {
   node_id: string;
   room: string | null;
+  name?: string | null;
   node_kind?: string | null;
   install_mode?: string | null;
 }
@@ -105,7 +107,7 @@ const NodePickerSheet = () => {
           return {
             requestId: result.id,
             nodeId: node.node_id,
-            nodeName: node.room || node.node_id.slice(0, 8),
+            nodeName: nodeDisplayName(node),
           };
         }),
       );
@@ -178,7 +180,7 @@ const NodePickerSheet = () => {
             <List.Item
               key={node.node_id}
               testID={`node-picker-list-item-${node.node_id}`}
-              title={node.room || node.node_id.slice(0, 8)}
+              title={nodeDisplayName(node)}
               description={desc.text}
               descriptionStyle={desc.color ? { color: desc.color } : undefined}
               right={(props) => (

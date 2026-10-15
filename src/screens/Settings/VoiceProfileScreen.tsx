@@ -40,7 +40,7 @@ import {
 } from '../../api/voiceProfileApi';
 import { listNodes, type NodeInfo } from '../../api/nodeApi';
 import { NodeKindIcon } from '../../components/NodeKindIcon';
-import { isDesktopAgent } from '../../utils/nodeKind';
+import { isDesktopAgent, nodeDisplayName } from '../../utils/nodeKind';
 
 // --- Types ---
 
@@ -516,7 +516,7 @@ const VoiceProfileScreen = () => {
                 return (
                   <List.Item
                     key={node.node_id}
-                    title={node.room || 'Unnamed node'}
+                    title={nodeDisplayName(node, 'Unnamed node')}
                     description={
                       desktop
                         ? 'Not needed: Jarvis uses the account signed in to the agent'

@@ -51,7 +51,7 @@ import DisplayNameEditor from '../../components/DisplayNameEditor';
 import KeyboardSafeView from '../../components/KeyboardSafeView';
 import { NodeKindIcon } from '../../components/NodeKindIcon';
 import { useNodeKinds } from '../../hooks/useNodeKinds';
-import { isDesktopAgent, NodeKindFields, sortPisFirst } from '../../utils/nodeKind';
+import { isDesktopAgent, nodeDisplayName, NodeKindFields, sortPisFirst } from '../../utils/nodeKind';
 
 const THEME_BUTTONS = [
   { value: 'light', label: 'Light', icon: 'white-balance-sunny' },
@@ -737,8 +737,12 @@ const SettingsScreen = () => {
                       const isSelected = node.node_id === smartHomeConfig.primary_node_id;
                       const kind = primaryNodeKind(node, nodeKinds);
                       const isComputer = isDesktopAgent(kind);
-                      const label = node.room
-                        ? `${node.room} (${node.node_id.slice(0, 8)}…)`
+                      const name = nodeDisplayName(
+                        { ...node, ...kind, name: node.name !== undefined ? node.name : nodeKinds[node.node_id]?.name },
+                        '',
+                      );
+                      const label = name
+                        ? `${name} (${node.node_id.slice(0, 8)}…)`
                         : node.node_id.slice(0, 16) + '…';
                       return (
                         <View key={node.node_id} testID={`primary-node-row-${node.node_id}`}>

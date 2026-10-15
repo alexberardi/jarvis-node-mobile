@@ -26,6 +26,7 @@ import { fabListPaddingBottom, fabStyle } from '../../theme/fab';
 import type { Routine, RoutineSchedule } from '../../types/Routine';
 import { NodeKindIcon } from '../../components/NodeKindIcon';
 import { useNodeKinds } from '../../hooks/useNodeKinds';
+import { nodeDisplayName, withKnownKind } from '../../utils/nodeKind';
 
 type Nav = NativeStackNavigationProp<RoutinesStackParamList>;
 type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
@@ -205,7 +206,7 @@ const RoutineListScreen = () => {
                 >
                   {nodes.map((n) => (
                     <Menu.Item key={n.node_id}
-                      title={n.room ? `${n.room}` : n.node_id}
+                      title={nodeDisplayName(withKnownKind(n, nodeKinds[n.node_id]), n.node_id)}
                       leadingIcon={({ size, color }) => (
                         <NodeKindIcon
                           node={nodeKinds[n.node_id]}

@@ -383,6 +383,16 @@ describe('StoreDetailScreen — Pi-only packages and computers', () => {
     expect(mockRequestInstall).toHaveBeenCalledWith('desk1', 'mpv-play', expect.any(String), 'v1.0.0');
   });
 
+  it("names a lone computer by its name in the install progress", async () => {
+    await pressInstall([{ ...desk, room: 'desktop', name: 'omarchy' }], {});
+
+    await waitFor(() => {
+      const nav = mockNavigate.mock.calls.find((c) => c[0] === 'InstallProgress');
+      expect(nav).toBeDefined();
+      expect(JSON.parse(nav![1].installs)[0].nodeName).toBe('omarchy');
+    }, CI_WAIT);
+  });
+
   it('offers both kinds in the picker when the package targets the desktop too', async () => {
     await pressInstall([pi, desk], { targets: ['node', 'desktop'] });
 
