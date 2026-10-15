@@ -35,6 +35,7 @@ import { useThemePreference, ThemePreference } from '../../theme/ThemeProvider';
 import {
   getSmartHomeConfig,
   updateSmartHomeConfig,
+  type NodeOption,
   type SmartHomeConfig,
 } from '../../api/smartHomeApi';
 
@@ -50,6 +51,7 @@ import DisplayNameEditor from '../../components/DisplayNameEditor';
 import KeyboardSafeView from '../../components/KeyboardSafeView';
 import { NodeKindIcon } from '../../components/NodeKindIcon';
 import { useNodeKinds } from '../../hooks/useNodeKinds';
+import { isDesktopAgent, NodeKindFields, sortPisFirst } from '../../utils/nodeKind';
 
 const THEME_BUTTONS = [
   { value: 'light', label: 'Light', icon: 'white-balance-sunny' },
@@ -59,6 +61,19 @@ const THEME_BUTTONS = [
 
 /** Gap above the "Settings" title, measured from the top of the screen. */
 const HEADER_TOP_MARGIN = 48;
+
+/**
+ * A primary-node option's kind: the smart-home config's own node_kind (servers
+ * from jarvis-server #176), merged over what the household node list says.
+ * With neither, the node counts as a Pi.
+ */
+const primaryNodeKind = (
+  node: NodeOption,
+  kinds: Record<string, NodeKindFields>,
+): NodeKindFields => ({
+  ...kinds[node.node_id],
+  ...(node.node_kind !== undefined ? { node_kind: node.node_kind } : {}),
+});
 
 const SettingsScreen = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -718,13 +733,15 @@ const SettingsScreen = () => {
                     <Text variant="bodySmall" style={[styles.hint, { marginBottom: 8 }]}>
                       The node that handles device discovery for your household
                     </Text>
-                    {smartHomeConfig.nodes.map((node, i, arr) => {
+                    {sortPisFirst(smartHomeConfig.nodes, (n) => primaryNodeKind(n, nodeKinds)).map((node, i, arr) => {
                       const isSelected = node.node_id === smartHomeConfig.primary_node_id;
+                      const kind = primaryNodeKind(node, nodeKinds);
+                      const isComputer = isDesktopAgent(kind);
                       const label = node.room
                         ? `${node.room} (${node.node_id.slice(0, 8)}…)`
                         : node.node_id.slice(0, 16) + '…';
                       return (
-                        <View key={node.node_id}>
+                        <View key={node.node_id} testID={`primary-node-row-${node.node_id}`}>
                           <TouchableRipple onPress={() => handlePrimaryNodeChange(node.node_id)}>
                             <View style={styles.radioRow}>
                               <Icon
@@ -733,14 +750,25 @@ const SettingsScreen = () => {
                                 color={isSelected ? theme.colors.primary : theme.colors.onSurfaceVariant}
                               />
                               <NodeKindIcon
-                                node={nodeKinds[node.node_id]}
+                                node={kind}
                                 size={20}
                                 testID={`primary-node-kind-${node.node_id}`}
                                 style={{ marginLeft: 12 }}
                               />
-                              <Text variant="bodyMedium" style={{ flex: 1, marginLeft: 8, fontWeight: '500' }}>
-                                {label}
-                              </Text>
+                              <View style={{ flex: 1, marginLeft: 8 }}>
+                                <Text variant="bodyMedium" style={{ fontWeight: '500' }}>
+                                  {label}
+                                </Text>
+                                {isComputer && (
+                                  <Text
+                                    variant="bodySmall"
+                                    style={styles.hint}
+                                    testID={`primary-node-note-${node.node_id}`}
+                                  >
+                                    {helpCopy.settings.primaryNodeComputer}
+                                  </Text>
+                                )}
+                              </View>
                             </View>
                           </TouchableRipple>
                           {i < arr.length - 1 && <Divider style={{ marginVertical: 2 }} />}

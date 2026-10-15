@@ -24,6 +24,21 @@ export const nodeKindIcon = (node: NodeKindFields | null | undefined): string =>
 export const nodeKindLabel = (node: NodeKindFields | null | undefined): string =>
   isDesktopAgent(node) ? 'Computer' : 'Raspberry Pi';
 
+/**
+ * Pis first, computers after, each group in its original order. The primary
+ * node finds smart-home devices and runs routines that have no node of their
+ * own; a computer can't do the first and does the second only while it's on
+ * (jarvis-server docs/decisions/2026-10-15-computer-as-primary-node.md). A node
+ * whose kind is unknown sorts as a Pi.
+ */
+export const sortPisFirst = <T,>(
+  nodes: readonly T[],
+  kindOf: (node: T) => NodeKindFields | null | undefined,
+): T[] => [
+  ...nodes.filter((n) => !isDesktopAgent(kindOf(n))),
+  ...nodes.filter((n) => isDesktopAgent(kindOf(n))),
+];
+
 export interface SignOutNodeFields extends NodeKindFields {
   household_id?: string | null;
   owner_user_id?: number | null;
