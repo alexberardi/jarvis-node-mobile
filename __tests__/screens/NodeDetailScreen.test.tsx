@@ -6,6 +6,7 @@ import NodeDetailScreen from '../../src/screens/Nodes/NodeDetailScreen';
 import { lightTheme } from '../../src/theme';
 import { getNode } from '../../src/api/nodeApi';
 import { hasK2 } from '../../src/services/k2Service';
+import { listHouseholdMembers } from '../../src/api/householdApi';
 
 // NodeDetailScreen's per-kind wiring: which icon, which tabs, and who sees the
 // Danger Zone. A Pi's delete is gated on holding its K2 on this phone (today's
@@ -30,6 +31,8 @@ jest.mock('../../src/screens/Nodes/HardwareTab', () => {
   const { Text } = require('react-native');
   return { HardwareTab: () => <Text>hardware-tab-body</Text> };
 });
+
+jest.mock('../../src/api/householdApi', () => ({ listHouseholdMembers: jest.fn() }));
 
 let mockAuth: any;
 jest.mock('../../src/auth/AuthContext', () => ({ useAuth: () => ({ state: mockAuth }) }));
@@ -59,8 +62,12 @@ const renderScreen = () =>
 describe('NodeDetailScreen — node kinds', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockAuth = { user: { id: 7 }, households: [{ id: 'hh-1', role: 'member' }] };
+    mockAuth = { user: { id: 7 }, accessToken: 'tok', households: [{ id: 'hh-1', role: 'member' }] };
     (hasK2 as jest.Mock).mockResolvedValue(false);
+    (listHouseholdMembers as jest.Mock).mockResolvedValue([
+      { user_id: 7, username: 'alex', display_name: 'Alex B', email: 'a@x', role: 'member' },
+      { user_id: 8, username: 'sam', display_name: null, email: 's@x', role: 'member' },
+    ]);
   });
 
   it('shows the Raspberry Pi icon and keeps the K2 gate for a Pi', async () => {
@@ -112,5 +119,51 @@ describe('NodeDetailScreen — node kinds', () => {
     const { findByText } = renderScreen();
     fireEvent.press(await findByText('Hardware'));
     expect(await findByText('hardware-tab-body')).toBeTruthy();
+  });
+
+  describe('Speaks as (a desktop agent\'s signed-in member)', () => {
+    it("shows the owner's display name, from the node's household members", async () => {
+      mockAuth = { ...mockAuth, user: { id: 99 } };
+      (getNode as jest.Mock).mockResolvedValue(DESKTOP);
+      const { findByTestId } = renderScreen();
+      expect(await findByTestId('node-speaks-as')).toHaveTextContent('Speaks as Alex B');
+      expect(listHouseholdMembers).toHaveBeenCalledWith('hh-1', 'tok');
+    });
+
+    it('falls back to the username', async () => {
+      (getNode as jest.Mock).mockResolvedValue({ ...DESKTOP, owner_user_id: 8 });
+      const { findByText } = renderScreen();
+      expect(await findByText('Speaks as sam')).toBeTruthy();
+    });
+
+    it('says nobody is signed in without an owner', async () => {
+      (getNode as jest.Mock).mockResolvedValue({ ...DESKTOP, owner_user_id: null });
+      const { findByTestId } = renderScreen();
+      expect(await findByTestId('node-speaks-as')).toHaveTextContent('Not signed in: sign in on the computer');
+    });
+
+    it('says nobody is signed in when the owner left the household', async () => {
+      (getNode as jest.Mock).mockResolvedValue({ ...DESKTOP, owner_user_id: 42 });
+      const { findByText } = renderScreen();
+      expect(await findByText('Not signed in: sign in on the computer')).toBeTruthy();
+    });
+
+    it('leaves the line out when the members cannot be loaded for someone else', async () => {
+      mockAuth = { ...mockAuth, user: { id: 99 } };
+      (listHouseholdMembers as jest.Mock).mockRejectedValue(new Error('403'));
+      (getNode as jest.Mock).mockResolvedValue(DESKTOP);
+      const { findByTestId, queryByTestId } = renderScreen();
+      await findByTestId('node-kind-icon');
+      await waitFor(() => expect(listHouseholdMembers).toHaveBeenCalled());
+      expect(queryByTestId('node-speaks-as')).toBeNull();
+    });
+
+    it('never shows it for a Pi', async () => {
+      (getNode as jest.Mock).mockResolvedValue(PI);
+      const { findByTestId, queryByTestId } = renderScreen();
+      await findByTestId('node-kind-icon');
+      expect(queryByTestId('node-speaks-as')).toBeNull();
+      expect(listHouseholdMembers).not.toHaveBeenCalled();
+    });
   });
 });

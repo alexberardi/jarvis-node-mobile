@@ -38,6 +38,8 @@ import { formatLastSeen } from '../../utils/serverTime';
 import { canSignOutDesktopAgent, isDesktopAgent } from '../../utils/nodeKind';
 import { NodeKindIcon } from '../../components/NodeKindIcon';
 import { useAuth } from '../../auth/AuthContext';
+import { useSpeaksAs } from '../../hooks/useSpeaksAs';
+import { speaksAsLabel, type SpeaksAs } from '../../utils/speaksAs';
 import KeyboardSafeView from '../../components/KeyboardSafeView';
 
 type Nav = NativeStackNavigationProp<NodesStackParamList>;
@@ -105,15 +107,19 @@ const resetProgressText = (state: NodeTaskState | null, name: string): string =>
 export const OverviewTab = ({
   node,
   canDelete,
+  speaksAs,
 }: {
   node: NodeInfo;
   canDelete: boolean;
+  /** A desktop agent's signed-in member (useSpeaksAs); left out for a Pi. */
+  speaksAs?: SpeaksAs;
 }) => {
   const theme = useTheme();
   const navigation = useNavigation<Nav>();
   const [deleteStep, setDeleteStep] = useState<DeleteStep>({ kind: 'closed' });
   const desktop = isDesktopAgent(node);
   const nodeName = node.room ?? (desktop ? 'This computer' : 'The node');
+  const speaksAsText = desktop && speaksAs ? speaksAsLabel(speaksAs) : null;
 
   // Stop polling the reset task if the screen goes away mid-wait.
   const unmountedRef = useRef(false);
@@ -222,6 +228,22 @@ export const OverviewTab = ({
         <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 2 }}>
           Last seen {formatLastSeen(node.last_seen, node.online)}
         </Text>
+        {speaksAsText && (
+          <View style={[styles.statusRow, { marginTop: 8 }]}>
+            <Icon
+              source={speaksAs?.kind === 'owner' ? 'account-voice' : 'account-alert-outline'}
+              size={18}
+              color={speaksAs?.kind === 'owner' ? theme.colors.onSurface : theme.colors.error}
+            />
+            <Text
+              testID="node-speaks-as"
+              variant="bodyMedium"
+              style={{ flex: 1, color: speaksAs?.kind === 'owner' ? theme.colors.onSurface : theme.colors.error }}
+            >
+              {speaksAsText}
+            </Text>
+          </View>
+        )}
       </View>
 
       {/* Stats row */}
@@ -612,6 +634,7 @@ const NodeDetailScreen = () => {
   // null = checking, true = key on this device, false = no key
   // (node was set up on another device — hide the settings gear).
   const [hasSettingsAccess, setHasSettingsAccess] = useState<boolean | null>(null);
+  const speaksAs = useSpeaksAs(node);
 
   useEffect(() => {
     let mounted = true;
@@ -679,7 +702,7 @@ const NodeDetailScreen = () => {
         <IconButton icon="arrow-left" onPress={() => navigation.goBack()} />
         <NodeKindIcon node={node} testID="node-kind-icon" style={{ marginRight: 8 }} />
         <Text variant="headlineSmall" style={{ fontWeight: 'bold', flex: 1 }}>
-          {node.room || 'Node'}
+          {node.room || (desktop ? 'This computer' : 'Node')}
         </Text>
         {(hasSettingsAccess || node.needs_k2) && (
           <IconButton
@@ -712,7 +735,7 @@ const NodeDetailScreen = () => {
           contentContainerStyle={styles.scroll}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         >
-          <OverviewTab node={node} canDelete={canDelete} />
+          <OverviewTab node={node} canDelete={canDelete} speaksAs={speaksAs} />
         </ScrollView>
       )}
 
