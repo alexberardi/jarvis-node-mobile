@@ -227,11 +227,12 @@ describe('SettingsScreen', () => {
     expect(getByText(/Command Center:.*192\.168\.1\.100:7703/)).toBeTruthy();
   });
 
-  it('should show Re-discover Services button', () => {
-    const { getByText } = render(<SettingsScreen />, { wrapper });
+  it('should show a Re-check Connection button that re-resolves the server URL', () => {
+    const { getByText, queryByText } = render(<SettingsScreen />, { wrapper });
 
-    const rediscoverBtn = getByText('Re-discover Services');
-    expect(rediscoverBtn).toBeTruthy();
+    fireEvent.press(getByText('Re-check Connection'));
+    expect(mockRediscover).toHaveBeenCalled();
+    expect(queryByText('Re-discover Services')).toBeNull();
   });
 
   it('separates the Call details row with a divider like the rows above it', () => {

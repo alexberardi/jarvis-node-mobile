@@ -5,6 +5,7 @@ import {
   Banner,
   Button,
   Dialog,
+  HelperText,
   IconButton,
   Portal,
   Text,
@@ -22,7 +23,7 @@ type Props = NativeStackScreenProps<AuthStackParamList, 'Landing'>;
 
 const LandingScreen = ({ navigation }: Props) => {
   const { isDark, toggleTheme } = useThemePreference();
-  const { fallbackMessage, config, manualUrl, setManualUrl, rediscover } = useConfig();
+  const { fallbackMessage, config, manualUrl, setManualUrl } = useConfig();
   const insets = useSafeAreaInsets();
   const theme = useTheme();
   const signOutNotice = useAuth().state.signOutNotice;
@@ -36,7 +37,7 @@ const LandingScreen = ({ navigation }: Props) => {
 
   const [dialogVisible, setDialogVisible] = useState(false);
   const [urlInput, setUrlInput] = useState('');
-  const [scanning, setScanning] = useState(false);
+  const [urlMissing, setUrlMissing] = useState(false);
 
   const displayUrl = manualUrl || config.configServiceUrl || null;
 
@@ -46,7 +47,12 @@ const LandingScreen = ({ navigation }: Props) => {
       Alert.alert('Error', 'Please enter a URL.');
       return;
     }
+    if (!/^https?:\/\//.test(trimmed)) {
+      Alert.alert('Invalid URL', 'URL must start with http:// or https://');
+      return;
+    }
     setDialogVisible(false);
+    setUrlMissing(false);
     await setManualUrl(trimmed);
   };
 
@@ -57,14 +63,17 @@ const LandingScreen = ({ navigation }: Props) => {
   };
 
   const openDialog = () => {
-    setUrlInput(manualUrl || '');
+    setUrlInput(displayUrl || '');
     setDialogVisible(true);
   };
 
-  const handleScanNetwork = async () => {
-    setScanning(true);
-    await rediscover();
-    setScanning(false);
+  // Log In and Create Account need a server to talk to.
+  const goTo = (screen: 'Login' | 'Register') => {
+    if (!displayUrl) {
+      setUrlMissing(true);
+      return;
+    }
+    navigation.navigate(screen);
   };
 
   return (
@@ -80,11 +89,6 @@ const LandingScreen = ({ navigation }: Props) => {
       )}
       <View style={[styles.topBar, { top: insets.top + 8 }]}>
         <IconButton
-          icon="server-network"
-          onPress={openDialog}
-          accessibilityLabel="Set server URL"
-        />
-        <IconButton
           icon={isDark ? 'weather-sunny' : 'weather-night'}
           onPress={toggleTheme}
           accessibilityLabel="Toggle dark mode"
@@ -99,6 +103,7 @@ const LandingScreen = ({ navigation }: Props) => {
         </Text>
         {displayUrl ? (
           <Button
+            testID="server-url-button"
             mode="text"
             compact
             onPress={openDialog}
@@ -108,32 +113,36 @@ const LandingScreen = ({ navigation }: Props) => {
           >
             {displayUrl}
           </Button>
-        ) : !config.configServiceUrl && (
+        ) : (
           <Button
+            testID="server-url-button"
             mode="outlined"
             compact
-            onPress={handleScanNetwork}
-            icon="lan"
-            loading={scanning}
-            disabled={scanning}
+            onPress={openDialog}
+            icon="server-network"
             style={styles.serverUrl}
           >
-            {scanning ? 'Scanning...' : 'Find Local Server'}
+            Set Server URL
           </Button>
+        )}
+        {urlMissing && !displayUrl && (
+          <HelperText type="error" visible>
+            Enter your server URL first.
+          </HelperText>
         )}
       </View>
 
       <View style={styles.buttons}>
         <Button
           mode="contained"
-          onPress={() => navigation.navigate('Login')}
+          onPress={() => goTo('Login')}
           style={styles.button}
         >
           Log In
         </Button>
         <Button
           mode="outlined"
-          onPress={() => navigation.navigate('Register')}
+          onPress={() => goTo('Register')}
           style={styles.button}
         >
           Create Account
@@ -145,7 +154,7 @@ const LandingScreen = ({ navigation }: Props) => {
           <Dialog.Title>Server URL</Dialog.Title>
           <Dialog.Content>
             <Text variant="bodySmall" style={{ marginBottom: 12, color: theme.colors.onSurfaceVariant }}>
-              Enter the URL of your Jarvis config service. Leave blank to auto-discover on your local network.
+              Enter the URL of your Jarvis server's config service.
             </Text>
             <TextInput
               mode="outlined"
