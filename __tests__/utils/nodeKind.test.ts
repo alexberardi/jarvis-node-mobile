@@ -1,5 +1,6 @@
 import {
   canSignOutDesktopAgent,
+  computerCanRun,
   isDesktopAgent,
   nodeKindIcon,
   nodeKindLabel,
@@ -95,5 +96,34 @@ describe('sortPisFirst', () => {
     const sorted = sortPisFirst(nodes, () => undefined);
     expect(sorted.map((n) => n.node_id)).toEqual(['x', 'y']);
     expect(sorted).not.toBe(nodes);
+  });
+});
+
+describe('computerCanRun', () => {
+  it('allows a package that declares no targets (jarvis-server decision 2026-10-15)', () => {
+    expect(computerCanRun({})).toBe(true);
+    expect(computerCanRun({ targets: [] })).toBe(true);
+    expect(computerCanRun(null)).toBe(true);
+    expect(computerCanRun(undefined)).toBe(true);
+  });
+
+  it('allows a package whose targets include desktop', () => {
+    expect(computerCanRun({ targets: ['desktop'] })).toBe(true);
+    expect(computerCanRun({ targets: ['node', 'desktop'] })).toBe(true);
+  });
+
+  it('refuses a package whose targets leave out desktop', () => {
+    expect(computerCanRun({ targets: ['node'] })).toBe(false);
+  });
+
+  it('refuses a package that needs Pi system setup', () => {
+    expect(computerCanRun({ apt_packages: ['mpv'] })).toBe(false);
+    expect(computerCanRun({ apt_sources: [{ name: 'x' }] })).toBe(false);
+    expect(computerCanRun({ post_install: [{ op: 'x' }] })).toBe(false);
+    expect(computerCanRun({ apt_packages: [], apt_sources: [], post_install: [] })).toBe(true);
+  });
+
+  it('ignores a malformed targets field rather than guessing', () => {
+    expect(computerCanRun({ targets: 'node' })).toBe(true);
   });
 });
