@@ -82,8 +82,27 @@ API URLs configured in `src/config/env.ts`. Dev mode uses localhost.
 ## Deployment
 
 - **EAS Build** profiles: development, staging, production
-- **CI/CD**: Not yet set up (manual EAS builds)
+- **CI/CD**: `.github/workflows/ci.yml`. Every PR and push runs the type check (`npx tsc --noEmit`) and Jest (`npm test -- --ci --coverage`). Every push to `main` (or a manual dispatch) also builds iOS and Android locally on the runner with the `production` profile and submits them with `eas submit` to TestFlight and Google Play internal testing. Store listing text and screenshots are pushed by `scripts/store/` (run by the user only).
 - iOS and Android supported
+
+## Merging (agents)
+
+**A merge to `main` ships to testers.** Every push to `main` runs `.github/workflows/ci.yml`, which builds iOS and Android with the `production` EAS profile and submits them to TestFlight and Play internal testing. Treat every merge as a release to the user's household.
+
+**Verify** before opening a PR (the same gates CI runs on every PR, `.github/workflows/ci.yml`):
+
+```bash
+npm ci && npx tsc --noEmit && npm test -- --ci
+```
+
+An agent may squash-merge **its own** PR into `main` once every CI check has passed, then check main's CI (and the build it starts) after the merge. **Hold for the user's review** instead, with a note saying why, when the PR touches:
+
+- release and native config: `eas.json`, `app.json`, `app.config.*`, `plugins/**`, `targets/**`, `native/**`, `ios/**`, `android/**`, `scripts/store/**`, `.github/**`;
+- auth, crypto and pairing: `modules/jarvis-crypto/**`, `src/auth/**`, `src/services/tokenStorage.ts`, `src/services/clearUserData.ts`, `src/services/oauthService.ts`, `src/services/qr*Service.ts`, `src/services/*presence*`, `src/config/env.ts`;
+- the test setup: `jest.config.js`, or deletes or renames a test (`**/__tests__/**`, `**/*.test.ts*`), or weakens one to get green;
+- anything marked "needs review" by its author.
+
+**Never** run `eas build`, `eas submit`, the `scripts/store/*` uploaders or any other store command by hand, never push a tag, and never trigger the deploy workflow manually: builds and submissions happen only in CI on merge. Never merge someone else's PR, never force-push to `main`.
 
 ## Dependencies
 
