@@ -7,6 +7,7 @@ import { getLatestRelease, LatestRelease } from '../api/nodeUpdateApi';
 import { useNodeUpdate } from '../hooks/useNodeUpdate';
 import { useSettingsSnapshot } from '../hooks/useSettingsSnapshot';
 import { encryptAndPushConfig } from '../services/configPushService';
+import { isDesktopAgent } from '../utils/nodeKind';
 
 interface Props {
   node: NodeInfo;
@@ -42,7 +43,29 @@ const stateLabel = (state: string): string => {
   }
 };
 
-export const NodeUpdateSection: React.FC<Props> = ({ node }) => {
+/**
+ * A desktop agent updates itself to follow the server's version (install plan 1.7): it shows
+ * its version only, never the Pi's release check, Update button or allow_updates K2 push.
+ */
+const AgentVersion: React.FC<Props> = ({ node }) => {
+  const theme = useTheme();
+  return (
+    <View style={styles.container}>
+      <Text variant="titleSmall">Agent version</Text>
+      <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
+        {node.last_seen_version ?? 'Unknown'}
+      </Text>
+      <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 2 }}>
+        Updates itself to match the server.
+      </Text>
+    </View>
+  );
+};
+
+export const NodeUpdateSection: React.FC<Props> = ({ node }) =>
+  isDesktopAgent(node) ? <AgentVersion node={node} /> : <PiNodeUpdateSection node={node} />;
+
+const PiNodeUpdateSection: React.FC<Props> = ({ node }) => {
   const theme = useTheme();
   const [latest, setLatest] = useState<LatestRelease | null>(null);
   const { task, error, loading, cancelling, rehydrating, trigger, cancel } =
