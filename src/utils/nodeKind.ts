@@ -39,6 +39,30 @@ export const sortPisFirst = <T,>(
   ...nodes.filter((n) => isDesktopAgent(kindOf(n))),
 ];
 
+/** The parts of a Pantry manifest that decide whether a computer can run it. */
+export interface ComputerManifestFields {
+  targets?: unknown;
+  apt_packages?: unknown;
+  apt_sources?: unknown;
+  post_install?: unknown;
+}
+
+const nonEmpty = (v: unknown): boolean => Array.isArray(v) && v.length > 0;
+
+/**
+ * Whether a desktop agent can run a package — the rule jarvisd (`piOnlyReason`)
+ * and the agent (`Manifest.CheckDesktop`) apply: `targets` that leave out
+ * `desktop`, or Pi system setup (apt packages, apt sources, post-install
+ * steps), mean Pi only. A package that declares no targets runs on a computer
+ * (jarvis-server decision 2026-10-15-store-hides-pi-only-packages).
+ */
+export const computerCanRun = (manifest: ComputerManifestFields | null | undefined): boolean => {
+  if (!manifest) return true;
+  const { targets } = manifest;
+  if (Array.isArray(targets) && targets.length > 0 && !targets.includes('desktop')) return false;
+  return !(nonEmpty(manifest.apt_packages) || nonEmpty(manifest.apt_sources) || nonEmpty(manifest.post_install));
+};
+
 export interface SignOutNodeFields extends NodeKindFields {
   household_id?: string | null;
   owner_user_id?: number | null;

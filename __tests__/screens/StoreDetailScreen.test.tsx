@@ -313,3 +313,84 @@ describe('StoreDetailScreen — apt consent UI', () => {
     expect(installProgressNav).toBeUndefined();
   });
 });
+
+describe('StoreDetailScreen — Pi-only packages and computers', () => {
+  let alertSpy: jest.SpyInstance;
+  const pi = { node_id: 'pi1', room: 'Kitchen', household_id: 'h1', node_kind: null, install_mode: 'tarball' };
+  const desk = { node_id: 'desk1', room: 'Laptop', household_id: 'h1', node_kind: 'desktop', install_mode: null };
+  const oldAgent = { node_id: 'desk2', room: 'Desktop', household_id: 'h1', install_mode: 'desktop-agent' };
+  const CI_WAIT = { timeout: 5000 };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    mockFetchNodeTools.mockResolvedValue({ client_tools: [] });
+    mockRequestInstall.mockResolvedValue({ id: 'req-1', status: 'pending', created_at: '2026-01-01T00:00:00Z' });
+    mockGetPackageDetail.mockResolvedValue(baseDetail);
+  });
+
+  afterEach(() => {
+    alertSpy.mockRestore();
+  });
+
+  const pressInstall = async (nodes: unknown[], manifest: Record<string, unknown>) => {
+    mockApiClientGet.mockResolvedValue({ data: nodes });
+    mockGetDownloadInfo.mockResolvedValue(makeDownloadInfo(manifest));
+    const result = render(<StoreDetailScreen />, { wrapper });
+    const button = await waitFor(() => result.getByText('Install'));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    fireEvent.press(button);
+    return result;
+  };
+
+  it('leaves a computer out when the package targets only Pi nodes', async () => {
+    await pressInstall([pi, desk, oldAgent], { targets: ['node'] });
+
+    await waitFor(() => expect(mockRequestInstall).toHaveBeenCalledTimes(1), CI_WAIT);
+    expect(mockRequestInstall).toHaveBeenCalledWith('pi1', 'mpv-play', expect.any(String), 'v1.0.0');
+    const picker = mockNavigate.mock.calls.find((c) => c[0] === 'NodePickerSheet');
+    expect(picker).toBeUndefined();
+  });
+
+  it('says so instead of installing when only computers are left', async () => {
+    await pressInstall([desk], { targets: ['node'] });
+
+    await waitFor(() => {
+      const calls = alertSpy.mock.calls.filter((c) => c[0] === 'Not for computers');
+      expect(calls).toHaveLength(1);
+      expect(calls[0][1]).toContain('MPV Play');
+      expect(calls[0][1]).toContain('Raspberry Pi');
+    }, CI_WAIT);
+    expect(mockRequestInstall).not.toHaveBeenCalled();
+  });
+
+  it('never asks for root consent for a computer-only household', async () => {
+    await pressInstall([desk], { apt_packages: ['mpv'] });
+
+    await waitFor(() => {
+      expect(alertSpy.mock.calls.filter((c) => c[0] === 'Not for computers')).toHaveLength(1);
+    }, CI_WAIT);
+    expect(alertSpy.mock.calls.filter((c) => c[0] === 'Root-privileged install')).toHaveLength(0);
+    expect(mockRequestInstall).not.toHaveBeenCalled();
+  });
+
+  it('installs a package with no targets on a computer', async () => {
+    await pressInstall([desk], {});
+
+    await waitFor(() => expect(mockRequestInstall).toHaveBeenCalledTimes(1), CI_WAIT);
+    expect(mockRequestInstall).toHaveBeenCalledWith('desk1', 'mpv-play', expect.any(String), 'v1.0.0');
+  });
+
+  it('offers both kinds in the picker when the package targets the desktop too', async () => {
+    await pressInstall([pi, desk], { targets: ['node', 'desktop'] });
+
+    await waitFor(() => {
+      const picker = mockNavigate.mock.calls.find((c) => c[0] === 'NodePickerSheet');
+      expect(picker).toBeDefined();
+      const ids = JSON.parse(picker![1].nodes).map((n: { node_id: string }) => n.node_id);
+      expect(ids).toEqual(['pi1', 'desk1']);
+    }, CI_WAIT);
+  });
+});
