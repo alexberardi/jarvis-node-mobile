@@ -16,6 +16,9 @@ import { NodesStackParamList } from '../../navigation/types';
 import { formatLastSeen } from '../../utils/serverTime';
 import { isDesktopAgent } from '../../utils/nodeKind';
 import { NodeKindIcon } from '../../components/NodeKindIcon';
+import { FAB_OFFSET, FAB_SIZE, fabListPaddingBottom } from '../../theme/fab';
+
+const FAB_ROW_GAP = 12;
 
 type Nav = NativeStackNavigationProp<NodesStackParamList>;
 
@@ -134,13 +137,27 @@ const NodeListScreen = () => {
         ListEmptyComponent={emptyComponent}
       />
 
-      <FAB
-        icon="plus"
-        style={[styles.fab, { backgroundColor: theme.colors.primary }]}
-        color={theme.colors.onPrimary}
-        onPress={() => navigation.navigate('AddNode')}
-        label="Add Node"
-      />
+      {/* Two ways in: a Raspberry Pi (QR/Wi-Fi provisioning) or a computer running the
+          Jarvis Automation agent (code pairing). They wrap onto two lines at large font sizes. */}
+      <View style={styles.fabRow} pointerEvents="box-none">
+        <FAB
+          testID="node-add-computer-fab"
+          icon="laptop"
+          mode="flat"
+          style={{ backgroundColor: theme.colors.secondaryContainer }}
+          color={theme.colors.onSecondaryContainer}
+          onPress={() => navigation.navigate('AddComputer')}
+          label="Add a computer"
+        />
+        <FAB
+          testID="node-add-fab"
+          icon="plus"
+          style={{ backgroundColor: theme.colors.primary }}
+          color={theme.colors.onPrimary}
+          onPress={() => navigation.navigate('AddNode')}
+          label="Add Node"
+        />
+      </View>
     </View>
   );
 };
@@ -155,10 +172,20 @@ const styles = StyleSheet.create({
     paddingRight: 8,
   },
   title: { fontWeight: 'bold', paddingHorizontal: 16, marginBottom: 12 },
-  list: { padding: 16, gap: 12, paddingBottom: 96 },
+  // Room for the two FABs even when a large font wraps them onto two rows.
+  list: { padding: 16, gap: 12, paddingBottom: fabListPaddingBottom + FAB_SIZE + FAB_ROW_GAP },
   emptyList: { flexGrow: 1, justifyContent: 'center', alignItems: 'center' },
   card: {},
-  fab: { position: 'absolute', right: 16, bottom: 24 },
+  fabRow: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    bottom: FAB_OFFSET,
+    flexDirection: 'row',
+    flexWrap: 'wrap-reverse',
+    justifyContent: 'flex-end',
+    gap: FAB_ROW_GAP,
+  },
 });
 
 export default NodeListScreen;
