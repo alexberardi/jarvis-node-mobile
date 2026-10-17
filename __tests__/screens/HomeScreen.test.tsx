@@ -380,6 +380,23 @@ describe('HomeScreen', () => {
     expect(await findByText('Living Room is ready — say hi to Jarvis!')).toBeTruthy();
   });
 
+  it('names a provisioned computer by its name in the ready snackbar', async () => {
+    const { findByText } = render(<HomeScreen />, { wrapper });
+
+    act(() => {
+      mockTriggerPendingReady!({
+        node_id: 'agent-new',
+        room: 'desktop',
+        online: true,
+        last_seen: null,
+        node_kind: 'desktop',
+        name: 'Alex MacBook',
+      });
+    });
+
+    expect(await findByText('Alex MacBook is ready — say hi to Jarvis!')).toBeTruthy();
+  });
+
   describe('image attachments', () => {
     const PHOTO = { uri: 'file:///photo-1.jpg', width: 4000, height: 3000 };
     const PHOTO2 = { uri: 'file:///photo-2.jpg', width: 800, height: 600 };

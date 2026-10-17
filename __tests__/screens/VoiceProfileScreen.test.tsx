@@ -111,7 +111,7 @@ describe('VoiceProfileScreen — node picker kinds', () => {
 
   it('lists a Pi with its icon and shows a computer as unable to record yet', async () => {
     (listNodes as jest.Mock).mockResolvedValue([
-      { node_id: 'pi-1', room: 'Kitchen', online: true, user: null, install_mode: 'tarball', node_kind: null },
+      { node_id: 'pi-1', room: 'Kitchen', online: true, user: null, install_mode: 'tarball', node_kind: null, name: 'kitchen-pi' },
       { node_id: 'agent-1', room: 'Office PC', online: true, user: null, install_mode: 'desktop-agent', node_kind: 'desktop' },
     ]);
     (startNodeEnrollment as jest.Mock).mockReturnValue(new Promise(() => {}));
@@ -135,6 +135,8 @@ describe('VoiceProfileScreen — node picker kinds', () => {
     });
     await waitFor(() => expect(startNodeEnrollment).toHaveBeenCalled());
     expect((startNodeEnrollment as jest.Mock).mock.calls[0][0]).toBe('pi-1');
+    // A Pi goes by its room, not its host name.
+    expect(await findByText(/^Recording on Kitchen/)).toBeTruthy();
   });
 });
 
