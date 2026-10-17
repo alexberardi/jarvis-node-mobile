@@ -1,4 +1,4 @@
-import { parseRanCard } from '../../src/types/autonomyCards';
+import { parseRanCard, parseWatchAlert } from '../../src/types/autonomyCards';
 
 const sample = {
   household_id: 'hh',
@@ -69,5 +69,55 @@ describe('parseRanCard', () => {
       steps: [{ label: 'x', command: 'x', status: 'exploded', result: '' }],
     });
     expect(card?.steps[0].status).toBe('pending');
+  });
+});
+
+const watchSample = {
+  household_id: 'hh',
+  card_type: 'watch_alert',
+  watch_id: 'wt_1',
+  state: 'active',
+  looking_for: 'the price to drop below 100 on example.com',
+  value: '$99',
+  previous: '$129',
+  checked_at: '2026-10-16T14:00:00Z',
+  source_url: 'https://www.example.com/item',
+  source_label: 'example.com',
+  interactive_elements: [],
+};
+
+describe('parseWatchAlert', () => {
+  it('returns null without card_type or value', () => {
+    const { card_type, ...rest } = watchSample;
+    expect(parseWatchAlert(rest)).toBeNull();
+    expect(parseWatchAlert(null)).toBeNull();
+    expect(parseWatchAlert({ ...watchSample, card_type: 'autonomy_ran' })).toBeNull();
+    expect(parseWatchAlert({ ...watchSample, value: undefined })).toBeNull();
+    expect(parseWatchAlert({ ...watchSample, value: 99 })).toBeNull();
+  });
+
+  it('parses a full sample', () => {
+    expect(parseWatchAlert(watchSample)).toEqual({
+      lookingFor: 'the price to drop below 100 on example.com',
+      value: '$99',
+      previous: '$129',
+      checkedAt: '2026-10-16T14:00:00Z',
+      sourceUrl: 'https://www.example.com/item',
+      sourceLabel: 'example.com',
+      state: 'active',
+    });
+  });
+
+  it('keeps a null previous and source_url as null', () => {
+    const parsed = parseWatchAlert({
+      ...watchSample,
+      previous: null,
+      source_url: null,
+      checked_at: undefined,
+    });
+    expect(parsed?.previous).toBeNull();
+    expect(parsed?.sourceUrl).toBeNull();
+    expect(parsed?.checkedAt).toBeNull();
+    expect(parsed?.value).toBe('$99');
   });
 });

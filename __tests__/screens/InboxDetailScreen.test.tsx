@@ -710,3 +710,69 @@ describe('"Ran on its own" card', () => {
     expect(queryByTestId('ran-card')).toBeNull();
   });
 });
+
+// Watch alert card (jarvis-server autonomy, card_type watch_alert).
+const sampleWatchItem = {
+  ...sampleItem,
+  category: 'watch_alert',
+  title: '👀 Cheaper item',
+  body: 'The price on example.com is now $99 (was $129).',
+  metadata: {
+    household_id: 'household-1',
+    card_type: 'watch_alert',
+    watch_id: 'wt_1',
+    state: 'active',
+    looking_for: 'the price to drop below 100 on example.com',
+    value: '$99',
+    previous: '$129',
+    checked_at: '2026-10-16T14:00:00Z',
+    source_url: 'https://www.example.com/item',
+    source_label: 'example.com',
+    interactive_elements: [
+      {
+        id: 'pause-watch',
+        label: 'Pause',
+        command: 'watch',
+        callback: 'pause_watch',
+        target: 'server',
+        data: { watch_id: 'wt_1' },
+      },
+      {
+        id: 'stop-watch',
+        label: 'Stop watching',
+        command: 'watch',
+        callback: 'cancel_watch',
+        target: 'server',
+        data: { watch_id: 'wt_1' },
+      },
+    ],
+  },
+};
+
+describe('watch-alert card', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('renders the card instead of the body, and keeps Pause and Stop watching', async () => {
+    mockGetInboxItem.mockResolvedValue(sampleWatchItem);
+
+    const { getByTestId, getByText, queryByText } = render(<InboxDetailScreen />, { wrapper });
+    await waitFor(() => expect(getByTestId('watch-card')).toBeTruthy());
+
+    expect(getByTestId('watch-change')).toHaveTextContent('$129 → $99');
+    expect(queryByText(sampleWatchItem.body)).toBeNull();
+    expect(getByText('Pause')).toBeTruthy();
+    expect(getByText('Stop watching')).toBeTruthy();
+  });
+
+  it('renders the body as before without card_type', async () => {
+    mockGetInboxItem.mockResolvedValue(sampleItem);
+
+    const { getByText, queryByTestId } = render(<InboxDetailScreen />, { wrapper });
+    await waitFor(() =>
+      expect(getByText('This is the full body of the research results.')).toBeTruthy(),
+    );
+    expect(queryByTestId('watch-card')).toBeNull();
+  });
+});

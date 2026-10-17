@@ -69,3 +69,32 @@ export function parseRanCard(metadata: Record<string, any> | null): RanCardData 
     rules,
   };
 }
+
+export interface WatchAlertData {
+  lookingFor: string;
+  value: string;
+  previous: string | null;
+  checkedAt: string | null;
+  sourceUrl: string | null;
+  sourceLabel: string;
+  /** active | paused | done */
+  state: string;
+}
+
+const strOrNull = (v: unknown): string | null => (typeof v === 'string' && v ? v : null);
+
+/** A fired watch (`card_type: "watch_alert"`), or null for any other item. */
+export function parseWatchAlert(metadata: Record<string, any> | null): WatchAlertData | null {
+  if (!metadata || metadata.card_type !== 'watch_alert' || typeof metadata.value !== 'string') {
+    return null;
+  }
+  return {
+    lookingFor: str(metadata.looking_for),
+    value: metadata.value,
+    previous: strOrNull(metadata.previous),
+    checkedAt: strOrNull(metadata.checked_at),
+    sourceUrl: strOrNull(metadata.source_url),
+    sourceLabel: str(metadata.source_label),
+    state: str(metadata.state),
+  };
+}

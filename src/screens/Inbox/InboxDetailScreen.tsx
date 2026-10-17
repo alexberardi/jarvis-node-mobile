@@ -25,9 +25,10 @@ import EditableDateTimeField from '../../components/EditableDateTimeField';
 import InboxAudioPlayer from '../../components/InboxAudioPlayer';
 import InteractiveElementsSection from '../../components/InteractiveElementsSection';
 import AutonomyRanCard from '../../components/inbox/AutonomyRanCard';
+import WatchAlertCard from '../../components/inbox/WatchAlertCard';
 import { InboxStackParamList } from '../../navigation/types';
 import { JarvisButton, normalizeButton } from '../../types/SmartHome';
-import { parseRanCard } from '../../types/autonomyCards';
+import { parseRanCard, parseWatchAlert } from '../../types/autonomyCards';
 import { parseInboxAudio } from '../../services/inboxAudioService';
 import {
   parseExpiresAt,
@@ -316,6 +317,7 @@ const InboxDetailScreen = () => {
     expiredByServer || (expiresAt !== null && expiresAt.getTime() <= Date.now());
   const inboxAudio = parseInboxAudio(item.metadata);
   const ranCard = parseRanCard(item.metadata);
+  const watchAlert = parseWatchAlert(item.metadata);
 
   const formatDate = (iso: string) => {
     const d = parseServerDate(iso) ?? new Date(iso);
@@ -394,6 +396,8 @@ const InboxDetailScreen = () => {
 
       {ranCard ? (
         <AutonomyRanCard data={ranCard} />
+      ) : watchAlert ? (
+        <WatchAlertCard data={watchAlert} />
       ) : linkUrl ? (
         <>
           {item.summary && item.summary !== linkUrl && (
