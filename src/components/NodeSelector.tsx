@@ -15,6 +15,7 @@ import { getSmartHomeConfig, NodeOption } from '../api/smartHomeApi';
 import { LAST_NODE_KEY } from '../config/storageKeys';
 import { usePendingNode } from '../contexts/PendingNodeContext';
 import { useNodeKinds } from '../hooks/useNodeKinds';
+import type { NodeKindMap } from '../hooks/useNodeKinds';
 import { nodeDisplayName, nodeKindIcon, withKnownKind } from '../utils/nodeKind';
 import { NodeKindIcon } from './NodeKindIcon';
 
@@ -87,6 +88,8 @@ const NodeSelector = forwardRef<NodeSelectorHandle, NodeSelectorProps>(
     const onSelectedNodeReadyChangeRef = useRef(onSelectedNodeReadyChange);
     onSelectedNodeReadyChangeRef.current = onSelectedNodeReadyChange;
     const reqIdRef = useRef(0);
+    // The household node list's kinds and names (set below, from useNodeKinds).
+    const knownKindsRef = useRef<NodeKindMap>({});
 
     const loadConfig = useCallback(async (): Promise<void> => {
       if (!householdId) return;
@@ -112,7 +115,8 @@ const NodeSelector = forwardRef<NodeSelectorHandle, NodeSelectorProps>(
       const pendingNode = pending ? nodeList.find((n) => n.node_id === pending) : undefined;
       if (pending && pendingNode) {
         onSelectNodeRef.current(pending);
-        onPendingNodeReadyRef.current?.(pendingNode);
+        // Best effort: a node this new may not be in the kinds map yet.
+        onPendingNodeReadyRef.current?.(withKnownKind(pendingNode, knownKindsRef.current[pending]));
         clearPendingRef.current();
         return;
       }
@@ -185,6 +189,7 @@ const NodeSelector = forwardRef<NodeSelectorHandle, NodeSelectorProps>(
     }, [householdId, waitingForNewNode, loadConfig]);
 
     const kinds = useNodeKinds(householdId, nodes.map((n) => n.node_id));
+    knownKindsRef.current = kinds;
     const selectedNode = nodes.find((n) => n.node_id === selectedNodeId);
     const selectedOffline = selectedNode && !selectedNode.online;
 

@@ -570,7 +570,7 @@ const VoiceProfileScreen = () => {
         <Card.Content style={styles.center}>
           <Icon source="microphone" size={64} color={paperTheme.colors.primary} />
           <Text variant="titleMedium" style={styles.title}>
-            {isVerify ? 'Testing' : 'Recording'} on {activeNode?.room || 'node'}
+            {isVerify ? 'Testing' : 'Recording'} on {activeNode ? nodeDisplayName(activeNode, 'node') : 'node'}
             {titleSuffix}
           </Text>
           <ActivityIndicator size="large" style={{ marginVertical: 12 }} />
@@ -602,7 +602,7 @@ const VoiceProfileScreen = () => {
           Enrollment Complete
         </Text>
         <Text variant="bodyMedium" style={styles.body}>
-          {sampleCount} samples enrolled on {activeNode?.room || 'the node'}.
+          {sampleCount} samples enrolled on {activeNode ? nodeDisplayName(activeNode, 'the node') : 'the node'}.
           Now let's verify it works — speak to the same node.
         </Text>
         <Button
@@ -613,7 +613,7 @@ const VoiceProfileScreen = () => {
           }
           style={styles.button}
         >
-          Test My Voice{activeNode ? ` on ${activeNode.room || 'node'}` : ''}
+          Test My Voice{activeNode ? ` on ${nodeDisplayName(activeNode, 'node')}` : ''}
         </Button>
         <Button
           mode="text"

@@ -135,6 +135,7 @@ describe('VoiceProfileScreen — node picker kinds', () => {
     });
     await waitFor(() => expect(startNodeEnrollment).toHaveBeenCalled());
     expect((startNodeEnrollment as jest.Mock).mock.calls[0][0]).toBe('pi-1');
+    expect(await findByText(/^Recording on Kitchen/)).toBeTruthy();
   });
 });
 

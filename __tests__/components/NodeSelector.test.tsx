@@ -270,6 +270,49 @@ describe('NodeSelector', () => {
     }
   });
 
+  it('fills a pending node\'s kind and name from the node list when the config has none', async () => {
+    jest.useFakeTimers();
+    try {
+      const onPendingNodeReady = jest.fn();
+      // An older server: the smart-home config carries no node_kind or name.
+      mockedGetConfig.mockResolvedValue(
+        config([{ node_id: 'node-1', room: 'Office', online: true, last_seen: null }]),
+      );
+      mockListNodes.mockResolvedValue([
+        { node_id: 'node-1', room: 'Office', node_kind: null, install_mode: 'tarball', name: null },
+        { node_id: 'agent-new', room: 'desktop', node_kind: 'desktop', install_mode: 'desktop-agent', name: 'Alex MacBook' },
+      ]);
+
+      renderWithPending({
+        householdId: 'hh-1',
+        selectedNodeId: null,
+        onSelectNode: jest.fn(),
+        onPendingNodeReady,
+      });
+
+      await act(async () => {}); // initial load + node-list lookup
+      await act(async () => {
+        pendingCtx!.markPending('agent-new', 'hh-1');
+      });
+      mockedGetConfig.mockResolvedValue(
+        config([
+          { node_id: 'node-1', room: 'Office', online: true, last_seen: null },
+          { node_id: 'agent-new', room: 'desktop', online: true, last_seen: null },
+        ]),
+      );
+      await act(async () => {
+        jest.advanceTimersByTime(4000);
+      });
+      await act(async () => {});
+
+      expect(onPendingNodeReady).toHaveBeenCalledWith(
+        expect.objectContaining({ node_id: 'agent-new', node_kind: 'desktop', name: 'Alex MacBook' }),
+      );
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('re-fetches on a subsequent screen focus (first focus is skipped)', async () => {
     const onSelectNode = jest.fn();
     mockedGetConfig.mockResolvedValue(

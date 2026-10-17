@@ -51,6 +51,7 @@ import NodeSelector, { NodeSelectorHandle } from '../../components/NodeSelector'
 import QuickActions from '../../components/QuickActions';
 import type { NodeOption } from '../../api/smartHomeApi';
 import { usePendingNode } from '../../contexts/PendingNodeContext';
+import { nodeDisplayName } from '../../utils/nodeKind';
 import { helpCopy } from '../../copy/help';
 import { useChat } from '../../hooks/useChat';
 import { useChatCapabilities } from '../../hooks/useChatCapabilities';
@@ -312,10 +313,14 @@ const HomeScreen = () => {
 
   // A just-provisioned node finished booting and was auto-selected — celebrate
   // it so the chat screen visibly "comes alive" without an app restart.
+  // A computer goes by its name; a Pi by its title-cased room.
   const handlePendingNodeReady = useCallback((node: NodeOption) => {
-    const where = node.room
-      ? node.room.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())
-      : 'Your new node';
+    const label = nodeDisplayName(node, '');
+    const where = !label
+      ? 'Your new node'
+      : label === node.room?.trim()
+        ? label.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())
+        : label;
     setSnackbar(`${where} is ready — say hi to Jarvis!`);
   }, []);
 
