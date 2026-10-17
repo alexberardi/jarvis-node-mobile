@@ -644,3 +644,69 @@ describe('phone-call prereqs (typed editors / server plane / expiry / guard)', (
     expect(queryByTestId('inbox-audio-player')).toBeNull();
   });
 });
+
+// "Ran on its own" card (jarvis-server autonomy, card_type autonomy_ran).
+const sampleRanItem = {
+  ...sampleItem,
+  category: 'autonomy',
+  title: '🤖 Ran on its own: Find a plumber',
+  body: 'I ran this on its own because your household\'s rules allow it.',
+  metadata: {
+    household_id: 'household-1',
+    card_type: 'autonomy_ran',
+    state: 'running',
+    workflow_id: 'wf_1',
+    plan_id: 'pl_1',
+    source: { kind: 'errand', label: 'Errand' },
+    steps: [
+      { label: 'Search the web', command: 'quick_search', status: 'ok', result: '5 results' },
+    ],
+    rules: [
+      {
+        tool: 'quick_search',
+        effect: 'allow',
+        scope: 'tool',
+        rule_id: null,
+        note: '',
+        reason: 'the tool declares run_without_confirmation',
+      },
+    ],
+    interactive_elements: [
+      {
+        id: 'stop-errand',
+        label: 'Stop',
+        command: 'errand',
+        callback: 'stop_errand',
+        target: 'server',
+        data: { workflow_id: 'wf_1', revision: 1 },
+      },
+    ],
+  },
+};
+
+describe('"Ran on its own" card', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('renders the card instead of the body, and keeps Stop', async () => {
+    mockGetInboxItem.mockResolvedValue(sampleRanItem);
+
+    const { getByTestId, getByText, queryByText } = render(<InboxDetailScreen />, { wrapper });
+    await waitFor(() => expect(getByTestId('ran-card')).toBeTruthy());
+
+    expect(getByText('Search the web')).toBeTruthy();
+    expect(queryByText(sampleRanItem.body)).toBeNull();
+    expect(getByText('Stop')).toBeTruthy();
+  });
+
+  it('renders the body as before without card_type', async () => {
+    mockGetInboxItem.mockResolvedValue(sampleItem);
+
+    const { getByText, queryByTestId } = render(<InboxDetailScreen />, { wrapper });
+    await waitFor(() =>
+      expect(getByText('This is the full body of the research results.')).toBeTruthy(),
+    );
+    expect(queryByTestId('ran-card')).toBeNull();
+  });
+});

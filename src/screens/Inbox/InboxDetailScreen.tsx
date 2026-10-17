@@ -24,8 +24,10 @@ import ActionButtons from '../../components/ActionButtons';
 import EditableDateTimeField from '../../components/EditableDateTimeField';
 import InboxAudioPlayer from '../../components/InboxAudioPlayer';
 import InteractiveElementsSection from '../../components/InteractiveElementsSection';
+import AutonomyRanCard from '../../components/inbox/AutonomyRanCard';
 import { InboxStackParamList } from '../../navigation/types';
 import { JarvisButton, normalizeButton } from '../../types/SmartHome';
+import { parseRanCard } from '../../types/autonomyCards';
 import { parseInboxAudio } from '../../services/inboxAudioService';
 import {
   parseExpiresAt,
@@ -313,6 +315,7 @@ const InboxDetailScreen = () => {
   const isExpired =
     expiredByServer || (expiresAt !== null && expiresAt.getTime() <= Date.now());
   const inboxAudio = parseInboxAudio(item.metadata);
+  const ranCard = parseRanCard(item.metadata);
 
   const formatDate = (iso: string) => {
     const d = parseServerDate(iso) ?? new Date(iso);
@@ -389,7 +392,9 @@ const InboxDetailScreen = () => {
 
       <Divider style={{ marginBottom: 16 }} />
 
-      {linkUrl ? (
+      {ranCard ? (
+        <AutonomyRanCard data={ranCard} />
+      ) : linkUrl ? (
         <>
           {item.summary && item.summary !== linkUrl && (
             <Text variant="bodyMedium" style={[styles.body, { marginBottom: 16 }]}>

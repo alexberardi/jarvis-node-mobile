@@ -1,0 +1,71 @@
+/**
+ * Inbox cards the server's autonomy features write (jarvis-server
+ * docs/autonomy). The metadata shape is the server's contract; parse it
+ * defensively so an older or newer server never crashes the detail screen.
+ */
+
+export type RanStepStatus = 'pending' | 'ok' | 'failed' | 'skipped';
+
+export interface RanCardStep {
+  label: string;
+  command: string;
+  status: RanStepStatus;
+  result: string;
+}
+
+export interface RanCardRule {
+  tool: string;
+  effect: string;
+  /** household | watch | goal | automation | tool */
+  scope: string;
+  note: string;
+  reason: string;
+  rule_id: number | null;
+}
+
+export interface RanCardData {
+  /** running | waiting | done | partial | failed | stopped */
+  state: string;
+  source: { kind: string; label: string };
+  steps: RanCardStep[];
+  rules: RanCardRule[];
+}
+
+const STEP_STATUSES: readonly RanStepStatus[] = ['pending', 'ok', 'failed', 'skipped'];
+
+const str = (v: unknown): string => (typeof v === 'string' ? v : '');
+
+const obj = (v: unknown): Record<string, any> =>
+  v !== null && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, any>) : {};
+
+/** The "Ran on its own" card (`card_type: "autonomy_ran"`), or null for any other item. */
+export function parseRanCard(metadata: Record<string, any> | null): RanCardData | null {
+  if (!metadata || metadata.card_type !== 'autonomy_ran' || !Array.isArray(metadata.steps)) {
+    return null;
+  }
+  const source = obj(metadata.source);
+  const steps = (metadata.steps as unknown[]).map((raw): RanCardStep => {
+    const s = obj(raw);
+    const status = STEP_STATUSES.includes(s.status) ? (s.status as RanStepStatus) : 'pending';
+    return { label: str(s.label), command: str(s.command), status, result: str(s.result) };
+  });
+  const rules = (Array.isArray(metadata.rules) ? (metadata.rules as unknown[]) : []).map(
+    (raw): RanCardRule => {
+      const r = obj(raw);
+      return {
+        tool: str(r.tool),
+        effect: str(r.effect),
+        scope: str(r.scope),
+        note: str(r.note),
+        reason: str(r.reason),
+        rule_id: typeof r.rule_id === 'number' ? r.rule_id : null,
+      };
+    },
+  );
+  return {
+    state: str(metadata.state),
+    source: { kind: str(source.kind), label: str(source.label) },
+    steps,
+    rules,
+  };
+}
