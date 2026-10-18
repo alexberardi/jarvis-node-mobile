@@ -786,6 +786,7 @@ const HomeScreen = () => {
           returnKeyType="send"
           editable={inputReady && !isLoading}
           style={styles.textInput}
+          testID="chat-input"
           dense
           outlineStyle={styles.inputOutline}
         />

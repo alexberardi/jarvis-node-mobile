@@ -362,6 +362,7 @@ const SettingsScreen = () => {
             mode="outlined"
             onPress={logout}
             style={styles.logoutButton}
+            testID="logout-button"
           >
             Log Out
           </Button>

@@ -137,6 +137,7 @@ const LandingScreen = ({ navigation }: Props) => {
           mode="contained"
           onPress={() => goTo('Login')}
           style={styles.button}
+          testID="landing-login-button"
         >
           Log In
         </Button>

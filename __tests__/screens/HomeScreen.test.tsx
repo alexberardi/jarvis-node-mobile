@@ -294,6 +294,18 @@ describe('HomeScreen', () => {
     expect(getByPlaceholderText('Message Jarvis...')).toBeTruthy();
   });
 
+  it('gives the composer the testID the Maestro chat flow types into', () => {
+    setUseChat({ warmupState: 'ready', toolCount: 3, toolsPending: false });
+    const { getByTestId, getByPlaceholderText } = render(
+      <HomeScreen />,
+      { wrapper },
+    );
+
+    fireEvent.press(getByTestId('node-selector'));
+
+    expect(getByTestId('chat-input')).toBe(getByPlaceholderText('Message Jarvis...'));
+  });
+
   it('should disable the input and show "Waiting for node…" while the node is still coming online', () => {
     // Tools may even have reported, but the node is not yet a live member of the
     // household (still provisioning / offline / wrong household) — sending would
