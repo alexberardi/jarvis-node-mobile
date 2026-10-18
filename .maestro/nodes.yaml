@@ -1,0 +1,98 @@
+appId: com.jarvis.nodemobile
+name: Nodes, list, detail, hardware and settings
+# The Nodes tab (src/screens/Nodes/): both seeded nodes are listed; dev-kitchen's detail
+# opens on Overview; Activity and (when the node is not a docker install) Hardware render;
+# its settings open and, on a phone without the node's K2 key (clearState wipes it), ask
+# for one instead of loading. The key is not generated: that needs a live node to take it.
+# Packages is not opened: packages are not tested (user, 2026-10-17).
+# Rename is not covered: the app has no rename for a node.
+tags:
+  - nodes
+  - e2e
+env:
+  EMAIL: "test@jarvisautomation.io"
+  PASSWORD: "DevPass123!"
+  # scripts/seed-dev.py's fixed node ids: dev-kitchen and dev-living-room.
+  NODE_ID: "5eed0000-0000-4000-8000-00000000a0de"
+  LIVING_NODE_ID: "5eed0000-0000-4000-8000-00000000117e"
+---
+- launchApp:
+    clearState: true
+- runFlow: subflows/login.yaml
+- tapOn:
+    id: "tab-nodes"
+- extendedWaitUntil:
+    visible:
+      id: "node-card-${NODE_ID}"
+    timeout: 20000
+- assertVisible:
+    id: "node-card-${LIVING_NODE_ID}"
+- assertVisible:
+    id: "node-add-fab"
+
+# Detail
+- tapOn:
+    id: "node-card-${NODE_ID}"
+- extendedWaitUntil:
+    visible:
+      id: "node-tab-overview"
+    timeout: 15000
+- assertVisible:
+    id: "node-kind-icon"
+- assertVisible:
+    id: "node-tab-activity"
+- tapOn:
+    id: "node-tab-activity"
+- waitForAnimationToEnd:
+    timeout: 3000
+
+# Hardware (every install but docker)
+- runFlow:
+    when:
+      visible:
+        id: "node-tab-hardware"
+    commands:
+      - tapOn:
+          id: "node-tab-hardware"
+      - extendedWaitUntil:
+          visible:
+            id: "hardware-tab"
+          timeout: 10000
+      - scrollUntilVisible:
+          element:
+            text: "Device Info"
+          direction: DOWN
+      - scrollUntilVisible:
+          element:
+            id: "node-id-copy-btn"
+          direction: DOWN
+
+- tapOn:
+    id: "node-tab-overview"
+
+# Settings: the cog shows when the phone has the node's key or the node wants one.
+- runFlow:
+    when:
+      visible:
+        id: "node-settings-button"
+    commands:
+      - tapOn:
+          id: "node-settings-button"
+      - extendedWaitUntil:
+          visible:
+            id: "node-settings-needs-k2"
+          timeout: 15000
+      - assertVisible:
+          text: "Encryption Key Required"
+      - back
+      - extendedWaitUntil:
+          visible:
+            id: "node-tab-overview"
+          timeout: 10000
+
+# Back to the list
+- back
+- extendedWaitUntil:
+    visible:
+      id: "node-card-${NODE_ID}"
+    timeout: 10000

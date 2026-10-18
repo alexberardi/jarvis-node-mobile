@@ -1,27 +1,11 @@
 appId: com.jarvis.nodemobile
 name: login
-# Reusable auth subflow. Drives the Login screen (src/screens/Auth/LoginScreen.tsx)
-# with EMAIL/PASSWORD from the parent flow's env (override per-run with
-# `maestro test -e EMAIL=... -e PASSWORD=...`). The email-input / password-input /
-# login-button testIDs were added alongside this flow.
+# Reusable auth subflow: logs in as the seeded superuser (EMAIL / PASSWORD, from the runner;
+# see .maestro/README.md). Starts on the Landing screen, which is where
+# `launchApp: {clearState: true}` leaves the app. To log in as another role, use
+# login-as.yaml with LOGIN_EMAIL.
 ---
-- assertVisible:
-    id: "email-input"
-- tapOn:
-    id: "email-input"
-- inputText: "${EMAIL}"
-- tapOn:
-    id: "password-input"
-- inputText: "${PASSWORD}"
-# Dismiss the keyboard before the login tap (a live keyboard swallows it).
-# The login screen has no inert label to target, so tap an empty content point
-# (NOT the appbar at the top — that's outside the scroll view and won't dismiss)
-# and let it settle. UNTESTED — the real-device shakeout used a pre-authed session
-# so this subflow wasn't exercised; verify during the CI shakeout (a stable inert
-# label or a testID dismiss target is preferable if this proves flaky).
-- tapOn:
-    point: "50%,22%"
-- waitForAnimationToEnd:
-    timeout: 3000
-- tapOn:
-    id: "login-button"
+- runFlow:
+    file: login-as.yaml
+    env:
+      LOGIN_EMAIL: ${EMAIL}

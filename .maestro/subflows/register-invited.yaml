@@ -1,0 +1,73 @@
+appId: com.jarvis.nodemobile
+name: register-invited
+# Creates a throwaway account that joins Avery Household through an invite code, the way a
+# new household member does it in the app:
+#   1. as the logged-in admin: Household Settings → Invite Codes → create (role INVITE_ROLE,
+#      1 day, 1 use) → copy the new code;
+#   2. clear the app → Create Account with that code, a fresh email (output.newEmail) and
+#      PASSWORD → Home.
+# Needs INVITE_ROLE (member or power_user). Start: logged in as an admin, on the main tabs.
+# End: logged in as the new account, on Home. Delete it again with delete-account.yaml.
+---
+- runFlow: open-household.yaml
+- scrollUntilVisible:
+    element:
+      id: "invite-create-open"
+    direction: DOWN
+- tapOn:
+    id: "invite-create-open"
+- tapOn:
+    id: "invite-role-${INVITE_ROLE}"
+- tapOn:
+    id: "invite-expiry-1"
+- tapOn:
+    id: "invite-max-uses-input"
+- inputText: "1"
+- hideKeyboard
+- tapOn:
+    id: "invite-create-submit"
+# A new code is prepended to the list, so it is the first one on screen.
+- extendedWaitUntil:
+    visible:
+      id: "invite-code-.*"
+    timeout: 15000
+- copyTextFrom:
+    id: "invite-code-.*"
+    index: 0
+- evalScript: ${output.inviteCode = maestro.copiedText}
+- evalScript: ${output.newEmail = 'e2e-' + Date.now() + '@jarvisautomation.io'}
+
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible:
+      id: "landing-register-button"
+    timeout: 30000
+- tapOn:
+    id: "landing-register-button"
+- tapOn:
+    id: "register-invite-input"
+- inputText: ${output.inviteCode}
+# Leaving the field validates the code (GET /invites/{code}/validate).
+- tapOn:
+    id: "register-email-input"
+- inputText: ${output.newEmail}
+- extendedWaitUntil:
+    visible:
+      id: "register-invite-valid"
+    timeout: 15000
+- assertVisible:
+    text: "You.ll join: Avery Household"
+- tapOn:
+    id: "register-password-input"
+- inputText: ${PASSWORD}
+- tapOn:
+    id: "register-confirm-input"
+- inputText: ${PASSWORD}
+- hideKeyboard
+- tapOn:
+    id: "register-button"
+- extendedWaitUntil:
+    visible:
+      id: "settings-button"
+    timeout: 30000

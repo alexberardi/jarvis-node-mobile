@@ -1,0 +1,108 @@
+appId: com.jarvis.nodemobile
+name: Memories, add, edit, delete
+# Memories (src/screens/Memories/) from Settings → Voice → Memories, as the seeded
+# superuser: the seeded memories are listed; a new one is added, edited and deleted again
+# (only the one this flow made: its text is unique per run).
+# State: if the flow dies before the delete, one "E2E memory <time>" stays in the list.
+tags:
+  - memories
+  - e2e
+env:
+  EMAIL: "test@jarvisautomation.io"
+  PASSWORD: "DevPass123!"
+---
+- launchApp:
+    clearState: true
+- runFlow: subflows/login.yaml
+- runFlow: subflows/open-settings.yaml
+- scrollUntilVisible:
+    element:
+      id: "settings-memories-row"
+    direction: DOWN
+- tapOn:
+    id: "settings-memories-row"
+- extendedWaitUntil:
+    visible:
+      id: "memory-card-.*"
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: "Has two golden retrievers, Biscuit and Pepper"
+    direction: DOWN
+
+# Add
+- evalScript: ${output.memo = 'E2E memory ' + Date.now()}
+- tapOn:
+    id: "memory-add-fab"
+- extendedWaitUntil:
+    visible:
+      id: "memory-content-input"
+    timeout: 10000
+- assertVisible:
+    text: "New Memory"
+- tapOn:
+    id: "memory-content-input"
+- inputText: ${output.memo}
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: "memory-save-button"
+    direction: DOWN
+- tapOn:
+    id: "memory-save-button"
+- extendedWaitUntil:
+    visible:
+      id: "memory-add-fab"
+    timeout: 10000
+- scrollUntilVisible:
+    element:
+      text: ${output.memo}
+    direction: DOWN
+
+# Edit
+- tapOn:
+    text: ${output.memo}
+- extendedWaitUntil:
+    visible:
+      text: "Edit Memory"
+    timeout: 10000
+- tapOn:
+    id: "memory-content-input"
+- eraseText: 100
+- inputText: "${output.memo} edited"
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: "memory-save-button"
+    direction: DOWN
+- tapOn:
+    id: "memory-save-button"
+- extendedWaitUntil:
+    visible:
+      id: "memory-add-fab"
+    timeout: 10000
+- scrollUntilVisible:
+    element:
+      text: "${output.memo} edited"
+    direction: DOWN
+
+# Delete
+- tapOn:
+    text: "${output.memo} edited"
+- extendedWaitUntil:
+    visible:
+      id: "memory-delete-button"
+    timeout: 10000
+- tapOn:
+    id: "memory-delete-button"
+- assertVisible:
+    text: "Delete this memory\\? This cannot be undone\\."
+# The alert's destructive button (RN puts the last button in the positive slot).
+- tapOn:
+    id: "android:id/button1"
+- extendedWaitUntil:
+    visible:
+      id: "memory-add-fab"
+    timeout: 10000
+- assertNotVisible:
+    text: "${output.memo} edited"

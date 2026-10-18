@@ -80,7 +80,7 @@ export const HardwareTab = ({ nodeId, node }: Props) => {
   }, [nodeId]);
 
   return (
-    <ScrollView contentContainerStyle={styles.scroll}>
+    <ScrollView testID="hardware-tab" contentContainerStyle={styles.scroll}>
       <InfoHelperText text={desktop ? helpCopy.hardware.desktopTabIntro : helpCopy.hardware.tabIntro} />
 
       {/* Bluetooth (Pi only) */}

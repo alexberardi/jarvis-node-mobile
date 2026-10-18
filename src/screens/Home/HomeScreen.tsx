@@ -723,7 +723,7 @@ const HomeScreen = () => {
 
       {/* Listening banner — shown while recording (incl. quick-open auto-listen) */}
       {isRecording && (
-        <View style={[styles.listeningBar, { backgroundColor: theme.colors.errorContainer }]}>
+        <View testID="listening-banner" style={[styles.listeningBar, { backgroundColor: theme.colors.errorContainer }]}>
           <Text variant="labelLarge" style={{ color: theme.colors.onErrorContainer }}>
             Listening… tap the mic to send
           </Text>
@@ -790,6 +790,7 @@ const HomeScreen = () => {
           outlineStyle={styles.inputOutline}
         />
         <IconButton
+          testID="mic-button"
           icon={isRecording ? 'microphone-off' : 'microphone'}
           size={24}
           onPress={handleMicPress}

@@ -1,0 +1,64 @@
+appId: com.jarvis.nodemobile
+name: Household as a member and as a power user
+# What the seeded non-admin roles see of the household (read only, nothing changes):
+# - the member (EMAIL_MEMBER, Sam) sees the household and its role in Settings, and no
+#   way into Household Settings;
+# - the power user (EMAIL_POWER, Robin) opens Household Settings, can manage invite codes,
+#   and has none of the admin controls (save name, role menus, remove member).
+tags:
+  - settings
+  - household
+  - e2e
+env:
+  EMAIL_MEMBER: "sam@jarvisautomation.io"
+  EMAIL_POWER: "robin@jarvisautomation.io"
+  PASSWORD: "DevPass123!"
+---
+# Member
+- launchApp:
+    clearState: true
+- runFlow:
+    file: subflows/login-as.yaml
+    env:
+      LOGIN_EMAIL: ${EMAIL_MEMBER}
+- runFlow: subflows/open-settings.yaml
+- scrollUntilVisible:
+    element:
+      id: "household-role-.*"
+    direction: DOWN
+- assertVisible:
+    text: "Avery Household"
+- assertVisible:
+    id: "household-role-.*"
+    text: "member"
+- assertNotVisible:
+    id: "household-edit-.*"
+
+# Power user
+- launchApp:
+    clearState: true
+- runFlow:
+    file: subflows/login-as.yaml
+    env:
+      LOGIN_EMAIL: ${EMAIL_POWER}
+- runFlow: subflows/open-household.yaml
+- assertNotVisible:
+    id: "household-save-name"
+- assertNotVisible:
+    id: "household-save-persona"
+- scrollUntilVisible:
+    element:
+      id: "member-row-${EMAIL_MEMBER}"
+    direction: DOWN
+- assertVisible:
+    id: "member-role-.*"
+    childOf:
+      id: "member-row-${EMAIL_MEMBER}"
+- assertNotVisible:
+    id: "member-role-chip-.*"
+- assertNotVisible:
+    id: "member-remove-.*"
+- scrollUntilVisible:
+    element:
+      id: "invite-create-open"
+    direction: DOWN
