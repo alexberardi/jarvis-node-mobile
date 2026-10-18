@@ -27,7 +27,7 @@ tags:
   - e2e
   - skip
 properties:
-  skip_reason: needs Face ID / Touch ID enrollment, which the headless harness emulator has not got
+  skip_reason: "needs biometric enrollment, which the headless emulator has not got (camera, biometrics stay manual: user, 2026-10-17)"
 env:
   EMAIL: "ci-node-test@example.com"
   PASSWORD: "ci-node-test-password"

@@ -34,9 +34,9 @@ env:
 
 # Second household admin.
 - runFlow:
-    file: subflows/login.yaml
+    file: subflows/login-as.yaml
     env:
-      EMAIL: ${EMAIL_ADMIN}
+      LOGIN_EMAIL: ${EMAIL_ADMIN}
 - tapOn:
     id: "settings-button"
 - assertVisible:
@@ -48,9 +48,9 @@ env:
 
 # Power user.
 - runFlow:
-    file: subflows/login.yaml
+    file: subflows/login-as.yaml
     env:
-      EMAIL: ${EMAIL_POWER}
+      LOGIN_EMAIL: ${EMAIL_POWER}
 - tapOn:
     id: "settings-button"
 - assertVisible:
@@ -62,9 +62,9 @@ env:
 
 # Member: a member can't edit the household, so no pencil next to it.
 - runFlow:
-    file: subflows/login.yaml
+    file: subflows/login-as.yaml
     env:
-      EMAIL: ${EMAIL_MEMBER}
+      LOGIN_EMAIL: ${EMAIL_MEMBER}
 - tapOn:
     id: "settings-button"
 - assertVisible:

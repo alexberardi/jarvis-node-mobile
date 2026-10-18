@@ -107,7 +107,7 @@ const LoginScreen = ({ navigation }: Props) => {
           onChangeText={setPassword}
         />
         {error ? (
-          <HelperText type="error" visible>
+          <HelperText testID="login-error" type="error" visible>
             {error}
           </HelperText>
         ) : null}

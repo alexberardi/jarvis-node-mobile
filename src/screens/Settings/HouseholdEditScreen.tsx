@@ -1244,7 +1244,7 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
               </View>
             )}
             {!membersLoading && !membersError && members.map((m) => (
-              <View key={m.user_id} style={styles.memberRow}>
+              <View key={m.user_id} style={styles.memberRow} testID={`member-row-${m.email}`}>
                 <View style={{ flex: 1 }}>
                   <Text variant="bodyMedium">{displayNameOf(m)}</Text>
                   {!!secondaryNameLine(m) && (
@@ -1276,7 +1276,7 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
                     />
                   </View>
                 ) : (
-                  <Chip compact>{ROLE_LABELS[m.role] || m.role}</Chip>
+                  <Chip testID={`member-role-${m.user_id}`} compact>{ROLE_LABELS[m.role] || m.role}</Chip>
                 )}
               </View>
             ))}
@@ -1311,7 +1311,7 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
               {invites.map((invite) => (
                 <View key={invite.id} style={styles.inviteRow}>
                   <View style={{ flex: 1 }}>
-                    <Text variant="bodyMedium" style={{ fontFamily: 'monospace', letterSpacing: 2 }}>
+                    <Text testID={`invite-code-${invite.id}`} variant="bodyMedium" style={{ fontFamily: 'monospace', letterSpacing: 2 }}>
                       {invite.code}
                     </Text>
                     <View style={styles.inviteMeta}>
@@ -1382,8 +1382,8 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
               onValueChange={setInviteRole}
               density="small"
               buttons={[
-                { value: 'member', label: 'Member' },
-                { value: 'power_user', label: 'Power User' },
+                { value: 'member', label: 'Member', testID: 'invite-role-member' },
+                { value: 'power_user', label: 'Power User', testID: 'invite-role-power_user' },
               ]}
             />
 
@@ -1393,14 +1393,15 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
               onValueChange={setInviteExpiry}
               density="small"
               buttons={[
-                { value: '1', label: '1' },
-                { value: '7', label: '7' },
-                { value: '30', label: '30' },
-                { value: '90', label: '90' },
+                { value: '1', label: '1', testID: 'invite-expiry-1' },
+                { value: '7', label: '7', testID: 'invite-expiry-7' },
+                { value: '30', label: '30', testID: 'invite-expiry-30' },
+                { value: '90', label: '90', testID: 'invite-expiry-90' },
               ]}
             />
 
             <TextInput
+              testID="invite-max-uses-input"
               mode="outlined"
               label="Max Uses (optional)"
               value={inviteMaxUses}

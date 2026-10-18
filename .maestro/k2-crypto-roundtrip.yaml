@@ -28,7 +28,7 @@ tags:
   - e2e
   - skip
 properties:
-  skip_reason: needs a DEV_MODE dev-client build and the dockerized fake node (E2E piece 7), which scripts/e2e mobile does not start
+  skip_reason: "needs a DEV_MODE dev-client build and the fake node (E2E piece 7)"
 env:
   EMAIL: "ci-node-test@example.com"
   PASSWORD: "ci-node-test-password"

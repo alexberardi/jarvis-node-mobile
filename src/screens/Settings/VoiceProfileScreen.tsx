@@ -440,7 +440,7 @@ const VoiceProfileScreen = () => {
   );
 
   const renderIdle = () => (
-    <Card style={styles.card}>
+    <Card style={styles.card} testID="voice-idle">
       <Card.Content>
         <Icon source="account-voice" size={48} color={paperTheme.colors.primary} />
         <Text variant="titleMedium" style={styles.title}>
@@ -453,6 +453,7 @@ const VoiceProfileScreen = () => {
           tone shifts in your everyday speech.
         </Text>
         <Button
+          testID="voice-start-enrollment"
           mode="contained"
           icon="microphone"
           onPress={() => openTargetPicker()}
@@ -490,7 +491,7 @@ const VoiceProfileScreen = () => {
       }
     };
     return (
-      <Card style={styles.card}>
+      <Card style={styles.card} testID="voice-select-target">
         <Card.Content>
           <Icon source="microphone-settings" size={48} color={paperTheme.colors.primary} />
           <Text variant="titleMedium" style={styles.title}>
@@ -543,6 +544,7 @@ const VoiceProfileScreen = () => {
           <Divider style={{ marginVertical: 12 }} />
 
           <Button
+            testID="voice-select-target-cancel"
             mode="text"
             onPress={() =>
               setPhase(sampleCount > 0 ? 'enrolled' : 'idle')

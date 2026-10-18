@@ -134,14 +134,15 @@ const LandingScreen = ({ navigation }: Props) => {
 
       <View style={styles.buttons}>
         <Button
+          testID="landing-login-button"
           mode="contained"
           onPress={() => goTo('Login')}
           style={styles.button}
-          testID="landing-login-button"
         >
           Log In
         </Button>
         <Button
+          testID="landing-register-button"
           mode="outlined"
           onPress={() => goTo('Register')}
           style={styles.button}

@@ -17,6 +17,7 @@ tags:
   - e2e
 env:
   EMAIL: "test@jarvisautomation.io"
+  PASSWORD: "DevPass123!"
 ---
 - launchApp:
     clearState: true

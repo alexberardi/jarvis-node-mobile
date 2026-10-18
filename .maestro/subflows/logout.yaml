@@ -8,7 +8,7 @@ name: logout
 - tapOn:
     id: "settings-button"
 - tapOn:
-    id: "logout-button"
+    id: "settings-logout"
 - extendedWaitUntil:
     visible:
       id: "landing-login-button"

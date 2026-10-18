@@ -24,7 +24,7 @@ tags:
   - e2e
   - skip
 properties:
-  skip_reason: needs a DEV_MODE dev-client build and the dockerized fake node (E2E piece 7), which scripts/e2e mobile does not start
+  skip_reason: "needs a DEV_MODE dev-client build and the fake node (E2E piece 7)"
 env:
   EMAIL: "ci-node-test@example.com"
   PASSWORD: "ci-node-test-password"
@@ -42,7 +42,7 @@ env:
     clearState: true
     clearKeychain: true
 
-# --- Auth: an unauthenticated app launches at Landing; the subflow logs in. ---
+# --- Auth: an unauthenticated app launches at the Login screen. ---
 - runFlow: subflows/login.yaml
 
 # --- Main tabs -> Nodes -> Add Node -> the provisioning entry (ScanForNodes). ---

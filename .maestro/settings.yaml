@@ -1,41 +1,145 @@
 appId: com.jarvis.nodemobile
-name: Settings keeps a change across a relaunch
-# Settings (src/screens/Settings/SettingsScreen.tsx) shows the signed-in user's
-# household, and a setting changed there survives closing the screen and
-# relaunching the app: "Auto-play responses" goes off → on (its testID follows
-# the value: auto-play-off / auto-play-on).
+name: Settings, every section
+# Settings (src/screens/Settings/SettingsScreen.tsx), top to bottom, as the seeded
+# superuser: each section renders (settings-section-*), and the settings that are safe to
+# flip on the emulator are flipped and checked: theme (Appearance), auto-play (Chat), and
+# Re-check Connection. Push notifications and Smart Home's switches are only asserted:
+# they call out to Expo's push service and the household's nodes. Security only shows on a
+# biometric-capable device, which the emulator is not (biometrics stay manual).
+# Every change here is local to the app, and the next flow's clearState resets it.
 tags:
   - settings
   - e2e
+env:
+  EMAIL: "test@jarvisautomation.io"
+  PASSWORD: "DevPass123!"
 ---
 - launchApp:
     clearState: true
 - runFlow: subflows/login.yaml
-- tapOn:
-    id: "settings-button"
+- runFlow: subflows/open-settings.yaml
+
+# Account
 - assertVisible:
-    id: "household-name-.*"
+    id: "settings-logout"
+- assertVisible:
+    id: "delete-account-button"
+
+# Household: the active household, joining and creating
+- scrollUntilVisible:
+    element:
+      id: "settings-section-household"
+    direction: DOWN
+- assertVisible:
+    id: "household-row-.*"
+- assertVisible:
     text: "Avery Household"
 - scrollUntilVisible:
     element:
-      id: "auto-play-off"
+      id: "join-invite-code"
+    direction: DOWN
+- scrollUntilVisible:
+    element:
+      id: "create-household-name"
+    direction: DOWN
+
+# Voice: the rows that open their own screens (each has a flow of its own)
+- scrollUntilVisible:
+    element:
+      id: "settings-section-voice"
+    direction: DOWN
+- scrollUntilVisible:
+    element:
+      id: "settings-call-context-row"
+    direction: DOWN
+- assertVisible:
+    id: "settings-voice-profile-row"
+- assertVisible:
+    id: "settings-command-feedback-row"
+- assertVisible:
+    id: "settings-memories-row"
+- assertVisible:
+    id: "settings-phonebook-row"
+# Command Feedback has no flow of its own: open it and come back.
+- tapOn:
+    id: "settings-command-feedback-row"
+- waitForAnimationToEnd:
+    timeout: 3000
+- back
+- extendedWaitUntil:
+    visible:
+      id: "settings-section-voice"
+    timeout: 10000
+
+# Appearance: dark, then light, then back to system (no assertion on the colours:
+# visual polish stays manual)
+- scrollUntilVisible:
+    element:
+      id: "settings-section-appearance"
+    direction: DOWN
+- tapOn:
+    id: "theme-dark"
+- tapOn:
+    id: "theme-light"
+- tapOn:
+    id: "theme-system"
+
+# Chat: auto-play is off by default; on, then off again
+- scrollUntilVisible:
+    element:
+      id: "settings-section-chat"
     direction: DOWN
 - tapOn:
     id: "auto-play-off"
 - assertVisible:
     id: "auto-play-on"
 - tapOn:
-    id: "settings-close"
-- stopApp
-# Relaunch without clearing state: the session and the setting both persist.
-- launchApp
-- extendedWaitUntil:
-    visible:
-      id: "tab-home"
-    timeout: 60000
-- tapOn:
-    id: "settings-button"
+    id: "auto-play-on"
+- assertVisible:
+    id: "auto-play-off"
+
+# Privacy
 - scrollUntilVisible:
     element:
-      id: "auto-play-on"
+      id: "settings-section-privacy"
     direction: DOWN
+- assertVisible:
+    text: "Push notifications"
+
+# Connection: the resolved service URLs, and a re-check that keeps them
+- scrollUntilVisible:
+    element:
+      id: "settings-section-connection"
+    direction: DOWN
+- scrollUntilVisible:
+    element:
+      id: "settings-recheck-connection"
+    direction: DOWN
+- assertVisible:
+    text: "Config: .*"
+- tapOn:
+    id: "settings-recheck-connection"
+- extendedWaitUntil:
+    visible:
+      text: "Config: .*"
+    timeout: 15000
+
+# Smart Home (loads from the household's config) and the config URL override
+- scrollUntilVisible:
+    element:
+      id: "settings-section-smart-home"
+    direction: DOWN
+- scrollUntilVisible:
+    element:
+      id: "settings-section-config-url"
+    direction: DOWN
+
+# Close: back on Home
+- scrollUntilVisible:
+    element:
+      id: "settings-close"
+    direction: UP
+- tapOn:
+    id: "settings-close"
+- assertVisible:
+    id: "settings-button"

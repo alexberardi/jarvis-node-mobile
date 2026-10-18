@@ -54,9 +54,9 @@ import { useNodeKinds } from '../../hooks/useNodeKinds';
 import { isDesktopAgent, nodeDisplayName, NodeKindFields, sortPisFirst } from '../../utils/nodeKind';
 
 const THEME_BUTTONS = [
-  { value: 'light', label: 'Light', icon: 'white-balance-sunny' },
-  { value: 'dark', label: 'Dark', icon: 'moon-waning-crescent' },
-  { value: 'system', label: 'System', icon: 'cellphone' },
+  { value: 'light', label: 'Light', icon: 'white-balance-sunny', testID: 'theme-light' },
+  { value: 'dark', label: 'Dark', icon: 'moon-waning-crescent', testID: 'theme-dark' },
+  { value: 'system', label: 'System', icon: 'cellphone', testID: 'theme-system' },
 ] as const;
 
 /** Gap above the "Settings" title, measured from the top of the screen. */
@@ -352,17 +352,17 @@ const SettingsScreen = () => {
       </View>
 
       {/* Account */}
-      <Card style={styles.card}>
+      <Card style={styles.card} testID="settings-section-account">
         <Card.Content>
           <Text variant="titleMedium" style={styles.sectionTitle}>
             Account
           </Text>
           <DisplayNameEditor />
           <Button
+            testID="settings-logout"
             mode="outlined"
             onPress={logout}
             style={styles.logoutButton}
-            testID="logout-button"
           >
             Log Out
           </Button>
@@ -390,7 +390,7 @@ const SettingsScreen = () => {
       </Card>
 
       {/* Household */}
-      <Card style={styles.card}>
+      <Card style={styles.card} testID="settings-section-household">
         <Card.Content>
           <Text variant="titleMedium" style={styles.sectionTitle}>
             Household
@@ -506,12 +506,12 @@ const SettingsScreen = () => {
 
       {/* Voice */}
       {householdId && (
-        <Card style={styles.card}>
+        <Card style={styles.card} testID="settings-section-voice">
           <Card.Content>
             <Text variant="titleMedium" style={styles.sectionTitle}>
               Voice
             </Text>
-            <TouchableRipple onPress={() => navigation.navigate('VoiceProfile')}>
+            <TouchableRipple testID="settings-voice-profile-row" onPress={() => navigation.navigate('VoiceProfile')}>
               <View style={styles.switchRow}>
                 <View style={{ flex: 1 }}>
                   <Text variant="bodyMedium">Voice Profile</Text>
@@ -527,7 +527,7 @@ const SettingsScreen = () => {
               </View>
             </TouchableRipple>
             <Divider style={{ marginVertical: 4 }} />
-            <TouchableRipple onPress={() => navigation.navigate('RecentCommands')}>
+            <TouchableRipple testID="settings-command-feedback-row" onPress={() => navigation.navigate('RecentCommands')}>
               <View style={styles.switchRow}>
                 <View style={{ flex: 1 }}>
                   <Text variant="bodyMedium">Command Feedback</Text>
@@ -539,7 +539,7 @@ const SettingsScreen = () => {
               </View>
             </TouchableRipple>
             <Divider style={{ marginVertical: 4 }} />
-            <TouchableRipple onPress={() => navigation.navigate('Memories')}>
+            <TouchableRipple testID="settings-memories-row" onPress={() => navigation.navigate('Memories')}>
               <View style={styles.switchRow}>
                 <View style={{ flex: 1 }}>
                   <Text variant="bodyMedium">Memories</Text>
@@ -586,7 +586,7 @@ const SettingsScreen = () => {
       )}
 
       {/* Appearance */}
-      <Card style={styles.card}>
+      <Card style={styles.card} testID="settings-section-appearance">
         <Card.Content>
           <Text variant="titleMedium" style={styles.sectionTitle}>
             Appearance
@@ -600,7 +600,7 @@ const SettingsScreen = () => {
       </Card>
 
       {/* Chat */}
-      <Card style={styles.card}>
+      <Card style={styles.card} testID="settings-section-chat">
         <Card.Content>
           <Text variant="titleMedium" style={styles.sectionTitle}>
             Chat
@@ -623,7 +623,7 @@ const SettingsScreen = () => {
 
       {/* Security — biometric login (only on capable devices) */}
       {biometricAvailable && (
-        <Card style={styles.card}>
+        <Card style={styles.card} testID="settings-section-security">
           <Card.Content>
             <Text variant="titleMedium" style={styles.sectionTitle}>
               Security
@@ -647,7 +647,7 @@ const SettingsScreen = () => {
       )}
 
       {/* Privacy */}
-      <Card style={styles.card}>
+      <Card style={styles.card} testID="settings-section-privacy">
         <Card.Content>
           <Text variant="titleMedium" style={styles.sectionTitle}>
             Privacy
@@ -668,7 +668,7 @@ const SettingsScreen = () => {
       </Card>
 
       {/* Connection Status */}
-      <Card style={styles.card}>
+      <Card style={styles.card} testID="settings-section-connection">
         <Card.Content>
           <Text variant="titleMedium" style={styles.sectionTitle}>
             Connection
@@ -701,6 +701,7 @@ const SettingsScreen = () => {
           )}
           <View style={styles.rediscoverRow}>
             <Button
+              testID="settings-recheck-connection"
               mode="outlined"
               onPress={rediscover}
               icon="refresh"
@@ -714,7 +715,7 @@ const SettingsScreen = () => {
 
       {/* Smart Home */}
       {householdId && (
-        <Card style={styles.card}>
+        <Card style={styles.card} testID="settings-section-smart-home">
           <Card.Content>
             <Text variant="titleMedium" style={styles.sectionTitle}>
               Smart Home
@@ -812,7 +813,7 @@ const SettingsScreen = () => {
       )}
 
       {/* Manual Config URL */}
-      <Card style={styles.card}>
+      <Card style={styles.card} testID="settings-section-config-url">
         <Card.Content>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <Text variant="titleMedium" style={styles.sectionTitle}>

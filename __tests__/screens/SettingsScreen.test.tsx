@@ -158,7 +158,7 @@ describe('SettingsScreen', () => {
   it('gives Log Out the testID the Maestro logout subflow taps', () => {
     const { getByTestId } = render(<SettingsScreen />, { wrapper });
 
-    fireEvent.press(getByTestId('logout-button'));
+    fireEvent.press(getByTestId('settings-logout'));
     expect(mockLogout).toHaveBeenCalled();
   });
 
