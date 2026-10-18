@@ -1,0 +1,34 @@
+appId: com.jarvis.nodemobile
+name: login
+# Shared auth subflow: Landing → Log In → email/password → the main tabs. The
+# parent flow starts with `launchApp: {clearState: true}`, so the app is on
+# Landing (src/screens/Auth/LandingScreen.tsx) with the baked config URL already
+# set. EMAIL/PASSWORD come from the parent's env (scripts/e2e mobile passes the
+# seeded superuser); log in as another role with
+#   - runFlow:
+#       file: subflows/login.yaml
+#       env:
+#         EMAIL: ${EMAIL_MEMBER}
+# Ends once the Home tab is up, so the next step can rely on the main tabs.
+---
+- extendedWaitUntil:
+    visible:
+      id: "landing-login-button"
+    timeout: 60000
+- tapOn:
+    id: "landing-login-button"
+- tapOn:
+    id: "email-input"
+- inputText: "${EMAIL}"
+- tapOn:
+    id: "password-input"
+- inputText: "${PASSWORD}"
+# The harness emulator's keyboard leaves the button uncovered (scripts/mobile-shot
+# taps it the same way); on iOS a live keyboard can swallow this tap, see
+# ../README.md.
+- tapOn:
+    id: "login-button"
+- extendedWaitUntil:
+    visible:
+      id: "tab-home"
+    timeout: 60000

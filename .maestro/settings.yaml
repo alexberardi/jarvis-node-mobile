@@ -1,0 +1,41 @@
+appId: com.jarvis.nodemobile
+name: Settings keeps a change across a relaunch
+# Settings (src/screens/Settings/SettingsScreen.tsx) shows the signed-in user's
+# household, and a setting changed there survives closing the screen and
+# relaunching the app: "Auto-play responses" goes off → on (its testID follows
+# the value: auto-play-off / auto-play-on).
+tags:
+  - settings
+  - e2e
+---
+- launchApp:
+    clearState: true
+- runFlow: subflows/login.yaml
+- tapOn:
+    id: "settings-button"
+- assertVisible:
+    id: "household-name-.*"
+    text: "Avery Household"
+- scrollUntilVisible:
+    element:
+      id: "auto-play-off"
+    direction: DOWN
+- tapOn:
+    id: "auto-play-off"
+- assertVisible:
+    id: "auto-play-on"
+- tapOn:
+    id: "settings-close"
+- stopApp
+# Relaunch without clearing state: the session and the setting both persist.
+- launchApp
+- extendedWaitUntil:
+    visible:
+      id: "tab-home"
+    timeout: 60000
+- tapOn:
+    id: "settings-button"
+- scrollUntilVisible:
+    element:
+      id: "auto-play-on"
+    direction: DOWN

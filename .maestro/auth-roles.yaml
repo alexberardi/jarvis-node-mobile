@@ -1,0 +1,77 @@
+appId: com.jarvis.nodemobile
+name: Login per seeded role
+# Every seeded login gets into the app, and the app knows its role: after login,
+# Settings lists the seeded household with that user's role in it
+# (household-role-<id>, src/screens/Settings/SettingsScreen.tsx). Then Log Out
+# and the next role. scripts/e2e mobile passes EMAIL (the superuser, an admin),
+# EMAIL_ADMIN, EMAIL_POWER, EMAIL_MEMBER and PASSWORD; the env defaults are the
+# rich seed's people (jarvis-server scripts/seed-dev.py).
+tags:
+  - auth
+  - e2e
+env:
+  EMAIL: "test@jarvisautomation.io"
+  EMAIL_ADMIN: "carl@jarvisautomation.io"
+  EMAIL_POWER: "robin@jarvisautomation.io"
+  EMAIL_MEMBER: "sam@jarvisautomation.io"
+---
+- launchApp:
+    clearState: true
+
+# Superuser (household admin).
+- runFlow: subflows/login.yaml
+- tapOn:
+    id: "settings-button"
+- assertVisible:
+    id: "household-name-.*"
+    text: "Avery Household"
+- assertVisible:
+    id: "household-role-.*"
+    text: "admin"
+- tapOn:
+    id: "settings-close"
+- runFlow: subflows/logout.yaml
+
+# Second household admin.
+- runFlow:
+    file: subflows/login.yaml
+    env:
+      EMAIL: ${EMAIL_ADMIN}
+- tapOn:
+    id: "settings-button"
+- assertVisible:
+    id: "household-role-.*"
+    text: "admin"
+- tapOn:
+    id: "settings-close"
+- runFlow: subflows/logout.yaml
+
+# Power user.
+- runFlow:
+    file: subflows/login.yaml
+    env:
+      EMAIL: ${EMAIL_POWER}
+- tapOn:
+    id: "settings-button"
+- assertVisible:
+    id: "household-role-.*"
+    text: "power user"
+- tapOn:
+    id: "settings-close"
+- runFlow: subflows/logout.yaml
+
+# Member: a member can't edit the household, so no pencil next to it.
+- runFlow:
+    file: subflows/login.yaml
+    env:
+      EMAIL: ${EMAIL_MEMBER}
+- tapOn:
+    id: "settings-button"
+- assertVisible:
+    id: "household-role-.*"
+    text: "member"
+- assertNotVisible:
+    id: "household-edit-.*"
+- tapOn:
+    id: "settings-close"
+- runFlow: subflows/logout.yaml
