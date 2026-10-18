@@ -57,6 +57,28 @@ jest.mock('expo-image-picker', () => ({
   launchImageLibraryAsync: jest.fn().mockResolvedValue({ canceled: true, assets: null }),
 }));
 
+// Inbox media attachments (InboxDetailScreen's viewer) load these native
+// modules at import time. VideoView renders a plain View carrying its props;
+// the user grants the photo permission and sharing is available. Tests
+// override per case.
+jest.mock('expo-video', () => {
+  const { View } = require('react-native');
+  return {
+    useVideoPlayer: jest.fn(() => ({ play: jest.fn(), pause: jest.fn(), release: jest.fn() })),
+    VideoView: (props) => require('react').createElement(View, props),
+  };
+});
+
+jest.mock('expo-media-library', () => ({
+  requestPermissionsAsync: jest.fn().mockResolvedValue({ granted: true, status: 'granted' }),
+  saveToLibraryAsync: jest.fn().mockResolvedValue(undefined),
+}));
+
+jest.mock('expo-sharing', () => ({
+  isAvailableAsync: jest.fn().mockResolvedValue(true),
+  shareAsync: jest.fn().mockResolvedValue(undefined),
+}));
+
 jest.mock('expo-image-manipulator', () => {
   const mockSaveAsync = jest.fn().mockResolvedValue({
     uri: 'file:///manipulated.jpg',

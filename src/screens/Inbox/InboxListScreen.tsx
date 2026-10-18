@@ -23,9 +23,11 @@ import {
 } from '../../api/inboxApi';
 import { useAuth } from '../../auth/AuthContext';
 import { FirstRunCard } from '../../components/FirstRunCard';
+import InboxAttachmentThumb from '../../components/inbox/InboxAttachmentThumb';
 import { helpCopy } from '../../copy/help';
 import { useFirstRun } from '../../hooks/useFirstRun';
 import { InboxStackParamList } from '../../navigation/types';
+import { parseInboxAttachments } from '../../services/inboxMediaService';
 import { categoryChipColors, CHIP_FILLS } from '../../theme/categoryChip';
 import { parseServerDate } from '../../utils/serverTime';
 
@@ -226,6 +228,7 @@ const InboxListScreen = () => {
   const renderCard = (item: InboxItem) => {
     const isSelected = selectedIds.has(item.id);
     const categoryColors = categoryChipColors(item.category, CATEGORY_COLORS, theme);
+    const firstAttachment = parseInboxAttachments(item)[0];
     return (
       <Card
         testID={`inbox-item-${item.id}`}
@@ -296,6 +299,15 @@ const InboxListScreen = () => {
                 {stripThinkTags(item.summary)}
               </Text>
             </View>
+            {firstAttachment && (
+              <View style={styles.thumb}>
+                <InboxAttachmentThumb
+                  attachment={firstAttachment}
+                  size={56}
+                  testID={`inbox-item-thumb-${item.id}`}
+                />
+              </View>
+            )}
           </View>
         </Card.Content>
       </Card>
@@ -462,6 +474,7 @@ const styles = StyleSheet.create({
   emptyList: { flexGrow: 1, justifyContent: 'center', alignItems: 'center' },
   card: {},
   cardRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 4 },
+  thumb: { marginLeft: 8, alignSelf: 'center' },
   unreadCard: { borderLeftWidth: 3, borderLeftColor: '#6366f1' },
   unreadTitle: { fontWeight: '700' },
   cardHeader: {

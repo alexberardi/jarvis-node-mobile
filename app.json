@@ -98,6 +98,15 @@
           "faceIDPermission": "Allow Jarvis to use Face ID to unlock the app."
         }
       ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Photo library access lets you choose photos to send to Jarvis in chat.",
+          "savePhotosPermission": "Jarvis saves pictures and videos from your inbox to your photo library when you tap Save.",
+          "isAccessMediaLocationEnabled": false,
+          "granularPermissions": []
+        }
+      ],
       "expo-web-browser",
       [
         "expo-location",

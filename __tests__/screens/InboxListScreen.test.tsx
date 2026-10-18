@@ -196,3 +196,44 @@ describe('InboxListScreen', () => {
     });
   });
 });
+
+const mockDownloadInboxMedia = jest.fn();
+jest.mock('../../src/services/inboxMediaService', () => ({
+  ...jest.requireActual('../../src/services/inboxMediaService'),
+  downloadInboxMedia: (...args: any[]) => mockDownloadInboxMedia(...args),
+}));
+
+describe('InboxListScreen attachments', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockDownloadInboxMedia.mockResolvedValue('file:///cache/inbox-media/t.png');
+  });
+
+  it('shows a thumbnail on rows with an attachment, and none on older items', async () => {
+    mockListInboxItems.mockResolvedValue([
+      {
+        ...sampleItems[0],
+        attachments: [
+          { kind: 'video', url: '/api/v0/inbox/item-1/attachments/a1', thumbnail_url: '/thumb/a1' },
+        ],
+      },
+      sampleItems[1],
+    ]);
+
+    const { findByTestId, queryByTestId } = render(<InboxListScreen />, { wrapper });
+
+    expect(await findByTestId('inbox-item-thumb-item-1')).toBeTruthy();
+    expect(queryByTestId('inbox-item-thumb-item-2')).toBeNull();
+    await waitFor(() => expect(mockDownloadInboxMedia).toHaveBeenCalledWith('/thumb/a1', undefined));
+  });
+
+  it('ignores a malformed attachments field', async () => {
+    mockListInboxItems.mockResolvedValue([{ ...sampleItems[0], attachments: 'nope' }]);
+
+    const { findByText, queryByTestId } = render(<InboxListScreen />, { wrapper });
+
+    expect(await findByText('Research on AI trends')).toBeTruthy();
+    expect(queryByTestId('inbox-item-thumb-item-1')).toBeNull();
+    expect(mockDownloadInboxMedia).not.toHaveBeenCalled();
+  });
+});

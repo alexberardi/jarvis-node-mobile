@@ -776,3 +776,53 @@ describe('watch-alert card', () => {
     expect(queryByTestId('watch-card')).toBeNull();
   });
 });
+
+const mockDownloadInboxMedia = jest.fn();
+jest.mock('../../src/services/inboxMediaService', () => ({
+  ...jest.requireActual('../../src/services/inboxMediaService'),
+  downloadInboxMedia: (...args: any[]) => mockDownloadInboxMedia(...args),
+}));
+
+describe('InboxDetailScreen attachments', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockDownloadInboxMedia.mockResolvedValue('file:///cache/inbox-media/a.png');
+  });
+
+  it('shows the attachment strip and opens the viewer', async () => {
+    mockGetInboxItem.mockResolvedValue({
+      ...sampleItem,
+      attachments: [
+        { kind: 'image', url: '/api/v0/inbox/test-id/attachments/a1', mime_type: 'image/png' },
+        { kind: 'video', url: '/api/v0/inbox/test-id/attachments/a2', mime_type: 'video/mp4' },
+      ],
+    });
+
+    const { findByTestId, getByTestId } = render(<InboxDetailScreen />, { wrapper });
+
+    fireEvent.press(await findByTestId('inbox-attachment-0'));
+    expect(getByTestId('inbox-attachment-1')).toBeTruthy();
+    expect(await findByTestId('attachment-image')).toBeTruthy();
+  });
+
+  it('reads attachments from metadata too', async () => {
+    mockGetInboxItem.mockResolvedValue({
+      ...sampleItem,
+      metadata: { attachments: [{ kind: 'image', url: '/a.png' }] },
+    });
+
+    const { findByTestId } = render(<InboxDetailScreen />, { wrapper });
+
+    expect(await findByTestId('inbox-attachment-0')).toBeTruthy();
+  });
+
+  it('renders an older item without attachments as before', async () => {
+    mockGetInboxItem.mockResolvedValue(sampleItem);
+
+    const { findByText, queryByTestId } = render(<InboxDetailScreen />, { wrapper });
+
+    expect(await findByText('Deep Research Results')).toBeTruthy();
+    expect(queryByTestId('inbox-attachment-0')).toBeNull();
+    expect(mockDownloadInboxMedia).not.toHaveBeenCalled();
+  });
+});
