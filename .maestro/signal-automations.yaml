@@ -1,0 +1,100 @@
+appId: com.jarvis.nodemobile
+name: Signal automations, write and clear a rule
+# Automations (src/screens/Settings/SignalAutomationsScreen.tsx), opened from Household
+# Settings as the admin: the catalog lists "I leave home" (presence.left); a rule is
+# written, set to run automatically, enabled and saved; it is there when the screen is
+# reopened; then it is cleared again (an empty instruction saves as "Clear").
+# State: sets the household's presence.left rule and clears it. If the flow dies in
+# between, the rule stays (it fires only on a real presence.left signal).
+tags:
+  - settings
+  - household
+  - e2e
+env:
+  EMAIL: "test@jarvisautomation.io"
+  PASSWORD: "DevPass123!"
+  RULE: "E2E lock the front door when I leave"
+---
+- launchApp:
+    clearState: true
+- runFlow: subflows/login.yaml
+- runFlow: subflows/open-household.yaml
+- scrollUntilVisible:
+    element:
+      id: "open-signal-automations"
+    direction: DOWN
+- tapOn:
+    id: "open-signal-automations"
+- extendedWaitUntil:
+    visible:
+      id: "automation-presence.left"
+    timeout: 15000
+- assertVisible:
+    text: "I leave home"
+- assertVisible:
+    id: "automation-presence.seen"
+
+# Write, enable, save
+- tapOn:
+    id: "instruction-presence.left"
+- eraseText: 200
+- inputText: ${RULE}
+- hideKeyboard
+- tapOn:
+    id: "delivery-automatic-presence.left"
+- assertVisible:
+    text: "Runs the moment it fires."
+- scrollUntilVisible:
+    element:
+      id: "save-presence.left"
+    direction: DOWN
+- tapOn:
+    id: "enabled-presence.left"
+- tapOn:
+    id: "save-presence.left"
+- extendedWaitUntil:
+    visible:
+      id: "save-presence.left"
+      enabled: false
+    timeout: 10000
+
+# Reopen: it was saved
+- back
+- tapOn:
+    id: "open-signal-automations"
+- extendedWaitUntil:
+    visible:
+      text: ${RULE}
+    timeout: 15000
+- assertVisible:
+    text: "Runs the moment it fires."
+
+# Clear it
+- tapOn:
+    id: "instruction-presence.left"
+- eraseText: 200
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: "save-presence.left"
+    direction: DOWN
+- assertVisible:
+    text: "Clear"
+    childOf:
+      id: "save-presence.left"
+- tapOn:
+    id: "save-presence.left"
+- extendedWaitUntil:
+    visible:
+      id: "save-presence.left"
+      enabled: false
+    timeout: 10000
+- back
+- tapOn:
+    id: "open-signal-automations"
+- extendedWaitUntil:
+    visible:
+      id: "automation-presence.left"
+    timeout: 15000
+- assertNotVisible:
+    text: ${RULE}

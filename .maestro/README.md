@@ -1,5 +1,8 @@
 # Maestro e2e flows (L2 — device e2e)
 
+The older iOS-era flows below (provisioning, K2, biometric login) are tagged `skip` for
+the Android runner; see "The overnight runner" further down for the flows it runs.
+
 The top layer of the mobile testing pyramid (`prds/mobile-app-delivery.md` Phase 2).
 These flows drive a **real dev-client build** in an iOS simulator against the
 dockerized **fake node** (`jarvis-node-setup` `run_provisioning.py` + SimulatedWiFi)
@@ -11,7 +14,43 @@ tool can automate.
 |---|---|
 | `provisioning-devmode-happy-path.yaml` | DEV_MODE "Simulator Mode" → connect to the fake node → NodeInfo → SelectNetwork → EnterPassword → provision → Success |
 | `k2-crypto-roundtrip.yaml` | the REAL `jarvis-crypto` native module (Argon2id + AES-GCM) on **both encrypt and decrypt** — password-protected backup → clipboard → import. jest mocks the module; this is the only test that runs it. **It caught a real native crash on its first run** (an 8-byte stack overflow in `argon2.c`, SIGABRT on every Argon2id hash). |
-| `login.yaml` | reusable auth subflow (email/password → household) |
+| `schedules.yaml` | the Scheduled errands screen renders |
+| `settings.yaml`, `household-*.yaml`, `signal-automations.yaml`, `voice-profile.yaml`, `nodes.yaml`, `memories.yaml`, `phonebook.yaml`, `call-context.yaml`, `register.yaml`, `force-password-change.yaml`, `deep-links.yaml` | E2E piece 6 (#153): see [`COVERAGE.md`](COVERAGE.md) for what each covers |
+
+Shared steps live in `subflows/` (never run on their own): `login.yaml` (the superuser),
+`login-as.yaml` (any `LOGIN_EMAIL`), `open-settings.yaml`, `open-household.yaml`,
+`register-invited.yaml` (a throwaway account joined through an invite code) and
+`delete-account.yaml` (removes that account again).
+
+## The overnight runner (Android, jarvis-server)
+
+jarvis-server's `scripts/e2e mobile` runs **every top-level flow here**, one Maestro process
+per flow, on its own headless Android emulator against a seeded rich sandbox
+(`scripts/seed-dev.py`: Avery Household, its rooms, devices, phonebook, memories, signals
+and two nodes). The contract is jarvis-server
+`docs/decisions/2026-10-18-e2e-mobile-runner.md`; in short:
+
+- a top-level flow starts with `launchApp: {clearState: true}`, logs itself in through
+  `subflows/`, and does not depend on another flow or the order; anything it changes on
+  the server it changes back, or it makes its own throwaway data (unique per run);
+- a flow that can't run there is tagged `skip` with `properties.skip_reason`;
+- the env is `EMAIL`/`PASSWORD` (the superuser), `EMAIL_ADMIN`, `EMAIL_POWER`,
+  `EMAIL_MEMBER` (same `PASSWORD`), `CHAT_MESSAGE`/`CHAT_REPLY`. A flow's own `env:` holds
+  the seed's values, for a local run.
+
+Run one flow from a jarvis-server checkout, against this checkout's committed `HEAD`:
+
+```bash
+scripts/e2e mobile --name <sandbox> --mobile-repo <path to this repo> --filter nodes
+```
+
+`npm test` checks the flows statically (`__tests__/maestro/flows.test.ts`): the contract
+above, that every `runFlow` file exists, and that every `id:` names a testID in `src/`.
+
+Android gotchas: the Login screen has no ScrollView, so its button takes a tap with the
+keyboard up; on a screen with a ScrollView, `hideKeyboard` (Android's back key) first, and
+only right after typing (with no keyboard up it navigates back). An RN `Alert`'s last
+button is `android:id/button1`.
 
 **Validated end-to-end on a real device (2026-06-23):** the full provisioning
 flow ran on an iOS simulator against a live command-center + the fake node — the

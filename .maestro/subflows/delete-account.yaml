@@ -1,0 +1,26 @@
+appId: com.jarvis.nodemobile
+name: delete-account
+# Deletes the logged-in account (Settings → Account → Danger Zone) with PASSWORD, and
+# checks the app is back on the Landing screen. Only for the throwaway accounts a flow
+# made itself (register-invited.yaml), never a seeded one. Start: on the main tabs.
+---
+- runFlow: open-settings.yaml
+- tapOn:
+    id: "delete-account-button"
+- extendedWaitUntil:
+    visible:
+      id: "delete-account-password"
+    timeout: 5000
+- tapOn:
+    id: "delete-account-password"
+- inputText: ${PASSWORD}
+- tapOn:
+    id: "delete-account-confirm"
+- inputText: "DELETE"
+- hideKeyboard
+- tapOn:
+    id: "delete-account-confirm-button"
+- extendedWaitUntil:
+    visible:
+      id: "landing-login-button"
+    timeout: 30000

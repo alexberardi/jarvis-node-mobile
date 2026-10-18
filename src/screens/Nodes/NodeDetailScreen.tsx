@@ -706,6 +706,7 @@ const NodeDetailScreen = () => {
         </Text>
         {(hasSettingsAccess || node.needs_k2) && (
           <IconButton
+            testID="node-settings-button"
             icon="cog-outline"
             onPress={() => navigation.navigate('NodeSettings', { nodeId, room: nodeDisplayName(node, '') || null })}
           />
@@ -719,12 +720,12 @@ const NodeDetailScreen = () => {
           onValueChange={(v) => setTab(v as Tab)}
           density="small"
           buttons={[
-            { value: 'overview', label: 'Overview' },
+            { value: 'overview', label: 'Overview', testID: 'node-tab-overview' },
             ...(node.install_mode !== 'docker'
-              ? [{ value: 'hardware', label: 'Hardware' }]
+              ? [{ value: 'hardware', label: 'Hardware', testID: 'node-tab-hardware' }]
               : []),
-            { value: 'packages', label: 'Packages' },
-            { value: 'activity', label: 'Activity' },
+            { value: 'packages', label: 'Packages', testID: 'node-tab-packages' },
+            { value: 'activity', label: 'Activity', testID: 'node-tab-activity' },
           ]}
         />
       </View>

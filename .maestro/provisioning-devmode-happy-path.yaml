@@ -22,6 +22,9 @@ name: Provisioning happy-path (DEV_MODE / simulated node)
 tags:
   - provisioning
   - e2e
+  - skip
+properties:
+  skip_reason: "needs a DEV_MODE dev-client build and the fake node (E2E piece 7)"
 env:
   EMAIL: "ci-node-test@example.com"
   PASSWORD: "ci-node-test-password"
@@ -40,7 +43,7 @@ env:
     clearKeychain: true
 
 # --- Auth: an unauthenticated app launches at the Login screen. ---
-- runFlow: login.yaml
+- runFlow: subflows/login.yaml
 
 # --- Main tabs -> Nodes -> Add Node -> the provisioning entry (ScanForNodes). ---
 # Maestro text selectors are FULL-STRING regex matches, not "contains": the tab's

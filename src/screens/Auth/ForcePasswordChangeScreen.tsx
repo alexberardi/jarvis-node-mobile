@@ -80,6 +80,7 @@ const ForcePasswordChangeScreen = () => {
 
         {needsCurrentPassword && (
           <TextInput
+            testID="force-temp-password-input"
             label="Temporary Password"
             secureTextEntry
             value={currentPassword}
@@ -89,6 +90,7 @@ const ForcePasswordChangeScreen = () => {
           />
         )}
         <TextInput
+          testID="force-new-password-input"
           label="New Password"
           secureTextEntry
           value={password}
@@ -96,6 +98,7 @@ const ForcePasswordChangeScreen = () => {
           error={!!passwordError}
         />
         <TextInput
+          testID="force-confirm-password-input"
           label="Confirm New Password"
           secureTextEntry
           value={confirmPassword}
@@ -104,12 +107,13 @@ const ForcePasswordChangeScreen = () => {
         />
 
         {showInlineError ? (
-          <HelperText type="error" visible>
+          <HelperText testID="force-password-error" type="error" visible>
             {showInlineError}
           </HelperText>
         ) : null}
 
         <Button
+          testID="force-password-submit"
           mode="contained"
           onPress={handleSubmit}
           loading={loading}
@@ -124,7 +128,7 @@ const ForcePasswordChangeScreen = () => {
         >
           Set Password
         </Button>
-        <Button mode="text" onPress={() => logout()} disabled={loading}>
+        <Button testID="force-password-logout" mode="text" onPress={() => logout()} disabled={loading}>
           Log Out
         </Button>
       </View>

@@ -1,0 +1,101 @@
+appId: com.jarvis.nodemobile
+name: Household settings, rename and back
+# Household Settings (src/screens/Settings/HouseholdEditScreen.tsx) as the household
+# admin (the seeded superuser): every admin section renders, and a rename saves, shows in
+# Settings' household list, and is undone. The screen keeps the name it was opened with
+# as "saved", so the rename back needs the screen reopened.
+#
+# State: renames Avery Household and renames it back. If the flow dies between the two
+# saves, the household stays "Avery Household E2E" and the flows that look for "Avery
+# Household" (settings, register) fail until a reseed.
+tags:
+  - settings
+  - household
+  - e2e
+env:
+  EMAIL: "test@jarvisautomation.io"
+  PASSWORD: "DevPass123!"
+  HOUSEHOLD_NAME: "Avery Household"
+---
+- launchApp:
+    clearState: true
+- runFlow: subflows/login.yaml
+- runFlow: subflows/open-household.yaml
+
+# The admin sections
+- assertVisible:
+    id: "household-save-name"
+- scrollUntilVisible:
+    element:
+      id: "household-persona-input"
+    direction: DOWN
+- scrollUntilVisible:
+    element:
+      id: "household-web-search-toggle"
+    direction: DOWN
+- scrollUntilVisible:
+    element:
+      id: "household-memory-toggle"
+    direction: DOWN
+- scrollUntilVisible:
+    element:
+      id: "household-location-input"
+    direction: DOWN
+- scrollUntilVisible:
+    element:
+      id: "open-signal-automations"
+    direction: DOWN
+- scrollUntilVisible:
+    element:
+      id: "member-row-${EMAIL}"
+    direction: DOWN
+- scrollUntilVisible:
+    element:
+      id: "invite-create-open"
+    direction: DOWN
+
+# Rename
+- scrollUntilVisible:
+    element:
+      id: "household-name-input"
+    direction: UP
+- tapOn:
+    id: "household-name-input"
+- eraseText: 60
+- inputText: "${HOUSEHOLD_NAME} E2E"
+- hideKeyboard
+- tapOn:
+    id: "household-save-name"
+- waitForAnimationToEnd:
+    timeout: 3000
+- back
+- extendedWaitUntil:
+    visible:
+      text: "${HOUSEHOLD_NAME} E2E"
+    timeout: 15000
+
+# And back
+- tapOn:
+    id: "household-edit-.*"
+- extendedWaitUntil:
+    visible:
+      id: "household-name-input"
+    timeout: 15000
+- assertVisible:
+    text: "${HOUSEHOLD_NAME} E2E"
+- tapOn:
+    id: "household-name-input"
+- eraseText: 60
+- inputText: "${HOUSEHOLD_NAME}"
+- hideKeyboard
+- tapOn:
+    id: "household-save-name"
+- waitForAnimationToEnd:
+    timeout: 3000
+- back
+- extendedWaitUntil:
+    visible:
+      text: "${HOUSEHOLD_NAME}"
+    timeout: 15000
+- assertNotVisible:
+    text: "${HOUSEHOLD_NAME} E2E"
