@@ -23,6 +23,7 @@ import { useAuth } from '../../auth/AuthContext';
 import ActionButtons from '../../components/ActionButtons';
 import EditableDateTimeField from '../../components/EditableDateTimeField';
 import InboxAudioPlayer from '../../components/InboxAudioPlayer';
+import InboxAttachments from '../../components/inbox/InboxAttachments';
 import InteractiveElementsSection from '../../components/InteractiveElementsSection';
 import AutonomyRanCard from '../../components/inbox/AutonomyRanCard';
 import WatchAlertCard from '../../components/inbox/WatchAlertCard';
@@ -30,6 +31,7 @@ import { InboxStackParamList } from '../../navigation/types';
 import { JarvisButton, normalizeButton } from '../../types/SmartHome';
 import { parseRanCard, parseWatchAlert } from '../../types/autonomyCards';
 import { parseInboxAudio } from '../../services/inboxAudioService';
+import { parseInboxAttachments } from '../../services/inboxMediaService';
 import {
   parseExpiresAt,
   parseInboxEditors,
@@ -316,6 +318,7 @@ const InboxDetailScreen = () => {
   const isExpired =
     expiredByServer || (expiresAt !== null && expiresAt.getTime() <= Date.now());
   const inboxAudio = parseInboxAudio(item.metadata);
+  const attachments = parseInboxAttachments(item);
   const ranCard = parseRanCard(item.metadata);
   const watchAlert = parseWatchAlert(item.metadata);
 
@@ -438,6 +441,10 @@ const InboxDetailScreen = () => {
           recording). Downloaded through the authenticated cache path;
           absent metadata renders nothing. */}
       {inboxAudio && <InboxAudioPlayer audio={inboxAudio} />}
+
+      {/* Media attachments (images, video). Older servers send none, and
+          then nothing renders. */}
+      <InboxAttachments attachments={attachments} />
 
       {/* FAIL-CLOSED editor guard: this card declares editors the build
           can't render (unknown field type / newer editor_schema). Submitting
