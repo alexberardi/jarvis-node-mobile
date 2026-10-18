@@ -55,6 +55,7 @@ const NodeListScreen = () => {
 
   const renderNode = ({ item }: { item: NodeInfo }) => (
     <Card
+      testID={`node-card-${item.node_id}`}
       style={styles.card}
       onPress={() =>
         navigation.navigate('NodeDetail', {

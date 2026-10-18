@@ -1,0 +1,99 @@
+appId: com.jarvis.nodemobile
+name: Call details, add, edit, delete
+# Call details (src/screens/CallContext/) from Settings → Voice → Call details, as the
+# seeded superuser: a detail is added (name + value), its value edited, and it is removed
+# with the list's swipe-to-delete. Its name is unique per run.
+# State: if the flow dies before the delete, one "E2E rewards <time>" detail stays.
+tags:
+  - call-context
+  - e2e
+env:
+  EMAIL: "test@jarvisautomation.io"
+  PASSWORD: "DevPass123!"
+---
+- launchApp:
+    clearState: true
+- runFlow: subflows/login.yaml
+- runFlow: subflows/open-settings.yaml
+- scrollUntilVisible:
+    element:
+      id: "settings-call-context-row"
+    direction: DOWN
+- tapOn:
+    id: "settings-call-context-row"
+- extendedWaitUntil:
+    visible:
+      id: "call-context-add-fab"
+    timeout: 15000
+- assertVisible:
+    text: "Call details"
+
+# Add
+- evalScript: ${output.label = 'E2E rewards ' + Date.now()}
+- tapOn:
+    id: "call-context-add-fab"
+- extendedWaitUntil:
+    visible:
+      id: "call-context-label-input"
+    timeout: 10000
+- assertVisible:
+    text: "Add detail"
+- tapOn:
+    id: "call-context-label-input"
+- inputText: ${output.label}
+- tapOn:
+    id: "call-context-value-input"
+- inputText: "9982-4471"
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: "call-context-save-button"
+    direction: DOWN
+- tapOn:
+    id: "call-context-save-button"
+- extendedWaitUntil:
+    visible:
+      text: ${output.label}
+    timeout: 10000
+- assertVisible:
+    text: "9982-4471"
+
+# Edit the value
+- tapOn:
+    text: ${output.label}
+- extendedWaitUntil:
+    visible:
+      text: "Edit detail"
+    timeout: 10000
+- tapOn:
+    id: "call-context-value-input"
+- eraseText: 40
+- inputText: "1234-5678"
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: "call-context-save-button"
+    direction: DOWN
+- tapOn:
+    id: "call-context-save-button"
+- extendedWaitUntil:
+    visible:
+      text: "1234-5678"
+    timeout: 10000
+
+# Delete: swipe the card left, tap its delete action, confirm
+- swipe:
+    from:
+      text: ${output.label}
+    direction: LEFT
+- tapOn:
+    id: "call-context-delete-.*"
+- assertVisible:
+    text: "Remove \"${output.label}\"\\?"
+# The alert's destructive button (RN puts the last button in the positive slot).
+- tapOn:
+    id: "android:id/button1"
+- extendedWaitUntil:
+    notVisible:
+      text: ${output.label}
+    timeout: 10000

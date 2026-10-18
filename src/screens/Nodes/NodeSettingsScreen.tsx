@@ -1671,7 +1671,7 @@ const NodeSettingsScreen: React.FC = () => {
   const renderContent = () => {
     if (loadState === 'needs_k2') {
       return (
-        <View style={styles.center}>
+        <View style={styles.center} testID="node-settings-needs-k2">
           <Icon source="key-variant" size={48} color={theme.colors.primary} />
           <Text variant="titleMedium" style={{ marginTop: 16, marginBottom: 8 }}>
             Encryption Key Required
@@ -1693,7 +1693,7 @@ const NodeSettingsScreen: React.FC = () => {
 
     if (loadState === 'loading') {
       return (
-        <View style={styles.center}>
+        <View style={styles.center} testID="node-settings-loading">
           <ActivityIndicator size="large" />
           <Text style={styles.loadingText}>Requesting settings from node...</Text>
         </View>
@@ -1702,7 +1702,7 @@ const NodeSettingsScreen: React.FC = () => {
 
     if (loadState === 'error' || loadState === 'timeout') {
       return (
-        <View style={styles.center}>
+        <View style={styles.center} testID="node-settings-error">
           <Text
             variant="bodyLarge"
             style={{ color: theme.colors.error, textAlign: 'center', marginBottom: 16 }}
@@ -1723,7 +1723,7 @@ const NodeSettingsScreen: React.FC = () => {
 
     return (
       <View style={{ flex: 1 }}>
-        <View style={styles.tabSelectorContainer}>
+        <View style={styles.tabSelectorContainer} testID="node-settings-tabs">
           <SegmentedButtons
             value={tab}
             onValueChange={(v) => setTab(v as Tab)}

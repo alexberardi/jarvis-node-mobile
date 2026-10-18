@@ -1,0 +1,116 @@
+appId: com.jarvis.nodemobile
+name: Phonebook, add, edit, delete
+# Phonebook (src/screens/Phonebook/) from Settings → Voice → Phonebook, as the seeded
+# superuser: the seeded businesses are listed; a new one is added (555-01xx, the fictional
+# range, like the seed), edited and removed again. Its name is unique per run.
+# State: if the flow dies before the delete, one "E2E Bakery <time>" stays in the list.
+tags:
+  - phonebook
+  - e2e
+env:
+  EMAIL: "test@jarvisautomation.io"
+  PASSWORD: "DevPass123!"
+---
+- launchApp:
+    clearState: true
+- runFlow: subflows/login.yaml
+- runFlow: subflows/open-settings.yaml
+- scrollUntilVisible:
+    element:
+      id: "settings-phonebook-row"
+    direction: DOWN
+- tapOn:
+    id: "settings-phonebook-row"
+- extendedWaitUntil:
+    visible:
+      id: "phone-contact-card-.*"
+    timeout: 15000
+- assertVisible:
+    text: "Phonebook"
+- scrollUntilVisible:
+    element:
+      text: "Brightpaw Veterinary"
+    direction: DOWN
+
+# Add
+- evalScript: ${output.biz = 'E2E Bakery ' + Date.now()}
+- tapOn:
+    id: "phone-contact-add-fab"
+- extendedWaitUntil:
+    visible:
+      id: "phone-contact-name-input"
+    timeout: 10000
+- assertVisible:
+    text: "Add Business"
+- tapOn:
+    id: "phone-contact-name-input"
+- inputText: ${output.biz}
+- tapOn:
+    id: "phone-contact-number-input"
+- inputText: "+15550199"
+- tapOn:
+    id: "phone-contact-address-input"
+- inputText: "1 Flour Lane"
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: "phone-contact-save-button"
+    direction: DOWN
+- tapOn:
+    id: "phone-contact-save-button"
+- extendedWaitUntil:
+    visible:
+      id: "phone-contact-add-fab"
+    timeout: 10000
+- scrollUntilVisible:
+    element:
+      text: ${output.biz}
+    direction: DOWN
+
+# Edit: the address
+- tapOn:
+    text: ${output.biz}
+- extendedWaitUntil:
+    visible:
+      text: "Edit Business"
+    timeout: 10000
+- tapOn:
+    id: "phone-contact-address-input"
+- eraseText: 40
+- inputText: "2 Flour Lane"
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: "phone-contact-save-button"
+    direction: DOWN
+- tapOn:
+    id: "phone-contact-save-button"
+- extendedWaitUntil:
+    visible:
+      id: "phone-contact-add-fab"
+    timeout: 10000
+- scrollUntilVisible:
+    element:
+      text: "2 Flour Lane"
+    direction: DOWN
+
+# Delete
+- tapOn:
+    text: ${output.biz}
+- extendedWaitUntil:
+    visible:
+      id: "phone-contact-delete-button"
+    timeout: 10000
+- tapOn:
+    id: "phone-contact-delete-button"
+- assertVisible:
+    text: "Remove this business from the phonebook\\?"
+# The alert's destructive button (RN puts the last button in the positive slot).
+- tapOn:
+    id: "android:id/button1"
+- extendedWaitUntil:
+    visible:
+      id: "phone-contact-add-fab"
+    timeout: 10000
+- assertNotVisible:
+    text: ${output.biz}

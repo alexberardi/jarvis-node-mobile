@@ -33,6 +33,7 @@ const MainTabNavigator = () => {
         component={HomeScreen}
         options={{
           tabBarLabel: 'Home',
+          tabBarButtonTestID: 'tab-home',
           tabBarIcon: ({ color, size }) => (
             <MaterialCommunityIcons name="home" color={color} size={size} />
           ),
@@ -43,6 +44,7 @@ const MainTabNavigator = () => {
         component={DevicesStackNavigator}
         options={{
           tabBarLabel: 'Devices',
+          tabBarButtonTestID: 'tab-devices',
           tabBarIcon: ({ color, size }) => (
             <MaterialCommunityIcons name="devices" color={color} size={size} />
           ),
@@ -53,6 +55,7 @@ const MainTabNavigator = () => {
         component={StoreStackNavigator}
         options={{
           tabBarLabel: 'Pantry',
+          tabBarButtonTestID: 'tab-pantry',
           tabBarIcon: ({ color, size }) => (
             <MaterialCommunityIcons name="package-variant-closed" color={color} size={size} />
           ),
@@ -63,6 +66,7 @@ const MainTabNavigator = () => {
         component={RoutinesStackNavigator}
         options={{
           tabBarLabel: 'Routines',
+          tabBarButtonTestID: 'tab-routines',
           tabBarIcon: ({ color, size }) => (
             <MaterialCommunityIcons name="playlist-play" color={color} size={size} />
           ),
@@ -73,6 +77,7 @@ const MainTabNavigator = () => {
         component={NodesStackNavigator}
         options={{
           tabBarLabel: 'Nodes',
+          tabBarButtonTestID: 'tab-nodes',
           tabBarIcon: ({ color, size }) => (
             <MaterialCommunityIcons name="raspberry-pi" color={color} size={size} />
           ),

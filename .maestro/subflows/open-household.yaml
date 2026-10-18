@@ -1,0 +1,16 @@
+appId: com.jarvis.nodemobile
+name: open-household
+# From the main tabs, as a household admin or power user: Settings, then the active
+# household's pencil (the seeded accounts are in one household, Avery Household).
+---
+- runFlow: open-settings.yaml
+- scrollUntilVisible:
+    element:
+      id: "household-edit-.*"
+    direction: DOWN
+- tapOn:
+    id: "household-edit-.*"
+- extendedWaitUntil:
+    visible:
+      id: "household-name-input"
+    timeout: 15000

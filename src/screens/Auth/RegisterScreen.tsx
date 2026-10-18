@@ -92,6 +92,7 @@ const RegisterScreen = ({ navigation }: Props) => {
       </Appbar.Header>
       <View style={styles.container}>
         <TextInput
+          testID="register-invite-input"
           label="Invite Code (optional)"
           autoCapitalize="characters"
           value={inviteCode}
@@ -102,16 +103,17 @@ const RegisterScreen = ({ navigation }: Props) => {
           style={{ fontFamily: 'monospace', letterSpacing: 4 }}
         />
         {inviteStatus?.valid && (
-          <HelperText type="info" visible style={{ color: theme.colors.primary }}>
+          <HelperText testID="register-invite-valid" type="info" visible style={{ color: theme.colors.primary }}>
             You'll join: {inviteStatus.household_name}
           </HelperText>
         )}
         {inviteStatus && !inviteStatus.valid && (
-          <HelperText type="error" visible>
+          <HelperText testID="register-invite-invalid" type="error" visible>
             Invalid or expired invite code
           </HelperText>
         )}
         <TextInput
+          testID="register-email-input"
           label="Email"
           autoCapitalize="none"
           keyboardType="email-address"
@@ -121,6 +123,7 @@ const RegisterScreen = ({ navigation }: Props) => {
           error={!!email && !isValidEmail}
         />
         <TextInput
+          testID="register-password-input"
           label="Password"
           secureTextEntry
           value={password}
@@ -128,6 +131,7 @@ const RegisterScreen = ({ navigation }: Props) => {
           error={!!passwordError}
         />
         <TextInput
+          testID="register-confirm-input"
           label="Confirm Password"
           secureTextEntry
           value={confirmPassword}
@@ -137,6 +141,7 @@ const RegisterScreen = ({ navigation }: Props) => {
 
         <View style={styles.checkboxRow}>
           <Checkbox
+            testID="register-push-checkbox"
             status={enablePush ? 'checked' : 'unchecked'}
             onPress={() => setEnablePush(!enablePush)}
           />
@@ -151,12 +156,13 @@ const RegisterScreen = ({ navigation }: Props) => {
         </View>
 
         {showInlineError ? (
-          <HelperText type="error" visible>
+          <HelperText testID="register-error" type="error" visible>
             {showInlineError}
           </HelperText>
         ) : null}
 
         <Button
+          testID="register-button"
           mode="contained"
           onPress={handleRegister}
           loading={loading}
@@ -172,7 +178,7 @@ const RegisterScreen = ({ navigation }: Props) => {
         >
           Create Account
         </Button>
-        <Button mode="text" onPress={() => navigation.navigate('Login')}>
+        <Button testID="register-login-link" mode="text" onPress={() => navigation.navigate('Login')}>
           Back to Log In
         </Button>
       </View>

@@ -1,0 +1,125 @@
+appId: com.jarvis.nodemobile
+name: Household members, invite and role change
+# Members and invites (src/screens/Settings/HouseholdEditScreen.tsx) end to end, on an
+# account this flow makes and deletes, so no seeded role ever changes:
+#   1. the admin creates a 1-use member invite; a new account joins with it
+#      (subflows/register-invited.yaml) and sees itself as a member: no household edit;
+#   2. the admin changes the new member to Power User from the role menu;
+#   3. the new account now opens Household Settings as a power user: invite codes yes,
+#      admin controls (save name, role menus) no;
+#   4. it deletes itself, and the admin's member list no longer has it.
+# State: if the flow dies before step 4, one e2e-<time>@jarvisautomation.io account is
+# left in Avery Household. It is unique per run, so later runs are unaffected.
+tags:
+  - settings
+  - household
+  - e2e
+env:
+  EMAIL: "test@jarvisautomation.io"
+  PASSWORD: "DevPass123!"
+---
+- launchApp:
+    clearState: true
+- runFlow: subflows/login.yaml
+
+# 1. Invite → register → member
+- runFlow:
+    file: subflows/register-invited.yaml
+    env:
+      INVITE_ROLE: member
+- runFlow: subflows/open-settings.yaml
+- scrollUntilVisible:
+    element:
+      id: "household-role-.*"
+    direction: DOWN
+- assertVisible:
+    id: "household-role-.*"
+    text: "member"
+- assertNotVisible:
+    id: "household-edit-.*"
+
+# 2. Admin: member → Power User
+- launchApp:
+    clearState: true
+- runFlow: subflows/login.yaml
+- runFlow: subflows/open-household.yaml
+- scrollUntilVisible:
+    element:
+      id: "member-row-${output.newEmail}"
+    direction: DOWN
+- assertVisible:
+    text: "Member"
+    childOf:
+      id: "member-row-${output.newEmail}"
+- tapOn:
+    id: "member-role-chip-.*"
+    childOf:
+      id: "member-row-${output.newEmail}"
+# The menu shows one set of options at a time, for the row it was opened from.
+- tapOn:
+    id: "role-opt-.*-power_user"
+- extendedWaitUntil:
+    visible:
+      text: "Power User"
+      childOf:
+        id: "member-row-${output.newEmail}"
+    timeout: 10000
+# It sticks: reopen the screen and look again.
+- back
+- tapOn:
+    id: "household-edit-.*"
+- scrollUntilVisible:
+    element:
+      id: "member-row-${output.newEmail}"
+    direction: DOWN
+- assertVisible:
+    text: "Power User"
+    childOf:
+      id: "member-row-${output.newEmail}"
+
+# 3. The new account as a power user
+- launchApp:
+    clearState: true
+- runFlow:
+    file: subflows/login-as.yaml
+    env:
+      LOGIN_EMAIL: ${output.newEmail}
+- runFlow: subflows/open-settings.yaml
+- scrollUntilVisible:
+    element:
+      id: "household-role-.*"
+    direction: DOWN
+- assertVisible:
+    id: "household-role-.*"
+    text: "power user"
+- tapOn:
+    id: "household-edit-.*"
+- extendedWaitUntil:
+    visible:
+      id: "household-name-input"
+    timeout: 15000
+- assertNotVisible:
+    id: "household-save-name"
+- scrollUntilVisible:
+    element:
+      id: "member-row-${output.newEmail}"
+    direction: DOWN
+- assertNotVisible:
+    id: "member-role-chip-.*"
+- scrollUntilVisible:
+    element:
+      id: "invite-create-open"
+    direction: DOWN
+- back
+- back
+
+# 4. Clean up
+- runFlow: subflows/delete-account.yaml
+- runFlow: subflows/login.yaml
+- runFlow: subflows/open-household.yaml
+- scrollUntilVisible:
+    element:
+      id: "member-row-${EMAIL}"
+    direction: DOWN
+- assertNotVisible:
+    id: "member-row-${output.newEmail}"
