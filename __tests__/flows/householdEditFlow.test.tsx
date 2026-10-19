@@ -505,4 +505,79 @@ describe('Household edit — flow integration (rename, roles, members, invites, 
 
     expect(setHouseholdSetting).toHaveBeenCalledWith('hh-1', 'pantry.enabled', true);
   });
+
+  describe('watches & errand autonomy', () => {
+    const WATCH_KEYS = { 'watches.enabled': false, 'errands.autonomous_enabled': false };
+
+    it('hides both switches against a server without the keys', async () => {
+      const utils = renderScreen();
+      await utils.findByText('bob@test.com');
+      await utils.findByTestId('household-web-search-toggle');
+      expect(utils.queryByTestId('household-watches-toggle')).toBeNull();
+      expect(utils.queryByTestId('household-errands-autonomy-toggle')).toBeNull();
+    });
+
+    it('reflects the saved values', async () => {
+      (getHouseholdSettings as jest.Mock).mockResolvedValueOnce({
+        'watches.enabled': true,
+        'errands.autonomous_enabled': false,
+      });
+      const utils = renderScreen();
+      expect((await utils.findByTestId('household-watches-toggle')).props.value).toBe(true);
+      expect(utils.getByTestId('household-errands-autonomy-toggle').props.value).toBe(false);
+    });
+
+    it.each([
+      ['household-watches-toggle', 'watches.enabled'],
+      ['household-errands-autonomy-toggle', 'errands.autonomous_enabled'],
+    ])('admin turns %s on → PUT %s', async (testID, key) => {
+      (getHouseholdSettings as jest.Mock).mockResolvedValueOnce(WATCH_KEYS);
+      const utils = renderScreen();
+      const toggle = await utils.findByTestId(testID);
+      expect(toggle.props.value).toBe(false);
+
+      await act(async () => {
+        fireEvent(toggle, 'valueChange', true);
+      });
+
+      expect(setHouseholdSetting).toHaveBeenCalledWith('hh-1', key, true);
+      expect(utils.getByTestId(testID).props.value).toBe(true);
+    });
+
+    it('a plain member sees both switches disabled, with the admin-only note', async () => {
+      (getHouseholdSettings as jest.Mock).mockResolvedValueOnce({
+        'watches.enabled': true,
+        'errands.autonomous_enabled': false,
+      });
+      const utils = renderScreen([{ ...ME, role: 'member' }, BOB]);
+      await utils.findByText('bob@test.com');
+      const watches = await utils.findByTestId('household-watches-toggle');
+      const errands = utils.getByTestId('household-errands-autonomy-toggle');
+      expect(watches.props.disabled).toBe(true);
+      expect(errands.props.disabled).toBe(true);
+      expect(watches.props.value).toBe(true);
+      expect(utils.getByTestId('household-watches-admin-note')).toBeTruthy();
+    });
+
+    it.each([
+      ['household-watches-toggle'],
+      ['household-errands-autonomy-toggle'],
+    ])('reverts %s and alerts when the write fails', async (testID) => {
+      (getHouseholdSettings as jest.Mock).mockResolvedValueOnce(WATCH_KEYS);
+      (setHouseholdSetting as jest.Mock).mockRejectedValueOnce({
+        response: { status: 403, data: { detail: 'Household admin required' } },
+      });
+      const alertSpy = jest.spyOn(Alert, 'alert');
+      const utils = renderScreen();
+      const toggle = await utils.findByTestId(testID);
+
+      await act(async () => {
+        fireEvent(toggle, 'valueChange', true);
+      });
+
+      expect(alertSpy).toHaveBeenCalledWith('Error', 'Household admin required');
+      expect(utils.getByTestId(testID).props.value).toBe(false);
+      alertSpy.mockRestore();
+    });
+  });
 });

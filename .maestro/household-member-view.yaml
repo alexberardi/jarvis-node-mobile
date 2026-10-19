@@ -4,7 +4,8 @@ name: Household as a member and as a power user
 # - the member (EMAIL_MEMBER, Sam) sees the household and its role in Settings, and no
 #   way into Household Settings;
 # - the power user (EMAIL_POWER, Robin) opens Household Settings, can manage invite codes,
-#   and has none of the admin controls (save name, role menus, remove member).
+#   and has none of the admin controls (save name, role menus, remove member); the
+#   watches and errand-autonomy switches show, disabled.
 # The superuser first renames the household back if an earlier run left it renamed
 # (subflows/reset-household-name.yaml): the member can't.
 tags:
@@ -70,3 +71,18 @@ env:
     element:
       id: "invite-create-open"
     direction: DOWN
+
+# Watches & errands: shown read-only (only an admin can change them)
+- scrollUntilVisible:
+    element:
+      id: "household-watches-toggle"
+    direction: UP
+    centerElement: true
+- assertVisible:
+    id: "household-watches-toggle"
+    enabled: false
+- assertVisible:
+    id: "household-errands-autonomy-toggle"
+    enabled: false
+- assertVisible:
+    id: "household-watches-admin-note"

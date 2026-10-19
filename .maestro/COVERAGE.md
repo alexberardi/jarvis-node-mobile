@@ -21,6 +21,7 @@ reason is in its `properties.skip_reason`).
 | Settings/SettingsScreen: Delete Account | flow | subflows/delete-account.yaml (throwaway accounts only) |
 | Settings/HouseholdEditScreen: name, admin sections | flow | household-edit.yaml |
 | Settings/HouseholdEditScreen: members, role change, invite codes | flow | household-members.yaml, household-member-view.yaml |
+| Settings/HouseholdEditScreen: watches and errand-autonomy switches | flow | household-watches-errands.yaml (admin toggles), household-member-view.yaml (read only) |
 | Settings/HouseholdEditScreen: pantry toggle | not tested | packages (user, 2026-10-17) |
 | Settings/HouseholdEditScreen: home presence (location) | not tested | needs a location fix; not in this piece |
 | Settings/SignalAutomationsScreen | flow | signal-automations.yaml |

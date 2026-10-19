@@ -66,6 +66,8 @@ import KeyboardSafeView from '../../components/KeyboardSafeView';
 type Props = NativeStackScreenProps<RootStackParamList, 'HouseholdEdit'>;
 
 type MemoryKey = 'memory.enabled' | 'memory.extraction_enabled';
+// Watches and errand autonomy — both default off, admin-only to write.
+type AgentKey = 'watches.enabled' | 'errands.autonomous_enabled';
 
 interface Member {
   user_id: number;
@@ -109,6 +111,11 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
   // doesn't gate it (legacy stack), which hides the card.
   const [pantryEnabled, setPantryEnabled] = useState<boolean | undefined>(undefined);
   const [savingPantry, setSavingPantry] = useState(false);
+  // Watches + errand autonomy — default off; undefined = the server doesn't
+  // have the key, which hides that switch.
+  const [watchesEnabled, setWatchesEnabled] = useState<boolean | undefined>(undefined);
+  const [errandsAutonomous, setErrandsAutonomous] = useState<boolean | undefined>(undefined);
+  const [savingAgentKey, setSavingAgentKey] = useState<AgentKey | null>(null);
   // Memory (D19): master toggle + "learn from voice" opt-out. Both default on.
   const [memoryEnabled, setMemoryEnabled] = useState(true);
   const [extractionEnabled, setExtractionEnabled] = useState(true);
@@ -208,6 +215,14 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
       setWebSearchEnabled(!!settings['web_search.enabled']);
       setPantryEnabled(
         'pantry.enabled' in settings ? settings['pantry.enabled'] === true : undefined,
+      );
+      setWatchesEnabled(
+        'watches.enabled' in settings ? settings['watches.enabled'] === true : undefined,
+      );
+      setErrandsAutonomous(
+        'errands.autonomous_enabled' in settings
+          ? settings['errands.autonomous_enabled'] === true
+          : undefined,
       );
       setMemoryEnabled(settings['memory.enabled'] ?? true);
       setExtractionEnabled(settings['memory.extraction_enabled'] ?? true);
@@ -535,6 +550,22 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
       Alert.alert('Error', settingErrorMessage(err, 'Failed to update Pantry setting'));
     } finally {
       setSavingPantry(false);
+    }
+  }, [householdId]);
+
+  // Toggle watches / errand autonomy (optimistic; revert on failure)
+  const handleToggleAgent = useCallback(async (key: AgentKey, next: boolean) => {
+    const apply = key === 'watches.enabled' ? setWatchesEnabled : setErrandsAutonomous;
+    apply(next);
+    setSavingAgentKey(key);
+    try {
+      await setHouseholdSetting(householdId, key, next);
+    } catch (err: unknown) {
+      apply(!next);
+      const what = key === 'watches.enabled' ? 'watches' : 'errand';
+      Alert.alert('Error', settingErrorMessage(err, `Failed to update ${what} setting`));
+    } finally {
+      setSavingAgentKey(null);
     }
   }, [householdId]);
 
@@ -918,6 +949,57 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
               </View>
               {!isAdmin && (
                 <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 8 }}>
+                  Only a household admin can change this.
+                </Text>
+              )}
+            </Card.Content>
+          </Card>
+        )}
+
+        {/* Watches & errands (hidden when the server has neither key) */}
+        {(watchesEnabled !== undefined || errandsAutonomous !== undefined) && (
+          <Card style={styles.card}>
+            <Card.Content>
+              <Text variant="titleMedium" style={styles.sectionTitle}>Watches & errands</Text>
+              {watchesEnabled !== undefined && (
+                <View style={styles.toggleRow}>
+                  <View style={{ flex: 1, paddingRight: 12 }}>
+                    <Text variant="bodyMedium">Use watches</Text>
+                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 2 }}>
+                      Let Jarvis keep an eye on things you ask it to watch and alert
+                      you when something changes.
+                    </Text>
+                  </View>
+                  <Switch
+                    testID="household-watches-toggle"
+                    value={watchesEnabled}
+                    onValueChange={(v) => handleToggleAgent('watches.enabled', v)}
+                    disabled={!isAdmin || savingAgentKey !== null}
+                  />
+                </View>
+              )}
+              {errandsAutonomous !== undefined && (
+                <View style={[styles.toggleRow, watchesEnabled !== undefined && { marginTop: 12 }]}>
+                  <View style={{ flex: 1, paddingRight: 12 }}>
+                    <Text variant="bodyMedium">Let errands run on their own</Text>
+                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 2 }}>
+                      Errands you start keep running on their own in the background.
+                    </Text>
+                  </View>
+                  <Switch
+                    testID="household-errands-autonomy-toggle"
+                    value={errandsAutonomous}
+                    onValueChange={(v) => handleToggleAgent('errands.autonomous_enabled', v)}
+                    disabled={!isAdmin || savingAgentKey !== null}
+                  />
+                </View>
+              )}
+              {!isAdmin && (
+                <Text
+                  testID="household-watches-admin-note"
+                  variant="bodySmall"
+                  style={{ color: theme.colors.onSurfaceVariant, marginTop: 8 }}
+                >
                   Only a household admin can change this.
                 </Text>
               )}
