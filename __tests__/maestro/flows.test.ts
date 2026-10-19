@@ -6,7 +6,10 @@
  *   every top-level flow targets the app, starts with `launchApp: {clearState: true}`
  *   unless it is tagged `skip`, and a skipped flow says why (`properties.skip_reason`);
  * - every `runFlow` file exists;
- * - every `id:` selector names a testID that exists in `src/` (or `App.tsx`).
+ * - every `id:` selector names a testID that exists in `src/` (or `App.tsx`);
+ * - an `inputText` that interpolates is one whole `${...}` expression: Maestro drops the
+ *   space after a `${...}` segment followed by literal text (`"${NAME} E2E"` typed
+ *   "NameE2E"), so build the string in the expression (`${NAME + ' E2E'}`).
  *
  * No YAML parser: the flows are written in a plain block style this reads line by line.
  */
@@ -144,6 +147,15 @@ describe('Maestro flows (.maestro/)', () => {
       for (const ref of refs) {
         expect([ref, fs.existsSync(path.join(path.dirname(file), ref))]).toEqual([ref, true]);
       }
+    });
+
+    it('types interpolated text as one whole expression', () => {
+      const mixed = lines(split(file).steps)
+        .map((l) => l.match(/^\s*-\s*inputText:\s*(.*?)\s*$/))
+        .filter((m): m is RegExpMatchArray => m !== null)
+        .map((m) => m[1].replace(/^"(.*)"$|^'(.*)'$/, '$1$2'))
+        .filter((v) => v.includes('${') && !/^\$\{[^}]*\}$/.test(v));
+      expect(mixed).toEqual([]);
     });
 
     it('selects only testIDs that exist in the app', () => {

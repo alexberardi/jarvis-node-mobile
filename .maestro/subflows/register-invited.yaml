@@ -6,9 +6,11 @@ name: register-invited
 #      1 day, 1 use) → copy the new code;
 #   2. clear the app → Create Account with that code, a fresh email (output.newEmail) and
 #      PASSWORD → Home.
-# Needs INVITE_ROLE (member or power_user). Start: logged in as an admin, on the main tabs.
+# First renames the household back if an earlier run left it renamed
+# (reset-household-name.yaml). Needs INVITE_ROLE (member or power_user). Start: logged in as an admin, on the main tabs.
 # End: logged in as the new account, on Home. Delete it again with delete-account.yaml.
 ---
+- runFlow: reset-household-name.yaml
 - runFlow: open-household.yaml
 - scrollUntilVisible:
     element:

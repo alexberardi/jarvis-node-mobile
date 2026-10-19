@@ -69,7 +69,12 @@ env:
 - tapOn:
     id: "memory-content-input"
 - eraseText: 100
-- inputText: "${output.memo} edited"
+# One whole value: Maestro drops the space in `"${output.memo} edited"`.
+- evalScript: ${output.edited = output.memo + ' edited'}
+- inputText: ${output.edited}
+- assertVisible:
+    id: "memory-content-input"
+    text: ${output.edited}
 - hideKeyboard
 - scrollUntilVisible:
     element:
@@ -83,12 +88,12 @@ env:
     timeout: 10000
 - scrollUntilVisible:
     element:
-      text: "${output.memo} edited"
+      text: ${output.edited}
     direction: DOWN
 
 # Delete
 - tapOn:
-    text: "${output.memo} edited"
+    text: ${output.edited}
 - extendedWaitUntil:
     visible:
       id: "memory-delete-button"
@@ -105,4 +110,4 @@ env:
       id: "memory-add-fab"
     timeout: 10000
 - assertNotVisible:
-    text: "${output.memo} edited"
+    text: ${output.edited}
