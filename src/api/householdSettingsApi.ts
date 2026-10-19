@@ -22,6 +22,20 @@ export interface HouseholdSettings {
    */
   'pantry.enabled'?: boolean;
   /**
+   * Watches: household members may ask Jarvis to watch a web page, a search
+   * or a signal and get told when it changes. Default off; household admin only to
+   * write (members get a 403). ABSENT on a server that doesn't know it — the
+   * app then hides the switch.
+   */
+  'watches.enabled'?: boolean;
+  /**
+   * Errand autonomy: household rules (signal/automation reactions) may start
+   * and run background errands without a tap — no one confirms first. Default off; household admin only to
+   * write (members get a 403). ABSENT on a server that doesn't know it — the
+   * app then hides the switch.
+   */
+  'errands.autonomous_enabled'?: boolean;
+  /**
    * Where the household is, as a free-text locality ("Springfield, IL 62704").
    * Biases business lookups so a phone call reaches the nearby branch —
    * a search for "Tony's Pizzeria" once resolved to Maryland for a New
