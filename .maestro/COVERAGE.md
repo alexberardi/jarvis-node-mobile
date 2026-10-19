@@ -16,6 +16,8 @@ reason is in its `properties.skip_reason`).
 | Auth/ForcePasswordChangeScreen | skip | force-password-change.yaml: needs AUTH_URL from the runner |
 | Settings/SettingsScreen: Account, Household, Voice, Appearance, Chat, Privacy, Connection, Smart Home, Config Service URL | flow | settings.yaml |
 | Settings/SettingsScreen: Security (biometric login) | not tested | biometrics stay manual (user, 2026-10-17); biometric-login.yaml is skipped |
+| Settings/SettingsScreen: Log Out (and staying logged out after a relaunch) | flow | auth-logout.yaml |
+| Settings/SettingsScreen: each seeded role's household and role | flow | auth-roles.yaml |
 | Settings/SettingsScreen: Delete Account | flow | subflows/delete-account.yaml (throwaway accounts only) |
 | Settings/HouseholdEditScreen: name, admin sections | flow | household-edit.yaml |
 | Settings/HouseholdEditScreen: members, role change, invite codes | flow | household-members.yaml, household-member-view.yaml |
@@ -43,8 +45,10 @@ reason is in its `properties.skip_reason`).
 | Store/TestInstallScreen | not tested | packages (user, 2026-10-17) |
 | Home/HomeScreen: quick-open deep links (deepLinks.ts) | flow | deep-links.yaml (com.jarvis.app://chat, open, stt) |
 | Home/HomeScreen: Universal Link (https://docs.jarvisautomation.dev/app/...) | not tested | iOS-only entry point; Android has no App Link for it |
-| Home/HomeScreen: chat | later | #145 |
-| Devices/*, Routines/*, Inbox/* | later | #145 |
+| Home/HomeScreen: chat (send, scripted reply) | flow | home-chat.yaml |
+| Home/HomeScreen: chat tool call's visible effect | later | #145 PR 2 (needs the scripted-model tool rules) |
+| Devices/DevicesScreen, Routines list, Pantry tab (they open and show seeded data) | flow | nav-tabs.yaml |
+| Devices/*, Routines/*, Inbox/* (everything else) | later | #145 |
 | Schedules/ScheduleListScreen | flow | schedules.yaml |
 | Provisioning/*, ImportKey/ImportKeyScreen | skip | provisioning-devmode-happy-path.yaml, k2-crypto-roundtrip.yaml: need a dev-client build and the fake node (piece 7) |
 | SmartHome/*, CommandData/* | later | not in piece 6 |

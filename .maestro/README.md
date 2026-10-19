@@ -15,10 +15,17 @@ tool can automate.
 | `provisioning-devmode-happy-path.yaml` | DEV_MODE "Simulator Mode" → connect to the fake node → NodeInfo → SelectNetwork → EnterPassword → provision → Success |
 | `k2-crypto-roundtrip.yaml` | the REAL `jarvis-crypto` native module (Argon2id + AES-GCM) on **both encrypt and decrypt** — password-protected backup → clipboard → import. jest mocks the module; this is the only test that runs it. **It caught a real native crash on its first run** (an 8-byte stack overflow in `argon2.c`, SIGABRT on every Argon2id hash). |
 | `schedules.yaml` | the Scheduled errands screen renders |
+| `auth-roles.yaml` | every seeded role (superuser, admin, power user, member) logs in, and Settings shows the seeded household with that role; a member gets no household edit button |
+| `auth-logout.yaml` | Log Out lands on Landing, and a relaunch stays logged out |
+| `nav-tabs.yaml` | the five tabs open (pick them by `tab-home`, `tab-devices`, `tab-pantry`, `tab-routines`, `tab-nodes`), and Devices, Routines and Nodes show seeded data |
+| `home-chat.yaml` | a chat message gets the scripted model's exact reply (`CHAT_MESSAGE` → `CHAT_REPLY`) |
 | `settings.yaml`, `household-*.yaml`, `signal-automations.yaml`, `voice-profile.yaml`, `nodes.yaml`, `memories.yaml`, `phonebook.yaml`, `call-context.yaml`, `register.yaml`, `force-password-change.yaml`, `deep-links.yaml` | E2E piece 6 (#153): see [`COVERAGE.md`](COVERAGE.md) for what each covers |
 
+E2E piece 5 (#145): its layout and seed contract are in
+[`../docs/decisions/2026-10-18-e2e-mobile-flows.md`](../docs/decisions/2026-10-18-e2e-mobile-flows.md).
+
 Shared steps live in `subflows/` (never run on their own): `login.yaml` (the superuser),
-`login-as.yaml` (any `LOGIN_EMAIL`), `open-settings.yaml`, `open-household.yaml`,
+`login-as.yaml` (any `LOGIN_EMAIL`), `logout.yaml` (Home → Settings → Log Out → Landing), `open-settings.yaml`, `open-household.yaml`,
 `register-invited.yaml` (a throwaway account joined through an invite code) and
 `delete-account.yaml` (removes that account again).
 

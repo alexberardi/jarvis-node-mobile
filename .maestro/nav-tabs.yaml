@@ -1,0 +1,50 @@
+appId: com.jarvis.nodemobile
+name: The five main tabs open on the seeded household
+# Each bottom tab (src/navigation/MainTabNavigator.tsx, tab-<name> testIDs)
+# opens its screen, and the screens that list seeded data show it: a seeded
+# device on Devices, a seeded routine on Routines, the seeded kitchen node on
+# Nodes (jarvis-server scripts/seed-dev.py, fixed node id 5eed…a0de).
+tags:
+  - nav
+  - e2e
+---
+- launchApp:
+    clearState: true
+- runFlow: subflows/login.yaml
+
+- tapOn:
+    id: "tab-devices"
+- extendedWaitUntil:
+    visible:
+      text: "Kitchen Ceiling"
+    timeout: 20000
+
+- tapOn:
+    id: "tab-pantry"
+- extendedWaitUntil:
+    visible:
+      id: "searchbar-input"
+    timeout: 20000
+
+- tapOn:
+    id: "tab-routines"
+- assertVisible:
+    id: "open-schedules"
+- extendedWaitUntil:
+    visible:
+      id: "routine-card-.*"
+    timeout: 20000
+
+- tapOn:
+    id: "tab-nodes"
+- extendedWaitUntil:
+    visible:
+      id: "node-kind-icon-5eed0000-0000-4000-8000-00000000a0de"
+    timeout: 20000
+
+- tapOn:
+    id: "tab-home"
+- assertVisible:
+    id: "settings-button"
+- assertVisible:
+    id: "inbox-button"

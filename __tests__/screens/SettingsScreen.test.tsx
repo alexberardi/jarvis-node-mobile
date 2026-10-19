@@ -155,6 +155,13 @@ describe('SettingsScreen', () => {
     expect(mockLogout).toHaveBeenCalled();
   });
 
+  it('gives Log Out the testID the Maestro logout subflow taps', () => {
+    const { getByTestId } = render(<SettingsScreen />, { wrapper });
+
+    fireEvent.press(getByTestId('settings-logout'));
+    expect(mockLogout).toHaveBeenCalled();
+  });
+
   it('should render Household section', () => {
     const { getByText } = render(<SettingsScreen />, { wrapper });
 

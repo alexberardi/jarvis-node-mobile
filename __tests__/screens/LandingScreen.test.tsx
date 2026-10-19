@@ -85,6 +85,17 @@ describe('LandingScreen', () => {
     expect(mockNavigate).toHaveBeenCalledWith('Login');
   });
 
+  it('gives Log In the testID the Maestro login subflow taps', () => {
+    const { getByTestId } = render(
+      <LandingScreen navigation={mockNavigation} route={{} as any} />,
+      { wrapper }
+    );
+
+    fireEvent.press(getByTestId('landing-login-button'));
+
+    expect(mockNavigate).toHaveBeenCalledWith('Login');
+  });
+
   it('should render app title', () => {
     const { getByText } = render(
       <LandingScreen navigation={mockNavigation} route={{} as any} />,
