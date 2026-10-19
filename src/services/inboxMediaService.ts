@@ -2,9 +2,13 @@
  * Inbox media attachments (images and video, e.g. ComfyUI output): parsing,
  * authenticated download to the local cache, save to photos and share.
  *
- * Contract (docs/decisions/inbox-attachments.md): an inbox item carries
- *   attachments = [{ kind: 'image'|'video', url, mime_type?, thumbnail_url?, … }]
- * at the top level, or the same list under metadata.attachments. Older
+ * Contract (docs/decisions/inbox-attachments.md): jarvisd sends, at the top
+ * level of an item,
+ *   attachments = [{ id, mime, size, width, height, duration_ms }]
+ * (width/height/duration_ms may be null) and serves each file at
+ * /api/v0/inbox/{item_id}/attachments/{id}. The kind comes from the mime
+ * type. An entry that already names its kind and url is taken as given, and
+ * metadata.attachments is read when the top-level list is absent. Older
  * servers send neither — that means "no attachments", nothing else changes.
  *
  * Like the phone-call audio, the bytes are only served to the user's JWT
@@ -41,12 +45,33 @@ export interface InboxAttachment {
 const STRING_FIELDS = ['id', 'mime_type', 'thumbnail_url', 'filename'] as const;
 const NUMBER_FIELDS = ['width', 'height', 'duration_seconds', 'size_bytes'] as const;
 
-const parseOne = (raw: unknown): InboxAttachment | null => {
+const kindFromMime = (mime: unknown): InboxAttachmentKind | null => {
+  if (typeof mime !== 'string') return null;
+  if (mime.startsWith('image/')) return 'image';
+  if (mime.startsWith('video/')) return 'video';
+  return null;
+};
+
+const parseOne = (raw: unknown, itemId?: string): InboxAttachment | null => {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
-  const a = raw as Record<string, unknown>;
-  if (a.kind !== 'image' && a.kind !== 'video') return null;
-  if (typeof a.url !== 'string' || a.url.length === 0) return null;
-  const out: InboxAttachment = { kind: a.kind, url: a.url };
+  // jarvisd's names (mime, size, duration_ms) map onto ours.
+  const a = { ...(raw as Record<string, unknown>) };
+  if (a.mime_type == null) a.mime_type = a.mime;
+  if (a.size_bytes == null) a.size_bytes = a.size;
+  if (a.duration_seconds == null && a.duration_ms != null) {
+    if (typeof a.duration_ms !== 'number') return null;
+    a.duration_seconds = a.duration_ms / 1000;
+  }
+  let kind: InboxAttachmentKind | null = null;
+  if (a.kind === 'image' || a.kind === 'video') kind = a.kind;
+  else if (a.kind == null) kind = kindFromMime(a.mime_type);
+  if (!kind) return null;
+  let url = a.url;
+  if (url == null && typeof a.id === 'string' && a.id.length > 0 && itemId) {
+    url = `/api/v0/inbox/${encodeURIComponent(itemId)}/attachments/${encodeURIComponent(a.id)}`;
+  }
+  if (typeof url !== 'string' || url.length === 0) return null;
+  const out: InboxAttachment = { kind, url };
   for (const key of STRING_FIELDS) {
     if (a[key] == null) continue;
     if (typeof a[key] !== 'string') return null;
@@ -65,6 +90,7 @@ const parseOne = (raw: unknown): InboxAttachment | null => {
  * Malformed entries are dropped one by one; anything else → [].
  */
 export const parseInboxAttachments = (item: {
+  id?: string;
   attachments?: unknown;
   metadata?: Record<string, any> | null;
 }): InboxAttachment[] => {
@@ -72,7 +98,7 @@ export const parseInboxAttachments = (item: {
   if (!Array.isArray(raw)) return [];
   const out: InboxAttachment[] = [];
   for (const entry of raw) {
-    const parsed = parseOne(entry);
+    const parsed = parseOne(entry, item.id);
     if (parsed) out.push(parsed);
     if (out.length >= MAX_ATTACHMENTS) break;
   }

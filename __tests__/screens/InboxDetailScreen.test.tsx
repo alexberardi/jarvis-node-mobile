@@ -793,8 +793,9 @@ describe('InboxDetailScreen attachments', () => {
     mockGetInboxItem.mockResolvedValue({
       ...sampleItem,
       attachments: [
-        { kind: 'image', url: '/api/v0/inbox/test-id/attachments/a1', mime_type: 'image/png' },
-        { kind: 'video', url: '/api/v0/inbox/test-id/attachments/a2', mime_type: 'video/mp4' },
+        // jarvisd's shape (see __tests__/fixtures/jarvisd-inbox-item-attachments.json).
+        { id: 'a1', mime: 'image/png', size: 75, width: 3, height: 2, duration_ms: null },
+        { id: 'a2', mime: 'video/mp4', size: 124, width: null, height: null, duration_ms: null },
       ],
     });
 
@@ -803,6 +804,10 @@ describe('InboxDetailScreen attachments', () => {
     fireEvent.press(await findByTestId('inbox-attachment-0'));
     expect(getByTestId('inbox-attachment-1')).toBeTruthy();
     expect(await findByTestId('attachment-image')).toBeTruthy();
+    expect(mockDownloadInboxMedia).toHaveBeenCalledWith(
+      '/api/v0/inbox/test-id/attachments/a1',
+      'image/png',
+    );
   });
 
   it('reads attachments from metadata too', async () => {
