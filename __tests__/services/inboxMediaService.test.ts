@@ -110,6 +110,57 @@ describe('parseInboxAttachments', () => {
     ]);
   });
 
+  describe("jarvisd's shape", () => {
+    it('derives the kind from mime and the url from the item and attachment ids', () => {
+      const item = {
+        id: 'item 1',
+        attachments: [
+          { id: 'a/1', mime: 'image/jpeg', size: 10, width: 4, height: 3, duration_ms: null },
+          { id: 'a2', mime: 'video/webm', size: 20, width: null, height: null, duration_ms: 4500 },
+        ],
+        metadata: null,
+      };
+      expect(parseInboxAttachments(item)).toEqual([
+        {
+          id: 'a/1',
+          kind: 'image',
+          url: '/api/v0/inbox/item%201/attachments/a%2F1',
+          mime_type: 'image/jpeg',
+          size_bytes: 10,
+          width: 4,
+          height: 3,
+        },
+        {
+          id: 'a2',
+          kind: 'video',
+          url: '/api/v0/inbox/item%201/attachments/a2',
+          mime_type: 'video/webm',
+          size_bytes: 20,
+          duration_seconds: 4.5,
+        },
+      ]);
+    });
+
+    it('drops entries it cannot place or type', () => {
+      const attachments = [
+        { id: 'pdf', mime: 'application/pdf', size: 1 },
+        { mime: 'image/png', size: 1 },
+        { id: '', mime: 'image/png', size: 1 },
+        { id: 'n', mime: 5, size: 1 },
+        { id: 's', mime: 'image/png', size: '1' },
+        { id: 'd', mime: 'video/mp4', size: 1, duration_ms: '4s' },
+        { id: 'ok', mime: 'image/gif', size: 1 },
+      ];
+      expect(parseInboxAttachments({ id: 'i1', attachments, metadata: null })).toEqual([
+        { id: 'ok', kind: 'image', url: '/api/v0/inbox/i1/attachments/ok', mime_type: 'image/gif', size_bytes: 1 },
+      ]);
+    });
+
+    it('needs the item id to build a url', () => {
+      expect(parseInboxAttachments({ attachments: [{ id: 'a1', mime: 'image/png' }] })).toEqual([]);
+    });
+  });
+
   it('caps the list at 10', () => {
     const many = Array.from({ length: 15 }, (_, i) => ({ kind: 'image', url: `/a${i}` }));
     expect(parseInboxAttachments({ attachments: many, metadata: null })).toHaveLength(10);

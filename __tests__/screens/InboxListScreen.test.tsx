@@ -213,9 +213,8 @@ describe('InboxListScreen attachments', () => {
     mockListInboxItems.mockResolvedValue([
       {
         ...sampleItems[0],
-        attachments: [
-          { kind: 'video', url: '/api/v0/inbox/item-1/attachments/a1', thumbnail_url: '/thumb/a1' },
-        ],
+        // jarvisd's shape (see __tests__/fixtures/jarvisd-inbox-item-attachments.json).
+        attachments: [{ id: 'a1', mime: 'image/png', size: 75, width: 3, height: 2, duration_ms: null }],
       },
       sampleItems[1],
     ]);
@@ -224,7 +223,11 @@ describe('InboxListScreen attachments', () => {
 
     expect(await findByTestId('inbox-item-thumb-item-1')).toBeTruthy();
     expect(queryByTestId('inbox-item-thumb-item-2')).toBeNull();
-    await waitFor(() => expect(mockDownloadInboxMedia).toHaveBeenCalledWith('/thumb/a1', undefined));
+    await waitFor(() => expect(mockDownloadInboxMedia).toHaveBeenCalledWith(
+        '/api/v0/inbox/item-1/attachments/a1',
+        'image/png',
+      ),
+    );
   });
 
   it('ignores a malformed attachments field', async () => {

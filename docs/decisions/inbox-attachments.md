@@ -7,53 +7,49 @@ The ComfyUI plan delivers generated media through the inbox:
 (3) the SDK's inbox API takes attachments, (4) the Python node passes them
 through, (5) `jarvis-cmd-comfyui` makes the media.
 
-Piece 1 was not readable when this was built, so the mobile side reads a
-tolerant contract and the server side should match it (or this file gets
-updated with whatever piece 1 settles on).
+Piece 1 was not readable when this was built, so the mobile side first read
+a contract of its own guessing, which jarvisd never sent (#218). The wire
+shape below is now piece 1's.
 
 ## Wire shape
 
-An inbox item may carry a list of attachments, at the top level:
+jarvisd (jarvis-server `internal/modules/notifications/attachments.go`,
+`type Attachment`) lists an item's attachments at the top level:
 
 ```json
 {
-  "id": "…",
+  "id": "<item_id>",
   "title": "Your picture is ready",
   "attachments": [
-    {
-      "id": "att_1",
-      "kind": "image",
-      "url": "/api/v0/inbox/<item_id>/attachments/att_1",
-      "mime_type": "image/png",
-      "thumbnail_url": "/api/v0/inbox/<item_id>/attachments/att_1/thumbnail",
-      "width": 1024,
-      "height": 1024,
-      "filename": "astronaut.png",
-      "size_bytes": 1832211
-    },
-    {
-      "kind": "video",
-      "url": "/api/v0/inbox/<item_id>/attachments/att_2",
-      "mime_type": "video/mp4",
-      "thumbnail_url": "…",
-      "duration_seconds": 4.2
-    }
+    { "id": "att_1", "mime": "image/png", "size": 1832211, "width": 1024, "height": 1024, "duration_ms": null },
+    { "id": "att_2", "mime": "video/mp4", "size": 912334, "width": null, "height": null, "duration_ms": null }
   ]
 }
 ```
 
-- `kind` (`image` or `video`) and `url` are required; everything else is
-  optional.
-- Mobile also reads `metadata.attachments` with the same shape, when the
-  top-level field is absent, so either placement works for piece 1.
-  Top-level wins when both are present.
+- Each file is served at `GET /api/v0/inbox/<item_id>/attachments/<id>`,
+  to the item's user only. There is no thumbnail endpoint.
+- The kind comes from `mime`: `image/*` is an image, `video/*` a video,
+  anything else is dropped. The server allows image/png, jpeg, webp, gif and
+  video/mp4, webm.
+- `width`, `height` and `duration_ms` may be `null` (no video parsing yet).
+- Items without attachments have no `attachments` key.
+- The app maps this onto its own `InboxAttachment` (`kind`, `url`,
+  `mime_type`, `size_bytes`, `duration_seconds`, …). An entry that already
+  carries `kind` and `url` (the shape this doc first proposed) is still
+  taken as given, and `metadata.attachments` is read when the top-level
+  field is absent; top-level wins when both are present.
+- `__tests__/services/inboxAttachmentsContract.test.ts` pins the server's
+  shape with a fixture copied from the server's
+  `TestInboxAttachmentsRoundTrip`, so the two cannot drift silently (#218).
 
 ## Decisions
 
 1. **Older servers keep working.** No field, `null`, a non-list or garbage
    means "no attachments": nothing is rendered and nothing else changes.
-   Entries with an unknown `kind`, no `url`, or wrongly typed optional
-   fields are dropped one by one; the rest still show. At most 10 are shown.
+   Entries with an unknown `kind` or `mime`, no `url` (or `id` to build it
+   from), or wrongly typed optional fields are dropped one by one;
+   the rest still show. At most 10 are shown.
 2. **Downloads are authenticated with the user's JWT**
    (`Authorization: Bearer …`). No presigned or public URLs, same as the
    phone-call audio. Relative URLs resolve against the notifications
