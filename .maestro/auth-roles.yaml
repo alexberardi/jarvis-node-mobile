@@ -20,6 +20,7 @@ env:
 
 # Superuser (household admin).
 - runFlow: subflows/login.yaml
+- runFlow: subflows/reset-household-name.yaml
 - tapOn:
     id: "settings-button"
 - assertVisible:

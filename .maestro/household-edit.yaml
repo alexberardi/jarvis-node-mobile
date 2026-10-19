@@ -6,8 +6,11 @@ name: Household settings, rename and back
 # as "saved", so the rename back needs the screen reopened.
 #
 # State: renames Avery Household and renames it back. If the flow dies between the two
-# saves, the household stays "Avery Household E2E" and the flows that look for "Avery
-# Household" (settings, register) fail until a reseed.
+# saves, the household stays "Avery Household E2E"; the flows that look for "Avery
+# Household" (this one included) first run subflows/reset-household-name.yaml, which
+# renames it back.
+# Each typed name is one whole value (`${output.newName}`, not `"${HOUSEHOLD_NAME} E2E"`:
+# Maestro drops the space after a `${...}` segment), and the field is checked after typing.
 tags:
   - settings
   - household
@@ -20,6 +23,7 @@ env:
 - launchApp:
     clearState: true
 - runFlow: subflows/login.yaml
+- runFlow: subflows/reset-household-name.yaml
 - runFlow: subflows/open-household.yaml
 
 # The admin sections
@@ -55,6 +59,7 @@ env:
     direction: DOWN
 
 # Rename
+- evalScript: ${output.newName = HOUSEHOLD_NAME + ' E2E'}
 - scrollUntilVisible:
     element:
       id: "household-name-input"
@@ -62,7 +67,10 @@ env:
 - tapOn:
     id: "household-name-input"
 - eraseText: 60
-- inputText: "${HOUSEHOLD_NAME} E2E"
+- inputText: ${output.newName}
+- assertVisible:
+    id: "household-name-input"
+    text: ${output.newName}
 - hideKeyboard
 - tapOn:
     id: "household-save-name"
@@ -71,7 +79,7 @@ env:
 - back
 - extendedWaitUntil:
     visible:
-      text: "${HOUSEHOLD_NAME} E2E"
+      text: ${output.newName}
     timeout: 15000
 
 # And back
@@ -82,11 +90,15 @@ env:
       id: "household-name-input"
     timeout: 15000
 - assertVisible:
-    text: "${HOUSEHOLD_NAME} E2E"
+    id: "household-name-input"
+    text: ${output.newName}
 - tapOn:
     id: "household-name-input"
 - eraseText: 60
-- inputText: "${HOUSEHOLD_NAME}"
+- inputText: ${HOUSEHOLD_NAME}
+- assertVisible:
+    id: "household-name-input"
+    text: ${HOUSEHOLD_NAME}
 - hideKeyboard
 - tapOn:
     id: "household-save-name"
@@ -98,4 +110,4 @@ env:
       text: "${HOUSEHOLD_NAME}"
     timeout: 15000
 - assertNotVisible:
-    text: "${HOUSEHOLD_NAME} E2E"
+    text: ${output.newName}

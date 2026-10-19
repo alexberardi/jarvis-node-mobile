@@ -78,10 +78,11 @@ env:
     element:
       id: "save-presence.left"
     direction: DOWN
+# One selector: on Android the button's label is likely folded into the button's own node, so
+# there is no child with the text "Clear".
 - assertVisible:
+    id: "save-presence.left"
     text: "Clear"
-    childOf:
-      id: "save-presence.left"
 - tapOn:
     id: "save-presence.left"
 - extendedWaitUntil:

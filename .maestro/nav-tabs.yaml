@@ -19,11 +19,12 @@ tags:
       text: "Kitchen Ceiling"
     timeout: 20000
 
+# The rich sandbox has Pantry off, so the tab shows its gate; with Pantry on, the pantry.
 - tapOn:
     id: "tab-pantry"
 - extendedWaitUntil:
     visible:
-      id: "searchbar-input"
+      id: "(pantry-gate|searchbar-input)"
     timeout: 20000
 
 - tapOn:

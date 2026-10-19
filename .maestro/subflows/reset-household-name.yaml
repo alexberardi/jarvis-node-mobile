@@ -1,0 +1,44 @@
+appId: com.jarvis.nodemobile
+name: reset-household-name
+# From the main tabs, as the household admin (the seeded superuser): if an earlier run
+# left Avery Household renamed (household-edit died between its two saves), rename it
+# back, so a flow that looks for "Avery Household" doesn't fail on another flow's leftover.
+# Ends on the main tabs again. Does nothing when the name is already right.
+---
+- runFlow: open-settings.yaml
+- extendedWaitUntil:
+    visible:
+      id: "household-name-.*"
+    timeout: 15000
+- runFlow:
+    when:
+      notVisible:
+        id: "household-name-.*"
+        text: "Avery Household"
+    commands:
+      - tapOn:
+          id: "household-edit-.*"
+      - extendedWaitUntil:
+          visible:
+            id: "household-name-input"
+          timeout: 15000
+      - tapOn:
+          id: "household-name-input"
+      - eraseText: 60
+      - inputText: "Avery Household"
+      - assertVisible:
+          id: "household-name-input"
+          text: "Avery Household"
+      - hideKeyboard
+      - tapOn:
+          id: "household-save-name"
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - back
+      - extendedWaitUntil:
+          visible:
+            id: "household-name-.*"
+            text: "Avery Household"
+          timeout: 15000
+- tapOn:
+    id: "settings-close"

@@ -17,6 +17,7 @@ env:
 - launchApp:
     clearState: true
 - runFlow: subflows/login.yaml
+- runFlow: subflows/reset-household-name.yaml
 - runFlow: subflows/open-settings.yaml
 
 # Account
@@ -73,10 +74,16 @@ env:
 
 # Appearance: dark, then light, then back to system (no assertion on the colours:
 # visual polish stays manual)
+# The buttons sit below the section's title: scroll to them, not to the section.
 - scrollUntilVisible:
     element:
       id: "settings-section-appearance"
     direction: DOWN
+- scrollUntilVisible:
+    element:
+      id: "theme-dark"
+    direction: DOWN
+    centerElement: true
 - tapOn:
     id: "theme-dark"
 - tapOn:
@@ -89,6 +96,11 @@ env:
     element:
       id: "settings-section-chat"
     direction: DOWN
+- scrollUntilVisible:
+    element:
+      id: "auto-play-off"
+    direction: DOWN
+    centerElement: true
 - tapOn:
     id: "auto-play-off"
 - assertVisible:

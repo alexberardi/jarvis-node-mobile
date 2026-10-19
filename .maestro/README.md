@@ -17,7 +17,7 @@ tool can automate.
 | `schedules.yaml` | the Scheduled errands screen renders |
 | `auth-roles.yaml` | every seeded role (superuser, admin, power user, member) logs in, and Settings shows the seeded household with that role; a member gets no household edit button |
 | `auth-logout.yaml` | Log Out lands on Landing, and a relaunch stays logged out |
-| `nav-tabs.yaml` | the five tabs open (pick them by `tab-home`, `tab-devices`, `tab-pantry`, `tab-routines`, `tab-nodes`), and Devices, Routines and Nodes show seeded data |
+| `nav-tabs.yaml` | the five tabs open (pick them by `tab-home`, `tab-devices`, `tab-pantry`, `tab-routines`, `tab-nodes`), and Devices, Routines and Nodes show seeded data; Pantry shows its gate (the rich sandbox has Pantry off) or, with Pantry on, the pantry |
 | `home-chat.yaml` | a chat message gets the scripted model's exact reply (`CHAT_MESSAGE` → `CHAT_REPLY`) |
 | `settings.yaml`, `household-*.yaml`, `signal-automations.yaml`, `voice-profile.yaml`, `nodes.yaml`, `memories.yaml`, `phonebook.yaml`, `call-context.yaml`, `register.yaml`, `force-password-change.yaml`, `deep-links.yaml` | E2E piece 6 (#153): see [`COVERAGE.md`](COVERAGE.md) for what each covers |
 
@@ -26,8 +26,10 @@ E2E piece 5 (#145): its layout and seed contract are in
 
 Shared steps live in `subflows/` (never run on their own): `login.yaml` (the superuser),
 `login-as.yaml` (any `LOGIN_EMAIL`), `logout.yaml` (Home → Settings → Log Out → Landing), `open-settings.yaml`, `open-household.yaml`,
-`register-invited.yaml` (a throwaway account joined through an invite code) and
-`delete-account.yaml` (removes that account again).
+`register-invited.yaml` (a throwaway account joined through an invite code),
+`delete-account.yaml` (removes that account again) and `reset-household-name.yaml` (as the
+admin, renames Avery Household back if a dead `household-edit` run left it renamed; the
+flows that look for the name run it first).
 
 ## The overnight runner (Android, jarvis-server)
 
@@ -52,12 +54,18 @@ scripts/e2e mobile --name <sandbox> --mobile-repo <path to this repo> --filter n
 ```
 
 `npm test` checks the flows statically (`__tests__/maestro/flows.test.ts`): the contract
-above, that every `runFlow` file exists, and that every `id:` names a testID in `src/`.
+above, that every `runFlow` file exists, that every `id:` names a testID in `src/`, and
+that an `inputText` with `${...}` in it is one whole expression.
 
 Android gotchas: the Login screen has no ScrollView, so its button takes a tap with the
 keyboard up; on a screen with a ScrollView, `hideKeyboard` (Android's back key) first, and
 only right after typing (with no keyboard up it navigates back). An RN `Alert`'s last
-button is `android:id/button1`.
+button is `android:id/button1`. Maestro drops the space after a `${...}` segment that is
+followed by literal text (`"${NAME} E2E"` types `NameE2E`): build the string in one
+expression (`evalScript: ${output.x = NAME + ' E2E'}`, then `inputText: ${output.x}`), and
+check the field after typing. A react-native-paper `Button`'s label looks folded into the
+button's own node (a `childOf` on it found nothing), so match `{id: <button>, text: ...}`.
+Scroll to the control you tap (`centerElement: true`), not to its card's title.
 
 **Validated end-to-end on a real device (2026-06-23):** the full provisioning
 flow ran on an iOS simulator against a live command-center + the fake node — the
