@@ -22,15 +22,15 @@ export interface HouseholdSettings {
    */
   'pantry.enabled'?: boolean;
   /**
-   * Watches: Jarvis keeps an eye on things the household asks it to watch and
-   * alerts them when something changes. Default off; household admin only to
+   * Watches: household members may ask Jarvis to watch a web page, a search
+   * or a signal and get told when it changes. Default off; household admin only to
    * write (members get a 403). ABSENT on a server that doesn't know it — the
    * app then hides the switch.
    */
   'watches.enabled'?: boolean;
   /**
-   * Errand autonomy: let errands run on their own in the background instead of
-   * waiting on the household at each step. Default off; household admin only to
+   * Errand autonomy: household rules (signal/automation reactions) may start
+   * and run background errands without a tap — no one confirms first. Default off; household admin only to
    * write (members get a 403). ABSENT on a server that doesn't know it — the
    * app then hides the switch.
    */

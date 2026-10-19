@@ -966,8 +966,8 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
                   <View style={{ flex: 1, paddingRight: 12 }}>
                     <Text variant="bodyMedium">Use watches</Text>
                     <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 2 }}>
-                      Let Jarvis keep an eye on things you ask it to watch and alert
-                      you when something changes.
+                      Let household members ask Jarvis to watch a web page, a search
+                      or a signal and get told when it changes.
                     </Text>
                   </View>
                   <Switch
@@ -981,9 +981,10 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
               {errandsAutonomous !== undefined && (
                 <View style={[styles.toggleRow, watchesEnabled !== undefined && { marginTop: 12 }]}>
                   <View style={{ flex: 1, paddingRight: 12 }}>
-                    <Text variant="bodyMedium">Let errands run on their own</Text>
+                    <Text variant="bodyMedium">Let rules run errands without asking</Text>
                     <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 2 }}>
-                      Errands you start keep running on their own in the background.
+                      Let your household's rules start errands and run them in the
+                      background without asking anyone first.
                     </Text>
                   </View>
                   <Switch
