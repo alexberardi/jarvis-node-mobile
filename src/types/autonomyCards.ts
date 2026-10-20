@@ -26,6 +26,8 @@ export interface RanCardRule {
 export interface RanCardData {
   /** running | waiting | done | partial | failed | stopped */
   state: string;
+  /** The finished errand's answer (markdown), or null on older or unfinished cards. */
+  answer: string | null;
   source: { kind: string; label: string };
   steps: RanCardStep[];
   rules: RanCardRule[];
@@ -64,6 +66,7 @@ export function parseRanCard(metadata: Record<string, any> | null): RanCardData 
   );
   return {
     state: str(metadata.state),
+    answer: typeof metadata.answer === 'string' && metadata.answer.trim() ? metadata.answer : null,
     source: { kind: str(source.kind), label: str(source.label) },
     steps,
     rules,

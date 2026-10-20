@@ -7,6 +7,7 @@ import { PaperWrapper as wrapper } from '../testUtils';
 
 const makeCard = (overrides: Partial<RanCardData> = {}): RanCardData => ({
   state: 'done',
+  answer: null,
   source: { kind: 'errand', label: 'Errand' },
   steps: [
     { label: 'Search the web', command: 'quick_search', status: 'ok', result: '5 results' },
@@ -94,5 +95,44 @@ describe('AutonomyRanCard', () => {
       { wrapper },
     );
     expect(getByText('From: Automation · I leave home')).toBeTruthy();
+  });
+
+  describe('answer', () => {
+    const answer = 'The best is the **Breville Bambino Plus**.\n\n- Gaggia Classic Pro';
+
+    it('shows the answer above the first step', () => {
+      const { getByTestId, toJSON } = render(<AutonomyRanCard data={makeCard({ answer })} />, {
+        wrapper,
+      });
+      expect(getByTestId('ran-answer')).toBeTruthy();
+      const tree = JSON.stringify(toJSON());
+      expect(tree.indexOf('"ran-answer"')).toBeGreaterThan(-1);
+      expect(tree.indexOf('"ran-answer"')).toBeLessThan(tree.indexOf('"ran-step-0"'));
+    });
+
+    it('renders the answer as markdown', () => {
+      const { getByText, queryByText } = render(
+        <AutonomyRanCard data={makeCard({ answer })} />,
+        { wrapper },
+      );
+      expect(getByText('Breville Bambino Plus')).toBeTruthy();
+      expect(getByText('Gaggia Classic Pro')).toBeTruthy();
+      expect(queryByText(/\*\*/)).toBeNull();
+    });
+
+    it('makes the answer text selectable', () => {
+      const { getByText } = render(<AutonomyRanCard data={makeCard({ answer })} />, { wrapper });
+      let node: any = getByText('Breville Bambino Plus');
+      while (node && node.props.selectable === undefined) node = node.parent;
+      expect(node?.props.selectable).toBe(true);
+    });
+
+    it('shows nothing extra without an answer (older cards)', () => {
+      const { queryByTestId, getByTestId } = render(<AutonomyRanCard data={makeCard()} />, {
+        wrapper,
+      });
+      expect(queryByTestId('ran-answer')).toBeNull();
+      expect(getByTestId('ran-step-0')).toBeTruthy();
+    });
   });
 });
