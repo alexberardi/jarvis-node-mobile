@@ -40,6 +40,7 @@ describe('parseRanCard', () => {
   it('parses a full sample', () => {
     expect(parseRanCard(sample)).toEqual({
       state: 'running',
+      answer: null,
       source: { kind: 'errand', label: 'Errand' },
       steps: [
         { label: 'Search the web', command: 'quick_search', status: 'ok', result: '5 results' },
@@ -56,6 +57,18 @@ describe('parseRanCard', () => {
         },
       ],
     });
+  });
+
+  it('keeps a string answer', () => {
+    expect(parseRanCard({ ...sample, answer: 'The **Bambino Plus** wins.' })?.answer).toBe(
+      'The **Bambino Plus** wins.',
+    );
+  });
+
+  it('treats a missing, blank or non-string answer as null', () => {
+    expect(parseRanCard(sample)?.answer).toBeNull();
+    expect(parseRanCard({ ...sample, answer: '  ' })?.answer).toBeNull();
+    expect(parseRanCard({ ...sample, answer: 42 })?.answer).toBeNull();
   });
 
   it('defaults missing rules to []', () => {

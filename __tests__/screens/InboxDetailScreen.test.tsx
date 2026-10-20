@@ -700,6 +700,17 @@ describe('"Ran on its own" card', () => {
     expect(getByText('Stop')).toBeTruthy();
   });
 
+  it("shows the errand's answer from metadata.answer", async () => {
+    mockGetInboxItem.mockResolvedValue({
+      ...sampleRanItem,
+      metadata: { ...sampleRanItem.metadata, state: 'done', answer: 'The Bambino Plus wins.' },
+    });
+
+    const { getByTestId, getByText } = render(<InboxDetailScreen />, { wrapper });
+    await waitFor(() => expect(getByTestId('ran-answer')).toBeTruthy());
+    expect(getByText('The Bambino Plus wins.')).toBeTruthy();
+  });
+
   it('renders the body as before without card_type', async () => {
     mockGetInboxItem.mockResolvedValue(sampleItem);
 
