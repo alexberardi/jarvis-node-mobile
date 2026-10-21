@@ -326,8 +326,9 @@ const SettingsScreen = () => {
     setSaving(true);
     try {
       await setManualUrl(null);
-      // See handleSaveUrl — clearing the override is also an env change
-      // (manual → auto-discovered cloud), so wipe caches + log out.
+      // See handleSaveUrl — clearing the URL is also an env change (no
+      // server left to talk to), so wipe caches + log out; the user is
+      // asked for a server URL again on the landing screen.
       await clearUserData({ queryClient });
     } catch (err) {
       console.error('[SettingsScreen] Failed to clear config URL', err);
@@ -822,8 +823,9 @@ const SettingsScreen = () => {
             <HelpIcon text={helpCopy.settings.configServiceUrl} size={16} />
           </View>
           <Text variant="bodySmall" style={styles.hint}>
-            Override auto-discovery with a specific URL. Leave empty to
-            auto-discover on the local network.
+            The address of your Jarvis server, e.g.
+            http://192.168.1.100:7700. Required — the app doesn't search the
+            network for it.
           </Text>
           <TextInput
             mode="outlined"
@@ -852,7 +854,7 @@ const SettingsScreen = () => {
                 onPress={handleClearUrl}
                 disabled={saving}
               >
-                Clear Override
+                Clear server URL
               </Button>
             )}
           </View>
