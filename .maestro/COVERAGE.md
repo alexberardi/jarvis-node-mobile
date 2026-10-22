@@ -47,7 +47,7 @@ reason is in its `properties.skip_reason`).
 | Home/HomeScreen: quick-open deep links (deepLinks.ts) | flow | deep-links.yaml (com.jarvis.app://chat, open, stt) |
 | Home/HomeScreen: Universal Link (https://docs.jarvisautomation.dev/app/...) | not tested | iOS-only entry point; Android has no App Link for it |
 | Home/HomeScreen: chat (send, scripted reply) | flow | home-chat.yaml |
-| Home/HomeScreen: chat tool call's visible effect | later | #458, after #457 adds the scripted-model tool rules |
+| Home/HomeScreen: chat tool calls (control_device, set_timer, shopping_list add) | flow | home-chat-tools.yaml (the sandbox's node is not running, so the reply is the scripted "node is offline" one: the call reached node dispatch) |
 | Devices/DevicesScreen, Routines list, Pantry tab (they open and show seeded data) | flow | nav-tabs.yaml |
 | Devices/DevicesScreen: open a device, the Rooms button | flow | devices.yaml |
 | Devices/DevicesScreen: add a device, discovery | later | needs a device to discover (no item filed yet) |
@@ -58,7 +58,15 @@ reason is in its `properties.skip_reason`).
 | Routines/RoutineEditScreen: create, add a trigger phrase, delete | flow | routines.yaml (free-text step: the command catalog needs the node's key) |
 | Routines/RoutineEditScreen: command catalog, schedule | later | needs a node with its key (piece 7) |
 | Routines/RoutineListScreen: run now, swipe delete | later | run now needs a live node; delete is covered from the editor (routines.yaml) |
-| Inbox/* | later | #458, after jarvis-server #457 seeds one inbox item of each kind |
+| Inbox/InboxListScreen | flow | inbox.yaml, inbox-suggestion.yaml (opens from Home's inbox button, items picked by title) |
+| Inbox/InboxListScreen: select mode, bulk read and delete, swipe delete | later | changes the seeded items the other Inbox flows open (no item filed yet) |
+| Inbox/InboxDetailScreen | flow | inbox.yaml (deep research: markdown body, sources), inbox-suggestion.yaml (server-plane buttons) |
+| Inbox/InboxCallbackResultScreen | flow | inbox-suggestion.yaml ("Never suggest this" → the server's answer) |
+| Inbox/SuppressedSuggestionsScreen | flow | inbox-suggestion.yaml (lists the new suppression, un-blocks it) |
+| Inbox/InteractiveListScreen | flow | inbox.yaml (rows and the "Add {n}" count; the actions need a live node) |
+| Inbox/AdapterDeployedScreen | flow | inbox.yaml (details; Revert calls the adapters API jarvisd does not serve) |
+| Inbox/AdapterProposalScreen, AdapterProposalDetailScreen | not tested | no seeded item: the screen loads /api/v0/adapters/proposals, which jarvisd does not serve (the LoRA pipeline is cut; jarvis-server #457) |
+| Inbox/WebViewPickerScreen | later | opened from an interactive_list row action with a start_url; the seed has none (no item filed yet) |
 | Schedules/ScheduleListScreen | flow | schedules.yaml |
 | Provisioning/*, ImportKey/ImportKeyScreen | skip | provisioning-devmode-happy-path.yaml, k2-crypto-roundtrip.yaml: need a dev-client build and the fake node (piece 7) |
 | SmartHome/*, CommandData/* | later | not in piece 6 |

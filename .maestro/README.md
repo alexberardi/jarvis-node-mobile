@@ -19,6 +19,9 @@ tool can automate.
 | `auth-logout.yaml` | Log Out lands on Landing, and a relaunch stays logged out |
 | `nav-tabs.yaml` | the five tabs open (pick them by `tab-home`, `tab-devices`, `tab-pantry`, `tab-routines`, `tab-nodes`), and Devices, Routines and Nodes show seeded data; Pantry shows its gate (the rich sandbox has Pantry off) or, with Pantry on, the pantry |
 | `home-chat.yaml` | a chat message gets the scripted model's exact reply (`CHAT_MESSAGE` → `CHAT_REPLY`) |
+| `home-chat-tools.yaml` | the scripted model's tool turns (`DEVICE_`, `TIMER_`, `LIST_MESSAGE`: control_device, set_timer, a shopping-list add) reach the node's dispatch: the sandbox's node is not running, so each gets its `*_REPLY_OFFLINE` |
+| `inbox.yaml` | the seeded inbox opens from Home; the deep-research item shows its markdown and sources (InboxDetail), the interactive list its rows and live "Add {n}" count (InteractiveList), the deployed adapter its details (AdapterDeployed) |
+| `inbox-suggestion.yaml` | the seeded suggestion card's "Never suggest this" opens the server's answer (InboxCallbackResult), Suppressed suggestions lists it, and the flow un-blocks it |
 | `settings.yaml`, `household-*.yaml`, `signal-automations.yaml`, `voice-profile.yaml`, `nodes.yaml`, `memories.yaml`, `phonebook.yaml`, `call-context.yaml`, `register.yaml`, `force-password-change.yaml`, `deep-links.yaml` | E2E piece 6 (#153): see [`COVERAGE.md`](COVERAGE.md) for what each covers |
 
 E2E piece 5 (#145): its layout and seed contract are in
@@ -44,8 +47,9 @@ and two nodes). The contract is jarvis-server
   the server it changes back, or it makes its own throwaway data (unique per run);
 - a flow that can't run there is tagged `skip` with `properties.skip_reason`;
 - the env is `EMAIL`/`PASSWORD` (the superuser), `EMAIL_ADMIN`, `EMAIL_POWER`,
-  `EMAIL_MEMBER` (same `PASSWORD`), `CHAT_MESSAGE`/`CHAT_REPLY`. A flow's own `env:` holds
-  the seed's values, for a local run.
+  `EMAIL_MEMBER` (same `PASSWORD`), `CHAT_MESSAGE`/`CHAT_REPLY`, the tool turns
+  `TIMER_`/`LIST_`/`DEVICE_MESSAGE` with `_REPLY`/`_REPLY_OFFLINE`, and the seeded inbox's
+  `INBOX_*` titles. A flow's own `env:` holds the seed's values, for a local run.
 
 Run one flow from a jarvis-server checkout, against this checkout's committed `HEAD`:
 

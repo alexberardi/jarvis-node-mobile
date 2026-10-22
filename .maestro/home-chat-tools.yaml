@@ -1,0 +1,73 @@
+appId: com.jarvis.nodemobile
+name: Chat tool calls with the scripted model
+# Home's chat (src/screens/Home/HomeScreen.tsx) against the scripted model's tool turns
+# (jarvis-server e2e/llm/mobile.json): turn on the seeded Kitchen Ceiling light
+# (control_device), set a timer (set_timer) and add to the shopping list (shopping_list).
+# Each is a node tool, and nothing runs the seeded node in the sandbox, so the server
+# answers the call "the node is offline" and the model replies *_REPLY_OFFLINE: proof the
+# model's call reached the node's dispatch, not that a light switched. scripts/e2e mobile
+# passes the messages and replies. The composer wait is home-chat.yaml's.
+#
+# State: nothing changes (the node never gets the calls).
+tags:
+  - home
+  - chat
+  - e2e
+env:
+  DEVICE_MESSAGE: "turn on the kitchen ceiling light"
+  DEVICE_REPLY_OFFLINE: "Your node is offline, so the kitchen ceiling light was not switched."
+  TIMER_MESSAGE: "set a timer for 10 minutes"
+  TIMER_REPLY_OFFLINE: "Your node is offline, so the timer was not set."
+  LIST_MESSAGE: "add oat milk to the shopping list"
+  LIST_REPLY_OFFLINE: "Your node is offline, so oat milk was not added."
+---
+- launchApp:
+    clearState: true
+- runFlow: subflows/login.yaml
+- extendedWaitUntil:
+    visible:
+      text: "Message Jarvis.*"
+    timeout: 120000
+
+# control_device
+- tapOn:
+    id: "chat-input"
+- inputText: "${DEVICE_MESSAGE}"
+- tapOn:
+    id: "send-button"
+- assertVisible:
+    text: "${DEVICE_MESSAGE}"
+- extendedWaitUntil:
+    visible:
+      text: "${DEVICE_REPLY_OFFLINE}"
+    timeout: 240000
+
+# set_timer
+- extendedWaitUntil:
+    visible:
+      text: "Message Jarvis.*"
+    timeout: 60000
+- tapOn:
+    id: "chat-input"
+- inputText: "${TIMER_MESSAGE}"
+- tapOn:
+    id: "send-button"
+- extendedWaitUntil:
+    visible:
+      text: "${TIMER_REPLY_OFFLINE}"
+    timeout: 240000
+
+# shopping_list add
+- extendedWaitUntil:
+    visible:
+      text: "Message Jarvis.*"
+    timeout: 60000
+- tapOn:
+    id: "chat-input"
+- inputText: "${LIST_MESSAGE}"
+- tapOn:
+    id: "send-button"
+- extendedWaitUntil:
+    visible:
+      text: "${LIST_REPLY_OFFLINE}"
+    timeout: 240000
