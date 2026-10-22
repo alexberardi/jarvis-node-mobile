@@ -66,9 +66,10 @@ env:
     visible:
       text: "Edit Memory"
     timeout: 10000
-- tapOn:
-    id: "memory-content-input"
-- eraseText: 100
+- runFlow:
+    file: subflows/clear-field.yaml
+    env:
+      FIELD_ID: "memory-content-input"
 # One whole value: Maestro drops the space in `"${output.memo} edited"`.
 - evalScript: ${output.edited = output.memo + ' edited'}
 - inputText: ${output.edited}
