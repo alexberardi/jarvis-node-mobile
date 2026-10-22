@@ -25,8 +25,9 @@ env:
     visible:
       text: ${DEVICE_NAME}
     timeout: 20000
+# The row's own node reads "<name>, <manufacturer>" (title and description merged),
+# so tap the title Text, which is exactly the name.
 - tapOn:
-    id: "device-row-.*"
     text: ${DEVICE_NAME}
 - extendedWaitUntil:
     visible:

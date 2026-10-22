@@ -31,8 +31,9 @@ env:
     timeout: 20000
 
 # Device edit: opens with the device's name and details, and back without saving.
+# The row's own node reads "<name>, <manufacturer>" (title and description merged),
+# so tap the title Text, which is exactly the name.
 - tapOn:
-    id: "device-row-.*"
     text: ${DEVICE_NAME}
 - extendedWaitUntil:
     visible:
