@@ -123,6 +123,20 @@ describe('RoomManagementScreen', () => {
     expect(getByText('No rooms yet')).toBeTruthy();
   });
 
+  it('opens the rename dialog with the room name in room-edit-name-input', () => {
+    mockRoomsQuery = {
+      data: mockRooms,
+      isLoading: false,
+      refetch: jest.fn(),
+    };
+
+    const { getByTestId } = render(<RoomManagementScreen />, { wrapper });
+    fireEvent.press(getByTestId('room-item-room-2'));
+
+    expect(getByTestId('room-edit-dialog')).toBeTruthy();
+    expect(getByTestId('room-edit-name-input').props.value).toBe('Kitchen');
+  });
+
   it('should render room list items', () => {
     mockRoomsQuery = {
       data: mockRooms,
