@@ -8,9 +8,6 @@ name: Devices, edit screen and rooms
 # State: if the flow dies before the delete, one "E2E room <time>" (or "... edited")
 # stays in the Rooms list; delete it by hand. The name is unique per run, so a
 # leftover never breaks the next run.
-# The rename does not tap the field first: the dialog's name input is autofocused with
-# the cursor at the end, so eraseText clears all of it (a tap can put the cursor
-# mid-field, #430).
 # The light toggle is in devices-light-toggle.yaml (skipped until the fake HA).
 tags:
   - devices
@@ -94,7 +91,10 @@ env:
 - assertVisible:
     id: "room-edit-name-input"
     text: ${output.room}
-- eraseText: 60
+- runFlow:
+    file: subflows/clear-field.yaml
+    env:
+      FIELD_ID: "room-edit-name-input"
 # One whole value: Maestro drops the space in `"${output.room} edited"`.
 - evalScript: ${output.edited = output.room + ' edited'}
 - inputText: ${output.edited}
