@@ -4,9 +4,12 @@
  * UX flow:
  * 1. Shows currently paired/connected devices on mount
  * 2. User taps "Scan" → role picker (Speaker / Audio Input)
- * 3. Scan runs on node (polls every 2s) → results appear as tappable list
- * 4. User taps device → pair + connect + audio route
+ * 3. Scan runs on node (polls every 1s) → devices appear as they're found
+ * 4. User taps device (even mid-scan) → pair + connect + audio route
  * 5. "Make Discoverable" for reverse flow (phone → Pi)
+ *
+ * Saved devices are reloaded after a scan, a pair, a disconnect and a
+ * forget, so a paired device always shows there with Forget.
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -50,10 +53,12 @@ interface Props {
 type Phase =
   | 'idle'
   | 'role_picker'
-  | 'scanning'
   | 'results'
-  | 'pairing'
   | 'discoverable';
+
+// Disconnect and forget are fire-and-forget on the node (202), so a reload
+// right away usually reads the old state: reload again after these delays.
+const STATUS_REFRESH_DELAYS_MS = [1500, 4000];
 
 const DEVICE_TYPE_ICONS: Record<string, string> = {
   audio_sink: 'speaker',
@@ -67,6 +72,7 @@ export const BluetoothSection = ({ nodeId }: Props) => {
   const [phase, setPhase] = useState<Phase>('idle');
   const [status, setStatus] = useState<BluetoothStatusResponse | null>(null);
   const [devices, setDevices] = useState<BluetoothDevice[]>([]);
+  const [scanning, setScanning] = useState(false);
   const [selectedRole, setSelectedRole] = useState<string>('source');
   const [pairingMac, setPairingMac] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -78,15 +84,31 @@ export const BluetoothSection = ({ nodeId }: Props) => {
   // switch fires the command and updates this map.
   const [autoConnect, setAutoConnect] = useState<Record<string, boolean>>({});
   const [forgetTarget, setForgetTarget] = useState<BluetoothDevice | null>(null);
-  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Scan and pair poll on separate timers so a pair can run mid-scan.
+  const scanPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pairPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const statusRefreshRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  const stopScanPoll = () => {
+    if (scanPollRef.current) clearInterval(scanPollRef.current);
+    scanPollRef.current = null;
+  };
+
+  const stopPairPoll = () => {
+    if (pairPollRef.current) clearInterval(pairPollRef.current);
+    pairPollRef.current = null;
+  };
 
   // Load current status on mount
   useEffect(() => {
     loadStatus();
     return () => {
-      if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+      stopScanPoll();
+      stopPairPoll();
       if (countdownRef.current) clearInterval(countdownRef.current);
+      statusRefreshRef.current.forEach(clearTimeout);
+      statusRefreshRef.current = [];
     };
   }, [nodeId]);
 
@@ -99,51 +121,77 @@ export const BluetoothSection = ({ nodeId }: Props) => {
     }
   }, [nodeId]);
 
+  // Reload now and again once the node has had time to apply the change.
+  const refreshStatusSoon = useCallback(() => {
+    loadStatus();
+    statusRefreshRef.current.forEach(clearTimeout);
+    statusRefreshRef.current = STATUS_REFRESH_DELAYS_MS.map((ms) =>
+      setTimeout(loadStatus, ms),
+    );
+  }, [loadStatus]);
+
   // ── Scan Flow ──────────────────────────────────────────────────────────
 
   const startScan = useCallback(async (role: string) => {
+    stopScanPoll();
     setSelectedRole(role);
-    setPhase('scanning');
+    setPhase('results');
+    setScanning(true);
     setDevices([]);
     setError(null);
+
+    // A failed scan keeps the devices found so far; with none, back to idle.
+    let found = 0;
+    const endScan = (message: string | null) => {
+      stopScanPoll();
+      setScanning(false);
+      if (message) setError(message);
+      if (message && found === 0) setPhase('idle');
+    };
 
     try {
       const { id: requestId } = await requestBluetoothScan(nodeId, role);
 
-      // Poll every 2s
-      pollTimerRef.current = setInterval(async () => {
+      // Poll every 1s: the node posts the devices found so far about once a second.
+      const timer = setInterval(async () => {
         try {
           const result = await pollBluetoothScan(nodeId, requestId);
-          if (result.status === 'completed' && result.devices) {
-            clearInterval(pollTimerRef.current!);
-            pollTimerRef.current = null;
+          if (scanPollRef.current !== timer) return; // stopped while in flight
+          if (result.devices) {
+            found = result.devices.length;
             setDevices(result.devices);
-            setPhase('results');
+          }
+          if (result.status === 'completed') {
+            endScan(null);
+            refreshStatusSoon();
           } else if (result.status === 'failed') {
-            clearInterval(pollTimerRef.current!);
-            pollTimerRef.current = null;
-            setError(result.error_message || 'Scan failed');
-            setPhase('idle');
+            endScan(result.error_message || 'Scan failed');
           }
         } catch {
-          clearInterval(pollTimerRef.current!);
-          pollTimerRef.current = null;
-          setError('Lost connection while scanning');
-          setPhase('idle');
+          if (scanPollRef.current === timer) endScan('Lost connection while scanning');
         }
-      }, 2000);
+      }, 1000);
+      scanPollRef.current = timer;
     } catch (e: any) {
       const detail = e?.response?.data?.detail || e?.message || 'Unknown error';
-      setError(`Failed to start scan: ${detail}`);
+      endScan(`Failed to start scan: ${detail}`);
       setPhase('idle');
     }
-  }, [nodeId]);
+  }, [nodeId, refreshStatusSoon]);
 
   // ── Pair Flow ──────────────────────────────────────────────────────────
 
   const handlePairDevice = useCallback(async (device: BluetoothDevice) => {
+    stopPairPoll();
     setPairingMac(device.mac_address);
-    setPhase('pairing');
+    setError(null);
+
+    const endPair = (message: string | null) => {
+      stopPairPoll();
+      setPairingMac(null);
+      if (message) setError(message);
+      refreshStatusSoon();
+    };
 
     try {
       const { id: requestId } = await pairBluetoothDevice(
@@ -152,38 +200,24 @@ export const BluetoothSection = ({ nodeId }: Props) => {
         selectedRole,
       );
 
-      // Poll for pair result
-      pollTimerRef.current = setInterval(async () => {
+      // Poll for pair result (the scan, if still running, keeps its own poll)
+      pairPollRef.current = setInterval(async () => {
         try {
           const result = await pollBluetoothPair(nodeId, requestId);
           if (result.status === 'completed') {
-            clearInterval(pollTimerRef.current!);
-            pollTimerRef.current = null;
-            setPairingMac(null);
             setSnackbar(`Connected to ${result.device_name || device.name}`);
-            setPhase('idle');
-            loadStatus();
+            endPair(null);
           } else if (result.status === 'failed') {
-            clearInterval(pollTimerRef.current!);
-            pollTimerRef.current = null;
-            setPairingMac(null);
-            setError(result.error_message || 'Pairing failed');
-            setPhase('results');
+            endPair(result.error_message || 'Pairing failed');
           }
         } catch {
-          clearInterval(pollTimerRef.current!);
-          pollTimerRef.current = null;
-          setPairingMac(null);
-          setError('Lost connection during pairing');
-          setPhase('results');
+          endPair('Lost connection during pairing');
         }
-      }, 2000);
+      }, 1000);
     } catch {
-      setPairingMac(null);
-      setError('Failed to start pairing');
-      setPhase('results');
+      endPair('Failed to start pairing');
     }
-  }, [nodeId, selectedRole, loadStatus]);
+  }, [nodeId, selectedRole, refreshStatusSoon]);
 
   // ── Disconnect ─────────────────────────────────────────────────────────
 
@@ -191,11 +225,11 @@ export const BluetoothSection = ({ nodeId }: Props) => {
     try {
       await disconnectBluetoothDevice(nodeId, device.mac_address);
       setSnackbar(`Disconnected ${device.name}`);
-      loadStatus();
+      refreshStatusSoon();
     } catch {
       setError('Failed to disconnect');
     }
-  }, [nodeId, loadStatus]);
+  }, [nodeId, refreshStatusSoon]);
 
   // ── Auto-reconnect toggle ──────────────────────────────────────────────
 
@@ -224,11 +258,11 @@ export const BluetoothSection = ({ nodeId }: Props) => {
     try {
       await releaseBluetoothDevice(nodeId, target.mac_address, true);
       setSnackbar(`Forgot ${target.name}`);
-      loadStatus();
+      refreshStatusSoon();
     } catch {
       setError('Failed to forget device');
     }
-  }, [nodeId, forgetTarget, loadStatus]);
+  }, [nodeId, forgetTarget, refreshStatusSoon]);
 
   // ── Discoverable ───────────────────────────────────────────────────────
 
@@ -255,6 +289,12 @@ export const BluetoothSection = ({ nodeId }: Props) => {
   }, [nodeId]);
 
   // ── Render ─────────────────────────────────────────────────────────────
+
+  // Saved devices already show with Forget; the scan list only offers new ones.
+  const savedMacs = new Set(
+    [...(status?.connected ?? []), ...(status?.paired ?? [])].map((d) => d.mac_address),
+  );
+  const scanDevices = devices.filter((d) => !savedMacs.has(d.mac_address));
 
   const renderSavedDevice = (d: BluetoothDevice) => {
     const icon = DEVICE_TYPE_ICONS[d.device_type] || 'bluetooth';
@@ -319,11 +359,11 @@ export const BluetoothSection = ({ nodeId }: Props) => {
           ) : null
         }
         onPress={() => {
-          if (!item.connected && phase === 'results') {
+          if (!item.connected && !pairingMac) {
             handlePairDevice(item);
           }
         }}
-        disabled={isPairing || item.connected}
+        disabled={!!pairingMac || item.connected}
       />
     );
   };
@@ -405,47 +445,38 @@ export const BluetoothSection = ({ nodeId }: Props) => {
           </View>
         )}
 
-        {/* Phase: Scanning */}
-        {phase === 'scanning' && (
-          <View style={styles.scanning}>
-            <ActivityIndicator size="large" />
-            <Text variant="bodyMedium" style={{ marginTop: 12 }}>
-              Scanning for Bluetooth devices...
-            </Text>
-            <Button mode="text" onPress={() => {
-              if (pollTimerRef.current) clearInterval(pollTimerRef.current);
-              setPhase('idle');
-            }} style={{ marginTop: 8 }}>
-              Cancel
-            </Button>
-          </View>
-        )}
-
-        {/* Phase: Results */}
+        {/* Phase: Results — fills in live while the scan runs */}
         {phase === 'results' && (
           <View style={styles.section}>
-            <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 4 }}>
-              {devices.length} device{devices.length !== 1 ? 's' : ''} found — tap to connect
-            </Text>
+            <View style={styles.resultsHeader}>
+              {scanning && <ActivityIndicator size="small" style={{ marginRight: 8 }} />}
+              <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, flex: 1 }}>
+                {scanning
+                  ? `Scanning… ${scanDevices.length} found${scanDevices.length > 0 ? ' — tap to connect' : ''}`
+                  : `${scanDevices.length} device${scanDevices.length !== 1 ? 's' : ''} found — tap to connect`}
+              </Text>
+              {scanning && (
+                <Button compact mode="text" onPress={() => {
+                  stopScanPoll();
+                  setScanning(false);
+                }}>
+                  Stop
+                </Button>
+              )}
+            </View>
             <FlatList
-              data={devices}
+              data={scanDevices}
               keyExtractor={(item) => item.mac_address}
               renderItem={renderDeviceItem}
               scrollEnabled={false}
             />
-            <Button mode="text" onPress={() => setPhase('idle')} style={{ marginTop: 8 }}>
-              Done
+            <Button mode="text" onPress={() => {
+              stopScanPoll();
+              setScanning(false);
+              setPhase('idle');
+            }} style={{ marginTop: 8 }}>
+              {scanning ? 'Cancel' : 'Done'}
             </Button>
-          </View>
-        )}
-
-        {/* Phase: Pairing */}
-        {phase === 'pairing' && (
-          <View style={styles.scanning}>
-            <ActivityIndicator size="large" />
-            <Text variant="bodyMedium" style={{ marginTop: 12 }}>
-              Pairing and connecting...
-            </Text>
           </View>
         )}
 
@@ -519,7 +550,7 @@ const styles = StyleSheet.create({
   actions: { marginTop: 8 },
   roleButtons: { flexDirection: 'row', gap: 12 },
   roleButton: { flex: 1 },
-  scanning: { alignItems: 'center', paddingVertical: 24 },
+  resultsHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
   discoverableCard: { alignItems: 'center', padding: 24, borderRadius: 12 },
   errorRow: { flexDirection: 'row', alignItems: 'center', marginTop: 12, paddingHorizontal: 4 },
   deviceCard: { marginBottom: 8 },
