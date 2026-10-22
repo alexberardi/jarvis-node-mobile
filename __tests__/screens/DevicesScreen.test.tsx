@@ -214,6 +214,33 @@ describe.skip('DevicesScreen', () => {
     expect(getByText('Smart Plug')).toBeTruthy();
   });
 
+  it('opens a device row in DeviceEdit by its testID', () => {
+    mockDevicesQuery = {
+      data: [
+        {
+          id: 'dev-1', household_id: 'hh-1', room_id: null, entity_id: 'light.kitchen',
+          name: 'Kitchen Ceiling', domain: 'light', device_class: null, manufacturer: null,
+          model: null, source: 'direct', protocol: null, local_ip: null, mac_address: null,
+          cloud_id: null, ha_device_id: null, is_controllable: true, is_active: true,
+          room_name: null, supported_actions: null, created_at: '', updated_at: '',
+        },
+      ],
+      isLoading: false,
+      refetch: jest.fn(),
+    };
+
+    const { getByTestId } = render(<DevicesScreen />, { wrapper });
+    fireEvent.press(getByTestId('device-row-dev-1'));
+
+    expect(mockNavigate).toHaveBeenCalledWith('DeviceEdit', { deviceId: 'dev-1', householdId: 'hh-1' });
+  });
+
+  it('opens Rooms from the devices-rooms-button', () => {
+    const { getByTestId } = render(<DevicesScreen />, { wrapper });
+    fireEvent.press(getByTestId('devices-rooms-button'));
+    expect(mockNavigate).toHaveBeenCalledWith('RoomManagement');
+  });
+
   it('should show FAB button', () => {
     mockDevicesQuery = {
       data: [],

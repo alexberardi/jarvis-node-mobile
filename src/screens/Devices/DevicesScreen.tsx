@@ -281,6 +281,7 @@ const DevicesScreen = () => {
           <Appbar.Action
             icon="door"
             accessibilityLabel="Rooms"
+            testID="devices-rooms-button"
             onPress={() => navigation.navigate('RoomManagement')}
           />
         )}
@@ -382,6 +383,7 @@ const DevicesScreen = () => {
                 return (
                   <React.Fragment key={device.id}>
                     <List.Item
+                      testID={`device-row-${device.id}`}
                       title={device.name}
                       description={subtitle || device.entity_id}
                       left={(props) => <List.Icon {...props} icon={icon} />}

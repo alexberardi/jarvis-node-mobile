@@ -1,0 +1,49 @@
+appId: com.jarvis.nodemobile
+name: Devices, light on and off
+# A seeded light's on/off switch on its edit screen (DeviceEditScreen's control panel,
+# src/components/device-controls/LightControl.tsx): turned on, then off again. The switch
+# shows only with the light's live state, which comes from Home Assistant; the sandbox has
+# no Home Assistant yet, so this flow is skipped until the fake one (#154) lands.
+# State: the light ends off, as the seed leaves it.
+tags:
+  - devices
+  - e2e
+  - skip
+properties:
+  skip_reason: "needs the fake Home Assistant (#154): the light's on/off switch shows only with its live state"
+env:
+  EMAIL: "test@jarvisautomation.io"
+  PASSWORD: "DevPass123!"
+  DEVICE_NAME: "Kitchen Ceiling"
+---
+- launchApp:
+    clearState: true
+- runFlow: subflows/login.yaml
+- tapOn:
+    id: "tab-devices"
+- extendedWaitUntil:
+    visible:
+      text: ${DEVICE_NAME}
+    timeout: 20000
+# The row's own node reads "<name>, <manufacturer>" (title and description merged),
+# so tap the title Text, which is exactly the name.
+- tapOn:
+    text: ${DEVICE_NAME}
+- extendedWaitUntil:
+    visible:
+      id: "light-power-switch"
+    timeout: 15000
+- assertVisible:
+    text: "Off"
+- tapOn:
+    id: "light-power-switch"
+- extendedWaitUntil:
+    visible:
+      text: "On"
+    timeout: 10000
+- tapOn:
+    id: "light-power-switch"
+- extendedWaitUntil:
+    visible:
+      text: "Off"
+    timeout: 10000

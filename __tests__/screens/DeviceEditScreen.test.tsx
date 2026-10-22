@@ -269,6 +269,20 @@ describe('DeviceEditScreen', () => {
     expect(getByText('Delete Device')).toBeTruthy();
   });
 
+  it('has the name input, save and delete buttons by testID', () => {
+    const { getByTestId } = render(
+      <DeviceEditScreen
+        navigation={mockNavigation}
+        route={makeRoute({ deviceId: 'dev-1', householdId: 'hh-1' })}
+      />,
+      { wrapper },
+    );
+
+    expect(getByTestId('device-name-input').props.value).toBe('Ceiling Light');
+    expect(getByTestId('device-save-button')).toBeTruthy();
+    expect(getByTestId('device-delete-button')).toBeTruthy();
+  });
+
   it('should render Edit Device appbar title', () => {
     const { getByText } = render(
       <DeviceEditScreen

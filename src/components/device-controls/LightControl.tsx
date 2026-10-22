@@ -133,7 +133,7 @@ const LightControl: React.FC<Props> = ({
       {hasLiveState ? (
         <View style={styles.toggleRow}>
           <Text variant="bodyLarge">{isOn ? 'On' : 'Off'}</Text>
-          <Switch value={isOn} onValueChange={handleToggle} disabled={loading} />
+          <Switch testID="light-power-switch" value={isOn} onValueChange={handleToggle} disabled={loading} />
         </View>
       ) : (
         <View style={styles.buttonRow}>

@@ -353,6 +353,7 @@ const RoomManagementScreen = () => {
               value={editName}
               onChangeText={setEditName}
               label="Room name"
+              testID="room-edit-name-input"
               autoFocus
               style={{ marginBottom: 12 }}
             />

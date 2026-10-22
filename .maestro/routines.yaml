@@ -1,0 +1,145 @@
+appId: com.jarvis.nodemobile
+name: Routines, create, edit, delete
+# Routines (src/screens/Routines/) as the seeded superuser: the seeded routines are
+# listed; a throwaway routine is created in the editor (RoutineEditScreen: name, a
+# trigger phrase, one step), edited (a second trigger phrase, saved and reopened) and
+# deleted from the editor. The seeded routines are left as they are.
+#
+# State: if the flow dies before the delete, one "E2E routine <time>" stays in the list;
+# delete it by hand. The name is unique per run, so a leftover never breaks the next run.
+# The step is typed as free text: the command catalog comes from the node's settings,
+# which need the node's key (the sandbox phone has none, see nodes.yaml).
+# Nothing is erased (#430): the edit adds a phrase instead of retyping a field.
+tags:
+  - routines
+  - e2e
+env:
+  EMAIL: "test@jarvisautomation.io"
+  PASSWORD: "DevPass123!"
+---
+- launchApp:
+    clearState: true
+- runFlow: subflows/login.yaml
+- tapOn:
+    id: "tab-routines"
+- extendedWaitUntil:
+    visible:
+      id: "routine-card-.*"
+    timeout: 20000
+
+# Create
+- evalScript: ${output.routine = 'E2E routine ' + Date.now()}
+- evalScript: ${output.phrase = 'e2e phrase ' + Date.now()}
+- tapOn:
+    id: "routine-add-fab"
+- extendedWaitUntil:
+    visible:
+      text: "New Routine"
+    timeout: 10000
+- assertNotVisible:
+    id: "routine-delete-button"
+- tapOn:
+    id: "routine-name-input"
+- inputText: ${output.routine}
+- assertVisible:
+    id: "routine-name-input"
+    text: ${output.routine}
+- tapOn:
+    id: "routine-trigger-input"
+- inputText: ${output.phrase}
+- tapOn:
+    id: "routine-trigger-add"
+- assertVisible:
+    id: "routine-trigger-.*"
+    text: ${output.phrase}
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: "routine-add-step"
+    direction: DOWN
+- tapOn:
+    id: "routine-add-step"
+- tapOn:
+    id: "routine-step-command-0"
+- inputText: "get_weather"
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: "routine-save-button"
+    direction: DOWN
+- tapOn:
+    id: "routine-save-button"
+- extendedWaitUntil:
+    visible:
+      id: "routine-add-fab"
+    timeout: 10000
+- scrollUntilVisible:
+    element:
+      text: ${output.routine}
+    direction: DOWN
+
+# Edit: add a second trigger phrase and save.
+- tapOn:
+    text: ${output.routine}
+- extendedWaitUntil:
+    visible:
+      text: "Edit Routine"
+    timeout: 10000
+- extendedWaitUntil:
+    visible:
+      id: "routine-trigger-.*"
+      text: ${output.phrase}
+    timeout: 10000
+- evalScript: ${output.phrase2 = output.phrase + ' again'}
+- tapOn:
+    id: "routine-trigger-input"
+- inputText: ${output.phrase2}
+- tapOn:
+    id: "routine-trigger-add"
+- assertVisible:
+    id: "routine-trigger-.*"
+    text: ${output.phrase2}
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: "routine-save-button"
+    direction: DOWN
+- tapOn:
+    id: "routine-save-button"
+- extendedWaitUntil:
+    visible:
+      id: "routine-add-fab"
+    timeout: 10000
+- scrollUntilVisible:
+    element:
+      text: ${output.routine}
+    direction: DOWN
+
+# Reopen: both phrases were saved. Then delete from the editor.
+- tapOn:
+    text: ${output.routine}
+- extendedWaitUntil:
+    visible:
+      text: "Edit Routine"
+    timeout: 10000
+- extendedWaitUntil:
+    visible:
+      id: "routine-trigger-.*"
+      text: ${output.phrase2}
+    timeout: 10000
+- assertVisible:
+    id: "routine-trigger-.*"
+    text: ${output.phrase}
+- tapOn:
+    id: "routine-delete-button"
+- assertVisible:
+    text: "Remove .*"
+# The alert's destructive button (RN puts the last button in the positive slot).
+- tapOn:
+    id: "android:id/button1"
+- extendedWaitUntil:
+    visible:
+      id: "routine-add-fab"
+    timeout: 10000
+- assertNotVisible:
+    text: ${output.routine}
