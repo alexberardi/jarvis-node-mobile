@@ -1,0 +1,109 @@
+appId: com.jarvis.nodemobile
+name: Inbox, one seeded item per screen
+# Inbox (src/screens/Inbox/) as the seeded superuser, from Home's inbox button. The rich
+# seed (jarvis-server scripts/seed-dev.py) gives the superuser one item per screen the list
+# opens one with (InboxListScreen routeForCategory); scripts/e2e passes their titles:
+# - INBOX_DETAIL_TITLE, a deep-research item: InboxDetail with its markdown body and sources;
+# - INBOX_LIST_TITLE, an interactive_list: InteractiveList's rows and its "Add {n}" action;
+# - INBOX_DEPLOYED_TITLE, an adapter_deployed item: AdapterDeployed's details.
+# Rows have only random ids (inbox-item-<id>), so they are picked by title.
+#
+# State: opening an item marks it read; nothing else is changed (no action is tapped,
+# the InteractiveList selection is local). The suggestion card's buttons are in
+# inbox-suggestion.yaml.
+tags:
+  - inbox
+  - e2e
+env:
+  EMAIL: "test@jarvisautomation.io"
+  PASSWORD: "DevPass123!"
+  INBOX_DETAIL_TITLE: "Research: heat pumps in cold climates"
+  INBOX_LIST_TITLE: "Restock the pantry"
+  INBOX_DEPLOYED_TITLE: "Voice assistant updated"
+---
+- launchApp:
+    clearState: true
+- runFlow: subflows/login.yaml
+- tapOn:
+    id: "inbox-button"
+- extendedWaitUntil:
+    visible:
+      id: "open-suppressed-suggestions"
+    timeout: 15000
+
+# InboxDetail: the markdown body and the sources list.
+- scrollUntilVisible:
+    element:
+      text: ${INBOX_DETAIL_TITLE}
+    direction: DOWN
+- tapOn:
+    text: ${INBOX_DETAIL_TITLE}
+- extendedWaitUntil:
+    visible:
+      text: "Findings"
+    timeout: 15000
+- assertVisible:
+    text: ${INBOX_DETAIL_TITLE}
+- scrollUntilVisible:
+    element:
+      text: "Sources"
+    direction: DOWN
+- scrollUntilVisible:
+    element:
+      text: "1\\. Cold-climate heat pump guide"
+    direction: DOWN
+- assertVisible:
+    text: "2\\. Heat pumps below freezing"
+- back
+
+# InteractiveList: the seeded rows, milk and eggs selected by default, so the action
+# reads "Add 2 to the list"; a tap on coffee makes it 3, and a second tap 2 again.
+- scrollUntilVisible:
+    element:
+      text: ${INBOX_LIST_TITLE}
+    direction: DOWN
+- tapOn:
+    text: ${INBOX_LIST_TITLE}
+- extendedWaitUntil:
+    visible:
+      id: "interactive-row-milk"
+    timeout: 15000
+- assertVisible:
+    id: "interactive-row-eggs"
+- assertVisible:
+    id: "interactive-row-coffee"
+- assertVisible:
+    text: "Add 2 to the list"
+- tapOn:
+    id: "interactive-row-coffee"
+- assertVisible:
+    text: "Add 3 to the list"
+- tapOn:
+    id: "interactive-row-coffee"
+- assertVisible:
+    text: "Add 2 to the list"
+- back
+
+# AdapterDeployed: renders from the item (its Revert is not tapped: it calls the
+# adapters API jarvisd does not serve).
+- scrollUntilVisible:
+    element:
+      text: ${INBOX_DEPLOYED_TITLE}
+    direction: DOWN
+- tapOn:
+    text: ${INBOX_DEPLOYED_TITLE}
+- extendedWaitUntil:
+    visible:
+      id: "adapter-revert"
+    timeout: 15000
+- assertVisible:
+    text: ${INBOX_DEPLOYED_TITLE}
+- assertVisible:
+    text: "mlx"
+- assertVisible:
+    text: "0\\.82s"
+- back
+- extendedWaitUntil:
+    visible:
+      id: "open-suppressed-suggestions"
+    timeout: 10000
