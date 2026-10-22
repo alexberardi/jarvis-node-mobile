@@ -33,6 +33,7 @@ const topLevel = fs
   .filter((f) => isFlow(f) && f !== 'config.yaml')
   .map((f) => path.join(MAESTRO, f));
 const allFlows = walk(MAESTRO).filter(isFlow);
+const CLEAR_FIELD = path.join(MAESTRO, 'subflows', 'clear-field.yaml');
 
 /** Header (before the first `---` line) and steps of a flow file. */
 function split(file: string): { header: string; steps: string } {
@@ -120,6 +121,21 @@ describe('Maestro flows (.maestro/)', () => {
     expect(topLevel.length).toBeGreaterThan(0);
   });
 
+  it('clears a field by tapping its end before erasing', () => {
+    const steps = lines(split(CLEAR_FIELD).steps).join('\n');
+    expect(steps).toMatch(/- tapOn:\s*\n\s+id: "\$\{FIELD_ID\}"\s*\n\s+point: "\d+%,\d+%"/);
+    expect(steps).toMatch(/- eraseText: \d+/);
+  });
+
+  it('passes FIELD_ID to every clear-field run', () => {
+    for (const file of allFlows) {
+      const steps = lines(split(file).steps).join('\n');
+      const runs = steps.match(/file: (?:subflows\/)?clear-field\.yaml\s*\n\s+env:\s*\n\s+FIELD_ID:/g) ?? [];
+      const all = steps.match(/clear-field\.yaml/g) ?? [];
+      expect([path.relative(MAESTRO, file), runs.length]).toEqual([path.relative(MAESTRO, file), all.length]);
+    }
+  });
+
   describe.each(topLevel.map((f) => [path.basename(f), f]))('%s', (_name, file) => {
     const { header, steps } = split(file);
     const skipped = isSkipped(header);
@@ -156,6 +172,14 @@ describe('Maestro flows (.maestro/)', () => {
         .map((m) => m[1].replace(/^"(.*)"$|^'(.*)'$/, '$1$2'))
         .filter((v) => v.includes('${') && !/^\$\{[^}]*\}$/.test(v));
       expect(mixed).toEqual([]);
+    });
+
+    it('clears a field only through subflows/clear-field.yaml', () => {
+      // `tapOn` taps a field's centre and `eraseText` only deletes what is before the
+      // cursor, so a bare erase leaves the field's tail ("Avery HouseholdE2E").
+      if (file === CLEAR_FIELD) return;
+      const erases = lines(split(file).steps).filter((l) => /^\s*-\s*eraseText\b/.test(l));
+      expect(erases).toEqual([]);
     });
 
     it('selects only testIDs that exist in the app', () => {

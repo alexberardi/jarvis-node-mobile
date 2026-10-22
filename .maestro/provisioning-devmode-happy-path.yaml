@@ -62,13 +62,15 @@ env:
 # The ip/port inputs are already present.
 - assertVisible:
     id: "ip-input"
-- tapOn:
-    id: "ip-input"
-- eraseText
+- runFlow:
+    file: subflows/clear-field.yaml
+    env:
+      FIELD_ID: "ip-input"
 - inputText: "${NODE_HOST}"
-- tapOn:
-    id: "port-input"
-- eraseText
+- runFlow:
+    file: subflows/clear-field.yaml
+    env:
+      FIELD_ID: "port-input"
 - inputText: "${NODE_PORT}"
 # Dismiss the keyboard before the connect tap. hideKeyboard is unreliable on RN
 # Paper inputs, and a LIVE keyboard SWALLOWS the next button tap (the tap just

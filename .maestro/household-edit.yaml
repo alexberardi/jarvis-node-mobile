@@ -64,9 +64,10 @@ env:
     element:
       id: "household-name-input"
     direction: UP
-- tapOn:
-    id: "household-name-input"
-- eraseText: 60
+- runFlow:
+    file: subflows/clear-field.yaml
+    env:
+      FIELD_ID: "household-name-input"
 - inputText: ${output.newName}
 - assertVisible:
     id: "household-name-input"
@@ -92,9 +93,10 @@ env:
 - assertVisible:
     id: "household-name-input"
     text: ${output.newName}
-- tapOn:
-    id: "household-name-input"
-- eraseText: 60
+- runFlow:
+    file: subflows/clear-field.yaml
+    env:
+      FIELD_ID: "household-name-input"
 - inputText: ${HOUSEHOLD_NAME}
 - assertVisible:
     id: "household-name-input"
