@@ -196,6 +196,7 @@ const DeviceEditScreen = ({ navigation, route }: Props) => {
       <ScrollView contentContainerStyle={styles.content}>
         <TextInput
           label="Device Name"
+          testID="device-name-input"
           value={name}
           onChangeText={setName}
           mode="outlined"
@@ -298,6 +299,7 @@ const DeviceEditScreen = ({ navigation, route }: Props) => {
         <Button
           mode="contained"
           onPress={handleSave}
+          testID="device-save-button"
           loading={saving}
           disabled={saving || !name.trim()}
           style={styles.saveButton}
@@ -308,6 +310,7 @@ const DeviceEditScreen = ({ navigation, route }: Props) => {
         <Button
           mode="outlined"
           onPress={handleDelete}
+          testID="device-delete-button"
           textColor={theme.colors.error}
           style={styles.deleteButton}
         >

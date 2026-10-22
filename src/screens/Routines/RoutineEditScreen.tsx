@@ -471,7 +471,7 @@ const RoutineEditScreen = () => {
                 </ScrollView>
               </Menu>
             ) : (
-              <TextInput mode="flat" label={commandsLoading ? 'Command (loading…)' : 'Command'}
+              <TextInput mode="flat" label={commandsLoading ? 'Command (loading…)' : 'Command'} testID={`routine-step-command-${index}`}
                 value={item.command} onChangeText={(v) => updateStep(index, { command: v, label: item.label || v })}
                 dense style={styles.stepInput} placeholder="e.g. get_weather" />
             )}
@@ -549,14 +549,14 @@ const RoutineEditScreen = () => {
           {isEditing ? 'Edit Routine' : 'New Routine'}
         </Text>
         {isEditing && (
-          <IconButton icon="delete-outline" onPress={handleDelete} iconColor={theme.colors.onSurfaceVariant} />
+          <IconButton icon="delete-outline" testID="routine-delete-button" onPress={handleDelete} iconColor={theme.colors.onSurfaceVariant} />
         )}
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll}>
         {/* Name */}
         <View style={styles.section}>
-          <TextInput mode="flat" label="Routine Name" value={name} onChangeText={setName} style={styles.topInput} />
+          <TextInput mode="flat" label="Routine Name" testID="routine-name-input" value={name} onChangeText={setName} style={styles.topInput} />
         </View>
 
         {/* Trigger Phrases */}
@@ -566,14 +566,14 @@ const RoutineEditScreen = () => {
             <HelpIcon text={helpCopy.routines.triggerPhrases} size={16} />
           </View>
           <View style={styles.triggerRow}>
-            <TextInput mode="flat" label="Add phrase" value={triggerInput} onChangeText={setTriggerInput}
+            <TextInput mode="flat" label="Add phrase" testID="routine-trigger-input" value={triggerInput} onChangeText={setTriggerInput}
               onSubmitEditing={addTriggerPhrase} dense style={[styles.topInput, { flex: 1 }]} />
-            <Button mode="contained-tonal" onPress={addTriggerPhrase} compact style={{ marginLeft: 8, alignSelf: 'center' }}>Add</Button>
+            <Button mode="contained-tonal" testID="routine-trigger-add" onPress={addTriggerPhrase} compact style={{ marginLeft: 8, alignSelf: 'center' }}>Add</Button>
           </View>
           {triggerPhrases.length > 0 && (
             <View style={styles.chips}>
               {triggerPhrases.map((phrase) => (
-                <Chip key={phrase} onClose={() => removeTriggerPhrase(phrase)} compact textStyle={{ fontSize: 12 }}>{phrase}</Chip>
+                <Chip key={phrase} testID={`routine-trigger-${phrase}`} onClose={() => removeTriggerPhrase(phrase)} compact textStyle={{ fontSize: 12 }}>{phrase}</Chip>
               ))}
             </View>
           )}
@@ -626,7 +626,7 @@ const RoutineEditScreen = () => {
           )}
           <DraggableFlatList data={steps} keyExtractor={(_, i) => `step-${i}`} renderItem={renderStep}
             onDragEnd={({ data }) => setSteps(data)} scrollEnabled={false} />
-          <Button mode="outlined" icon="plus" onPress={addStep} compact style={{ alignSelf: 'flex-start' }}>Add Step</Button>
+          <Button mode="outlined" icon="plus" testID="routine-add-step" onPress={addStep} compact style={{ alignSelf: 'flex-start' }}>Add Step</Button>
         </View>
 
         {/* Response Instruction */}
@@ -746,7 +746,7 @@ const RoutineEditScreen = () => {
               {validationError}
             </Text>
           )}
-          <Button mode="contained" onPress={handleSave} disabled={!!validationError || saving} loading={saving}>
+          <Button mode="contained" testID="routine-save-button" onPress={handleSave} disabled={!!validationError || saving} loading={saving}>
             {isEditing ? 'Save Changes' : 'Create Routine'}
           </Button>
         </View>
