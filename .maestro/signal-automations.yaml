@@ -35,9 +35,10 @@ env:
     id: "automation-presence.seen"
 
 # Write, enable, save
-- tapOn:
-    id: "instruction-presence.left"
-- eraseText: 200
+- runFlow:
+    file: subflows/clear-field.yaml
+    env:
+      FIELD_ID: "instruction-presence.left"
 - inputText: ${RULE}
 - hideKeyboard
 - tapOn:
@@ -70,9 +71,10 @@ env:
     text: "Runs the moment it fires."
 
 # Clear it
-- tapOn:
-    id: "instruction-presence.left"
-- eraseText: 200
+- runFlow:
+    file: subflows/clear-field.yaml
+    env:
+      FIELD_ID: "instruction-presence.left"
 - hideKeyboard
 - scrollUntilVisible:
     element:

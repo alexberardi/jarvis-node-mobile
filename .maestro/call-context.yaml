@@ -65,10 +65,14 @@ env:
     visible:
       text: "Edit detail"
     timeout: 10000
-- tapOn:
-    id: "call-context-value-input"
-- eraseText: 40
+- runFlow:
+    file: subflows/clear-field.yaml
+    env:
+      FIELD_ID: "call-context-value-input"
 - inputText: "1234-5678"
+- assertVisible:
+    id: "call-context-value-input"
+    text: "1234-5678"
 - hideKeyboard
 - scrollUntilVisible:
     element:
