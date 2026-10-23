@@ -15,6 +15,7 @@ import {
   Text,
   useTheme,
 } from 'react-native-paper';
+import { useQueryClient } from '@tanstack/react-query';
 
 import * as smartHomeApi from '../../api/smartHomeApi';
 import { useAuth } from '../../auth/AuthContext';
@@ -40,7 +41,9 @@ const DOMAIN_LABELS: Record<string, string> = {
 };
 
 const POLL_INTERVAL_MS = 2000;
-const POLL_TIMEOUT_MS = 120000; // 2 minutes
+// A node that is online answers a scan within seconds; one that never answers
+// is offline or busy, so say so instead of spinning.
+const POLL_TIMEOUT_MS = 30000;
 
 type ScanState = 'scanning' | 'results' | 'error' | 'timeout';
 
@@ -48,6 +51,7 @@ const DeviceDiscoveryScreen = ({ navigation, route }: Props) => {
   const { nodeId } = route.params;
   const theme = useTheme();
   const { state: authState } = useAuth();
+  const queryClient = useQueryClient();
 
   const [scanState, setScanState] = useState<ScanState>('scanning');
   const [devices, setDevices] = useState<(DiscoveredDeviceResult & { selected: boolean })[]>([]);
@@ -56,12 +60,16 @@ const DeviceDiscoveryScreen = ({ navigation, route }: Props) => {
   const [importing, setImporting] = useState(false);
   const [snackbar, setSnackbar] = useState('');
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Bumped by every new scan and on unmount: a poll from an older scan (or
+  // one in flight when the screen closed) stops instead of scheduling more.
+  const scanIdRef = useRef(0);
 
   // Determine if we're in the Devices stack (direct import) or SmartHome setup
   const isDevicesStack = (navigation as DevicesProps['navigation']).getState?.()
     ?.routes?.some((r: { name: string }) => r.name === 'DevicesList');
 
   const cleanup = useCallback(() => {
+    scanIdRef.current += 1;
     if (pollTimerRef.current) {
       clearTimeout(pollTimerRef.current);
       pollTimerRef.current = null;
@@ -70,23 +78,28 @@ const DeviceDiscoveryScreen = ({ navigation, route }: Props) => {
 
   const startScan = useCallback(async () => {
     cleanup();
+    const scanId = scanIdRef.current;
+    const stale = () => scanIdRef.current !== scanId;
     setScanState('scanning');
     setError(null);
     setDevices([]);
 
     try {
       const { id: requestId } = await smartHomeApi.requestDeviceScan(nodeId);
+      if (stale()) return;
       const startTime = Date.now();
 
       const poll = async () => {
+        if (stale()) return;
         if (Date.now() - startTime > POLL_TIMEOUT_MS) {
           setScanState('timeout');
-          setError('Scan timed out. Is the node online?');
+          setError("The node didn't answer the scan. Is it online?");
           return;
         }
 
         try {
           const result = await smartHomeApi.pollDeviceScan(nodeId, requestId);
+          if (stale()) return;
 
           if (result.status === 'completed' && result.devices) {
             setDevices(
@@ -108,6 +121,7 @@ const DeviceDiscoveryScreen = ({ navigation, route }: Props) => {
           // Still pending
           pollTimerRef.current = setTimeout(poll, POLL_INTERVAL_MS);
         } catch (e) {
+          if (stale()) return;
           // 410 Gone = expired
           if (e && typeof e === 'object' && 'response' in e) {
             const resp = (e as { response?: { status?: number } }).response;
@@ -124,6 +138,7 @@ const DeviceDiscoveryScreen = ({ navigation, route }: Props) => {
 
       await poll();
     } catch (e) {
+      if (stale()) return;
       setScanState('error');
       setError(e instanceof Error ? e.message : 'Failed to start scan');
     }
@@ -193,6 +208,8 @@ const DeviceDiscoveryScreen = ({ navigation, route }: Props) => {
         }));
 
         const result = await smartHomeApi.importDevices(householdId, importItems);
+        // Refresh the Devices list now rather than relying on its focus refetch.
+        queryClient.invalidateQueries({ queryKey: ['devices', householdId] });
         setSnackbar(
           `Imported ${result.created} device${result.created !== 1 ? 's' : ''}`,
         );
@@ -234,7 +251,7 @@ const DeviceDiscoveryScreen = ({ navigation, route }: Props) => {
         },
       );
     }
-  }, [devices, authState.activeHouseholdId, isDevicesStack, navigation]);
+  }, [devices, authState.activeHouseholdId, isDevicesStack, navigation, queryClient]);
 
   if (scanState === 'scanning') {
     return (
