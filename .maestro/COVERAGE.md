@@ -50,7 +50,7 @@ reason is in its `properties.skip_reason`).
 | Home/HomeScreen: chat tool calls (control_device, set_timer, shopping_list add) | flow | home-chat-tools.yaml (the sandbox's node is not running, so the reply is the scripted "node is offline" one: the call reached node dispatch) |
 | Devices/DevicesScreen, Routines list, Pantry tab (they open and show seeded data) | flow | nav-tabs.yaml |
 | Devices/DevicesScreen: open a device, the Rooms button | flow | devices.yaml |
-| Devices/DevicesScreen: add a device, discovery | later | needs a device to discover (no item filed yet) |
+| Devices/DevicesScreen: add a device, discovery | flow | devices.yaml (the scan ends: results, an error with Retry, or "No node is online"; importing needs a device to discover, no item filed yet) |
 | Devices/DeviceEditScreen: name and details, save and delete buttons | flow | devices.yaml (opens a seeded device and goes back; nothing saved) |
 | Devices/DeviceEditScreen: light on/off (LightControl) | skip | devices-light-toggle.yaml: needs the fake Home Assistant (#154) |
 | Devices/RoomManagementScreen: add, rename, delete a room | flow | devices.yaml |
