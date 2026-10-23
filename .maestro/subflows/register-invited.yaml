@@ -28,11 +28,15 @@ name: register-invited
 - hideKeyboard
 - tapOn:
     id: "invite-create-submit"
-# A new code is prepended to the list, so it is the first one on screen.
-- extendedWaitUntil:
-    visible:
+# A new code is prepended to the list, so it is the topmost code. The list sits below
+# the header whose create button was scrolled to, so the code can render just below the
+# fold: scroll to it instead of waiting in place (the scroll also rides out the dialog
+# closing after the create).
+- scrollUntilVisible:
+    element:
       id: "invite-code-.*"
-    timeout: 15000
+    direction: DOWN
+    centerElement: true
 - copyTextFrom:
     id: "invite-code-.*"
     index: 0

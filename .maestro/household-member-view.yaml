@@ -55,10 +55,12 @@ env:
     id: "household-save-name"
 - assertNotVisible:
     id: "household-save-persona"
+# Center the row: found at the bottom edge, its role chip can still be below the fold.
 - scrollUntilVisible:
     element:
       id: "member-row-${EMAIL_MEMBER}"
     direction: DOWN
+    centerElement: true
 - assertVisible:
     id: "member-role-.*"
     childOf:
