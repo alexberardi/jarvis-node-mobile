@@ -28,7 +28,8 @@
         "NSLocationWhenInUseUsageDescription": "Jarvis uses your location while the app is open to tell whether you're home, so it can respond to your presence. Your precise location stays on this device — only 'home' or 'away' is ever sent.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Jarvis checks whether you've arrived at or left home in the background so it can respond to your presence. Your precise location never leaves this device — only 'home' or 'away' is sent.",
         "NSBonjourServices": [
-          "_jarvis-config._tcp"
+          "_jarvis-config._tcp",
+          "_jarvis-setup._tcp"
         ],
         "INAlternativeAppNames": [
           {

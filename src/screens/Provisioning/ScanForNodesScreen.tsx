@@ -9,6 +9,10 @@ import { useProvisioningContext } from '../../contexts/ProvisioningContext';
 import { helpCopy } from '../../copy/help';
 import { ProvisioningStackParamList } from '../../navigation/types';
 import { SIMULATED_NODE_IP, NODE_PORT, DEV_MODE } from '../../config/env';
+import {
+  useSetupNodeDiscovery,
+  DiscoveredSetupNode,
+} from '../../hooks/useSetupNodeDiscovery';
 import { useThemePreference } from '../../theme/ThemeProvider';
 import KeyboardSafeView from '../../components/KeyboardSafeView';
 
@@ -32,6 +36,7 @@ const ScanForNodesScreen = ({ navigation }: Props) => {
   // fresh token instead of showing "Token ready!" with no token behind it.
   const tokenReady = !!provisioningToken;
   const [fetchingToken, setFetchingToken] = useState(false);
+  const discoveredNodes = useSetupNodeDiscovery();
 
   // Phase 1: Fetch provisioning token while still on home WiFi
   const handlePrepare = async () => {
@@ -68,6 +73,27 @@ const ScanForNodesScreen = ({ navigation }: Props) => {
     }
 
     const success = await connect(devIp, parseInt(devPort, 10) || 8080);
+    if (success) {
+      navigation.navigate('NodeInfo');
+    }
+  };
+
+  // A node discovered on the LAN needs no WiFi switch, so fetch the token
+  // (if Prepare hasn't run) and connect in one step, like dev mode.
+  const handleConnectDiscovered = async (node: DiscoveredSetupNode) => {
+    if (!authState.accessToken || !authState.activeHouseholdId) {
+      setError('Not authenticated or no household selected');
+      return;
+    }
+
+    if (!tokenReady) {
+      const tokenSuccess = await fetchProvisioningToken(
+        authState.activeHouseholdId,
+      );
+      if (!tokenSuccess) return;
+    }
+
+    const success = await connect(node.address, node.port);
     if (success) {
       navigation.navigate('NodeInfo');
     }
@@ -112,6 +138,43 @@ const ScanForNodesScreen = ({ navigation }: Props) => {
         />
       </Appbar.Header>
       <View style={styles.container}>
+        {/* Nodes in LAN setup mode, found via mDNS (_jarvis-setup._tcp) */}
+        {discoveredNodes.length > 0 && (
+          <Card style={styles.card}>
+            <Card.Content>
+              <Text variant="titleMedium" style={styles.cardTitle}>
+                Nodes found on your network
+              </Text>
+              {discoveredNodes.map((node) => (
+                <View
+                  key={node.nodeId}
+                  style={styles.discoveredRow}
+                  testID={`discovered-node-${node.nodeId}`}
+                >
+                  <View style={styles.discoveredInfo}>
+                    <Text variant="bodyMedium" style={styles.discoveredName}>
+                      {node.nodeId}
+                    </Text>
+                    <Text variant="bodySmall" style={styles.discoveredMeta}>
+                      {node.hardware ? `${node.hardware} · ` : ''}
+                      {node.address}:{node.port}
+                    </Text>
+                  </View>
+                  <Button
+                    testID={`setup-node-${node.nodeId}`}
+                    mode="contained"
+                    compact
+                    onPress={() => handleConnectDiscovered(node)}
+                    disabled={isLoading || fetchingToken}
+                  >
+                    Set up
+                  </Button>
+                </View>
+              ))}
+            </Card.Content>
+          </Card>
+        )}
+
         {/* Real provisioning mode */}
         <Card style={styles.card}>
           <Card.Content>
@@ -269,6 +332,21 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     lineHeight: 24,
     opacity: 0.8,
+  },
+  discoveredRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  discoveredInfo: {
+    flex: 1,
+    marginRight: 12,
+  },
+  discoveredName: {
+    fontWeight: '600',
+  },
+  discoveredMeta: {
+    opacity: 0.7,
   },
   wifiButtonRow: {
     flexDirection: 'row',
