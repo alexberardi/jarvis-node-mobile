@@ -50,3 +50,50 @@ it.each([
   await waitFor(() => expect(getLatestRelease).not.toHaveBeenCalled());
   expect(useSettingsSnapshot).not.toHaveBeenCalled();
 });
+
+describe('release comparison (#496)', () => {
+  const goNode = { ...base, install_mode: 'tarball', node_kind: null, last_seen_version: '0.1.0-rc18' };
+
+  it('asks for the release of this node', async () => {
+    renderIt(goNode);
+    await waitFor(() => expect(getLatestRelease).toHaveBeenCalledWith('n1'));
+  });
+
+  it.each(['0.1.0-rc19', '0.1.0'])('offers a Go node at 0.1.0-rc18 the newer %s', async (version) => {
+    (getLatestRelease as jest.Mock).mockResolvedValue({ version, kind: 'go' });
+    const { findByText, getByText } = renderIt(goNode);
+    expect(await findByText(`Latest: ${version}`)).toBeTruthy();
+    expect(getByText('Update')).toBeTruthy();
+  });
+
+  it.each(['0.1.0-rc18', '0.1.0-rc17', '0.0.9'])('never offers %s to a node at 0.1.0-rc18', async (version) => {
+    (getLatestRelease as jest.Mock).mockResolvedValue({ version, kind: 'go' });
+    const { queryByText } = renderIt(goNode);
+    await waitFor(() => expect(getLatestRelease).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 0));
+    expect(queryByText(/Latest:/)).toBeNull();
+    expect(queryByText('Update')).toBeNull();
+  });
+
+  it('offers nothing when the server returns no release', async () => {
+    (getLatestRelease as jest.Mock).mockResolvedValue(null);
+    const { queryByText } = renderIt(goNode);
+    await waitFor(() => expect(getLatestRelease).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 0));
+    expect(queryByText(/Latest:/)).toBeNull();
+    expect(queryByText('Update')).toBeNull();
+  });
+
+  it('does not offer 0.3.6 to a Go node at 0.1.0-rc18 (the server answers with the Go release)', async () => {
+    // The server picks the release by the node's kind; a Python node's 0.3.6
+    // never comes back for a Go node's id.
+    (getLatestRelease as jest.Mock).mockImplementation(async (nodeId: string) =>
+      nodeId === 'n1' ? { version: '0.1.0-rc18', kind: 'go' } : { version: '0.3.6', kind: 'python' },
+    );
+    const { queryByText } = renderIt(goNode);
+    await waitFor(() => expect(getLatestRelease).toHaveBeenCalledWith('n1'));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(queryByText(/0\.3\.6/)).toBeNull();
+    expect(queryByText('Update')).toBeNull();
+  });
+});

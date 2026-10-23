@@ -8,23 +8,11 @@ import { useNodeUpdate } from '../hooks/useNodeUpdate';
 import { useSettingsSnapshot } from '../hooks/useSettingsSnapshot';
 import { encryptAndPushConfig } from '../services/configPushService';
 import { isDesktopAgent } from '../utils/nodeKind';
+import { compareSemver } from '../utils/semver';
 
 interface Props {
   node: NodeInfo;
 }
-
-const compareVersions = (a: string, b: string): number => {
-  const parse = (v: string) =>
-    v.replace(/^v/, '').split('.').map((n) => parseInt(n, 10));
-  const aa = parse(a);
-  const bb = parse(b);
-  for (let i = 0; i < Math.max(aa.length, bb.length); i += 1) {
-    const x = aa[i] ?? 0;
-    const y = bb[i] ?? 0;
-    if (x !== y) return x - y;
-  }
-  return 0;
-};
 
 const stateLabel = (state: string): string => {
   switch (state) {
@@ -144,23 +132,25 @@ const PiNodeUpdateSection: React.FC<Props> = ({ node }) => {
 
   useEffect(() => {
     let cancelled = false;
-    getLatestRelease().then((info) => {
+    getLatestRelease(node.node_id).then((info) => {
       if (!cancelled) setLatest(info);
     });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [node.node_id]);
 
   // Update is only meaningful for tarball installs (the ones the node can
-  // upgrade itself). Docker / dev show version but no button.
+  // upgrade itself). Docker / dev show version but no button. Only a
+  // release strictly newer than the node's own is offered (semver
+  // precedence: 0.1.0-rc18 < 0.1.0-rc19 < 0.1.0).
   const supported = node.install_mode === 'tarball';
   const current = node.last_seen_version;
   const updateAvailable =
     supported &&
     !!latest &&
     !!current &&
-    compareVersions(latest.version, current) > 0;
+    compareSemver(latest.version, current) > 0;
 
   const isActive = task && task.state !== 'success' && task.state !== 'failed';
 
