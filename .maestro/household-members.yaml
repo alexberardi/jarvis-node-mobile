@@ -43,10 +43,12 @@ env:
     clearState: true
 - runFlow: subflows/login.yaml
 - runFlow: subflows/open-household.yaml
+# Center the row: found at the bottom edge, its role chip can still be below the fold.
 - scrollUntilVisible:
     element:
       id: "member-row-${output.newEmail}"
     direction: DOWN
+    centerElement: true
 - assertVisible:
     text: "Member"
     childOf:
@@ -72,6 +74,7 @@ env:
     element:
       id: "member-row-${output.newEmail}"
     direction: DOWN
+    centerElement: true
 - assertVisible:
     text: "Power User"
     childOf:

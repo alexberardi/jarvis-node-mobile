@@ -19,10 +19,31 @@ env:
     clearState: true
 - runFlow: subflows/login.yaml
 - runFlow: subflows/open-household.yaml
+# The Automations card sits below every other admin card (persona, web search, pantry,
+# watches & errands, memory, calls, K2, presence), and PR #121 made the screen longer: one
+# scrollUntilVisible from the top gives up before reaching it. Stage the scroll through the
+# same anchors household-edit.yaml uses on this screen, and center the button for the tap.
+- scrollUntilVisible:
+    element:
+      id: "household-persona-input"
+    direction: DOWN
+- scrollUntilVisible:
+    element:
+      id: "household-web-search-toggle"
+    direction: DOWN
+- scrollUntilVisible:
+    element:
+      id: "household-memory-toggle"
+    direction: DOWN
+- scrollUntilVisible:
+    element:
+      id: "household-location-input"
+    direction: DOWN
 - scrollUntilVisible:
     element:
       id: "open-signal-automations"
     direction: DOWN
+    centerElement: true
 - tapOn:
     id: "open-signal-automations"
 - extendedWaitUntil:
@@ -61,6 +82,13 @@ env:
 
 # Reopen: it was saved
 - back
+# Back keeps HouseholdEdit mounted, so the scroll position usually survives — but don't
+# trust where it landed: scroll the button back into view before tapping.
+- scrollUntilVisible:
+    element:
+      id: "open-signal-automations"
+    direction: DOWN
+    centerElement: true
 - tapOn:
     id: "open-signal-automations"
 - extendedWaitUntil:
@@ -93,6 +121,12 @@ env:
       enabled: false
     timeout: 10000
 - back
+# Same as the first reopen: scroll to the button instead of tapping where it last was.
+- scrollUntilVisible:
+    element:
+      id: "open-signal-automations"
+    direction: DOWN
+    centerElement: true
 - tapOn:
     id: "open-signal-automations"
 - extendedWaitUntil:
