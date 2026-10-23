@@ -8,6 +8,8 @@ name: Devices, edit screen and rooms
 # State: if the flow dies before the delete, one "E2E room <time>" (or "... edited")
 # stays in the Rooms list; delete it by hand. The name is unique per run, so a
 # leftover never breaks the next run.
+# Add device (the FAB) starts a scan that ends: results, an error with Retry, or
+# "No node is online" when no node can scan, never an endless spinner (#507).
 # The light toggle is in devices-light-toggle.yaml (skipped until the fake HA).
 tags:
   - devices
@@ -129,3 +131,12 @@ env:
     notVisible:
       text: ${output.edited}
     timeout: 10000
+
+# Add device: the scan goes to an online node and ends within its 30 s limit;
+# with no node online (the sandbox's node is not running) the tab says so.
+- tapOn:
+    id: "devices-add-button"
+- extendedWaitUntil:
+    visible:
+      text: "No node is online to scan for devices|Discovered Devices|Retry"
+    timeout: 45000
