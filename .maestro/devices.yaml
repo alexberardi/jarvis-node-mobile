@@ -83,7 +83,11 @@ env:
       text: ${output.room}
     direction: DOWN
 
-# Rename
+# Rename. The dialog keeps sliding up while its autofocused input raises the keyboard,
+# so clear-field's corner tap, computed from the bounds of a moving input, can land off
+# it — the erase then leaves the old name under the typed one (run 20261022-231530). Let
+# the animations settle first, and retry the clear-and-type if the field still ends up
+# mangled: clear-field's 200-character erase also swallows a botched earlier attempt.
 - tapOn:
     text: ${output.room}
 - extendedWaitUntil:
@@ -93,23 +97,30 @@ env:
 - assertVisible:
     id: "room-edit-name-input"
     text: ${output.room}
-- runFlow:
-    file: subflows/clear-field.yaml
-    env:
-      FIELD_ID: "room-edit-name-input"
+- waitForAnimationToEnd:
+    timeout: 5000
 # One whole value: Maestro drops the space in `"${output.room} edited"`.
 - evalScript: ${output.edited = output.room + ' edited'}
-- inputText: ${output.edited}
-- assertVisible:
-    id: "room-edit-name-input"
-    text: ${output.edited}
+- retry:
+    maxRetries: 2
+    commands:
+      - runFlow:
+          file: subflows/clear-field.yaml
+          env:
+            FIELD_ID: "room-edit-name-input"
+      - inputText: ${output.edited}
+      - assertVisible:
+          id: "room-edit-name-input"
+          text: ${output.edited}
 - tapOn:
     id: "room-edit-save"
 - extendedWaitUntil:
     notVisible:
       id: "room-edit-dialog"
     timeout: 10000
-- hideKeyboard
+# No hideKeyboard here: it is a bare BACK key on Android, and whether the keyboard
+# outlives the dialog varies — on a closed keyboard BACK pops the Rooms screen itself.
+# The E2E rooms sort to the top of the list, so the scroll needs no keyboard room anyway.
 - scrollUntilVisible:
     element:
       text: ${output.edited}
