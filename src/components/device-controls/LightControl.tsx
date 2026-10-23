@@ -38,6 +38,11 @@ const LightControl: React.FC<Props> = ({
   const s = state.state ?? {};
   const hasLiveState = state.state != null;
   const isOn = hasLiveState ? (s.state as string) === 'on' : false;
+  // A live state that is neither on nor off (e.g. 'unknown') is indeterminate:
+  // show it as such, not as Off, and let the user pick the action.
+  const isKnown = isOn || (s.state as string) === 'off';
+  const isUnknown = hasLiveState && !isKnown;
+  const isOff = hasLiveState && isKnown && !isOn;
   const brightness = s.brightness as number | undefined;
   const colorTemp = s.color_temp as number | undefined;
   const rgb = s.rgb as [number, number, number] | undefined;
@@ -80,9 +85,13 @@ const LightControl: React.FC<Props> = ({
     [householdId, deviceId, onStateChange],
   );
 
-  const handleToggle = useCallback(() => {
-    sendAction(isOn ? 'turn_off' : 'turn_on');
-  }, [isOn, sendAction]);
+  // Send what the Switch was set to, not the inverse of the believed state.
+  const handleToggle = useCallback(
+    (value: boolean) => {
+      sendAction(value ? 'turn_on' : 'turn_off');
+    },
+    [sendAction],
+  );
 
   const handleBrightnessSlide = useCallback(
     (value: number) => {
@@ -129,8 +138,9 @@ const LightControl: React.FC<Props> = ({
 
   return (
     <View style={styles.container}>
-      {/* On/Off: toggle switch with live state, buttons without */}
-      {hasLiveState ? (
+      {/* On/Off: toggle switch with a known live state, buttons otherwise */}
+      {isUnknown && <Text variant="bodyLarge">Unknown</Text>}
+      {hasLiveState && isKnown ? (
         <View style={styles.toggleRow}>
           <Text variant="bodyLarge">{isOn ? 'On' : 'Off'}</Text>
           <Switch testID="light-power-switch" value={isOn} onValueChange={handleToggle} disabled={loading} />
@@ -138,6 +148,7 @@ const LightControl: React.FC<Props> = ({
       ) : (
         <View style={styles.buttonRow}>
           <Button
+            testID="light-power-on"
             mode="contained"
             onPress={() => sendAction('turn_on')}
             loading={loading}
@@ -148,6 +159,7 @@ const LightControl: React.FC<Props> = ({
             Turn On
           </Button>
           <Button
+            testID="light-power-off"
             mode="contained-tonal"
             onPress={() => sendAction('turn_off')}
             disabled={loading}
@@ -172,7 +184,7 @@ const LightControl: React.FC<Props> = ({
             step={1}
             value={localBrightness}
             onValueChange={handleBrightnessSlide}
-            disabled={loading || (hasLiveState && !isOn)}
+            disabled={loading || isOff}
             minimumTrackTintColor={theme.colors.primary}
             maximumTrackTintColor={theme.colors.surfaceVariant}
             thumbTintColor={theme.colors.primary}
@@ -193,13 +205,13 @@ const LightControl: React.FC<Props> = ({
                 <Pressable
                   key={preset.hex}
                   onPress={() => handleColorPreset(preset)}
-                  disabled={loading || (hasLiveState && !isOn)}
+                  disabled={loading || isOff}
                   style={[
                     styles.presetCircle,
                     { backgroundColor: preset.hex },
                     isActive && styles.presetActive,
                     isActive && { borderColor: theme.colors.primary },
-                    ((hasLiveState && !isOn) || loading) && styles.presetDisabled,
+                    (isOff || loading) && styles.presetDisabled,
                   ]}
                   accessibilityLabel={preset.label}
                 />
@@ -224,7 +236,7 @@ const LightControl: React.FC<Props> = ({
               step={100}
               value={localColorTemp}
               onValueChange={handleColorTempSlide}
-              disabled={loading || (hasLiveState && !isOn)}
+              disabled={loading || isOff}
               minimumTrackTintColor="#ff9500"
               maximumTrackTintColor="#b0d4ff"
               thumbTintColor={theme.colors.primary}

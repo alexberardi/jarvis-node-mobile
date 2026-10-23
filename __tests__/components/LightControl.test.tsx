@@ -76,4 +76,52 @@ describe('LightControl', () => {
 
     expect(queryByTestId('light-power-switch')).toBeNull();
   });
+
+  // The action comes from the Switch's new value, not from the believed state,
+  // so a wrong believed state can't turn "switch off" into turn_on (#518).
+  it.each([
+    ['off', false, 'turn_off'],
+    ['on', false, 'turn_off'],
+    ['off', true, 'turn_on'],
+    ['on', true, 'turn_on'],
+  ])('believed %s, switch set to %s sends %s', async (believed, value, action) => {
+    const { getByTestId } = render(
+      <LightControl
+        householdId="hh-1"
+        deviceId="dev-1"
+        state={makeState({ state: { state: believed } })}
+        onStateChange={jest.fn()}
+      />,
+      { wrapper },
+    );
+
+    fireEvent(getByTestId('light-power-switch'), 'valueChange', value);
+
+    await waitFor(() => expect(mockedControl).toHaveBeenCalledWith('hh-1', 'dev-1', action, undefined));
+    expect(mockedControl).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows an unknown state as indeterminate, with Turn On and Turn Off', async () => {
+    const onStateChange = jest.fn();
+    const { getByTestId, getByText, queryByTestId, queryByText } = render(
+      <LightControl
+        householdId="hh-1"
+        deviceId="dev-1"
+        state={makeState({ state: { state: 'unknown' } })}
+        onStateChange={onStateChange}
+      />,
+      { wrapper },
+    );
+
+    expect(getByText('Unknown')).toBeTruthy();
+    expect(queryByText('Off')).toBeNull();
+    expect(queryByText('On')).toBeNull();
+    expect(queryByTestId('light-power-switch')).toBeNull();
+
+    fireEvent.press(getByTestId('light-power-off'));
+    await waitFor(() => expect(mockedControl).toHaveBeenCalledWith('hh-1', 'dev-1', 'turn_off', undefined));
+    await waitFor(() => expect(onStateChange).toHaveBeenCalled());
+    fireEvent.press(getByTestId('light-power-on'));
+    await waitFor(() => expect(mockedControl).toHaveBeenCalledWith('hh-1', 'dev-1', 'turn_on', undefined));
+  });
 });
