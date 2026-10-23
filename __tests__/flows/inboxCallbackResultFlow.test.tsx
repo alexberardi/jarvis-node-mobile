@@ -152,6 +152,40 @@ describe('InboxCallbackResult — flow integration (poll, terminal render, error
     expect(() => getByTestId('pending-indicator')).toThrow();
   });
 
+  it('renders a ran card (with its answer) instead of the body', async () => {
+    mockGetInteractiveCallbackStatus.mockResolvedValue(
+      completed({
+        title: 'Ran on its own: espresso machines',
+        body: 'The Bambino Plus wins.\n\nI ran this on its own.',
+        metadata: {
+          card_type: 'autonomy_ran',
+          state: 'done',
+          answer: 'The Bambino Plus wins.',
+          source: { kind: 'errand', label: 'Errand' },
+          steps: [
+            {
+              label: 'Search for espresso machines',
+              command: 'quick_search',
+              status: 'ok',
+              result: '2 sources',
+            },
+          ],
+          rules: [],
+        },
+      }),
+    );
+
+    const { getByTestId, getByText, queryByTestId } = render(<InboxCallbackResultScreen />, {
+      wrapper,
+    });
+
+    await waitFor(() => expect(getByTestId('ran-card')).toBeTruthy(), { timeout: 8000 });
+    expect(getByTestId('ran-answer')).toBeTruthy();
+    expect(getByText('The Bambino Plus wins.')).toBeTruthy();
+    expect(getByText('Search for espresso machines')).toBeTruthy();
+    expect(queryByTestId('result-body')).toBeNull();
+  });
+
   it('renders error_message on a terminal failed status', async () => {
     mockGetInteractiveCallbackStatus.mockResolvedValue(
       failed('Node refused the request.'),

@@ -75,10 +75,14 @@ env:
     visible:
       text: "Edit Business"
     timeout: 10000
-- tapOn:
-    id: "phone-contact-address-input"
-- eraseText: 40
+- runFlow:
+    file: subflows/clear-field.yaml
+    env:
+      FIELD_ID: "phone-contact-address-input"
 - inputText: "2 Flour Lane"
+- assertVisible:
+    id: "phone-contact-address-input"
+    text: "2 Flour Lane"
 - hideKeyboard
 - scrollUntilVisible:
     element:

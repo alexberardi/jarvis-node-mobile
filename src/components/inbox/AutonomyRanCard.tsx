@@ -1,7 +1,9 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
+import Markdown, { RenderRules } from 'react-native-markdown-display';
 import { Chip, Icon, Text, useTheme } from 'react-native-paper';
 
+import { useInboxMarkdownStyles } from '../../hooks/useInboxMarkdownStyles';
 import type { RanCardData, RanStepStatus } from '../../types/autonomyCards';
 
 interface AutonomyRanCardProps {
@@ -25,6 +27,15 @@ const SCOPE_LABELS: Record<string, string> = {
   tool: "The tool says it's safe to run without asking",
 };
 
+// Make the answer's text selectable, like the plain-text inbox bodies.
+const ANSWER_RULES: RenderRules = {
+  textgroup: (node, children, _parent, styles) => (
+    <Text key={node.key} style={styles.textgroup} selectable>
+      {children}
+    </Text>
+  ),
+};
+
 const STEP_ICONS: Record<RanStepStatus, string> = {
   ok: 'check-circle',
   failed: 'close-circle',
@@ -34,11 +45,13 @@ const STEP_ICONS: Record<RanStepStatus, string> = {
 
 /**
  * "Ran on its own" inbox card (metadata.card_type === 'autonomy_ran'):
- * what ran step by step, where it came from, and which rule allowed it.
+ * the errand's answer (metadata.answer) when it has one, what ran step by
+ * step, where it came from, and which rule allowed it.
  * The Stop button stays with InteractiveElementsSection.
  */
 const AutonomyRanCard: React.FC<AutonomyRanCardProps> = ({ data }) => {
   const theme = useTheme();
+  const markdownStyles = useInboxMarkdownStyles();
   const stateLabel = STATE_LABELS[data.state];
   const source =
     data.source.kind === 'automation'
@@ -68,6 +81,14 @@ const AutonomyRanCard: React.FC<AutonomyRanCardProps> = ({ data }) => {
           {source}
         </Text>
       </View>
+
+      {data.answer ? (
+        <View testID="ran-answer">
+          <Markdown style={markdownStyles} rules={ANSWER_RULES}>
+            {data.answer}
+          </Markdown>
+        </View>
+      ) : null}
 
       {data.steps.map((step, i) => (
         <View key={i} testID={`ran-step-${i}`} style={styles.step}>

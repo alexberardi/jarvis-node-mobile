@@ -242,6 +242,13 @@ describe('SettingsScreen', () => {
     expect(queryByText('Re-discover Services')).toBeNull();
   });
 
+  it('says the server URL is required and does not claim auto-discovery', () => {
+    const { queryByText, getByText } = render(<SettingsScreen />, { wrapper });
+
+    expect(queryByText(/auto-discover/i)).toBeNull();
+    expect(getByText(/doesn't search the network/i)).toBeTruthy();
+  });
+
   it('separates the Call details row with a divider like the rows above it', () => {
     const { getByTestId } = render(<SettingsScreen />, { wrapper });
     expect(getByTestId('settings-call-context-divider')).toBeTruthy();

@@ -50,13 +50,15 @@ env:
     text: "Add Node.*"
 - assertVisible:
     id: "ip-input"
-- tapOn:
-    id: "ip-input"
-- eraseText
+- runFlow:
+    file: subflows/clear-field.yaml
+    env:
+      FIELD_ID: "ip-input"
 - inputText: "${NODE_HOST}"
-- tapOn:
-    id: "port-input"
-- eraseText
+- runFlow:
+    file: subflows/clear-field.yaml
+    env:
+      FIELD_ID: "port-input"
 - inputText: "${NODE_PORT}"
 - retry:
     maxRetries: 3

@@ -60,7 +60,7 @@ const fetchServiceUrls = async (
 
     for (const svc of data.services) {
       // Replace localhost/127.0.0.1 in service URLs with the config host IP
-      let svcUrl = svc.url;
+      let svcUrl = svc.url.replace(/\/+$/, '');
       svcUrl = svcUrl.replace(/localhost|127\.0\.0\.1/, configHost);
 
       if (svc.name === 'jarvis-auth') {

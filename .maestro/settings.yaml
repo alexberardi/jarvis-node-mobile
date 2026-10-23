@@ -127,8 +127,13 @@ env:
     element:
       id: "settings-recheck-connection"
     direction: DOWN
-- assertVisible:
-    text: "Config: .*"
+# The URL lines sit above the button, so a swipe overshoot can leave the button near the
+# top of the screen with "Config:" off the top: scroll back up to it instead of asserting
+# where it may no longer be.
+- scrollUntilVisible:
+    element:
+      text: "Config: .*"
+    direction: UP
 - tapOn:
     id: "settings-recheck-connection"
 - extendedWaitUntil:

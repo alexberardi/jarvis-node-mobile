@@ -248,12 +248,23 @@ const DevicesScreen = () => {
         setSnackbar('No nodes available. Add a node first.');
         return;
       }
-      // Scan with the household's designated primary node (the smart-home node),
-      // not just the first node returned — fall back to nodes[0] if no primary set.
-      const targetNode = nodes.find((n) => n.node_id === primaryNodeId) ?? nodes[0];
+      // Scan with the household's designated primary node (the smart-home node)
+      // when it is online, else the first online node. An offline node never
+      // answers the scan request, so the scan would only time out.
+      const primary = nodes.find((n) => n.node_id === primaryNodeId);
+      const targetNode = primary?.online ? primary : nodes.find((n) => n.online);
+      if (!targetNode) {
+        setSnackbar('No node is online to scan for devices');
+        return;
+      }
       navigation.navigate('DeviceDiscovery', { nodeId: targetNode.node_id });
-      if (nodes.length > 1) {
-        setSnackbar(`Scanning with node: ${nodeDisplayName(targetNode, targetNode.node_id)}`);
+      const targetName = nodeDisplayName(targetNode, targetNode.node_id);
+      if (primary && primary !== targetNode) {
+        setSnackbar(
+          `${nodeDisplayName(primary, primary.node_id)} is offline, scanning with ${targetName}`,
+        );
+      } else if (nodes.length > 1) {
+        setSnackbar(`Scanning with node: ${targetName}`);
       }
     } catch {
       setSnackbar('Failed to fetch nodes');
@@ -281,6 +292,7 @@ const DevicesScreen = () => {
           <Appbar.Action
             icon="door"
             accessibilityLabel="Rooms"
+            testID="devices-rooms-button"
             onPress={() => navigation.navigate('RoomManagement')}
           />
         )}
@@ -382,6 +394,7 @@ const DevicesScreen = () => {
                 return (
                   <React.Fragment key={device.id}>
                     <List.Item
+                      testID={`device-row-${device.id}`}
                       title={device.name}
                       description={subtitle || device.entity_id}
                       left={(props) => <List.Icon {...props} icon={icon} />}
@@ -406,6 +419,7 @@ const DevicesScreen = () => {
         <FAB
           icon="plus"
           accessibilityLabel="Add device"
+          testID="devices-add-button"
           style={[styles.fab, { backgroundColor: theme.colors.primary }]}
           color={theme.colors.onPrimary}
           onPress={startScan}

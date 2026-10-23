@@ -19,6 +19,9 @@ tool can automate.
 | `auth-logout.yaml` | Log Out lands on Landing, and a relaunch stays logged out |
 | `nav-tabs.yaml` | the five tabs open (pick them by `tab-home`, `tab-devices`, `tab-pantry`, `tab-routines`, `tab-nodes`), and Devices, Routines and Nodes show seeded data; Pantry shows its gate (the rich sandbox has Pantry off) or, with Pantry on, the pantry |
 | `home-chat.yaml` | a chat message gets the scripted model's exact reply (`CHAT_MESSAGE` → `CHAT_REPLY`) |
+| `home-chat-tools.yaml` | the scripted model's tool turns (`DEVICE_`, `TIMER_`, `LIST_MESSAGE`: control_device, set_timer, a shopping-list add) reach the node's dispatch: the sandbox's node is not running, so each gets its `*_REPLY_OFFLINE` |
+| `inbox.yaml` | the seeded inbox opens from Home; the deep-research item shows its markdown and sources (InboxDetail), the interactive list its rows and live "Add {n}" count (InteractiveList), the deployed adapter its details (AdapterDeployed) |
+| `inbox-suggestion.yaml` | the seeded suggestion card's "Never suggest this" opens the server's answer (InboxCallbackResult), Suppressed suggestions lists it, and the flow un-blocks it |
 | `settings.yaml`, `household-*.yaml`, `signal-automations.yaml`, `voice-profile.yaml`, `nodes.yaml`, `memories.yaml`, `phonebook.yaml`, `call-context.yaml`, `register.yaml`, `force-password-change.yaml`, `deep-links.yaml` | E2E piece 6 (#153): see [`COVERAGE.md`](COVERAGE.md) for what each covers |
 
 E2E piece 5 (#145): its layout and seed contract are in
@@ -44,8 +47,9 @@ and two nodes). The contract is jarvis-server
   the server it changes back, or it makes its own throwaway data (unique per run);
 - a flow that can't run there is tagged `skip` with `properties.skip_reason`;
 - the env is `EMAIL`/`PASSWORD` (the superuser), `EMAIL_ADMIN`, `EMAIL_POWER`,
-  `EMAIL_MEMBER` (same `PASSWORD`), `CHAT_MESSAGE`/`CHAT_REPLY`. A flow's own `env:` holds
-  the seed's values, for a local run.
+  `EMAIL_MEMBER` (same `PASSWORD`), `CHAT_MESSAGE`/`CHAT_REPLY`, the tool turns
+  `TIMER_`/`LIST_`/`DEVICE_MESSAGE` with `_REPLY`/`_REPLY_OFFLINE`, and the seeded inbox's
+  `INBOX_*` titles. A flow's own `env:` holds the seed's values, for a local run.
 
 Run one flow from a jarvis-server checkout, against this checkout's committed `HEAD`:
 
@@ -55,7 +59,8 @@ scripts/e2e mobile --name <sandbox> --mobile-repo <path to this repo> --filter n
 
 `npm test` checks the flows statically (`__tests__/maestro/flows.test.ts`): the contract
 above, that every `runFlow` file exists, that every `id:` names a testID in `src/`, and
-that an `inputText` with `${...}` in it is one whole expression.
+that an `inputText` with `${...}` in it is one whole expression, and that no flow
+uses `eraseText` except `subflows/clear-field.yaml`.
 
 Android gotchas: the Login screen has no ScrollView, so its button takes a tap with the
 keyboard up; on a screen with a ScrollView, `hideKeyboard` (Android's back key) first, and
@@ -66,6 +71,9 @@ expression (`evalScript: ${output.x = NAME + ' E2E'}`, then `inputText: ${output
 check the field after typing. A react-native-paper `Button`'s label looks folded into the
 button's own node (a `childOf` on it found nothing), so match `{id: <button>, text: ...}`.
 Scroll to the control you tap (`centerElement: true`), not to its card's title.
+To replace a field's text, `runFlow: {file: subflows/clear-field.yaml, env: {FIELD_ID: <testID>}}`
+then `inputText`: a plain `tapOn` puts the cursor mid-text and `eraseText` only deletes
+before it, so the old tail stays behind the new text.
 
 **Validated end-to-end on a real device (2026-06-23):** the full provisioning
 flow ran on an iOS simulator against a live command-center + the fake node — the

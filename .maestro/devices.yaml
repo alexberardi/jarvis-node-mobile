@@ -1,0 +1,142 @@
+appId: com.jarvis.nodemobile
+name: Devices, edit screen and rooms
+# Devices (src/screens/Devices/) as the seeded superuser: a seeded device opens its
+# edit screen (DeviceEditScreen) with its name and details, and the Rooms screen
+# (RoomManagementScreen, the door button in the Devices header) adds, renames and
+# deletes a throwaway room. The seeded devices and rooms are left as they are.
+#
+# State: if the flow dies before the delete, one "E2E room <time>" (or "... edited")
+# stays in the Rooms list; delete it by hand. The name is unique per run, so a
+# leftover never breaks the next run.
+# Add device (the FAB) starts a scan that ends: results, an error with Retry, or
+# "No node is online" when no node can scan, never an endless spinner (#507).
+# The light toggle is in devices-light-toggle.yaml (skipped until the fake HA).
+tags:
+  - devices
+  - e2e
+env:
+  EMAIL: "test@jarvisautomation.io"
+  PASSWORD: "DevPass123!"
+  DEVICE_NAME: "Kitchen Ceiling"
+---
+- launchApp:
+    clearState: true
+- runFlow: subflows/login.yaml
+- tapOn:
+    id: "tab-devices"
+- extendedWaitUntil:
+    visible:
+      text: ${DEVICE_NAME}
+    timeout: 20000
+
+# Device edit: opens with the device's name and details, and back without saving.
+# The row's own node reads "<name>, <manufacturer>" (title and description merged),
+# so tap the title Text, which is exactly the name.
+- tapOn:
+    text: ${DEVICE_NAME}
+- extendedWaitUntil:
+    visible:
+      text: "Edit Device"
+    timeout: 10000
+- assertVisible:
+    id: "device-name-input"
+    text: ${DEVICE_NAME}
+- scrollUntilVisible:
+    element:
+      text: "Entity ID"
+    direction: DOWN
+- scrollUntilVisible:
+    element:
+      id: "device-save-button"
+    direction: DOWN
+- assertVisible:
+    id: "device-delete-button"
+- back
+- extendedWaitUntil:
+    visible:
+      id: "devices-rooms-button"
+    timeout: 10000
+
+# Rooms: add
+- tapOn:
+    id: "devices-rooms-button"
+- extendedWaitUntil:
+    visible:
+      id: "room-add-input"
+    timeout: 10000
+- extendedWaitUntil:
+    visible:
+      id: "room-item-.*"
+    timeout: 15000
+- evalScript: ${output.room = 'E2E room ' + Date.now()}
+- tapOn:
+    id: "room-add-input"
+- inputText: ${output.room}
+- assertVisible:
+    id: "room-add-input"
+    text: ${output.room}
+- hideKeyboard
+- tapOn:
+    id: "room-add-button"
+- scrollUntilVisible:
+    element:
+      text: ${output.room}
+    direction: DOWN
+
+# Rename
+- tapOn:
+    text: ${output.room}
+- extendedWaitUntil:
+    visible:
+      id: "room-edit-dialog"
+    timeout: 10000
+- assertVisible:
+    id: "room-edit-name-input"
+    text: ${output.room}
+- runFlow:
+    file: subflows/clear-field.yaml
+    env:
+      FIELD_ID: "room-edit-name-input"
+# One whole value: Maestro drops the space in `"${output.room} edited"`.
+- evalScript: ${output.edited = output.room + ' edited'}
+- inputText: ${output.edited}
+- assertVisible:
+    id: "room-edit-name-input"
+    text: ${output.edited}
+- tapOn:
+    id: "room-edit-save"
+- extendedWaitUntil:
+    notVisible:
+      id: "room-edit-dialog"
+    timeout: 10000
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      text: ${output.edited}
+    direction: DOWN
+
+# Delete: the delete button in the renamed room's row.
+- tapOn:
+    id: "room-delete-.*"
+    childOf:
+      id: "room-item-.*"
+      containsDescendants:
+        - text: ${output.edited}
+- assertVisible:
+    text: "Delete Room"
+# The alert's destructive button (RN puts the last button in the positive slot).
+- tapOn:
+    id: "android:id/button1"
+- extendedWaitUntil:
+    notVisible:
+      text: ${output.edited}
+    timeout: 10000
+
+# Add device: the scan goes to an online node and ends within its 30 s limit;
+# with no node online (the sandbox's node is not running) the tab says so.
+- tapOn:
+    id: "devices-add-button"
+- extendedWaitUntil:
+    visible:
+      text: "No node is online to scan for devices|Discovered Devices|Retry"
+    timeout: 45000

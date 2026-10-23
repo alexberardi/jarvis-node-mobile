@@ -190,3 +190,28 @@ describe('discoverConfigService — no network discovery', () => {
     expect(result.config.configServiceUrl).toBe(discovered);
   });
 });
+
+describe('discoverConfigService — path-prefixed service URLs', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    global.fetch = mockFetch as unknown as typeof global.fetch;
+  });
+
+  it('keeps a path-prefixed service URL', async () => {
+    mockedSC.loadManualConfigUrl.mockResolvedValue('http://10.0.0.5:7700');
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        services: [
+          { name: 'jarvis-command-center', url: 'http://localhost:7700/cc', path: '/cc', host: 'localhost', port: 7700 },
+          { name: 'jarvis-auth', url: 'http://localhost:7700/auth/', host: 'localhost', port: 7700 },
+        ],
+      }),
+    });
+
+    const result = await discoverConfigService();
+
+    expect(result.config.commandCenterUrl).toBe('http://10.0.0.5:7700/cc');
+    expect(result.config.authBaseUrl).toBe('http://10.0.0.5:7700/auth');
+  });
+});

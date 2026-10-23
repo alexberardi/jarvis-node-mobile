@@ -1,5 +1,5 @@
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import {
@@ -19,7 +19,10 @@ import {
   normalizeInteractiveElements,
 } from '../../api/commandCenterApi';
 import InteractiveElementsSection from '../../components/InteractiveElementsSection';
+import AutonomyRanCard from '../../components/inbox/AutonomyRanCard';
+import { useInboxMarkdownStyles } from '../../hooks/useInboxMarkdownStyles';
 import { InboxStackParamList } from '../../navigation/types';
+import { parseRanCard } from '../../types/autonomyCards';
 
 type ResultRoute = RouteProp<InboxStackParamList, 'InboxCallbackResult'>;
 
@@ -68,44 +71,7 @@ const InboxCallbackResultScreen = () => {
     return stopPolling;
   }, [poll, stopPolling]);
 
-  const markdownStyles = useMemo(
-    () => ({
-      body: { color: theme.colors.onSurface, fontSize: 14, lineHeight: 20 },
-      heading1: { color: theme.colors.onSurface, fontSize: 20, fontWeight: 'bold' as const, marginTop: 16, marginBottom: 8 },
-      heading2: { color: theme.colors.onSurface, fontSize: 18, fontWeight: 'bold' as const, marginTop: 14, marginBottom: 6 },
-      heading3: { color: theme.colors.onSurface, fontSize: 16, fontWeight: 'bold' as const, marginTop: 12, marginBottom: 4 },
-      link: { color: theme.colors.primary },
-      bullet_list: { marginLeft: 8 },
-      ordered_list: { marginLeft: 8 },
-      strong: { fontWeight: 'bold' as const },
-      // Without these, the library's light-theme code defaults leak through
-      // in dark mode (light-gray box, unreadable light text).
-      code_inline: {
-        backgroundColor: theme.colors.surfaceVariant,
-        color: theme.colors.onSurfaceVariant,
-        paddingHorizontal: 4,
-        borderRadius: 3,
-        fontSize: 13,
-      },
-      code_block: {
-        backgroundColor: theme.colors.surfaceVariant,
-        color: theme.colors.onSurfaceVariant,
-        borderColor: theme.colors.outlineVariant,
-        padding: 8,
-        borderRadius: 6,
-        fontSize: 13,
-      },
-      fence: {
-        backgroundColor: theme.colors.surfaceVariant,
-        color: theme.colors.onSurfaceVariant,
-        borderColor: theme.colors.outlineVariant,
-        padding: 8,
-        borderRadius: 6,
-        fontSize: 13,
-      },
-    }),
-    [theme],
-  );
+  const markdownStyles = useInboxMarkdownStyles();
 
   const header = (
     <View style={[styles.header, { backgroundColor: theme.colors.background }]}>
@@ -184,6 +150,7 @@ const InboxCallbackResultScreen = () => {
   const nextHouseholdId: string | null =
     (inbox.metadata?.household_id as string | undefined) ?? null;
   const useMarkdown = (inbox.metadata?.content_format ?? 'markdown') === 'markdown';
+  const ranCard = parseRanCard(inbox.metadata ?? null);
 
   return (
     <View style={styles.container}>
@@ -201,7 +168,9 @@ const InboxCallbackResultScreen = () => {
           </Text>
         ) : null}
         <Divider style={{ marginBottom: 16 }} />
-        {inbox.body
+        {ranCard
+          ? <AutonomyRanCard data={ranCard} />
+          : inbox.body
           ? (useMarkdown
               ? <View testID="result-body"><Markdown style={markdownStyles}>{inbox.body}</Markdown></View>
               : <Text testID="result-body" variant="bodyMedium" selectable>{inbox.body}</Text>)

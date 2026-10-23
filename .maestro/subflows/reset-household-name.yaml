@@ -22,9 +22,10 @@ name: reset-household-name
           visible:
             id: "household-name-input"
           timeout: 15000
-      - tapOn:
-          id: "household-name-input"
-      - eraseText: 60
+      - runFlow:
+          file: clear-field.yaml
+          env:
+            FIELD_ID: "household-name-input"
       - inputText: "Avery Household"
       - assertVisible:
           id: "household-name-input"
