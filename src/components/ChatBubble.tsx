@@ -7,6 +7,7 @@ const COLLAPSE_HEIGHT = 400;
 
 import type { ChatAction, ChatMessage } from '../api/chatApi';
 import { DEV_MODE } from '../config/env';
+import { blend } from '../theme';
 import TraceWaterfall from './TraceWaterfall';
 
 /** Strip <think>...</think> blocks from LLM output (Qwen3 reasoning traces). */
@@ -129,7 +130,15 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
         style={[
           styles.bubble,
           isUser
-            ? [styles.userBubble, { backgroundColor: theme.colors.primary }]
+            ? [
+                styles.userBubble,
+                {
+                  // The admin chat's soft violet bubble: primary over the background, with a
+                  // quiet primary border, so both themes stay in their own palette.
+                  backgroundColor: blend(theme.colors.background, theme.colors.primary, theme.dark ? 0.16 : 0.1),
+                  borderColor: `${theme.colors.primary}40`,
+                },
+              ]
             : [styles.assistantBubble, { backgroundColor: theme.colors.surfaceVariant }],
         ]}
       >
@@ -160,7 +169,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
             {message.content.length > 0 && (
               <Text
                 variant="bodyMedium"
-                style={{ color: theme.colors.onPrimary }}
+                style={{ color: theme.colors.onSurface }}
               >
                 {message.content}
               </Text>
@@ -376,6 +385,7 @@ const styles = StyleSheet.create({
   },
   userBubble: {
     borderBottomRightRadius: 4,
+    borderWidth: 1,
   },
   assistantBubble: {
     borderBottomLeftRadius: 4,

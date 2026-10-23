@@ -46,6 +46,7 @@ function cleanForTTS(text: string): string {
 }
 import { useAuth } from '../../auth/AuthContext';
 import ChatBubble from '../../components/ChatBubble';
+import ThinkingWave from '../../components/ThinkingWave';
 import { FirstRunCard } from '../../components/FirstRunCard';
 import NodeSelector, { NodeSelectorHandle } from '../../components/NodeSelector';
 import QuickActions from '../../components/QuickActions';
@@ -715,6 +716,7 @@ const HomeScreen = () => {
       {/* Typing indicator */}
       {isLoading && messages.length > 0 && messages[messages.length - 1]?.role === 'status' && (
         <View style={styles.typingRow}>
+          <ThinkingWave color={theme.colors.primary} />
           <Text variant="bodySmall" style={{ color: theme.colors.outline }}>
             {messages[messages.length - 1]?.content}
           </Text>
@@ -936,6 +938,9 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   typingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
     paddingHorizontal: 24,
     paddingBottom: 4,
   },
