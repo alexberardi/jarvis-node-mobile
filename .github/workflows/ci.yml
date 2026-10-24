@@ -102,12 +102,19 @@ jobs:
       # push gets a unique, increasing build number and TestFlight/Play stop
       # rejecting "already submitted this version". The marketing version
       # (expo.version) is still bumped by hand for real releases.
+      #
+      # run_number stays the same when a job is re-run (only run_attempt goes
+      # up), so a re-run after the upload landed resubmits the same number and
+      # App Store Connect rejects it ("build number N has already been used").
+      # Use run_number * 100 + run_attempt: unique per attempt, still
+      # increasing across runs, and far below Play's 2100000000 limit.
       - name: Set build number from CI run
         run: |
-          jq --arg n "${{ github.run_number }}" \
+          n=$(( ${{ github.run_number }} * 100 + ${{ github.run_attempt }} ))
+          jq --arg n "$n" \
             '.expo.ios.buildNumber = $n | .expo.android.versionCode = ($n | tonumber)' \
             app.json > app.json.tmp && mv app.json.tmp app.json
-          echo "Build number set to ${{ github.run_number }}"
+          echo "Build number set to $n (run ${{ github.run_number }}, attempt ${{ github.run_attempt }})"
           grep -E '"buildNumber"|"versionCode"' app.json
 
       - name: Build iOS locally
@@ -157,14 +164,16 @@ jobs:
         env:
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
 
-      # See iOS job: derive a monotonic versionCode from the CI run number so
-      # local builds always get a unique, increasing Play Store version code.
+      # See iOS job: derive a monotonic versionCode from the CI run number and
+      # attempt so local builds always get a unique, increasing Play Store
+      # version code, re-runs included.
       - name: Set build number from CI run
         run: |
-          jq --arg n "${{ github.run_number }}" \
+          n=$(( ${{ github.run_number }} * 100 + ${{ github.run_attempt }} ))
+          jq --arg n "$n" \
             '.expo.ios.buildNumber = $n | .expo.android.versionCode = ($n | tonumber)' \
             app.json > app.json.tmp && mv app.json.tmp app.json
-          echo "versionCode set to ${{ github.run_number }}"
+          echo "versionCode set to $n (run ${{ github.run_number }}, attempt ${{ github.run_attempt }})"
           grep -E '"buildNumber"|"versionCode"' app.json
 
       - name: Build Android locally
