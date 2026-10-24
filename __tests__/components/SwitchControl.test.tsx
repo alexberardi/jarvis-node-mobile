@@ -37,8 +37,8 @@ describe('SwitchControl', () => {
     });
   });
 
-  it('shows Turn On and Turn Off buttons when no live state', () => {
-    const state = makeState({ state: null });
+  it('shows Unknown with Turn On and Turn Off buttons when no live state', () => {
+    const state = makeState({ state: null, error: 'Device unreachable' });
     const { getByText } = render(
       <SwitchControl
         householdId="hh-1"
@@ -48,6 +48,7 @@ describe('SwitchControl', () => {
       />,
       { wrapper },
     );
+    expect(getByText('Unknown')).toBeTruthy();
     expect(getByText('Turn On')).toBeTruthy();
     expect(getByText('Turn Off')).toBeTruthy();
   });
