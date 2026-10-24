@@ -27,6 +27,7 @@ interface ConfigContextValue {
   fallbackMessage: string | null;
   manualUrl: string | null;
   rediscover: () => Promise<void>;
+  recheck: () => Promise<void>;
   setManualUrl: (url: string | null) => Promise<void>;
 }
 
@@ -50,9 +51,17 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({
     applyResult(discovered);
   }, [applyResult]);
 
-  // Re-check the server URL (no network scan). Keeps the current result until the new one
-  // lands: clearing it would unmount the app and drop navigation back to Home.
+  // Re-check the server URL (no network scan). Clearing the result remounts the whole app,
+  // which logout and delete-account rely on to reset in-memory state.
   const rediscover = useCallback(async () => {
+    setResult(null);
+    await clearCachedConfig();
+    await runDiscovery();
+  }, [runDiscovery]);
+
+  // Settings' Re-check Connection: same, but keeps the app mounted (and on Settings) until
+  // the new result lands.
+  const recheck = useCallback(async () => {
     await clearCachedConfig();
     await runDiscovery();
   }, [runDiscovery]);
@@ -81,9 +90,10 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({
       fallbackMessage: result.fallbackMessage,
       manualUrl,
       rediscover,
+      recheck,
       setManualUrl,
     };
-  }, [result, manualUrl, rediscover, setManualUrl]);
+  }, [result, manualUrl, rediscover, recheck, setManualUrl]);
 
   if (!value) {
     return (
