@@ -4,12 +4,17 @@ import { PaperProvider } from 'react-native-paper';
 
 import DeviceDiscoveryScreen from '../../src/screens/SmartHome/DeviceDiscoveryScreen';
 import * as smartHomeApi from '../../src/api/smartHomeApi';
+import * as nodeApi from '../../src/api/nodeApi';
 import { lightTheme } from '../../src/theme';
 
 jest.mock('../../src/api/smartHomeApi', () => ({
   requestDeviceScan: jest.fn(),
   pollDeviceScan: jest.fn(),
   importDevices: jest.fn(),
+}));
+
+jest.mock('../../src/api/nodeApi', () => ({
+  listNodes: jest.fn(),
 }));
 
 jest.mock('../../src/auth/AuthContext', () => ({
@@ -22,6 +27,10 @@ jest.mock('@tanstack/react-query', () => ({
 }));
 
 const api = smartHomeApi as jest.Mocked<typeof smartHomeApi>;
+const nodes = nodeApi as jest.Mocked<typeof nodeApi>;
+
+const node = (node_id: string, room: string, online: boolean) =>
+  ({ node_id, room, online, last_seen: null }) as never;
 
 const kettle = {
   name: 'Kettle',
@@ -78,6 +87,11 @@ describe('DeviceDiscoveryScreen (Devices tab scan)', () => {
     jest.useFakeTimers();
     jest.clearAllMocks();
     api.requestDeviceScan.mockResolvedValue({ id: 'req-1', status: 'pending' });
+    nodes.listNodes.mockResolvedValue([
+      node('pi4', 'Garage', true),
+      node('zero', 'Kitchen', true),
+      node('old', 'Attic', false),
+    ]);
   });
 
   afterEach(() => {
@@ -158,5 +172,79 @@ describe('DeviceDiscoveryScreen (Devices tab scan)', () => {
     await advance(10000);
 
     expect(api.pollDeviceScan).toHaveBeenCalledTimes(1);
+  });
+
+  it('names the node it scans with', async () => {
+    api.pollDeviceScan.mockResolvedValue({ status: 'pending' } as never);
+
+    const screen = renderScreen();
+    await flush();
+
+    expect(nodes.listNodes).toHaveBeenCalledWith('hh-1');
+    expect(screen.getByText('Scanning with Garage')).toBeTruthy();
+  });
+
+  it('after a timeout, lets the user pick another online node and scans with it', async () => {
+    api.pollDeviceScan.mockResolvedValue({ status: 'pending' } as never);
+
+    const screen = renderScreen();
+    await flush();
+    for (let i = 0; i < 16; i++) await advance(2000);
+    expect(screen.getByText("The node didn't answer the scan. Is it online?")).toBeTruthy();
+
+    // The node that didn't answer is marked; the offline one is labelled and can't be picked.
+    expect(screen.getByText('Scan with another node')).toBeTruthy();
+    expect(screen.getByTestId('scan-node-pi4-current')).toBeTruthy();
+    expect(screen.getByTestId('scan-node-old-offline')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('scan-node-old'));
+    await flush();
+    expect(api.requestDeviceScan).toHaveBeenCalledTimes(1);
+
+    api.pollDeviceScan.mockResolvedValue({ status: 'completed', devices: [kettle] } as never);
+    fireEvent.press(screen.getByTestId('scan-node-zero'));
+    await flush();
+
+    expect(api.requestDeviceScan).toHaveBeenLastCalledWith('zero');
+    expect(api.pollDeviceScan).toHaveBeenLastCalledWith('zero', 'req-1');
+    expect(screen.getByText('Kettle')).toBeTruthy();
+  });
+
+  it('Retry scans again with the node the user picked last', async () => {
+    api.pollDeviceScan.mockResolvedValue({ status: 'failed', error_message: 'nope' } as never);
+
+    const screen = renderScreen();
+    await flush();
+    fireEvent.press(screen.getByTestId('scan-node-zero'));
+    await flush();
+    fireEvent.press(screen.getByTestId('retry-scan-button'));
+    await flush();
+
+    expect(api.requestDeviceScan.mock.calls.map((c) => c[0])).toEqual(['pi4', 'zero', 'zero']);
+  });
+
+  it('Cancel during a scan stops polling and offers the node choice', async () => {
+    api.pollDeviceScan.mockResolvedValue({ status: 'pending' } as never);
+
+    const screen = renderScreen();
+    await flush();
+    fireEvent.press(screen.getByTestId('cancel-scan-button'));
+    await flush();
+
+    expect(screen.getByText('Scan cancelled')).toBeTruthy();
+    expect(screen.getByText('Scan with another node')).toBeTruthy();
+    const polls = api.pollDeviceScan.mock.calls.length;
+    await advance(10000);
+    expect(api.pollDeviceScan).toHaveBeenCalledTimes(polls);
+  });
+
+  it('still works when the node list cannot be loaded', async () => {
+    nodes.listNodes.mockRejectedValue(new Error('offline'));
+    api.pollDeviceScan.mockResolvedValue({ status: 'failed', error_message: 'nope' } as never);
+
+    const screen = renderScreen();
+    await flush();
+
+    expect(screen.getByTestId('retry-scan-button')).toBeTruthy();
+    expect(screen.queryByText('Scan with another node')).toBeNull();
   });
 });

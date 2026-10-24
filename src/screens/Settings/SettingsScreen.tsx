@@ -766,6 +766,15 @@ const SettingsScreen = () => {
                                 <Text variant="bodyMedium" style={{ fontWeight: '500' }}>
                                   {label}
                                 </Text>
+                                {!node.online && (
+                                  <Text
+                                    variant="bodySmall"
+                                    style={{ color: theme.colors.error }}
+                                    testID={`primary-node-offline-${node.node_id}`}
+                                  >
+                                    Offline
+                                  </Text>
+                                )}
                                 {isComputer && (
                                   <Text
                                     variant="bodySmall"
