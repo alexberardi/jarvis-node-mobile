@@ -50,9 +50,9 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({
     applyResult(discovered);
   }, [applyResult]);
 
-  // Re-check the server URL (no network scan).
+  // Re-check the server URL (no network scan). Keeps the current result until the new one
+  // lands: clearing it would unmount the app and drop navigation back to Home.
   const rediscover = useCallback(async () => {
-    setResult(null);
     await clearCachedConfig();
     await runDiscovery();
   }, [runDiscovery]);

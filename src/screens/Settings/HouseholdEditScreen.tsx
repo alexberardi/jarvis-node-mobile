@@ -1327,7 +1327,9 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
               </View>
             )}
             {!membersLoading && !membersError && members.map((m) => (
-              <View key={m.user_id} style={styles.memberRow} testID={`member-row-${m.email}`}>
+              // collapsable={false}: Android flattens this plain row and hoists the role Chip out
+              // of it, which breaks the e2e flows' childOf member-row-* assertions.
+              <View key={m.user_id} style={styles.memberRow} testID={`member-row-${m.email}`} collapsable={false}>
                 <View style={{ flex: 1 }}>
                   <Text variant="bodyMedium">{displayNameOf(m)}</Text>
                   {!!secondaryNameLine(m) && (
