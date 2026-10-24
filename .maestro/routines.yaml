@@ -10,6 +10,12 @@ name: Routines, create, edit, delete
 # The step is typed as free text: the command catalog comes from the node's settings,
 # which need the node's key (the sandbox phone has none, see nodes.yaml).
 # Nothing is erased (#430): the edit adds a phrase instead of retyping a field.
+# Chips are asserted by their exact id, routine-trigger-<phrase>: the loose
+# routine-trigger-.* also matches routine-trigger-INPUT, which still holds the phrase
+# when the Add tap went nowhere (run 20261022-231530).
+# hideKeyboard is a bare BACK key on Android (Maestro AndroidDriver: `input keyevent 4`):
+# use it only straight after typing, when the keyboard is certainly up — on a closed
+# keyboard it pops the screen instead.
 tags:
   - routines
   - e2e
@@ -50,8 +56,7 @@ env:
 - tapOn:
     id: "routine-trigger-add"
 - assertVisible:
-    id: "routine-trigger-.*"
-    text: ${output.phrase}
+    id: "routine-trigger-${output.phrase}"
 - hideKeyboard
 - scrollUntilVisible:
     element:
@@ -87,8 +92,7 @@ env:
     timeout: 10000
 - extendedWaitUntil:
     visible:
-      id: "routine-trigger-.*"
-      text: ${output.phrase}
+      id: "routine-trigger-${output.phrase}"
     timeout: 10000
 - evalScript: ${output.phrase2 = output.phrase + ' again'}
 - tapOn:
@@ -97,8 +101,7 @@ env:
 - tapOn:
     id: "routine-trigger-add"
 - assertVisible:
-    id: "routine-trigger-.*"
-    text: ${output.phrase2}
+    id: "routine-trigger-${output.phrase2}"
 - hideKeyboard
 - scrollUntilVisible:
     element:
@@ -124,12 +127,10 @@ env:
     timeout: 10000
 - extendedWaitUntil:
     visible:
-      id: "routine-trigger-.*"
-      text: ${output.phrase2}
+      id: "routine-trigger-${output.phrase2}"
     timeout: 10000
 - assertVisible:
-    id: "routine-trigger-.*"
-    text: ${output.phrase}
+    id: "routine-trigger-${output.phrase}"
 - tapOn:
     id: "routine-delete-button"
 - assertVisible:

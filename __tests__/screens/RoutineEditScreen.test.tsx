@@ -91,4 +91,12 @@ describe('RoutineEditScreen — new routine by testID', () => {
     const screen = renderScreen();
     expect(screen.queryByTestId('routine-delete-button')).toBeNull();
   });
+
+  it('keeps taps while the keyboard is up, so a button fires on the first tap', () => {
+    // With the ScrollView default ('never'), the first tap on a button while the keyboard
+    // is up only dismisses the keyboard — the Add tap right after typing a phrase did
+    // nothing (e2e run 20261022-231530).
+    const screen = renderScreen();
+    expect(screen.getByTestId('routine-edit-scroll').props.keyboardShouldPersistTaps).toBe('handled');
+  });
 });

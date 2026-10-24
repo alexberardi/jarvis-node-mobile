@@ -136,6 +136,22 @@ describe('Maestro flows (.maestro/)', () => {
     }
   });
 
+  // Paper's List.Item and IconButton put `<testID>-content` / `<testID>-container` on a
+  // child view, so an open-ended `room-item-.*` also matches that child, and the Delete
+  // step's childOf lands on it instead of the row (#524).
+  it('selects the rooms rows and delete buttons, not their Paper child views', () => {
+    const room = 'b3794f13-0c4e-4a2b-9f1d-2a6e8c0d7f55';
+    const sels = idSelectors(path.join(MAESTRO, 'devices.yaml')).filter((s) => /^room-(item|delete)-/.test(s));
+    expect(sels.length).toBeGreaterThan(0);
+    for (const sel of sels) {
+      const re = new RegExp(`^${sel}$`);
+      const kind = sel.startsWith('room-item-') ? 'item' : 'delete';
+      expect([sel, re.test(`room-${kind}-${room}`)]).toEqual([sel, true]);
+      expect([sel, re.test(`room-${kind}-${room}-content`)]).toEqual([sel, false]);
+      expect([sel, re.test(`room-${kind}-${room}-container`)]).toEqual([sel, false]);
+    }
+  });
+
   describe.each(topLevel.map((f) => [path.basename(f), f]))('%s', (_name, file) => {
     const { header, steps } = split(file);
     const skipped = isSkipped(header);
