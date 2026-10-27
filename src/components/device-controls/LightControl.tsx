@@ -38,10 +38,10 @@ const LightControl: React.FC<Props> = ({
   const s = state.state ?? {};
   const hasLiveState = state.state != null;
   const isOn = hasLiveState ? (s.state as string) === 'on' : false;
-  // A live state that is neither on nor off (e.g. 'unknown') is indeterminate:
-  // show it as such, not as Off, and let the user pick the action.
+  // A state that can't be read, or is neither on nor off (e.g. 'unknown'), is
+  // indeterminate: show it as such, not as Off, and let the user pick the action.
   const isKnown = isOn || (s.state as string) === 'off';
-  const isUnknown = hasLiveState && !isKnown;
+  const isUnknown = !isKnown;
   const isOff = hasLiveState && isKnown && !isOn;
   const brightness = s.brightness as number | undefined;
   const colorTemp = s.color_temp as number | undefined;
@@ -140,7 +140,7 @@ const LightControl: React.FC<Props> = ({
     <View style={styles.container}>
       {/* On/Off: toggle switch with a known live state, buttons otherwise */}
       {isUnknown && <Text variant="bodyLarge">Unknown</Text>}
-      {hasLiveState && isKnown ? (
+      {isKnown ? (
         <View style={styles.toggleRow}>
           <Text variant="bodyLarge">{isOn ? 'On' : 'Off'}</Text>
           <Switch testID="light-power-switch" value={isOn} onValueChange={handleToggle} disabled={loading} />
