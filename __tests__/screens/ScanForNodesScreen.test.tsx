@@ -1,10 +1,12 @@
 import React from 'react';
-import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
+import { render, fireEvent, waitFor, act, within } from '@testing-library/react-native';
+import { Linking, Platform } from 'react-native';
 import { PaperProvider } from 'react-native-paper';
 
 import ScanForNodesScreen from '../../src/screens/Provisioning/ScanForNodesScreen';
 import { HelpProvider } from '../../src/components/HelpProvider';
 import { lightTheme } from '../../src/theme';
+import { SEARCH_GRACE_MS } from '../../src/hooks/useSetupNodeDiscovery';
 
 const mockNavigate = jest.fn();
 const mockNavigation = { navigate: mockNavigate } as any;
@@ -49,10 +51,15 @@ let mockZeroconfListeners: Record<string, ZeroconfListener[]> = {};
 const mockScan = jest.fn();
 const mockStop = jest.fn();
 const mockRemoveAllListeners = jest.fn();
+// Set to make `new Zeroconf()` throw, as a missing native module does.
+let mockZeroconfMissing = false;
 
 jest.mock('react-native-zeroconf', () => ({
   __esModule: true,
   default: class MockZeroconf {
+    constructor() {
+      if (mockZeroconfMissing) throw new Error('RNZeroconf native module is null');
+    }
     on(event: string, listener: ZeroconfListener) {
       (mockZeroconfListeners[event] = mockZeroconfListeners[event] ?? []).push(listener);
     }
@@ -94,6 +101,7 @@ describe('ScanForNodesScreen', () => {
     jest.clearAllMocks();
     mockProvisioningToken = null;
     mockZeroconfListeners = {};
+    mockZeroconfMissing = false;
   });
 
   it('should render prepare button initially', () => {
@@ -309,6 +317,126 @@ describe('ScanForNodesScreen', () => {
 
       expect(getAllByText('node-abc')).toHaveLength(1);
       expect(getByText(/10\.0\.0\.200:8080/)).toBeTruthy();
+    });
+  });
+  describe('LAN browse state (shown even with no node found)', () => {
+    const renderScreen = () =>
+      render(
+        <PaperProvider theme={lightTheme}>
+          <HelpProvider>
+            <ScanForNodesScreen navigation={mockNavigation} route={{} as any} />
+          </HelpProvider>
+        </PaperProvider>
+      );
+
+    afterEach(() => {
+      jest.useRealTimers();
+      jest.restoreAllMocks();
+    });
+
+    it('shows the browse searching on mount, before any result', () => {
+      const { getByTestId, getByText, queryByTestId } = renderScreen();
+
+      expect(getByTestId('lan-discovery-searching')).toBeTruthy();
+      expect(getByText(/Looking for nodes on your Wi-Fi/)).toBeTruthy();
+      expect(queryByTestId('lan-discovery-empty')).toBeNull();
+    });
+
+    it('says nothing was found once the browse has had time, and that a Wi-Fi node raises no hotspot', () => {
+      jest.useFakeTimers();
+      const { getByTestId, getByText, queryByTestId } = renderScreen();
+
+      act(() => {
+        jest.advanceTimersByTime(SEARCH_GRACE_MS);
+      });
+
+      expect(queryByTestId('lan-discovery-searching')).toBeNull();
+      expect(getByTestId('lan-discovery-empty')).toBeTruthy();
+      expect(getByText(/No nodes found yet/)).toBeTruthy();
+      expect(getByText(/already joined to your Wi-Fi won't raise one/)).toBeTruthy();
+    });
+
+    it('says nothing was found when the browse stops with no node', () => {
+      const { getByTestId } = renderScreen();
+
+      emitZeroconf('stop', undefined);
+
+      expect(getByTestId('lan-discovery-empty')).toBeTruthy();
+    });
+
+    it('still lists a node that resolves after nothing was found', () => {
+      jest.useFakeTimers();
+      const { getByTestId, queryByTestId } = renderScreen();
+      act(() => {
+        jest.advanceTimersByTime(SEARCH_GRACE_MS);
+      });
+
+      emitZeroconf('resolved', resolvedNode);
+
+      expect(getByTestId('discovered-node-node-abc')).toBeTruthy();
+      expect(queryByTestId('lan-discovery-empty')).toBeNull();
+    });
+
+    it('on iOS, a browse error names Settings > Jarvis Automation > Local Network', () => {
+      jest.replaceProperty(Platform, 'OS', 'ios');
+      const openSettings = jest
+        .spyOn(Linking, 'openSettings')
+        .mockResolvedValue(undefined);
+      const { getByTestId, getByText, queryByTestId } = renderScreen();
+
+      emitZeroconf('error', new Error('-72008'));
+
+      expect(getByTestId('lan-discovery-error')).toBeTruthy();
+      expect(queryByTestId('lan-discovery-searching')).toBeNull();
+      expect(
+        getByText(/Settings > Jarvis Automation > Local Network/),
+      ).toBeTruthy();
+      fireEvent.press(getByTestId('lan-open-settings'));
+      expect(openSettings).toHaveBeenCalled();
+    });
+
+    it('on Android, a browse error says it could not search, with the reason', () => {
+      jest.replaceProperty(Platform, 'OS', 'android');
+      const { getByTestId, getByText, queryByTestId } = renderScreen();
+
+      emitZeroconf('error', new Error('discovery failed: 0'));
+
+      expect(getByTestId('lan-discovery-error')).toBeTruthy();
+      expect(getByText(/Couldn't search your Wi-Fi.*discovery failed: 0/)).toBeTruthy();
+      expect(queryByTestId('lan-open-settings')).toBeNull();
+    });
+
+    it('says the browse is unavailable when the native module is missing', () => {
+      mockZeroconfMissing = true;
+      const { getByTestId, getByText } = renderScreen();
+
+      expect(getByTestId('lan-discovery-unavailable')).toBeTruthy();
+      expect(getByText(/isn't available in this build/)).toBeTruthy();
+      // The hotspot path is still offered, as the primary action.
+      expect(getByTestId('prepare-button')).toBeTruthy();
+    });
+
+    it('says the browse is unavailable when the scan cannot start', () => {
+      mockScan.mockImplementationOnce(() => {
+        throw new Error('scan failed');
+      });
+      const { getByTestId } = renderScreen();
+
+      expect(getByTestId('lan-discovery-unavailable')).toBeTruthy();
+    });
+
+    it('puts one discovered node first, above the hotspot card', () => {
+      const { getByTestId, getAllByTestId } = renderScreen();
+
+      emitZeroconf('resolved', resolvedNode);
+
+      const lanCard = getByTestId('lan-discovery-card');
+      expect(within(lanCard).getByTestId('setup-node-node-abc')).toBeTruthy();
+      expect(within(lanCard).getByText(/ready to set up. No hotspot needed/)).toBeTruthy();
+      // Tree order: the LAN card renders before the hotspot card.
+      expect(
+        getAllByTestId(/^(lan-discovery-card|hotspot-card)$/).map((n) => n.props.testID),
+      ).toEqual(['lan-discovery-card', 'hotspot-card']);
     });
   });
 });
