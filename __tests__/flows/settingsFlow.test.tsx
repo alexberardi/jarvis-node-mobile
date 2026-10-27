@@ -410,6 +410,22 @@ describe('Settings — flow integration (households, delete-account, smart-home 
     expect(utils.queryByTestId(/^primary-node-note-/)).toBeNull();
   });
 
+  it('Primary Node marks a node the server reports offline', async () => {
+    getSH.mockResolvedValue({
+      ...SMART_HOME,
+      nodes: [
+        { node_id: 'pi-1', room: 'Kitchen', online: true, last_seen: null },
+        { node_id: 'pi-2', room: 'Garage', online: false, last_seen: null },
+      ],
+    });
+    mockListNodes.mockRejectedValue(new Error('404'));
+    const utils = renderScreen();
+    await utils.findByText('Garage (pi-2…)');
+
+    expect(utils.getByTestId('primary-node-offline-pi-2')).toHaveTextContent('Offline');
+    expect(utils.queryByTestId('primary-node-offline-pi-1')).toBeNull();
+  });
+
   it('Primary Node names computers by their name and keeps the room for a Pi', async () => {
     getSH.mockResolvedValue({
       ...SMART_HOME,
