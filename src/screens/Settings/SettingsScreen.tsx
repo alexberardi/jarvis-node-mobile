@@ -92,7 +92,7 @@ const SettingsScreen = () => {
     setBiometricEnabled,
     biometricAvailable,
   } = useAuth();
-  const { config, isUsingCloud, manualUrl, rediscover, setManualUrl } =
+  const { config, isUsingCloud, manualUrl, recheck, setManualUrl } =
     useConfig();
   const queryClient = useQueryClient();
   const { paperTheme, themePreference, setThemePreference } = useThemePreference();
@@ -704,7 +704,7 @@ const SettingsScreen = () => {
             <Button
               testID="settings-recheck-connection"
               mode="outlined"
-              onPress={rediscover}
+              onPress={recheck}
               icon="refresh"
             >
               Re-check Connection
