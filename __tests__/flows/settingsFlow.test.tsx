@@ -53,7 +53,7 @@ jest.mock('../../src/auth/AuthContext', () => ({
   }),
 }));
 
-const mockRediscover = jest.fn();
+const mockRecheck = jest.fn();
 const mockSetManualUrl = jest.fn();
 jest.mock('../../src/contexts/ConfigContext', () => ({
   useConfig: () => ({
@@ -64,7 +64,7 @@ jest.mock('../../src/contexts/ConfigContext', () => ({
     },
     isUsingCloud: false,
     manualUrl: null,
-    rediscover: mockRediscover,
+    recheck: mockRecheck,
     setManualUrl: mockSetManualUrl,
   }),
 }));
