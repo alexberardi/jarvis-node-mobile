@@ -42,7 +42,7 @@ jest.mock('../../src/auth/AuthContext', () => ({
   }),
 }));
 
-const mockRediscover = jest.fn();
+const mockRecheck = jest.fn();
 const mockSetManualUrl = jest.fn();
 
 jest.mock('../../src/contexts/ConfigContext', () => ({
@@ -54,7 +54,7 @@ jest.mock('../../src/contexts/ConfigContext', () => ({
     },
     isUsingCloud: false,
     manualUrl: null,
-    rediscover: mockRediscover,
+    recheck: mockRecheck,
     setManualUrl: mockSetManualUrl,
   }),
 }));
@@ -214,7 +214,7 @@ describe('SettingsScreen', () => {
       },
       isUsingCloud: true,
       manualUrl: null,
-      rediscover: mockRediscover,
+      recheck: mockRecheck,
       setManualUrl: mockSetManualUrl,
     });
 
@@ -238,7 +238,7 @@ describe('SettingsScreen', () => {
     const { getByText, queryByText } = render(<SettingsScreen />, { wrapper });
 
     fireEvent.press(getByText('Re-check Connection'));
-    expect(mockRediscover).toHaveBeenCalled();
+    expect(mockRecheck).toHaveBeenCalled();
     expect(queryByText('Re-discover Services')).toBeNull();
   });
 
