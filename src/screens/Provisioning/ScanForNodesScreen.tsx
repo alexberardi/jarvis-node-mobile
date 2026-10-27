@@ -1,7 +1,16 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import React, { useState } from 'react';
 import { StyleSheet, View, Linking, Platform } from 'react-native';
-import { Appbar, Button, Card, HelperText, Text, TextInput, Divider } from 'react-native-paper';
+import {
+  ActivityIndicator,
+  Appbar,
+  Button,
+  Card,
+  HelperText,
+  Text,
+  TextInput,
+  Divider,
+} from 'react-native-paper';
 
 import { useAuth } from '../../auth/AuthContext';
 import { HelpIcon } from '../../components/HelpIcon';
@@ -12,6 +21,7 @@ import { SIMULATED_NODE_IP, NODE_PORT, DEV_MODE } from '../../config/env';
 import {
   useSetupNodeDiscovery,
   DiscoveredSetupNode,
+  SetupNodeDiscovery,
 } from '../../hooks/useSetupNodeDiscovery';
 import { useThemePreference } from '../../theme/ThemeProvider';
 import KeyboardSafeView from '../../components/KeyboardSafeView';
@@ -21,6 +31,31 @@ type Props = NativeStackScreenProps<ProvisioningStackParamList, 'ScanForNodes'>;
 // Standard AP mode address for Jarvis nodes
 const AP_MODE_IP = '192.168.4.1';
 const AP_MODE_PORT = 8080;
+
+// iOS lists the Local Network permission under the app's name (app.json).
+const LOCAL_NETWORK_SETTINGS = 'Settings > Jarvis Automation > Local Network';
+
+/** What the LAN card says when it has no node to list. */
+const lanStatusMessage = ({ status, error }: SetupNodeDiscovery): string => {
+  const ios = Platform.OS === 'ios';
+  switch (status) {
+    case 'searching':
+      return 'Looking for nodes on your Wi-Fi…';
+    case 'empty':
+      return (
+        "No nodes found yet. Make sure the node is powered on and on the same Wi-Fi as this phone; it shows up here as soon as it's found." +
+        (ios
+          ? ` If you didn't allow Local Network access, turn it on in ${LOCAL_NETWORK_SETTINGS}.`
+          : '')
+      );
+    case 'unavailable':
+      return "Searching your Wi-Fi for nodes isn't available in this build. Use the hotspot steps below.";
+    case 'error':
+      return ios
+        ? `Couldn't search your Wi-Fi for nodes. Jarvis needs Local Network access: turn it on in ${LOCAL_NETWORK_SETTINGS}, then come back to this screen.`
+        : `Couldn't search your Wi-Fi for nodes${error ? ` (${error})` : ''}. Check that this phone is on Wi-Fi, then come back to this screen.`;
+  }
+};
 
 const ScanForNodesScreen = ({ navigation }: Props) => {
   const { state: authState } = useAuth();
@@ -36,7 +71,9 @@ const ScanForNodesScreen = ({ navigation }: Props) => {
   // fresh token instead of showing "Token ready!" with no token behind it.
   const tokenReady = !!provisioningToken;
   const [fetchingToken, setFetchingToken] = useState(false);
-  const discoveredNodes = useSetupNodeDiscovery();
+  const discovery = useSetupNodeDiscovery();
+  const discoveredNodes = discovery.nodes;
+  const hasDiscovered = discoveredNodes.length > 0;
 
   // Phase 1: Fetch provisioning token while still on home WiFi
   const handlePrepare = async () => {
@@ -138,48 +175,83 @@ const ScanForNodesScreen = ({ navigation }: Props) => {
         />
       </Appbar.Header>
       <View style={styles.container}>
-        {/* Nodes in LAN setup mode, found via mDNS (_jarvis-setup._tcp) */}
-        {discoveredNodes.length > 0 && (
-          <Card style={styles.card}>
-            <Card.Content>
-              <Text variant="titleMedium" style={styles.cardTitle}>
-                Nodes found on your network
-              </Text>
-              {discoveredNodes.map((node) => (
-                <View
-                  key={node.nodeId}
-                  style={styles.discoveredRow}
-                  testID={`discovered-node-${node.nodeId}`}
-                >
-                  <View style={styles.discoveredInfo}>
-                    <Text variant="bodyMedium" style={styles.discoveredName}>
-                      {node.nodeId}
-                    </Text>
-                    <Text variant="bodySmall" style={styles.discoveredMeta}>
-                      {node.hardware ? `${node.hardware} · ` : ''}
-                      {node.address}:{node.port}
-                    </Text>
-                  </View>
-                  <Button
-                    testID={`setup-node-${node.nodeId}`}
-                    mode="contained"
-                    compact
-                    onPress={() => handleConnectDiscovered(node)}
-                    disabled={isLoading || fetchingToken}
-                  >
-                    Set up
-                  </Button>
-                </View>
-              ))}
-            </Card.Content>
-          </Card>
-        )}
-
-        {/* Real provisioning mode */}
-        <Card style={styles.card}>
+        {/* Nodes in LAN setup mode, found via mDNS (_jarvis-setup._tcp).
+            Always shown first: a node already on Wi-Fi sets up only here. */}
+        <Card style={styles.card} testID="lan-discovery-card">
           <Card.Content>
             <Text variant="titleMedium" style={styles.cardTitle}>
-              Provision New Node
+              On your network
+            </Text>
+            {hasDiscovered ? (
+              <>
+                <Text variant="bodyMedium" style={styles.instructions}>
+                  {discoveredNodes.length === 1 ? 'This node is' : 'These nodes are'} on
+                  your Wi-Fi and ready to set up. No hotspot needed.
+                </Text>
+                {discoveredNodes.map((node) => (
+                  <View
+                    key={node.nodeId}
+                    style={styles.discoveredRow}
+                    testID={`discovered-node-${node.nodeId}`}
+                  >
+                    <View style={styles.discoveredInfo}>
+                      <Text variant="titleSmall" style={styles.discoveredName}>
+                        {node.nodeId}
+                      </Text>
+                      <Text variant="bodySmall" style={styles.discoveredMeta}>
+                        {node.hardware ? `${node.hardware} · ` : ''}
+                        {node.address}:{node.port}
+                      </Text>
+                    </View>
+                    <Button
+                      testID={`setup-node-${node.nodeId}`}
+                      mode="contained"
+                      icon="plus-circle"
+                      onPress={() => handleConnectDiscovered(node)}
+                      disabled={isLoading || fetchingToken}
+                    >
+                      Set up
+                    </Button>
+                  </View>
+                ))}
+              </>
+            ) : (
+              <View
+                style={styles.lanStatusRow}
+                testID={`lan-discovery-${discovery.status}`}
+              >
+                {discovery.status === 'searching' && (
+                  <ActivityIndicator size="small" style={styles.lanSpinner} />
+                )}
+                <Text variant="bodyMedium" style={styles.lanStatusText}>
+                  {lanStatusMessage(discovery)}
+                </Text>
+              </View>
+            )}
+            {!hasDiscovered && discovery.status === 'error' && Platform.OS === 'ios' && (
+              <Button
+                testID="lan-open-settings"
+                mode="outlined"
+                icon="cog"
+                onPress={() => Linking.openSettings()}
+                style={styles.button}
+              >
+                Open Jarvis Settings
+              </Button>
+            )}
+          </Card.Content>
+        </Card>
+
+        {/* Hotspot provisioning: only for a node that is on no network yet */}
+        <Card style={styles.card} testID="hotspot-card">
+          <Card.Content>
+            <Text variant="titleMedium" style={styles.cardTitle}>
+              Node not on Wi-Fi yet?
+            </Text>
+            <Text variant="bodySmall" style={styles.hotspotNote}>
+              A node that isn't on any network raises its own Jarvis-XXXX hotspot.
+              A node already joined to your Wi-Fi won't raise one: set it up from
+              the list above.
             </Text>
 
             {!tokenReady ? (
@@ -192,7 +264,7 @@ const ScanForNodesScreen = ({ navigation }: Props) => {
 
                 <Button
                   testID="prepare-button"
-                  mode="contained"
+                  mode={hasDiscovered ? 'outlined' : 'contained'}
                   onPress={handlePrepare}
                   loading={fetchingToken}
                   disabled={fetchingToken || isLoading}
@@ -337,6 +409,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 8,
+  },
+  lanStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  lanSpinner: {
+    marginRight: 12,
+  },
+  lanStatusText: {
+    flex: 1,
+    lineHeight: 22,
+    opacity: 0.8,
+  },
+  hotspotNote: {
+    marginBottom: 12,
+    opacity: 0.7,
   },
   discoveredInfo: {
     flex: 1,

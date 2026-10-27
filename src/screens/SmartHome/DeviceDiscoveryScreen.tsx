@@ -17,8 +17,10 @@ import {
 } from 'react-native-paper';
 import { useQueryClient } from '@tanstack/react-query';
 
+import { listNodes, NodeInfo } from '../../api/nodeApi';
 import * as smartHomeApi from '../../api/smartHomeApi';
 import { useAuth } from '../../auth/AuthContext';
+import { nodeDisplayName } from '../../utils/nodeKind';
 import type { DeviceImportItem, DiscoveredDeviceResult } from '../../types/SmartHome';
 import type { DevicesStackParamList, SmartHomeSetupParamList } from '../../navigation/types';
 
@@ -48,7 +50,10 @@ const POLL_TIMEOUT_MS = 30000;
 type ScanState = 'scanning' | 'results' | 'error' | 'timeout';
 
 const DeviceDiscoveryScreen = ({ navigation, route }: Props) => {
-  const { nodeId } = route.params;
+  // The node the scan runs on: starts as the one Devices picked, and the
+  // user can switch to another when it doesn't answer.
+  const [nodeId, setNodeId] = useState(route.params.nodeId);
+  const [nodes, setNodes] = useState<NodeInfo[]>([]);
   const theme = useTheme();
   const { state: authState } = useAuth();
   const queryClient = useQueryClient();
@@ -148,6 +153,39 @@ const DeviceDiscoveryScreen = ({ navigation, route }: Props) => {
     startScan();
     return cleanup;
   }, [startScan, cleanup]);
+
+  // The household's nodes, to name the scanning node and offer the others.
+  // Without them the screen still scans; it just can't offer a switch.
+  useEffect(() => {
+    const householdId = authState.activeHouseholdId;
+    if (!householdId) return;
+    let live = true;
+    listNodes(householdId)
+      .then((list) => {
+        if (live) setNodes(list);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [authState.activeHouseholdId]);
+
+  const cancelScan = useCallback(() => {
+    cleanup();
+    setScanState('error');
+    setError('Scan cancelled');
+  }, [cleanup]);
+
+  const scanWith = useCallback(
+    (id: string) => {
+      // A new nodeId makes a new startScan, and the effect above runs it.
+      if (id === nodeId) startScan();
+      else setNodeId(id);
+    },
+    [nodeId, startScan],
+  );
+
+  const scanningNode = nodes.find((n) => n.node_id === nodeId);
 
   const toggleDevice = (entityId: string) => {
     setDevices((prev) =>
@@ -260,6 +298,11 @@ const DeviceDiscoveryScreen = ({ navigation, route }: Props) => {
         <Text variant="bodyLarge" style={styles.loadingText}>
           Scanning for devices...
         </Text>
+        {scanningNode && (
+          <Text variant="bodyMedium" style={{ marginTop: 4 }} testID="scanning-node-name">
+            Scanning with {nodeDisplayName(scanningNode)}
+          </Text>
+        )}
         <Text
           variant="bodySmall"
           style={{ opacity: 0.5, marginTop: 8, textAlign: 'center' }}
@@ -267,6 +310,14 @@ const DeviceDiscoveryScreen = ({ navigation, route }: Props) => {
           The node is checking for WiFi and cloud devices.{'\n'}This may take a
           moment.
         </Text>
+        <Button
+          mode="text"
+          onPress={cancelScan}
+          style={{ marginTop: 16 }}
+          testID="cancel-scan-button"
+        >
+          Cancel
+        </Button>
       </View>
     );
   }
@@ -291,6 +342,49 @@ const DeviceDiscoveryScreen = ({ navigation, route }: Props) => {
         >
           Back
         </Button>
+        {nodes.length > 1 && (
+          <View style={styles.nodeChoice} testID="scan-node-choice">
+            <Text variant="titleSmall" style={{ marginBottom: 4 }}>
+              Scan with another node
+            </Text>
+            {nodes.map((n) => {
+              const current = n.node_id === nodeId;
+              // An offline node never answers the scan, so it can't be picked.
+              return (
+                <TouchableOpacity
+                  key={n.node_id}
+                  style={[styles.nodeRow, !n.online && styles.registeredRow]}
+                  onPress={() => scanWith(n.node_id)}
+                  disabled={!n.online}
+                  accessibilityState={{ disabled: !n.online, selected: current }}
+                  testID={`scan-node-${n.node_id}`}
+                >
+                  <Text variant="bodyLarge" style={{ flex: 1 }}>
+                    {nodeDisplayName(n)}
+                  </Text>
+                  {current && (
+                    <Text
+                      variant="labelSmall"
+                      style={{ color: theme.colors.primary }}
+                      testID={`scan-node-${n.node_id}-current`}
+                    >
+                      Last tried
+                    </Text>
+                  )}
+                  {!n.online && (
+                    <Text
+                      variant="labelSmall"
+                      style={{ color: theme.colors.error, marginLeft: 8 }}
+                      testID={`scan-node-${n.node_id}-offline`}
+                    >
+                      Offline
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
       </View>
     );
   }
@@ -465,6 +559,15 @@ const styles = StyleSheet.create({
   manufacturerText: { opacity: 0.5, marginRight: 8 },
   loadingText: { marginTop: 16, opacity: 0.7 },
   bottomActions: { padding: 16, gap: 8 },
+  nodeChoice: { alignSelf: 'stretch', marginTop: 24 },
+  nodeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
 });
 
 export default DeviceDiscoveryScreen;

@@ -92,7 +92,7 @@ const SettingsScreen = () => {
     setBiometricEnabled,
     biometricAvailable,
   } = useAuth();
-  const { config, isUsingCloud, manualUrl, rediscover, setManualUrl } =
+  const { config, isUsingCloud, manualUrl, recheck, setManualUrl } =
     useConfig();
   const queryClient = useQueryClient();
   const { paperTheme, themePreference, setThemePreference } = useThemePreference();
@@ -704,7 +704,7 @@ const SettingsScreen = () => {
             <Button
               testID="settings-recheck-connection"
               mode="outlined"
-              onPress={rediscover}
+              onPress={recheck}
               icon="refresh"
             >
               Re-check Connection
@@ -766,6 +766,15 @@ const SettingsScreen = () => {
                                 <Text variant="bodyMedium" style={{ fontWeight: '500' }}>
                                   {label}
                                 </Text>
+                                {!node.online && (
+                                  <Text
+                                    variant="bodySmall"
+                                    style={{ color: theme.colors.error }}
+                                    testID={`primary-node-offline-${node.node_id}`}
+                                  >
+                                    Offline
+                                  </Text>
+                                )}
                                 {isComputer && (
                                   <Text
                                     variant="bodySmall"

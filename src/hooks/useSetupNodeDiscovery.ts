@@ -27,11 +27,38 @@ const pickAddress = (service: Service): string | null => {
 };
 
 /**
- * Browse `_jarvis-setup._tcp` while the caller is mounted and return the
- * LAN nodes currently waiting to be set up, deduped by node id.
+ * Where the LAN browse stands, so the screen never shows a blank:
+ * - `searching`: the browse is running and has found nothing yet;
+ * - `empty`: it has run for SEARCH_GRACE_MS (or stopped) with nothing found.
+ *   The browse keeps running, so a node that shows up later is still listed;
+ * - `unavailable`: no native module (Expo Go, jest) or the browse would not start;
+ * - `error`: the browse reported an error, e.g. iOS refusing it because the
+ *   user declined Local Network access.
  */
-export const useSetupNodeDiscovery = (): DiscoveredSetupNode[] => {
+export type SetupDiscoveryStatus = 'searching' | 'empty' | 'unavailable' | 'error';
+
+export interface SetupNodeDiscovery {
+  nodes: DiscoveredSetupNode[];
+  status: SetupDiscoveryStatus;
+  /** The browse's error message, for `unavailable` and `error`. */
+  error?: string;
+}
+
+/** How long a browse with no result counts as still searching. */
+export const SEARCH_GRACE_MS = 8000;
+
+const messageOf = (err: unknown): string =>
+  err instanceof Error ? err.message : String(err ?? '');
+
+/**
+ * Browse `_jarvis-setup._tcp` while the caller is mounted and return the
+ * LAN nodes currently waiting to be set up, deduped by node id, with the
+ * browse's status.
+ */
+export const useSetupNodeDiscovery = (): SetupNodeDiscovery => {
   const [nodes, setNodes] = useState<DiscoveredSetupNode[]>([]);
+  const [status, setStatus] = useState<SetupDiscoveryStatus>('searching');
+  const [error, setError] = useState<string | undefined>();
 
   useEffect(() => {
     // Keyed by instance name: the 'remove' event only carries the name.
@@ -43,12 +70,22 @@ export const useSetupNodeDiscovery = (): DiscoveredSetupNode[] => {
       setNodes([...byId.values()]);
     };
 
+    const fail = (next: 'unavailable' | 'error', err: unknown) => {
+      setStatus(next);
+      setError(messageOf(err) || undefined);
+    };
+
+    // Searching only counts as an answer once it has had time to find something.
+    const settle = () =>
+      setStatus((current) => (current === 'searching' ? 'empty' : current));
+
     let zeroconf: Zeroconf;
     try {
       // Required lazily: the native module is absent in Expo Go and jest.
       const ZeroconfClass = require('react-native-zeroconf').default;
       zeroconf = new ZeroconfClass();
-    } catch {
+    } catch (err) {
+      fail('unavailable', err);
       return;
     }
 
@@ -69,17 +106,22 @@ export const useSetupNodeDiscovery = (): DiscoveredSetupNode[] => {
       if (byName.delete(name)) publish();
     });
 
-    zeroconf.on('error', () => {
-      // A failed browse just means no LAN discovery; the hotspot path remains.
-    });
+    zeroconf.on('stop', settle);
+
+    zeroconf.on('error', (err: unknown) => fail('error', err));
 
     try {
       zeroconf.scan(SETUP_SERVICE_TYPE, SETUP_SERVICE_PROTOCOL, 'local.');
-    } catch {
-      // Native module unavailable (Expo Go): leave the list empty.
+    } catch (err) {
+      fail('unavailable', err);
+      zeroconf.removeAllListeners();
+      return;
     }
 
+    const graceTimer = setTimeout(settle, SEARCH_GRACE_MS);
+
     return () => {
+      clearTimeout(graceTimer);
       zeroconf.removeAllListeners();
       try {
         zeroconf.stop();
@@ -89,5 +131,5 @@ export const useSetupNodeDiscovery = (): DiscoveredSetupNode[] => {
     };
   }, []);
 
-  return nodes;
+  return { nodes, status, error };
 };
