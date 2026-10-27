@@ -63,18 +63,21 @@ describe('LightControl', () => {
     await waitFor(() => expect(onStateChange).toHaveBeenCalled());
   });
 
-  it('has no light-power-switch without live state', () => {
-    const { queryByTestId } = render(
+  it('shows Unknown with Turn On and Turn Off, and no switch, without live state', () => {
+    const { queryByTestId, getByText } = render(
       <LightControl
         householdId="hh-1"
         deviceId="dev-1"
-        state={makeState()}
+        state={makeState({ error: 'Device unreachable' })}
         onStateChange={jest.fn()}
       />,
       { wrapper },
     );
 
     expect(queryByTestId('light-power-switch')).toBeNull();
+    expect(getByText('Unknown')).toBeTruthy();
+    expect(getByText('Turn On')).toBeTruthy();
+    expect(getByText('Turn Off')).toBeTruthy();
   });
 
   // The action comes from the Switch's new value, not from the believed state,
