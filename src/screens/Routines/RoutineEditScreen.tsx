@@ -553,7 +553,9 @@ const RoutineEditScreen = () => {
         )}
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll}>
+      {/* 'handled': with the default, the first tap on a button while the keyboard is up
+          only dismisses the keyboard, so Add / Add Step need two taps. */}
+      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" testID="routine-edit-scroll">
         {/* Name */}
         <View style={styles.section}>
           <TextInput mode="flat" label="Routine Name" testID="routine-name-input" value={name} onChangeText={setName} style={styles.topInput} />
