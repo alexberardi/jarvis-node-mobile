@@ -120,6 +120,8 @@ export interface NodeHardwareInfo {
 
 export interface NodeConfigSnapshot {
   wake_word_threshold?: number;
+  /** The Go node reports it; the Python node never has. */
+  wake_word_threshold_auto?: boolean;
   silence_threshold?: number;
   silence_duration?: number;
   min_record_seconds?: number;

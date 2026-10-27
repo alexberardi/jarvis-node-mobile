@@ -2,7 +2,6 @@ import Slider from '@react-native-community/slider';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import {
-  ActivityIndicator,
   Button,
   Card,
   Divider,
@@ -18,6 +17,7 @@ import {
   updateNodeConfig,
 } from '../api/nodeApi';
 import { useSettingsSnapshot } from '../hooks/useSettingsSnapshot';
+import { SnapshotStatus } from './SnapshotStatus';
 
 interface Props {
   nodeId: string;
@@ -25,6 +25,8 @@ interface Props {
 
 interface VoiceSettings {
   wake_word_threshold: number;
+  /** null: the node doesn't report it (the Python node), so the switch is hidden and never sent. */
+  wake_word_threshold_auto: boolean | null;
   silence_threshold: number;
   silence_duration: number;
   wake_ack_audio_enabled: boolean;
@@ -37,6 +39,7 @@ interface VoiceSettings {
 
 const DEFAULTS: VoiceSettings = {
   wake_word_threshold: 0.5,
+  wake_word_threshold_auto: null,
   silence_threshold: 5000,
   silence_duration: 0.5,
   wake_ack_audio_enabled: true,
@@ -56,12 +59,13 @@ interface SliderRowProps {
   step: number;
   onChange: (v: number) => void;
   testID?: string;
+  disabled?: boolean;
 }
 
-const SliderRow = ({ label, value, displayValue, min, max, step, onChange, testID }: SliderRowProps) => {
+const SliderRow = ({ label, value, displayValue, min, max, step, onChange, testID, disabled }: SliderRowProps) => {
   const theme = useTheme();
   return (
-    <View style={styles.settingRow}>
+    <View style={[styles.settingRow, disabled && styles.disabled]}>
       <View style={styles.settingHeader}>
         <Text variant="bodyMedium">{label}</Text>
         <Text variant="bodyMedium" style={{ color: theme.colors.primary, fontWeight: '600' }}>
@@ -75,6 +79,7 @@ const SliderRow = ({ label, value, displayValue, min, max, step, onChange, testI
         maximumValue={max}
         step={step}
         value={value}
+        disabled={disabled}
         onValueChange={onChange}
         minimumTrackTintColor={theme.colors.primary}
         maximumTrackTintColor={theme.colors.surfaceVariant}
@@ -95,7 +100,8 @@ export const NodeVoiceSettings = ({ nodeId }: Props) => {
     message?: string;
   }>({ status: 'idle' });
 
-  const { snapshot, state: snapshotState } = useSettingsSnapshot({ nodeId });
+  const { snapshot, state: snapshotState, error: snapshotError, refetch, provisionKey } =
+    useSettingsSnapshot({ nodeId });
 
   useEffect(() => {
     if (seededRef.current) return;
@@ -104,6 +110,8 @@ export const NodeVoiceSettings = ({ nodeId }: Props) => {
     if (!nc) return;
     setSettings({
       wake_word_threshold: nc.wake_word_threshold ?? DEFAULTS.wake_word_threshold,
+      wake_word_threshold_auto:
+        typeof nc.wake_word_threshold_auto === 'boolean' ? nc.wake_word_threshold_auto : null,
       silence_threshold: nc.silence_threshold ?? DEFAULTS.silence_threshold,
       silence_duration: nc.silence_duration ?? DEFAULTS.silence_duration,
       wake_ack_audio_enabled: nc.wake_ack_audio_enabled ?? DEFAULTS.wake_ack_audio_enabled,
@@ -164,6 +172,9 @@ export const NodeVoiceSettings = ({ nodeId }: Props) => {
     try {
       const payload: Record<string, number | string | boolean> = {
         wake_word_threshold: settings.wake_word_threshold,
+        ...(settings.wake_word_threshold_auto !== null && {
+          wake_word_threshold_auto: settings.wake_word_threshold_auto,
+        }),
         silence_threshold: settings.silence_threshold,
         silence_duration: settings.silence_duration,
         wake_ack_audio_enabled: settings.wake_ack_audio_enabled,
@@ -203,12 +214,12 @@ export const NodeVoiceSettings = ({ nodeId }: Props) => {
     );
   }
 
-  // Until the snapshot lands, show a placeholder card with a spinner
-  // instead of falling back to the in-memory ``DEFAULTS``. The earlier
-  // behavior briefly rendered every slider at its default position
-  // before the real node config arrived (~500-1500 ms later), creating
-  // a flicker that misrepresented the live state.
+  // Until the snapshot lands, the card's body says what's happening (loading, or why it can't
+  // load and what to do) instead of falling back to the in-memory DEFAULTS, which flickered
+  // every slider to a wrong value before the real node config arrived.
   if (snapshotState !== 'loaded' || !seededRef.current) {
+    // Loaded with voice settings that the seeding effect hasn't applied yet: still loading.
+    const status = snapshotState === 'loaded' && snapshot?.node_config ? 'loading' : snapshotState;
     return (
       <Card style={styles.card}>
         <Card.Title
@@ -222,13 +233,14 @@ export const NodeVoiceSettings = ({ nodeId }: Props) => {
             </View>
           )}
         />
-        <Card.Content style={styles.loadingBody}>
-          <ActivityIndicator animating size="small" />
-          <Text variant="bodySmall" style={{ marginLeft: 12, opacity: 0.7 }}>
-            {snapshotState === 'error'
-              ? 'Could not reach the node — try again in a moment.'
-              : 'Loading current settings from the node…'}
-          </Text>
+        <Card.Content>
+          <SnapshotStatus
+            state={status}
+            error={snapshotError}
+            onRetry={refetch}
+            onProvisionKey={provisionKey}
+            emptyMessage="This node doesn't report voice settings."
+          />
         </Card.Content>
       </Card>
     );
@@ -264,14 +276,36 @@ export const NodeVoiceSettings = ({ nodeId }: Props) => {
 
         <Divider style={styles.divider} />
 
+        {settings.wake_word_threshold_auto !== null && (
+          <>
+            <View style={styles.switchRow}>
+              <Text variant="bodyMedium">Adjust Wake Sensitivity Automatically</Text>
+              <Switch
+                testID="wake-threshold-auto"
+                value={settings.wake_word_threshold_auto}
+                onValueChange={(v) => update('wake_word_threshold_auto', v)}
+                color={theme.colors.primary}
+              />
+            </View>
+            <Text variant="labelSmall" style={styles.hint}>
+              {settings.wake_word_threshold_auto
+                ? 'Calibrated from your recent wake words, never above 0.50, so the slider below is ignored. Turn this off if the node wakes when nobody called it.'
+                : 'Off: the node uses the sensitivity below.'}
+            </Text>
+          </>
+        )}
         <SliderRow
           label="Wake Word Sensitivity"
           value={settings.wake_word_threshold}
-          displayValue={settings.wake_word_threshold.toFixed(2)}
+          displayValue={
+            settings.wake_word_threshold_auto ? 'Automatic' : settings.wake_word_threshold.toFixed(2)
+          }
           min={0.2}
           max={0.9}
           step={0.05}
+          disabled={settings.wake_word_threshold_auto === true}
           onChange={(v) => update('wake_word_threshold', v)}
+          testID="wake-threshold-slider"
         />
         <Text variant="labelSmall" style={styles.hint}>
           Lower = more sensitive (more false wakes). Higher = less sensitive.
@@ -442,6 +476,9 @@ const styles = StyleSheet.create({
   settingRow: {
     marginVertical: 4,
   },
+  disabled: {
+    opacity: 0.45,
+  },
   settingHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -472,11 +509,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  loadingBody: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-  },
+
   calibrateRow: {
     flexDirection: 'row',
     alignItems: 'center',
