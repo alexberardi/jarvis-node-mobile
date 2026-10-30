@@ -222,28 +222,22 @@ describe('HardwareTab — per node kind', () => {
     expect(getByText('Voice Mode')).toBeTruthy();
   });
 
-  it('a desktop agent shows only Device Info and how Jarvis knows the speaker (no enrollment)', async () => {
+  it('offers the shared voice profile on a desktop without showing Pi hardware', async () => {
     const desktop = { ...baseNode, node_kind: 'desktop', install_mode: 'desktop-agent', voice_mode: 'brief' };
-    const { getByText, queryByText, queryByTestId } = renderTab(desktop);
+    const { getByText, queryByText, findByTestId } = renderTab(desktop);
     for (const marker of PI_SECTIONS) expect(queryByText(marker)).toBeNull();
     expect(queryByText('Voice Mode')).toBeNull();
     expect(getByText('Device Info')).toBeTruthy();
     expect(getByText('Node ID')).toBeTruthy();
     expect(getByText('Voice Recognition')).toBeTruthy();
-    // On a computer the speaker is the account signed in to the agent.
-    expect(
-      getByText("Jarvis knows it's you on this computer: it uses the account signed in to the agent"),
-    ).toBeTruthy();
-    expect(queryByTestId('voice-recognition-enroll-btn')).toBeNull();
-    expect(queryByText(/can't record/)).toBeNull();
-    expect(queryByText(/No voice profile yet/)).toBeNull();
-    // Nothing to check either: no voice-profile request for a computer.
-    expect(getVoiceProfileStatus).not.toHaveBeenCalled();
+    fireEvent.press(await findByTestId('voice-recognition-enroll-btn'));
+    expect(mockNavigate).toHaveBeenCalledWith('VoiceProfile');
+    expect(getVoiceProfileStatus).toHaveBeenCalledWith('household-1');
   });
 
   it('falls back to install_mode when the agent has not reported node_kind', async () => {
-    const { queryByText, queryByTestId } = renderTab({ ...baseNode, node_kind: null, install_mode: 'desktop-agent' });
+    const { queryByText, findByTestId } = renderTab({ ...baseNode, node_kind: null, install_mode: 'desktop-agent' });
     for (const marker of PI_SECTIONS) expect(queryByText(marker)).toBeNull();
-    expect(queryByTestId('voice-recognition-enroll-btn')).toBeNull();
+    expect(await findByTestId('voice-recognition-enroll-btn')).toBeTruthy();
   });
 });

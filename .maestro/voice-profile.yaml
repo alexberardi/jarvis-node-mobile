@@ -38,7 +38,7 @@ env:
       id: "voice-select-target"
     timeout: 10000
 - assertVisible:
-    text: "Pick a node to enroll on"
+    text: "Pick a device to enroll on"
 - scrollUntilVisible:
     element:
       id: "voice-select-target-cancel"

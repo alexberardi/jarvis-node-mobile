@@ -56,7 +56,7 @@ export const helpCopy = {
 
   settings: {
     primaryNode: "One node speaks to your smart-home gear on behalf of all others. Pick whichever's most reliable.",
-    primaryNodeComputer: "Can't find smart-home devices · runs routines only while it's on",
+    primaryNodeComputer: "Available for device discovery and routines while this computer is on and connected",
     useExternalDevices: "Pull live state from Home Assistant or another hub instead of Jarvis's local copy.",
     recheckConnection: 'Reconnect to your server URL and reload the service addresses. Use after changing WiFi.',
     configServiceUrl: 'Switches environments. Saving logs you out and clears local data — be ready to re-sign-in.',
@@ -68,7 +68,7 @@ export const helpCopy = {
   voiceProfile: {
     enrollCta: 'Teaches Jarvis to recognize your voice so it knows which household member is speaking.',
     variedPrompts: 'Reading a command, a question, and a statement helps Jarvis match your everyday speaking patterns.',
-    addVsRerecord: 'Add one keeps your existing samples. Re-record wipes them and rebuilds from scratch.',
+    addVsRerecord: 'Samples from any household node or computer are added to one shared voice profile. Adding a device keeps your existing samples.',
     testMatch: 'Records a short sample and checks whether it matches your enrolled profile.',
     confidenceAnchor: 'Above ~70% reliably identifies you. Lower means add more samples from the same node.',
     recognitionOffTitle: 'Speaker recognition is off for this household',
@@ -81,7 +81,7 @@ export const helpCopy = {
     desktopTabIntro:
       'This computer runs the Jarvis Automation agent. Its microphone, speakers and Bluetooth are set up on the computer itself.',
     desktopVoiceIdentity:
-      "Jarvis knows it's you on this computer: it uses the account signed in to the agent",
+      "This computer uses its signed-in account for voice commands. You can also use its microphone to add samples to your household voice profile.",
     voiceMode: 'How chatty Jarvis is by default. "Brief" answers in a sentence; "conversational" adds context.',
     adapterHash: 'Identifier for the language-model fine-tune this node uses. Useful when reporting bugs.',
     wakeAckAudio: 'The "On it" sound after the wake word. Turn off if you find it slows down quick commands.',

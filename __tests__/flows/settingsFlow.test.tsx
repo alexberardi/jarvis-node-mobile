@@ -373,7 +373,7 @@ describe('Settings — flow integration (households, delete-account, smart-home 
     expect(utils.getByTestId('primary-node-kind-node-1').props.accessibilityLabel).toBe('Raspberry Pi');
   });
 
-  it('Primary Node lists Pis before computers and notes what a computer cannot do (server sends node_kind)', async () => {
+  it('Primary Node lists Pis before computers and describes when a computer is available (server sends node_kind)', async () => {
     getSH.mockResolvedValue({
       ...SMART_HOME,
       nodes: [
@@ -388,7 +388,7 @@ describe('Settings — flow integration (households, delete-account, smart-home 
     const rows = utils.getAllByTestId(/^primary-node-row-/).map((r) => r.props.testID);
     expect(rows).toEqual(['primary-node-row-pi-1', 'primary-node-row-mac-1']);
     expect(utils.getByTestId('primary-node-note-mac-1')).toHaveTextContent(
-      "Can't find smart-home devices · runs routines only while it's on",
+      "Available for device discovery and routines while this computer is on and connected",
     );
     expect(utils.queryByTestId('primary-node-note-pi-1')).toBeNull();
   });

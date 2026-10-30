@@ -1,21 +1,20 @@
 /**
  * Voice Profile enrollment, testing, and management screen.
  *
- * Node-mic only — phone-mic enrollment was dropped because its acoustic
- * profile diverges enough from the stationary node's mic that profiles
- * built on phone audio score poorly at runtime. Every flow on this
- * screen orchestrates the target node's mic via MQTT.
+ * Records on a household node or desktop agent, using the microphone
+ * the member normally speaks to. Every flow on this screen orchestrates
+ * the selected device's mic via MQTT.
  *
  * Flow:
  * 1. Check if profile exists → idle / enrolled
  * 2. Pick a node → orchestrate 3 takes (varied prompts) on that node
  * 3. After all takes: test verification on the same node
- * 4. Enrolled view: add one more sample, re-record all, or delete
+ * 4. Enrolled view: add samples from any device, test, or explicitly delete
  */
 
 import { useNavigation } from '@react-navigation/native';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, StyleSheet, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import {
   ActivityIndicator,
   Appbar,
@@ -133,7 +132,7 @@ const VoiceProfileScreen = () => {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollDeadlineRef = useRef<number>(0);
   // What the node picker should do when a node is tapped:
-  //   'enroll'  → fresh 3-take wizard (clears existing profile)
+  //   'enroll'  → 3 takes appended to the household profile
   //   'add_one' → single-take wizard appended to existing profile
   //   'test'    → run node verification against existing profile
   type TargetPurpose = 'enroll' | 'add_one' | 'test';
@@ -235,7 +234,9 @@ const VoiceProfileScreen = () => {
           if (result === null) return; // still pending
           clearTimers();
           if (!result.success) {
-            setError(`Enrollment failed: ${result.error || 'unknown error'}`);
+            setError(result.error === 'audio_bus_unavailable'
+              ? 'Turn on voice listening on this device and check its microphone, then try again.'
+              : `Enrollment failed: ${result.error || 'unknown error'}`);
             multiTakeRef.current = null;
             setMultiTake(null);
             setPhase(sampleCount > 0 ? 'enrolled' : 'idle');
@@ -281,29 +282,12 @@ const VoiceProfileScreen = () => {
     }
   }, [householdId, sampleCount]);
 
-  /**
-   * Begin a multi-take wizard on the given node.
-   * - clearExisting=true → wipes any prior profile so the new takes form
-   *   a fresh centroid (used for "Re-Record All").
-   * - totalTakes=1 with clearExisting=false → "Add One More Sample".
-   */
+  // Adding a microphone never deletes samples recorded on other devices.
   const startMultiTakeNodeWizard = useCallback(
-    async (node: NodeInfo, totalTakes: number, clearExisting: boolean) => {
+    async (node: NodeInfo, totalTakes: number) => {
       if (!householdId) return;
       setError(null);
       setActiveNode(node);
-      if (clearExisting) {
-        setPhase('deleting');
-        try {
-          await deleteVoiceProfile(householdId);
-          setSampleCount(0);
-        } catch (e) {
-          console.error('[VoiceProfile] clear-before-wizard failed:', e);
-          setError('Could not clear existing profile. Try again.');
-          setPhase('idle');
-          return;
-        }
-      }
       const ctx: MultiTakeContext = {
         totalTakes,
         currentTake: 0,
@@ -380,7 +364,7 @@ const VoiceProfileScreen = () => {
   const handleDelete = useCallback(() => {
     Alert.alert(
       'Delete Voice Profile',
-      'Are you sure? You can always re-enroll later.',
+      'This deletes all your voice samples for this household, including samples from other devices. You can enroll again later.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -447,7 +431,7 @@ const VoiceProfileScreen = () => {
           Set Up Voice Recognition
         </Text>
         <Text variant="bodyMedium" style={styles.body}>
-          We'll record {TARGET_TAKES} short voice samples on the node you
+          We'll record {TARGET_TAKES} short voice samples on the device you
           pick — a command, a question, and a casual statement. The varied
           prompts help Jarvis recognize you across the natural pitch and
           tone shifts in your everyday speech.
@@ -469,25 +453,25 @@ const VoiceProfileScreen = () => {
     const purpose = targetPurposeRef.current;
     const heading =
       purpose === 'test'
-        ? 'Pick a node to test on'
+        ? 'Pick a device to test on'
         : purpose === 'add_one'
-          ? 'Add a sample on which node?'
-          : 'Pick a node to enroll on';
+          ? 'Add a sample on which device?'
+          : 'Pick a device to enroll on';
     const subhead =
       purpose === 'test'
-        ? 'The verification will run on the same mic, so use the node you usually speak to.'
+        ? 'Choose any household node or computer with a microphone to test your profile.'
         : purpose === 'add_one'
-          ? 'One short take. Pick the node whose mic you want to enrich this profile with.'
-          : `Enrollment runs on the node's mic so daytime recognition matches your enrollment acoustics. ${TARGET_TAKES} takes total.`;
+          ? 'One short take from this microphone, added to your existing household profile.'
+          : `Add ${TARGET_TAKES} samples from this microphone. All your existing household samples are kept.`;
     const onPickNode = (node: NodeInfo) => {
       switch (purpose) {
         case 'test':
           return startNodeVerifyFlow(node);
         case 'add_one':
-          return startMultiTakeNodeWizard(node, 1, false);
+          return startMultiTakeNodeWizard(node, 1);
         case 'enroll':
         default:
-          return startMultiTakeNodeWizard(node, TARGET_TAKES, sampleCount > 0);
+          return startMultiTakeNodeWizard(node, TARGET_TAKES);
       }
     };
     return (
@@ -505,22 +489,23 @@ const VoiceProfileScreen = () => {
             <ActivityIndicator style={styles.button} />
           ) : nodes.length === 0 ? (
             <Text variant="bodySmall" style={[styles.body, { opacity: 0.6 }]}>
-              No online nodes available. Make sure a node is online and try again.
+              No online devices available. Make sure a node or computer is online and try again.
             </Text>
           ) : (
             <View>
               {nodes.map((node) => {
-                // A computer needs no enrollment (Jarvis uses the account
-                // signed in to the agent), and the agent has no enroll_voice /
-                // verify_voice handler, so a pick would wait out the 60 s poll.
-                const desktop = isDesktopAgent(node);
+                // Older desktop agents ignore enrollment commands. Only offer
+                // recording once the agent advertises support in its heartbeat.
+                const cannotRecord = isDesktopAgent(node) && node.capabilities?.voice_enrollment !== true;
                 return (
                   <List.Item
                     key={node.node_id}
                     title={nodeDisplayName(node, 'Unnamed node')}
                     description={
-                      desktop
-                        ? 'Not needed: Jarvis uses the account signed in to the agent'
+                      cannotRecord
+                        ? node.capabilities?.voice_enrollment === false
+                          ? 'Voice recording is not available on this computer'
+                          : 'Update the Jarvis agent to record voice samples'
                         : node.user || node.node_id.substring(0, 8)
                     }
                     left={(props) => (
@@ -532,9 +517,9 @@ const VoiceProfileScreen = () => {
                         style={[props.style, { justifyContent: 'center' }]}
                       />
                     )}
-                    onPress={desktop ? undefined : () => onPickNode(node)}
-                    disabled={desktop}
-                    style={[styles.nodeRow, desktop && { opacity: 0.5 }]}
+                    onPress={cannotRecord ? undefined : () => onPickNode(node)}
+                    disabled={cannotRecord}
+                    style={[styles.nodeRow, cannotRecord && { opacity: 0.5 }]}
                   />
                 );
               })}
@@ -577,7 +562,7 @@ const VoiceProfileScreen = () => {
           </Text>
           <ActivityIndicator size="large" style={{ marginVertical: 12 }} />
           <Text variant="bodyMedium" style={styles.prompt}>
-            The node will play a cue and then record. Read this prompt
+            The device will play a cue and then record. Read this prompt
             aloud when you hear it:{'\n\n'}"{prompt}"
           </Text>
           <Text variant="bodySmall" style={[styles.body, { marginTop: 12 }]}>
@@ -604,8 +589,8 @@ const VoiceProfileScreen = () => {
           Enrollment Complete
         </Text>
         <Text variant="bodyMedium" style={styles.body}>
-          {sampleCount} samples enrolled on {activeNode ? nodeDisplayName(activeNode, 'the node') : 'the node'}.
-          Now let's verify it works — speak to the same node.
+          Your household profile now has {sampleCount} samples, including the new samples from {activeNode ? nodeDisplayName(activeNode, 'this device') : 'this device'}.
+          Test your voice on this microphone next.
         </Text>
         <Button
           mode="contained"
@@ -644,8 +629,8 @@ const VoiceProfileScreen = () => {
         </View>
         <Text variant="bodyMedium" style={styles.body}>
           {matched
-            ? 'Your voice profile is working on this node.'
-            : "The test sample didn't match your profile. You can re-record the test, add more enrollment samples, or re-record the full profile from scratch."}
+            ? 'Your voice profile is working on this device.'
+            : "The test sample didn't match your profile. You can re-record the test or add more samples from this microphone."}
         </Text>
         {matched ? (
           <Button
@@ -689,8 +674,8 @@ const VoiceProfileScreen = () => {
         </Text>
         <Text variant="bodyMedium" style={styles.body}>
           {sampleCount === 1
-            ? '1 sample enrolled. Adding more samples improves accuracy across pitch and tone variation.'
-            : `${sampleCount} samples enrolled. Add more to widen recognition across pitch and tone.`}
+            ? '1 sample in your household profile. Add samples from any node or computer without replacing it.'
+            : `${sampleCount} samples in your household profile. Add samples from any node or computer without replacing them.`}
         </Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
           <Button
@@ -713,11 +698,11 @@ const VoiceProfileScreen = () => {
         </Button>
         <Button
           mode="outlined"
-          icon="refresh"
+          icon="plus-circle-outline"
           onPress={() => openTargetPicker()}
           style={styles.button}
         >
-          Re-Record All {TARGET_TAKES} Samples
+          Add Another Device
         </Button>
         <Button
           mode="text"
@@ -771,7 +756,7 @@ const VoiceProfileScreen = () => {
         <Appbar.Content title="Voice Recognition" />
       </Appbar.Header>
 
-      <View style={styles.content}>
+      <ScrollView contentContainerStyle={styles.content}>
         {error && (
           <Text
             variant="bodySmall"
@@ -782,7 +767,7 @@ const VoiceProfileScreen = () => {
         )}
         {recognitionEnabled === false && phase !== 'loading' && renderRecognitionOffNotice()}
         {renderPhase()}
-      </View>
+      </ScrollView>
     </View>
   );
 };
@@ -792,7 +777,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    flex: 1,
+    flexGrow: 1,
     padding: 16,
     justifyContent: 'center',
   },
