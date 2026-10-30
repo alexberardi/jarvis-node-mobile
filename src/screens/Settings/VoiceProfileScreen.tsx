@@ -40,6 +40,7 @@ import {
 import { listNodes, type NodeInfo } from '../../api/nodeApi';
 import { NodeKindIcon } from '../../components/NodeKindIcon';
 import { isDesktopAgent, nodeDisplayName } from '../../utils/nodeKind';
+import { voiceEnrollmentError } from '../../utils/voiceEnrollmentError';
 
 // --- Types ---
 
@@ -49,6 +50,7 @@ type Phase =
   | 'enrolled'         // profile exists
   | 'select_target'    // pick which node to enroll/test on
   | 'awaiting_node'    // node is recording + uploading; polling for result
+  | 'take_failed'      // rejected take; keep its prompt and earlier successes for retry
   | 'test_prompt'      // prompt user to verify after enrollment
   | 'test_result'      // showing match result
   | 'deleting';
@@ -56,9 +58,6 @@ type Phase =
 // Multi-take wizard state. When non-null, we're mid-wizard — each take is
 // a full round-trip (mobile → CC → MQTT → node TTS + record + upload →
 // mobile poll). After all `totalTakes` complete, we drop into test_prompt.
-// `useExplicitIndices` is unused for node-mic (the whisper backend
-// auto-allocates next index for each enrollment), kept structurally for
-// symmetry with the prior phone-mic flow.
 type MultiTakeContext = {
   totalTakes: number;
   currentTake: number; // 0-indexed
@@ -146,6 +145,7 @@ const VoiceProfileScreen = () => {
     }
     return () => {
       clearTimers();
+      multiTakeRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [householdId]);
@@ -207,6 +207,7 @@ const VoiceProfileScreen = () => {
     const ctx = multiTakeRef.current;
     if (!ctx || !householdId) return;
     setError(null);
+    setNodeRequestId(null);
     setPhase('awaiting_node');
     const prompt =
       ENROLLMENT_PROMPTS[ctx.currentTake % ENROLLMENT_PROMPTS.length];
@@ -216,6 +217,7 @@ const VoiceProfileScreen = () => {
         prompt,
         NODE_ENROLLMENT_DURATION_S,
       );
+      if (multiTakeRef.current !== ctx) return;
       setNodeRequestId(request_id);
 
       pollDeadlineRef.current = Date.now() + POLL_DEADLINE_MS;
@@ -231,12 +233,15 @@ const VoiceProfileScreen = () => {
         }
         try {
           const result = await getNodeEnrollmentResult(request_id);
+          if (multiTakeRef.current !== ctx) return;
           if (result === null) return; // still pending
           clearTimers();
           if (!result.success) {
-            setError(result.error === 'audio_bus_unavailable'
-              ? 'Turn on voice listening on this device and check its microphone, then try again.'
-              : `Enrollment failed: ${result.error || 'unknown error'}`);
+            setError(voiceEnrollmentError(result));
+            if (result.error === 'low_quality') {
+              setPhase('take_failed');
+              return;
+            }
             multiTakeRef.current = null;
             setMultiTake(null);
             setPhase(sampleCount > 0 ? 'enrolled' : 'idle');
@@ -248,13 +253,14 @@ const VoiceProfileScreen = () => {
           // from currentTake when the user added samples piecemeal).
           try {
             const status = await getVoiceProfileStatus(householdId);
+            if (multiTakeRef.current !== ctx) return;
             setSampleCount(status.sample_count);
           } catch (statusErr) {
             console.warn('[VoiceProfile] post-take status refresh failed:', statusErr);
           }
 
           const live = multiTakeRef.current;
-          if (!live) return; // user cancelled mid-poll
+          if (live !== ctx) return; // user cancelled or started another wizard mid-poll
           const nextTake = live.currentTake + 1;
           if (nextTake >= live.totalTakes) {
             // Wizard complete — drop into the test step.
@@ -613,6 +619,28 @@ const VoiceProfileScreen = () => {
     </Card>
   );
 
+  const renderFailedTake = () => (
+    <Card style={styles.card}>
+      <Card.Content>
+        <Text variant="titleMedium" style={styles.title}>
+          Take {(multiTake?.currentTake ?? 0) + 1} of {multiTake?.totalTakes ?? 1} needs another try
+        </Text>
+        <Text variant="bodyMedium" accessibilityRole="alert" style={styles.body}>
+          {error}
+        </Text>
+        <Text variant="bodyMedium" style={styles.body}>
+          Your earlier samples are kept. Retry this take on {activeNode ? nodeDisplayName(activeNode, 'this device') : 'this device'}, or finish for now.
+        </Text>
+        <Button mode="contained" icon="microphone" onPress={triggerCurrentNodeTake} style={styles.button}>
+          Retry This Take
+        </Button>
+        <Button mode="text" onPress={cancelNodeFlow} style={styles.button}>
+          Finish for Now
+        </Button>
+      </Card.Content>
+    </Card>
+  );
+
   const renderTestResult = () => (
     <Card style={styles.card}>
       <Card.Content style={styles.center}>
@@ -738,6 +766,8 @@ const VoiceProfileScreen = () => {
         return renderSelectTarget();
       case 'awaiting_node':
         return renderAwaitingNode();
+      case 'take_failed':
+        return renderFailedTake();
       case 'test_prompt':
         return renderTestPrompt();
       case 'test_result':
@@ -757,7 +787,7 @@ const VoiceProfileScreen = () => {
       </Appbar.Header>
 
       <ScrollView contentContainerStyle={styles.content}>
-        {error && (
+        {error && phase !== 'take_failed' && (
           <Text
             variant="bodySmall"
             style={[styles.error, { color: paperTheme.colors.error }]}

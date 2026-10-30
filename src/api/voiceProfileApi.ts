@@ -188,6 +188,10 @@ export interface NodeEnrollmentResult {
   duration_secs?: number;
   response?: VoiceProfileEnrollResult;
   error?: string;
+  // Enrollment quality details relayed by command-center after a rejected take.
+  reason?: string;
+  speech_seconds?: number;
+  min_speech_seconds?: number;
   // verify_voice results
   matched?: boolean;
   confidence?: number;

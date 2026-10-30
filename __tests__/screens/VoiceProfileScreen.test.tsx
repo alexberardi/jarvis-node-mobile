@@ -205,3 +205,111 @@ describe('VoiceProfileScreen — household enrollment', () => {
     expect(deleteVoiceProfile).not.toHaveBeenCalled();
   });
 });
+
+describe('VoiceProfileScreen — rejected takes', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.useFakeTimers();
+    (listNodes as jest.Mock).mockResolvedValue([
+      { node_id: 'agent-1', room: 'Office PC', online: true, node_kind: 'desktop', capabilities: { voice_enrollment: true } },
+    ]);
+    (startNodeEnrollment as jest.Mock).mockResolvedValue({ request_id: 'take' });
+  });
+
+  afterEach(() => jest.useRealTimers());
+
+  const status = (count: number) => ({ has_profile: count > 0, sample_count: count, recognition_enabled: true });
+  const rejected = { success: false, error: 'low_quality', reason: 'too_little_speech', speech_seconds: 1.8, min_speech_seconds: 3 };
+
+  it('explains the rejection and retries only that take, keeping earlier samples', async () => {
+    (getVoiceProfileStatus as jest.Mock)
+      .mockResolvedValueOnce(status(3))
+      .mockResolvedValueOnce(status(4))
+      .mockResolvedValueOnce(status(5))
+      .mockResolvedValueOnce(status(6));
+    (getNodeEnrollmentResult as jest.Mock)
+      .mockResolvedValueOnce({ success: true })
+      .mockResolvedValueOnce(rejected)
+      .mockResolvedValueOnce({ success: true })
+      .mockResolvedValueOnce({ success: true });
+    const ui = renderScreen();
+    fireEvent.press(await ui.findByText('Add Another Device'));
+    fireEvent.press(await ui.findByText('Office PC'));
+    await ui.findByText(/Take 1 of 3/);
+    await act(async () => { await jest.advanceTimersByTimeAsync(1000); });
+    await ui.findByText(/Take 2 of 3/);
+    await act(async () => { await jest.advanceTimersByTimeAsync(1000); });
+
+    expect(ui.getByText(/1\.8 seconds of speech.*3\.0 seconds/)).toBeTruthy();
+    expect(ui.getByText('Take 2 of 3 needs another try')).toBeTruthy();
+    const failedTake = (startNodeEnrollment as jest.Mock).mock.calls[1];
+    fireEvent.press(ui.getByText('Retry This Take'));
+    await waitFor(() => expect(startNodeEnrollment).toHaveBeenCalledTimes(3));
+    expect(startNodeEnrollment).toHaveBeenLastCalledWith(...failedTake);
+    await act(async () => { await jest.advanceTimersByTimeAsync(1000); });
+    await ui.findByText(/Take 3 of 3/);
+    await act(async () => { await jest.advanceTimersByTimeAsync(1000); });
+
+    expect(ui.getByText('Enrollment Complete')).toBeTruthy();
+    expect(ui.getByText(/Your household profile now has 6 samples/)).toBeTruthy();
+    expect(startNodeEnrollment).toHaveBeenCalledTimes(4);
+    expect(deleteVoiceProfile).not.toHaveBeenCalled();
+    ui.unmount();
+  });
+
+  it.each([0, 3])('can finish after a rejected take with %i existing samples', async (count) => {
+    (getVoiceProfileStatus as jest.Mock).mockResolvedValue(status(count));
+    (getNodeEnrollmentResult as jest.Mock).mockResolvedValue(rejected);
+    const ui = renderScreen();
+    fireEvent.press(await ui.findByText(count ? 'Add Another Device' : 'Start Enrollment'));
+    fireEvent.press(await ui.findByText('Office PC'));
+    await ui.findByText(/Take 1 of 3/);
+    await act(async () => { await jest.advanceTimersByTimeAsync(1000); });
+    fireEvent.press(ui.getByText('Finish for Now'));
+    expect(ui.getByText(count ? 'Voice Profile Active' : 'Start Enrollment')).toBeTruthy();
+    expect(startNodeEnrollment).toHaveBeenCalledTimes(1);
+    expect(deleteVoiceProfile).not.toHaveBeenCalled();
+    ui.unmount();
+  });
+
+  it.each(['cancel', 'leave'])('ignores a late take result after the member chooses to %s', async (exit) => {
+    (getVoiceProfileStatus as jest.Mock).mockResolvedValue(status(3));
+    let finish!: (value: object) => void;
+    (getNodeEnrollmentResult as jest.Mock).mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+    const ui = renderScreen();
+    fireEvent.press(await ui.findByText('Add Another Device'));
+    fireEvent.press(await ui.findByText('Office PC'));
+    await ui.findByText(/Take 1 of 3/);
+    await act(async () => { await jest.advanceTimersByTimeAsync(1000); });
+    if (exit === 'cancel') {
+      fireEvent.press(ui.getByText('Cancel'));
+      await act(async () => { finish(rejected); });
+      expect(ui.getByText('Voice Profile Active')).toBeTruthy();
+      expect(ui.queryByText('Retry This Take')).toBeNull();
+      ui.unmount();
+    } else {
+      ui.unmount();
+      await act(async () => { finish({ success: true }); });
+    }
+    expect(startNodeEnrollment).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    [{ reason: 'inconsistent' }, 'This take did not match your existing voice samples. Make sure only you are speaking, then try again.'],
+    [{ reason: 'too_short' }, 'The recording was too short to identify your voice. Read the whole prompt after the cue.'],
+    [{ reason: 'too_little_speech' }, 'Not enough clear speech was detected. Read the whole prompt after the cue, close to the selected microphone.'],
+    [{ reason: 'too_little_speech', speech_seconds: null, min_speech_seconds: 3 }, 'Not enough clear speech was detected. Read the whole prompt after the cue, close to the selected microphone.'],
+    [{}, 'This recording could not be used. Try the prompt again on the selected microphone.'],
+  ])('explains a rejected recording when the server reports %j', async (details, message) => {
+    (getVoiceProfileStatus as jest.Mock).mockResolvedValue(status(3));
+    (getNodeEnrollmentResult as jest.Mock).mockResolvedValue({ success: false, error: 'low_quality', ...details });
+    const ui = renderScreen();
+    fireEvent.press(await ui.findByText('Add One More Sample'));
+    fireEvent.press(await ui.findByText('Office PC'));
+    await ui.findByText(/Take 1 of 1/);
+    await act(async () => { await jest.advanceTimersByTimeAsync(1000); });
+    expect(ui.getByText(message)).toBeTruthy();
+    expect(ui.getByText('Retry This Take')).toBeTruthy();
+    ui.unmount();
+  });
+});
