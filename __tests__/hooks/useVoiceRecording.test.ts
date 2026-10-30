@@ -1,5 +1,7 @@
 import { renderHook, act } from '@testing-library/react-native';
+import { Platform } from 'react-native';
 import { Audio } from 'expo-av';
+import { startWavRecording, stopWavRecording } from 'jarvis-wav-recorder';
 
 import { useVoiceRecording } from '../../src/hooks/useVoiceRecording';
 
@@ -27,6 +29,11 @@ jest.mock('expo-av', () => {
     },
   };
 });
+
+jest.mock('jarvis-wav-recorder', () => ({
+  startWavRecording: jest.fn(),
+  stopWavRecording: jest.fn(),
+}));
 
 describe('useVoiceRecording', () => {
   beforeEach(() => {
@@ -164,6 +171,75 @@ describe('useVoiceRecording', () => {
       expect(result.current.isRecording).toBe(true);
 
       // Stop recording (should fail gracefully)
+      let uri: string | null = 'not-null';
+      await act(async () => {
+        uri = await result.current.stopRecording();
+      });
+
+      expect(uri).toBeNull();
+      expect(result.current.isRecording).toBe(false);
+    });
+  });
+
+  // Android's MediaRecorder can't write WAV, so Android records through jarvis-wav-recorder.
+  describe('on Android', () => {
+    const originalOS = Platform.OS;
+
+    beforeEach(() => {
+      Platform.OS = 'android';
+      (Audio.requestPermissionsAsync as jest.Mock).mockResolvedValue({
+        status: 'granted',
+      });
+      (startWavRecording as jest.Mock).mockResolvedValue(undefined);
+      (stopWavRecording as jest.Mock).mockResolvedValue('file:///cache/recording-1.wav');
+    });
+
+    afterEach(() => {
+      Platform.OS = originalOS;
+    });
+
+    it('records through the WAV recorder, not expo-av', async () => {
+      const { result } = renderHook(() => useVoiceRecording());
+
+      let started = false;
+      await act(async () => {
+        started = await result.current.startRecording();
+      });
+      expect(started).toBe(true);
+      expect(result.current.isRecording).toBe(true);
+
+      let uri: string | null = null;
+      await act(async () => {
+        uri = await result.current.stopRecording();
+      });
+
+      expect(uri).toBe('file:///cache/recording-1.wav');
+      expect(result.current.isRecording).toBe(false);
+      expect(startWavRecording).toHaveBeenCalled();
+      expect(stopWavRecording).toHaveBeenCalled();
+      expect(Audio.Recording).not.toHaveBeenCalled();
+    });
+
+    it('reports a failed start', async () => {
+      (startWavRecording as jest.Mock).mockRejectedValue(new Error('mic busy'));
+      const { result } = renderHook(() => useVoiceRecording());
+
+      let started = true;
+      await act(async () => {
+        started = await result.current.startRecording();
+      });
+
+      expect(started).toBe(false);
+      expect(result.current.isRecording).toBe(false);
+    });
+
+    it('returns null when stopping fails', async () => {
+      (stopWavRecording as jest.Mock).mockRejectedValue(new Error('io'));
+      const { result } = renderHook(() => useVoiceRecording());
+
+      await act(async () => {
+        await result.current.startRecording();
+      });
       let uri: string | null = 'not-null';
       await act(async () => {
         uri = await result.current.stopRecording();

@@ -1,11 +1,14 @@
 /**
- * Voice recording hook using expo-av.
+ * Voice recording hook: 16 kHz mono PCM WAV, the only format the server's STT reads.
  *
- * Records audio in WAV format (16kHz mono) suitable for Whisper transcription.
+ * iOS records LINEARPCM through expo-av. Android's MediaRecorder (what expo-av uses there)
+ * can't write WAV, so Android records through the local jarvis-wav-recorder module.
  */
 
 import { useCallback, useRef, useState } from 'react';
+import { Platform } from 'react-native';
 import { Audio } from 'expo-av';
+import { startWavRecording, stopWavRecording } from 'jarvis-wav-recorder';
 
 interface UseVoiceRecordingReturn {
   isRecording: boolean;
@@ -17,6 +20,7 @@ interface UseVoiceRecordingReturn {
 
 const RECORDING_OPTIONS: Audio.RecordingOptions = {
   isMeteringEnabled: false,
+  // Unused: Android records through jarvis-wav-recorder.
   android: {
     extension: '.wav',
     outputFormat: Audio.AndroidOutputFormat.DEFAULT,
@@ -45,6 +49,7 @@ const RECORDING_OPTIONS: Audio.RecordingOptions = {
 export function useVoiceRecording(): UseVoiceRecordingReturn {
   const [isRecording, setIsRecording] = useState(false);
   const recordingRef = useRef<Audio.Recording | null>(null);
+  const androidRecordingRef = useRef(false);
 
   const startRecording = useCallback(async (): Promise<boolean> => {
     try {
@@ -52,6 +57,13 @@ export function useVoiceRecording(): UseVoiceRecordingReturn {
       if (status !== 'granted') {
         console.warn('[Voice] Microphone permission denied');
         return false;
+      }
+
+      if (Platform.OS === 'android') {
+        await startWavRecording();
+        androidRecordingRef.current = true;
+        setIsRecording(true);
+        return true;
       }
 
       await Audio.setAudioModeAsync({
@@ -73,6 +85,17 @@ export function useVoiceRecording(): UseVoiceRecordingReturn {
   }, []);
 
   const stopRecording = useCallback(async (): Promise<string | null> => {
+    if (androidRecordingRef.current) {
+      androidRecordingRef.current = false;
+      setIsRecording(false);
+      try {
+        return await stopWavRecording();
+      } catch (err) {
+        console.error('[Voice] Failed to stop recording:', err);
+        return null;
+      }
+    }
+
     const recording = recordingRef.current;
     if (!recording) return null;
 
