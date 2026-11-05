@@ -355,6 +355,52 @@ describe('NodeSettingsScreen — three-tab layout', () => {
   });
 });
 
+describe('NodeSettingsScreen — "Share with phone calls"', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  function snapshotWithCallContext() {
+    const s = snapshotWithAgents();
+    s.commands = [
+      ...s.commands,
+      {
+        command_name: 'get_calendar_events',
+        description: 'Read your calendar',
+        secrets: [],
+        enabled: true,
+        call_context: { enabled: false, description: 'Your free and busy times for the next week' },
+      } as (typeof s.commands)[number],
+    ];
+    return s;
+  }
+
+  it('shows the switch with what the command shares, only for commands that share', async () => {
+    const view = await renderLoaded(snapshotWithCallContext());
+    await waitFor(() => expect(view.getByText('get calendar events')).toBeTruthy());
+
+    expect(view.getAllByText('Share with phone calls')).toHaveLength(1);
+    expect(view.getByText('Your free and busy times for the next week')).toBeTruthy();
+    expect(view.getByTestId('share-get_calendar_events').props.value).toBe(false);
+  });
+
+  it('switching it pushes config_type "context_sharing" for that command', async () => {
+    const view = await renderLoaded(snapshotWithCallContext());
+    await waitFor(() => expect(view.getByText('get calendar events')).toBeTruthy());
+    mockEncryptAndPushConfig.mockResolvedValue(undefined);
+
+    await act(async () => {
+      fireEvent(view.getByTestId('share-get_calendar_events'), 'valueChange', true);
+    });
+
+    expect(mockEncryptAndPushConfig).toHaveBeenCalledWith('node-abc', 'context_sharing', {
+      command_name: 'get_calendar_events',
+      enabled: 'true',
+    });
+    expect(view.getByTestId('share-get_calendar_events').props.value).toBe(true);
+  });
+});
+
 describe('NodeSettingsScreen — agent secret values', () => {
   beforeEach(() => {
     jest.clearAllMocks();
