@@ -132,6 +132,7 @@ const NodeSettingsScreen: React.FC = () => {
 
   // Track enabled/disabled state per command (keyed by raw command_name)
   const [commandStates, setCommandStates] = useState<Record<string, boolean>>({});
+  const [contextSharing, setContextSharing] = useState<Record<string, boolean>>({});
 
   // Track enabled/disabled state per agent (keyed by raw agent_name)
   const [agentStates, setAgentStates] = useState<Record<string, boolean>>({});
@@ -376,6 +377,11 @@ const NodeSettingsScreen: React.FC = () => {
                 states[cmd.command_name] = cmd.enabled !== false;
               }
               setCommandStates(states);
+              const sharing: Record<string, boolean> = {};
+              for (const cmd of snapshot.commands) {
+                if (cmd.call_context) sharing[cmd.command_name] = cmd.call_context.enabled !== false;
+              }
+              setContextSharing(sharing);
               const aStates: Record<string, boolean> = {};
               for (const a of snapshot.agents ?? []) {
                 aStates[a.agent_name] = a.enabled !== false;
@@ -802,6 +808,25 @@ const NodeSettingsScreen: React.FC = () => {
         console.error('Failed to toggle command:', err);
         // Revert on error
         setCommandStates((prev) => ({ ...prev, [commandName]: !enabled }));
+      }
+    },
+    [nodeId, authState.accessToken],
+  );
+
+  // "Share with phone calls": whether the command answers call plans' context queries; the
+  // node enforces it (context_sharing push, jarvis-server#573).
+  const handleToggleContextSharing = useCallback(
+    async (commandName: string, enabled: boolean) => {
+      if (!authState.accessToken) return;
+      setContextSharing((prev) => ({ ...prev, [commandName]: enabled }));
+      try {
+        await encryptAndPushConfig(nodeId, 'context_sharing', {
+          command_name: commandName,
+          enabled: enabled ? 'true' : 'false',
+        });
+      } catch (err) {
+        console.error('Failed to switch context sharing:', err);
+        setContextSharing((prev) => ({ ...prev, [commandName]: !enabled }));
       }
     },
     [nodeId, authState.accessToken],
@@ -1376,6 +1401,22 @@ const NodeSettingsScreen: React.FC = () => {
             />
           </Menu>
         </View>
+        {cmd.call_context ? (
+          <View style={[styles.flatRow, { marginTop: 12 }]}>
+            <View style={{ flex: 1, paddingRight: 12 }}>
+              <Text variant="bodyMedium">Share with phone calls</Text>
+              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 2 }}>
+                {cmd.call_context.description || 'Shares details with the plan when Jarvis makes a call for you.'}
+              </Text>
+            </View>
+            <Switch
+              testID={`share-${cmd.command_name}`}
+              accessibilityLabel={`Share ${displayName} with phone calls`}
+              value={contextSharing[cmd.command_name] !== false}
+              onValueChange={(val) => handleToggleContextSharing(cmd.command_name, val)}
+            />
+          </View>
+        ) : null}
       </Surface>
     );
   };
