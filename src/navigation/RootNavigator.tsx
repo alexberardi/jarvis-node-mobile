@@ -13,6 +13,7 @@ import CallContextStackNavigator from './CallContextStackNavigator';
 import PhonebookStackNavigator from './PhonebookStackNavigator';
 import RecentCommandsStackNavigator from './RecentCommandsStackNavigator';
 import SmartHomeSetupNavigator from './SmartHomeSetupNavigator';
+import NowPlayingScreen from '../screens/NowPlaying/NowPlayingScreen';
 import HouseholdEditScreen from '../screens/Settings/HouseholdEditScreen';
 import SignalAutomationsScreen from '../screens/Settings/SignalAutomationsScreen';
 import SettingsScreen from '../screens/Settings/SettingsScreen';
@@ -81,6 +82,11 @@ const RootNavigator = () => {
       <Stack.Screen
         name="CallContext"
         component={CallContextStackNavigator}
+        options={{ presentation: 'modal' }}
+      />
+      <Stack.Screen
+        name="NowPlaying"
+        component={NowPlayingScreen}
         options={{ presentation: 'modal' }}
       />
     </Stack.Navigator>

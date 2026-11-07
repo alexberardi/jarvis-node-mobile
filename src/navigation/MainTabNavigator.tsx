@@ -1,8 +1,9 @@
 import { CommonActions } from '@react-navigation/native';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { BottomTabBar, createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import React from 'react';
 
+import MiniPlayer from '../components/NowPlaying/MiniPlayer';
 import DevicesStackNavigator from './DevicesStackNavigator';
 import NodesStackNavigator from './NodesStackNavigator';
 import RoutinesStackNavigator from './RoutinesStackNavigator';
@@ -13,11 +14,22 @@ import { useThemePreference } from '../theme/ThemeProvider';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
+type TabState = { index: number; routes: { state?: { index?: number } }[] };
+
+/** The mini-player sits on each tab's first screen only, never on a drill-in (P11). */
+export const onFirstScreen = (s: TabState): boolean => (s.routes[s.index]?.state?.index ?? 0) === 0;
+
 const MainTabNavigator = () => {
   const { paperTheme } = useThemePreference();
 
   return (
     <Tab.Navigator
+      tabBar={(props) => (
+        <>
+          {onFirstScreen(props.state) && <MiniPlayer />}
+          <BottomTabBar {...props} />
+        </>
+      )}
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: paperTheme.colors.primary,
