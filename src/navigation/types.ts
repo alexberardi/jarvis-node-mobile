@@ -212,4 +212,5 @@ export type RootStackParamList = {
   Memories: NavigatorScreenParams<MemoriesStackParamList> | undefined;
   Phonebook: NavigatorScreenParams<PhonebookStackParamList> | undefined;
   CallContext: NavigatorScreenParams<CallContextStackParamList> | undefined;
+  NowPlaying: undefined;
 };
