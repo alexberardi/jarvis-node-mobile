@@ -98,7 +98,7 @@ const NowPlayingCard: React.FC<Props> = ({ p, send, busy }) => {
 
         <View style={styles.controls}>
           {s.shuffle !== undefined && can('shuffle') && (
-            <IconButton icon="shuffle-variant" accessibilityLabel="Shuffle" mode={s.shuffle ? 'contained' : undefined}
+            <IconButton icon="shuffle-variant" accessibilityLabel="Shuffle" mode={s.shuffle ? 'contained-tonal' : undefined}
               selected={s.shuffle} accessibilityState={{ selected: s.shuffle }} disabled={busy}
               onPress={() => ctl({ action: 'shuffle' })} />
           )}
@@ -107,7 +107,7 @@ const NowPlayingCard: React.FC<Props> = ({ p, send, busy }) => {
               onPress={() => ctl({ action: 'previous' })} />
           )}
           {(playing ? can('pause') : can('play')) && (
-            <IconButton icon={playing ? 'pause' : 'play'} size={36} mode="contained"
+            <IconButton icon={playing ? 'pause' : 'play'} size={36} mode="contained" selected
               accessibilityLabel={playing ? 'Pause' : 'Play'} disabled={busy} testID="np-playpause"
               onPress={() => ctl({ action: playing ? 'pause' : 'play' })} />
           )}
@@ -117,7 +117,7 @@ const NowPlayingCard: React.FC<Props> = ({ p, send, busy }) => {
           )}
           {s.repeat !== undefined && can('repeat') && (
             <IconButton icon={s.repeat === 'one' ? 'repeat-once' : 'repeat'} accessibilityLabel={repeatLabel}
-              mode={s.repeat !== 'off' ? 'contained' : undefined} selected={s.repeat !== 'off'}
+              mode={s.repeat !== 'off' ? 'contained-tonal' : undefined} selected={s.repeat !== 'off'}
               accessibilityState={{ selected: s.repeat !== 'off' }} disabled={busy}
               onPress={() => ctl({ action: 'repeat' })} />
           )}
