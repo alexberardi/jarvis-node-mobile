@@ -4,8 +4,12 @@ import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { PaperProvider } from 'react-native-paper';
 
-import InteractiveElementsSection from '../../src/components/InteractiveElementsSection';
-import { sendInteractiveCallback, InteractiveElement } from '../../src/api/commandCenterApi';
+import InteractiveElementsSection, { failureMessage } from '../../src/components/InteractiveElementsSection';
+import {
+  getInteractiveCallbackStatus,
+  sendInteractiveCallback,
+  InteractiveElement,
+} from '../../src/api/commandCenterApi';
 import { lightTheme } from '../../src/theme';
 
 const mockPush = jest.fn();
@@ -21,7 +25,13 @@ jest.mock('@react-navigation/native', () => {
 jest.mock('../../src/api/commandCenterApi', () => ({
   ...jest.requireActual('../../src/api/commandCenterApi'),
   sendInteractiveCallback: jest.fn(),
+  getInteractiveCallbackStatus: jest.fn(),
 }));
+
+const jobStatus = (status: string, extra: Record<string, unknown> = {}) => ({
+  id: 'job-1', status, navigation_type: 'new_notification', completed_at: null,
+  error_message: null, context_data: null, ...extra,
+});
 
 const wrapper = ({ children }: { children: React.ReactNode }) => (
   <PaperProvider theme={lightTheme}>
@@ -44,6 +54,8 @@ describe('InteractiveElementsSection', () => {
     jest.clearAllMocks();
     mockPush.mockClear();
     jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    // A new_notification tap is watched until it finishes; by default it succeeds at once.
+    (getInteractiveCallbackStatus as jest.Mock).mockResolvedValue(jobStatus('completed'));
   });
 
   it('renders nothing for empty array', () => {
@@ -550,6 +562,69 @@ describe('multi-field editors merge (phone confirm card)', () => {
           data: expect.objectContaining({ details: '' }),
         }),
       );
+    });
+  });
+
+  describe('the outcome of a new_notification tap', () => {
+    const tapped = async (label = 'Add to Calendar') => {
+      (sendInteractiveCallback as jest.Mock).mockResolvedValue({
+        id: 'job-1', status: 'pending', navigation_type: 'new_notification', created_at: 'x',
+      });
+      const utils = render(
+        <InteractiveElementsSection
+          elements={[el({ id: 'cal', label, target: 'server' })]}
+          targetNodeId={null}
+          serverHouseholdId="hh-1"
+        />,
+        { wrapper },
+      );
+      fireEvent.press(utils.getByText(label));
+      return utils;
+    };
+
+    it('a success gets the check mark only once the job completed', async () => {
+      const { getByText } = await tapped();
+      await waitFor(() => expect(getInteractiveCallbackStatus).toHaveBeenCalledWith('job-1'));
+      await waitFor(() => expect(getByText('Add to Calendar')).toBeDisabled());
+    });
+
+    it('a failure shows an error toast with the reason and the chip can be tapped again', async () => {
+      (getInteractiveCallbackStatus as jest.Mock).mockResolvedValue(jobStatus('failed', {
+        error_message: "Your iCloud calendar credentials aren't set up yet.",
+        context_data: { inbox: { title: "Couldn't finish that", summary: "Your iCloud calendar credentials aren't set up yet." } },
+      }));
+      const { findByText, getByText } = await tapped();
+      expect(await findByText("Couldn't finish that: Your iCloud calendar credentials aren't set up yet.")).toBeTruthy();
+      await waitFor(() => expect(getByText('Add to Calendar')).not.toBeDisabled());
+      // Retrying sends the callback again.
+      (getInteractiveCallbackStatus as jest.Mock).mockResolvedValue(jobStatus('completed'));
+      fireEvent.press(getByText('Add to Calendar'));
+      await waitFor(() => expect(sendInteractiveCallback).toHaveBeenCalledTimes(2));
+    });
+
+    it('waits through pending polls for the outcome', async () => {
+      jest.useFakeTimers();
+      try {
+        (getInteractiveCallbackStatus as jest.Mock)
+          .mockResolvedValueOnce(jobStatus('pending'))
+          .mockResolvedValueOnce(jobStatus('failed', { error_message: 'the device is offline' }));
+        const { findByText } = await tapped();
+        await waitFor(() => expect(getInteractiveCallbackStatus).toHaveBeenCalledTimes(1));
+        jest.advanceTimersByTime(1000);
+        expect(await findByText('the device is offline')).toBeTruthy();
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+  });
+
+  describe('failureMessage', () => {
+    it('prefers the server card, then its error, then a plain fallback', () => {
+      expect(failureMessage(jobStatus('failed', { context_data: { inbox: { title: 'T', summary: 'S' } } }) as never)).toBe('T: S');
+      expect(failureMessage(jobStatus('failed', { context_data: { inbox: { summary: 'S' } } }) as never)).toBe('S');
+      expect(failureMessage(jobStatus('failed', { error_message: 'E' }) as never)).toBe('E');
+      expect(failureMessage(jobStatus('expired') as never)).toBe("That didn't run in time. Try again.");
+      expect(failureMessage(jobStatus('failed') as never)).toBe("That didn't work.");
     });
   });
 });
