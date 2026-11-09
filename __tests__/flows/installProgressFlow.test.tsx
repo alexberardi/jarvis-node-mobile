@@ -51,6 +51,8 @@ jest.mock('../../src/api/packageInstallApi', () => ({
 
 jest.mock('../../src/api/testInstallApi', () => ({
   pollTestInstallStatus: jest.fn(),
+  fetchTestRuns: jest.fn(() => Promise.resolve([])),
+  sendToForge: jest.fn(),
 }));
 
 const mockInvalidateTools = jest.fn();

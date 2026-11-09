@@ -21,6 +21,7 @@ import { StoreStackParamList } from '../../navigation/types';
 import type { InstallStatus, InstallStatusValue } from '../../types/Package';
 import { installStatusLabel, isTerminalInstallStatus } from '../../utils/packageStatus';
 import { safeJsonParse } from '../../utils/safeJson';
+import SendToForgeCard from './SendToForgeCard';
 
 type Nav = NativeStackNavigationProp<StoreStackParamList>;
 type Route = RouteProp<StoreStackParamList, 'InstallProgress'>;
@@ -268,6 +269,10 @@ const InstallProgressScreen = () => {
             </Card>
           );
         })}
+        {isTestInstall &&
+          installs
+            .filter((entry) => statuses.get(entry.requestId) && isTerminalInstallStatus(statuses.get(entry.requestId)!.status))
+            .map((entry) => <SendToForgeCard key={`forge-${entry.requestId}`} nodeId={entry.nodeId} requestId={entry.requestId} />)}
       </ScrollView>
 
       {(allDone || pollError) && (
