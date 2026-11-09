@@ -1,11 +1,13 @@
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, StyleSheet, View } from 'react-native';
-import { Chip, Text, useTheme } from 'react-native-paper';
+import { Chip, Portal, Snackbar, Text, useTheme } from 'react-native-paper';
 
 import {
+  getInteractiveCallbackStatus,
   InteractiveCallbackRequest,
+  InteractiveCallbackStatus,
   InteractiveElement,
   sendInteractiveCallback,
 } from '../api/commandCenterApi';
@@ -56,6 +58,21 @@ interface Props {
   onPendingChange?: (pending: boolean) => void;
 }
 
+// A "new_notification" tap is watched until it finishes, as the stacked result screen does, so a
+// failure is shown instead of a check mark (jarvis-server docs/cc/phone-followups.md).
+const POLL_INTERVAL_MS = 1000;
+const POLL_TIMEOUT_MS = 30_000;
+
+/** What went wrong, for the error toast: the server's card if it sent one, else its error. */
+export const failureMessage = (s: InteractiveCallbackStatus): string => {
+  const inbox = s.context_data?.inbox;
+  const title = typeof inbox?.title === 'string' ? inbox.title : '';
+  const summary = typeof inbox?.summary === 'string' ? inbox.summary : '';
+  if (summary) return title ? `${title}: ${summary}` : summary;
+  if (s.error_message) return s.error_message;
+  return s.status === 'expired' ? "That didn't run in time. Try again." : "That didn't work.";
+};
+
 const iconForKind = (kind: string | undefined): string | undefined => {
   switch (kind) {
     case 'actor': return 'account';
@@ -87,6 +104,15 @@ const InteractiveElementsSection: React.FC<Props> = ({
   const navigation = useNavigation<NativeStackNavigationProp<InboxStackParamList>>();
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [sentIds, setSentIds] = useState<Set<string>>(new Set());
+  const [failedIds, setFailedIds] = useState<Set<string>>(new Set());
+  const [failure, setFailure] = useState<string | null>(null);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   const [emptyFieldError, setEmptyFieldError] = useState<string | null>(null);
 
   // Normalize the legacy single-editor prop into the fields shape so the
@@ -174,6 +200,12 @@ const InteractiveElementsSection: React.FC<Props> = ({
       };
 
       setPendingId(el.id);
+      setFailure(null);
+      setFailedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(el.id);
+        return next;
+      });
       onPendingChange?.(true);
       try {
         const response = await sendInteractiveCallback(request);
@@ -194,13 +226,17 @@ const InteractiveElementsSection: React.FC<Props> = ({
             targetNodeId: targetNodeId ?? undefined,
           });
         } else {
-          // "new_notification" — async; mark sent so the chip dims and
-          // the user knows the result will land in the inbox later.
-          setSentIds((prev) => {
-            const next = new Set(prev);
-            next.add(el.id);
-            return next;
-          });
+          // "new_notification" — the result card lands in the inbox, but the chip waits for the
+          // outcome: a check mark only for a success, an error toast (and a chip that can be
+          // tapped again) for a failure. Still running after the timeout: marked sent, as before.
+          const outcome = await awaitOutcome(response.id);
+          if (!mounted.current) return;
+          if (outcome.failed) {
+            setFailedIds((prev) => new Set(prev).add(el.id));
+            setFailure(outcome.message);
+          } else {
+            setSentIds((prev) => new Set(prev).add(el.id));
+          }
         }
       } catch (err: unknown) {
         if (onExpired && isExpiryError(err)) {
@@ -245,7 +281,14 @@ const InteractiveElementsSection: React.FC<Props> = ({
           // follow-up inbox item to appear.
           const chipDisabled =
             disabled || noContext || isSent || (pendingId !== null && !isPending);
-          const icon = isSent ? 'check' : isPending ? 'progress-clock' : iconForKind(el.kind);
+          const isFailed = failedIds.has(el.id);
+          const icon = isSent
+            ? 'check'
+            : isPending
+              ? 'progress-clock'
+              : isFailed
+                ? 'alert-circle-outline'
+                : iconForKind(el.kind);
           return (
             <Chip
               key={el.id}
@@ -255,16 +298,51 @@ const InteractiveElementsSection: React.FC<Props> = ({
               style={[
                 styles.chip,
                 isSent && { backgroundColor: theme.colors.surfaceVariant },
+                isFailed && { backgroundColor: theme.colors.errorContainer },
               ]}
+              textStyle={isFailed ? { color: theme.colors.onErrorContainer } : undefined}
             >
               {text}
             </Chip>
           );
         })}
       </View>
+      <Portal>
+        <Snackbar
+          visible={failure !== null}
+          onDismiss={() => setFailure(null)}
+          duration={8000}
+          style={{ backgroundColor: theme.colors.errorContainer }}
+          action={{ label: 'OK', textColor: theme.colors.onErrorContainer, onPress: () => setFailure(null) }}
+        >
+          <Text style={{ color: theme.colors.onErrorContainer }}>{failure ?? ''}</Text>
+        </Snackbar>
+      </Portal>
     </View>
   );
 };
+
+/** Polls a callback job until it leaves "pending"; failed is false while it is still running at the timeout. */
+async function awaitOutcome(jobId: string): Promise<{ failed: boolean; message: string }> {
+  const started = Date.now();
+  for (;;) {
+    let status: InteractiveCallbackStatus | null = null;
+    try {
+      status = await getInteractiveCallbackStatus(jobId);
+    } catch {
+      status = null; // a poll that fails is retried until the timeout
+    }
+    if (status && status.status !== 'pending') {
+      return status.status === 'completed'
+        ? { failed: false, message: '' }
+        : { failed: true, message: failureMessage(status) };
+    }
+    if (Date.now() - started >= POLL_TIMEOUT_MS) {
+      return { failed: false, message: '' };
+    }
+    await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+  }
+}
 
 const styles = StyleSheet.create({
   container: {
