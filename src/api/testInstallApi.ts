@@ -64,11 +64,21 @@ export interface TestRun {
 }
 
 /** The runs so far, from the same poll route. */
-export const fetchTestRuns = async (nodeId: string, requestId: string): Promise<TestRun[]> => {
-  const res = await apiClient.get<{ runs?: TestRun[] }>(
+export const fetchTestRuns = async (nodeId: string, requestId: string): Promise<TestRun[]> =>
+  (await fetchTestActivity(nodeId, requestId)).runs;
+
+/**
+ * The runs and how many node events there are (the test install's log lines, device scans and
+ * controls, which Send to Forge includes), from the same poll route.
+ */
+export const fetchTestActivity = async (
+  nodeId: string,
+  requestId: string,
+): Promise<{ runs: TestRun[]; events: number }> => {
+  const res = await apiClient.get<{ runs?: TestRun[]; events?: unknown[] }>(
     `${getBaseUrl()}/api/v0/nodes/${nodeId}/test-install/${requestId}`,
   );
-  return res.data.runs ?? [];
+  return { runs: res.data.runs ?? [], events: res.data.events?.length ?? 0 };
 };
 
 /** Send to Forge: jarvisd sends the install result, the runs and the note to the draft. */

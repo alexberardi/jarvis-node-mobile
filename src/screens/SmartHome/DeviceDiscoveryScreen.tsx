@@ -69,9 +69,10 @@ const DeviceDiscoveryScreen = ({ navigation, route }: Props) => {
   // one in flight when the screen closed) stops instead of scheduling more.
   const scanIdRef = useRef(0);
 
-  // Determine if we're in the Devices stack (direct import) or SmartHome setup
+  // Determine if we're in the Devices stack (direct import) or SmartHome setup: by the screens the
+  // stack has, not the ones open, since a jump from another tab opens this screen alone.
   const isDevicesStack = (navigation as DevicesProps['navigation']).getState?.()
-    ?.routes?.some((r: { name: string }) => r.name === 'DevicesList');
+    ?.routeNames?.includes('DevicesList');
 
   const cleanup = useCallback(() => {
     scanIdRef.current += 1;
@@ -251,8 +252,13 @@ const DeviceDiscoveryScreen = ({ navigation, route }: Props) => {
         setSnackbar(
           `Imported ${result.created} device${result.created !== 1 ? 's' : ''}`,
         );
-        // Navigate back to DevicesList
-        setTimeout(() => navigation.goBack(), 800);
+        // Back to DevicesList: below this screen, or in its place when this screen was opened alone
+        // from another tab (a Forge test), where going back would leave the tab and strand it here.
+        setTimeout(() => {
+          const nav = navigation as DevicesProps['navigation'];
+          if (nav.getState?.()?.routes?.some((r: { name: string }) => r.name === 'DevicesList')) nav.goBack();
+          else nav.replace('DevicesList');
+        }, 800);
       } catch (e) {
         setSnackbar(
           e instanceof Error ? e.message : 'Failed to import devices',

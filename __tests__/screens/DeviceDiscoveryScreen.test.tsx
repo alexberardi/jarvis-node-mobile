@@ -54,7 +54,10 @@ const mockNavigate = jest.fn();
 const navigation = {
   goBack: mockGoBack,
   navigate: mockNavigate,
-  getState: () => ({ routes: [{ name: 'DevicesList' }, { name: 'DeviceDiscovery' }] }),
+  getState: () => ({
+    routes: [{ name: 'DevicesList' }, { name: 'DeviceDiscovery' }],
+    routeNames: ['DevicesList', 'DeviceEdit', 'DeviceDiscovery'],
+  }),
 };
 
 const renderScreen = () =>
