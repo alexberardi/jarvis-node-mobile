@@ -12,8 +12,9 @@ import { listHouseholdMembers } from '../../src/api/householdApi';
 // Danger Zone. A Pi's delete is gated on holding its K2 on this phone (today's
 // rule); a desktop agent's sign-out on cc's rule (owner or household admin).
 
+const mockNavigate = jest.fn();
 jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: jest.fn(), goBack: jest.fn() }),
+  useNavigation: () => ({ navigate: mockNavigate, goBack: jest.fn() }),
   useRoute: () => ({ params: { nodeId: 'node-1' } }),
 }));
 jest.mock('../../src/api/nodeApi', () => ({
@@ -68,6 +69,13 @@ describe('NodeDetailScreen — node kinds', () => {
       { user_id: 7, username: 'alex', display_name: 'Alex B', email: 'a@x', role: 'member' },
       { user_id: 8, username: 'sam', display_name: null, email: 's@x', role: 'member' },
     ]);
+  });
+
+  it("opens the node's Forge test from the overview", async () => {
+    (getNode as jest.Mock).mockResolvedValue(DESKTOP);
+    const { findByTestId } = renderScreen();
+    fireEvent.press(await findByTestId('node-forge-test-button'));
+    expect(mockNavigate).toHaveBeenCalledWith('NodeForgeTest', { nodeId: 'node-1' });
   });
 
   it('shows the Raspberry Pi icon and keeps the K2 gate for a Pi', async () => {

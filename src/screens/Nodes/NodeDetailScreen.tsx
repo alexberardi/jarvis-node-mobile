@@ -272,6 +272,16 @@ export const OverviewTab = ({
 
       <NodeUpdateSection node={node} />
 
+      <Button
+        testID="node-forge-test-button"
+        mode="outlined"
+        icon="flask-outline"
+        style={styles.forgeTestButton}
+        onPress={() => navigation.navigate('NodeForgeTest', { nodeId: node.node_id })}
+      >
+        Test a Forge command
+      </Button>
+
       {canDelete && (
         <>
           <View style={styles.dangerHeader}>
@@ -799,6 +809,10 @@ const styles = StyleSheet.create({
   activityRow: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  forgeTestButton: {
+    marginTop: 16,
+    marginHorizontal: 16,
   },
   dangerHeader: {
     marginTop: 32,

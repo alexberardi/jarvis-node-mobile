@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Button, Card, Text, TextInput, useTheme } from 'react-native-paper';
 
-import { fetchTestRuns, sendToForge, type TestRun } from '../../api/testInstallApi';
+import { fetchTestActivity, sendToForge, type TestRun } from '../../api/testInstallApi';
 
 // Runs keep coming in for the node's whole test window, so the list refreshes on its own.
 const REFRESH_MS = 5000;
@@ -28,12 +28,18 @@ const outcome = (run: TestRun): string => {
 const SendToForgeCard = ({ nodeId, requestId }: { nodeId: string; requestId: string }) => {
   const theme = useTheme();
   const [runs, setRuns] = useState<TestRun[]>([]);
+  const [events, setEvents] = useState(0);
   const [note, setNote] = useState('');
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
 
   const refresh = useCallback(() => {
-    fetchTestRuns(nodeId, requestId).then(setRuns).catch(() => {});
+    fetchTestActivity(nodeId, requestId)
+      .then((a) => {
+        setRuns(a.runs);
+        setEvents(a.events);
+      })
+      .catch(() => {});
   }, [nodeId, requestId]);
 
   useEffect(() => {
@@ -78,6 +84,11 @@ const SendToForgeCard = ({ nodeId, requestId }: { nodeId: string; requestId: str
               <Text variant="bodySmall" numberOfLines={3}>{outcome(run)}</Text>
             </View>
           ))
+        )}
+        {events > 0 && (
+          <Text variant="bodySmall" testID="send-to-forge-events" style={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}>
+            Also sends {events} node event{events === 1 ? '' : 's'}: its log lines, device scans and controls.
+          </Text>
         )}
         <TextInput
           testID="send-to-forge-note"
