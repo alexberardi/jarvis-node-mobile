@@ -1,0 +1,78 @@
+appId: com.jarvis.nodemobile
+name: Inbox suggestion card, Never suggest this, and Suppressed suggestions
+# The rich seed's suggestion card (INBOX_ACTIONS_TITLE, jarvis-server scripts/seed-dev.py)
+# opens in InboxDetail with server-plane buttons, so no node has to be online. Its
+# INBOX_ACTIONS_BUTTON ("Never suggest this") opens InboxCallbackResult with the server's
+# answer, INBOX_ACTIONS_RESULT, and records a suppression, which Suppressed suggestions
+# (the bell-off button on the Inbox list) then lists. The flow un-blocks it again.
+#
+# State: if the flow dies before the un-block, the office fan suppression stays in
+# Suppressed suggestions (the seed's --reset removes it, or un-block it by hand); a
+# second tap on the button records the same suppression again, so a rerun still passes.
+tags:
+  - inbox
+  - e2e
+env:
+  EMAIL: "test@jarvisautomation.io"
+  PASSWORD: "DevPass123!"
+  INBOX_ACTIONS_TITLE: "Turn off the office fan at night?"
+  INBOX_ACTIONS_BUTTON: "Never suggest this"
+  INBOX_ACTIONS_RESULT: "Won't suggest that again"
+---
+- launchApp:
+    clearState: true
+- runFlow: subflows/login.yaml
+- tapOn:
+    id: "inbox-button"
+- extendedWaitUntil:
+    visible:
+      id: "open-suppressed-suggestions"
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: ${INBOX_ACTIONS_TITLE}
+    direction: DOWN
+- tapOn:
+    text: ${INBOX_ACTIONS_TITLE}
+
+# InboxDetail → the button → InboxCallbackResult with the server's answer.
+- scrollUntilVisible:
+    element:
+      text: ${INBOX_ACTIONS_BUTTON}
+    direction: DOWN
+    centerElement: true
+- tapOn:
+    text: ${INBOX_ACTIONS_BUTTON}
+- extendedWaitUntil:
+    visible:
+      id: "result-heading"
+      text: ${INBOX_ACTIONS_RESULT}
+    timeout: 30000
+
+# Back to the list (result → detail → list), then Suppressed suggestions lists it.
+- back
+- back
+- extendedWaitUntil:
+    visible:
+      id: "open-suppressed-suggestions"
+    timeout: 10000
+- tapOn:
+    id: "open-suppressed-suggestions"
+- extendedWaitUntil:
+    visible:
+      id: "suppression-card-.*"
+    timeout: 15000
+- assertVisible:
+    id: "suppression-list"
+- assertVisible:
+    text: "turning off the office fan at night"
+
+# Un-block it again (an RN Alert: its last button, "Un-block", is button1).
+- tapOn:
+    id: "suppression-unblock-.*"
+- tapOn:
+    id: "android:id/button1"
+- extendedWaitUntil:
+    notVisible:
+      text: "turning off the office fan at night"
+    timeout: 15000

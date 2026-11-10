@@ -53,7 +53,7 @@ jest.mock('../../src/auth/AuthContext', () => ({
   }),
 }));
 
-const mockRediscover = jest.fn();
+const mockRecheck = jest.fn();
 const mockSetManualUrl = jest.fn();
 jest.mock('../../src/contexts/ConfigContext', () => ({
   useConfig: () => ({
@@ -64,7 +64,7 @@ jest.mock('../../src/contexts/ConfigContext', () => ({
     },
     isUsingCloud: false,
     manualUrl: null,
-    rediscover: mockRediscover,
+    recheck: mockRecheck,
     setManualUrl: mockSetManualUrl,
   }),
 }));
@@ -93,6 +93,12 @@ jest.mock('../../src/api/authApi', () => ({
 jest.mock('../../src/api/smartHomeApi', () => ({
   getSmartHomeConfig: jest.fn(),
   updateSmartHomeConfig: jest.fn(),
+}));
+
+// Kinds for the Primary Node picker's icons (smart-home config carries none).
+const mockListNodes = jest.fn();
+jest.mock('../../src/api/nodeApi', () => ({
+  listNodes: (...args: unknown[]) => mockListNodes(...args),
 }));
 
 jest.mock('../../src/api/voiceProfileApi', () => ({
@@ -155,6 +161,10 @@ describe('Settings — flow integration (households, delete-account, smart-home 
       refreshToken: null,
     };
     getSH.mockResolvedValue(SMART_HOME);
+    mockListNodes.mockResolvedValue([
+      { node_id: 'node-1', install_mode: 'tarball', node_kind: null },
+      { node_id: 'node-2', install_mode: 'desktop-agent', node_kind: 'desktop' },
+    ]);
     updateSH.mockResolvedValue(SMART_HOME);
     getVP.mockResolvedValue({ has_profile: true, sample_count: 3 });
     (arePushNotificationsEnabled as jest.Mock).mockResolvedValue(true);
@@ -352,5 +362,84 @@ describe('Settings — flow integration (households, delete-account, smart-home 
     });
 
     expect(updateSH).toHaveBeenCalledWith('hh-1', { primary_node_id: 'node-2' });
+  });
+
+  it('Primary Node rows show the Raspberry Pi for a Pi and the robot for a computer', async () => {
+    const utils = renderScreen();
+    await waitFor(() => expect(mockListNodes).toHaveBeenCalledWith('hh-1'));
+    await waitFor(() =>
+      expect(utils.getByTestId('primary-node-kind-node-2').props.accessibilityLabel).toBe('Computer'),
+    );
+    expect(utils.getByTestId('primary-node-kind-node-1').props.accessibilityLabel).toBe('Raspberry Pi');
+  });
+
+  it('Primary Node lists Pis before computers and notes what a computer cannot do (server sends node_kind)', async () => {
+    getSH.mockResolvedValue({
+      ...SMART_HOME,
+      nodes: [
+        { node_id: 'mac-1', room: 'Office', online: true, last_seen: null, node_kind: 'desktop' },
+        { node_id: 'pi-1', room: 'Kitchen', online: true, last_seen: null, node_kind: null },
+      ],
+    });
+    mockListNodes.mockRejectedValue(new Error('offline'));
+    const utils = renderScreen();
+    await utils.findByText('Office (mac-1…)');
+
+    const rows = utils.getAllByTestId(/^primary-node-row-/).map((r) => r.props.testID);
+    expect(rows).toEqual(['primary-node-row-pi-1', 'primary-node-row-mac-1']);
+    expect(utils.getByTestId('primary-node-note-mac-1')).toHaveTextContent(
+      "Can't find smart-home devices · runs routines only while it's on",
+    );
+    expect(utils.queryByTestId('primary-node-note-pi-1')).toBeNull();
+  });
+
+  it('Primary Node keeps the server order and shows no note when nothing reports a kind (older server)', async () => {
+    getSH.mockResolvedValue({
+      ...SMART_HOME,
+      nodes: [
+        { node_id: 'mac-1', room: 'Office', online: true, last_seen: null },
+        { node_id: 'pi-1', room: 'Kitchen', online: true, last_seen: null },
+      ],
+    });
+    mockListNodes.mockRejectedValue(new Error('404'));
+    const utils = renderScreen();
+    await utils.findByText('Office (mac-1…)');
+
+    const rows = utils.getAllByTestId(/^primary-node-row-/).map((r) => r.props.testID);
+    expect(rows).toEqual(['primary-node-row-mac-1', 'primary-node-row-pi-1']);
+    expect(utils.queryByTestId(/^primary-node-note-/)).toBeNull();
+  });
+
+  it('Primary Node marks a node the server reports offline', async () => {
+    getSH.mockResolvedValue({
+      ...SMART_HOME,
+      nodes: [
+        { node_id: 'pi-1', room: 'Kitchen', online: true, last_seen: null },
+        { node_id: 'pi-2', room: 'Garage', online: false, last_seen: null },
+      ],
+    });
+    mockListNodes.mockRejectedValue(new Error('404'));
+    const utils = renderScreen();
+    await utils.findByText('Garage (pi-2…)');
+
+    expect(utils.getByTestId('primary-node-offline-pi-2')).toHaveTextContent('Offline');
+    expect(utils.queryByTestId('primary-node-offline-pi-1')).toBeNull();
+  });
+
+  it('Primary Node names computers by their name and keeps the room for a Pi', async () => {
+    getSH.mockResolvedValue({
+      ...SMART_HOME,
+      nodes: [
+        { node_id: 'pi-1', room: 'Kitchen', online: true, last_seen: null, node_kind: null, name: 'pi-zero' },
+        { node_id: 'mac-1', room: 'desktop', online: true, last_seen: null, node_kind: 'desktop', name: 'omarchy' },
+        // Older server: the name comes from the household node list.
+        { node_id: 'mac-2', room: 'desktop', online: true, last_seen: null, node_kind: 'desktop' },
+      ],
+    });
+    mockListNodes.mockResolvedValue([{ node_id: 'mac-2', node_kind: 'desktop', name: 'macbook' }]);
+    const utils = renderScreen();
+    await utils.findByText('omarchy (mac-1…)');
+    await utils.findByText('macbook (mac-2…)');
+    expect(utils.getByText('Kitchen (pi-1…)')).toBeTruthy();
   });
 });

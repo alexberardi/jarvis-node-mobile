@@ -35,18 +35,23 @@ jest.mock('../../src/auth/AuthContext', () => ({
 
 // The heavy native-backed child sections — stub to null so we test only
 // HardwareTab's own card logic (no slider / datetimepicker / child polling).
-jest.mock('../../src/components/BluetoothSection', () => ({
-  BluetoothSection: () => null,
-}));
-jest.mock('../../src/components/NodeVoiceSettings', () => ({
-  NodeVoiceSettings: () => null,
-}));
-jest.mock('../../src/components/NodeMaintenanceSettings', () => ({
-  NodeMaintenanceSettings: () => null,
-}));
-jest.mock('../../src/components/SpeakerHATCard', () => ({
-  SpeakerHATCard: () => null,
-}));
+// Each renders a marker so the per-kind tests can see which sections mount.
+jest.mock('../../src/components/BluetoothSection', () => {
+  const { Text } = require('react-native');
+  return { BluetoothSection: () => <Text>stub-bluetooth</Text> };
+});
+jest.mock('../../src/components/NodeVoiceSettings', () => {
+  const { Text } = require('react-native');
+  return { NodeVoiceSettings: () => <Text>stub-voice-settings</Text> };
+});
+jest.mock('../../src/components/NodeMaintenanceSettings', () => {
+  const { Text } = require('react-native');
+  return { NodeMaintenanceSettings: () => <Text>stub-maintenance</Text> };
+});
+jest.mock('../../src/components/SpeakerHATCard', () => {
+  const { Text } = require('react-native');
+  return { SpeakerHATCard: () => <Text>stub-speaker-hat</Text> };
+});
 
 // Help leaf is context-backed — stub both exports the screen uses.
 jest.mock('../../src/components/HelpIcon', () => ({
@@ -198,5 +203,47 @@ describe('HardwareTab — flow integration (voice-profile check, enroll nav, cop
     await waitFor(() =>
       expect(getByText('Checking enrollment status...')).toBeTruthy(),
     );
+  });
+});
+
+describe('HardwareTab — per node kind', () => {
+  const PI_SECTIONS = ['stub-bluetooth', 'stub-voice-settings', 'stub-speaker-hat', 'stub-maintenance'];
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockHouseholdId = 'household-1';
+    (getVoiceProfileStatus as jest.Mock).mockResolvedValue({ has_profile: false, sample_count: 0 });
+  });
+
+  it('a Pi keeps every hardware section and the Voice Mode row', async () => {
+    const { getByText } = renderTab({ ...baseNode, install_mode: 'tarball' });
+    await waitFor(() => expect(getVoiceProfileStatus).toHaveBeenCalled());
+    for (const marker of PI_SECTIONS) expect(getByText(marker)).toBeTruthy();
+    expect(getByText('Voice Mode')).toBeTruthy();
+  });
+
+  it('a desktop agent shows only Device Info and how Jarvis knows the speaker (no enrollment)', async () => {
+    const desktop = { ...baseNode, node_kind: 'desktop', install_mode: 'desktop-agent', voice_mode: 'brief' };
+    const { getByText, queryByText, queryByTestId } = renderTab(desktop);
+    for (const marker of PI_SECTIONS) expect(queryByText(marker)).toBeNull();
+    expect(queryByText('Voice Mode')).toBeNull();
+    expect(getByText('Device Info')).toBeTruthy();
+    expect(getByText('Node ID')).toBeTruthy();
+    expect(getByText('Voice Recognition')).toBeTruthy();
+    // On a computer the speaker is the account signed in to the agent.
+    expect(
+      getByText("Jarvis knows it's you on this computer: it uses the account signed in to the agent"),
+    ).toBeTruthy();
+    expect(queryByTestId('voice-recognition-enroll-btn')).toBeNull();
+    expect(queryByText(/can't record/)).toBeNull();
+    expect(queryByText(/No voice profile yet/)).toBeNull();
+    // Nothing to check either: no voice-profile request for a computer.
+    expect(getVoiceProfileStatus).not.toHaveBeenCalled();
+  });
+
+  it('falls back to install_mode when the agent has not reported node_kind', async () => {
+    const { queryByText, queryByTestId } = renderTab({ ...baseNode, node_kind: null, install_mode: 'desktop-agent' });
+    for (const marker of PI_SECTIONS) expect(queryByText(marker)).toBeNull();
+    expect(queryByTestId('voice-recognition-enroll-btn')).toBeNull();
   });
 });

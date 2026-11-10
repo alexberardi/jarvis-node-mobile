@@ -151,6 +151,16 @@ describe('parseExpiresAt', () => {
     expect(d?.toISOString()).toBe('2026-07-19T12:00:00.000Z');
   });
 
+  it('reads a zone-less expires_at as UTC (command-center legacy format)', () => {
+    const d = parseExpiresAt({ expires_at: '2026-07-19T12:00:00.123456' });
+    expect(d?.toISOString()).toBe('2026-07-19T12:00:00.123Z');
+  });
+
+  it('honors an offset', () => {
+    const d = parseExpiresAt({ expires_at: '2026-07-19T08:00:00-04:00' });
+    expect(d?.toISOString()).toBe('2026-07-19T12:00:00.000Z');
+  });
+
   it.each([
     ['absent', {}],
     ['null metadata', null],

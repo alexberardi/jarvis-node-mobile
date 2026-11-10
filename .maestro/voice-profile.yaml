@@ -1,0 +1,52 @@
+appId: com.jarvis.nodemobile
+name: Voice profile screen (no recording)
+# Voice Recognition (src/screens/Settings/VoiceProfileScreen.tsx) from Settings → Voice:
+# the screen loads its status, the enrollment start opens the node picker, and Cancel goes
+# back. Nothing is recorded: enrolling records on a node's mic, which the sandbox's
+# seeded nodes have not got (the voice lane covers speaker ID).
+tags:
+  - settings
+  - voice
+  - e2e
+env:
+  EMAIL: "test@jarvisautomation.io"
+  PASSWORD: "DevPass123!"
+---
+- launchApp:
+    clearState: true
+- runFlow: subflows/login.yaml
+- runFlow: subflows/open-settings.yaml
+- scrollUntilVisible:
+    element:
+      id: "settings-voice-profile-row"
+    direction: DOWN
+- tapOn:
+    id: "settings-voice-profile-row"
+- extendedWaitUntil:
+    visible:
+      text: "Voice Recognition"
+    timeout: 10000
+# The seeded superuser has no voice profile, so the screen settles on the intro card.
+- extendedWaitUntil:
+    visible:
+      id: "voice-idle"
+    timeout: 15000
+- tapOn:
+    id: "voice-start-enrollment"
+- extendedWaitUntil:
+    visible:
+      id: "voice-select-target"
+    timeout: 10000
+- assertVisible:
+    text: "Pick a node to enroll on"
+- scrollUntilVisible:
+    element:
+      id: "voice-select-target-cancel"
+    direction: DOWN
+- tapOn:
+    id: "voice-select-target-cancel"
+- assertVisible:
+    id: "voice-idle"
+- back
+- assertVisible:
+    id: "settings-voice-profile-row"

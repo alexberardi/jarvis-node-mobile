@@ -26,6 +26,9 @@ name: K2 crypto round-trip (backup -> import)
 tags:
   - crypto
   - e2e
+  - skip
+properties:
+  skip_reason: "needs a DEV_MODE dev-client build and the fake node (E2E piece 7)"
 env:
   EMAIL: "ci-node-test@example.com"
   PASSWORD: "ci-node-test-password"
@@ -38,7 +41,7 @@ env:
 - launchApp:
     clearState: true
     clearKeychain: true
-- runFlow: login.yaml
+- runFlow: subflows/login.yaml
 
 # --- Provision a node (stores K2 on the device; lands on Success). ---
 - tapOn:
@@ -47,13 +50,15 @@ env:
     text: "Add Node.*"
 - assertVisible:
     id: "ip-input"
-- tapOn:
-    id: "ip-input"
-- eraseText
+- runFlow:
+    file: subflows/clear-field.yaml
+    env:
+      FIELD_ID: "ip-input"
 - inputText: "${NODE_HOST}"
-- tapOn:
-    id: "port-input"
-- eraseText
+- runFlow:
+    file: subflows/clear-field.yaml
+    env:
+      FIELD_ID: "port-input"
 - inputText: "${NODE_PORT}"
 - retry:
     maxRetries: 3

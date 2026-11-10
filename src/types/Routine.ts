@@ -10,6 +10,7 @@ export interface RoutineStep {
 }
 
 export type ResponseLength = 'short' | 'medium' | 'long';
+export type RoutineMode = 'simple' | 'advanced';
 export type ScheduleType = 'interval' | 'cron';
 export type DayOfWeek = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
 
@@ -38,6 +39,9 @@ export interface RoutineSchedule {
 }
 
 export interface Routine {
+  // Missing on older servers: those routines use the Advanced builder.
+  mode?: RoutineMode;
+  utterance?: string;
   id: string;
   slug?: string;
   name: string;

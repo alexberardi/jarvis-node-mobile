@@ -42,7 +42,7 @@ jest.mock('../../src/auth/AuthContext', () => ({
   }),
 }));
 
-const mockRediscover = jest.fn();
+const mockRecheck = jest.fn();
 const mockSetManualUrl = jest.fn();
 
 jest.mock('../../src/contexts/ConfigContext', () => ({
@@ -54,7 +54,7 @@ jest.mock('../../src/contexts/ConfigContext', () => ({
     },
     isUsingCloud: false,
     manualUrl: null,
-    rediscover: mockRediscover,
+    recheck: mockRecheck,
     setManualUrl: mockSetManualUrl,
   }),
 }));
@@ -155,6 +155,13 @@ describe('SettingsScreen', () => {
     expect(mockLogout).toHaveBeenCalled();
   });
 
+  it('gives Log Out the testID the Maestro logout subflow taps', () => {
+    const { getByTestId } = render(<SettingsScreen />, { wrapper });
+
+    fireEvent.press(getByTestId('settings-logout'));
+    expect(mockLogout).toHaveBeenCalled();
+  });
+
   it('should render Household section', () => {
     const { getByText } = render(<SettingsScreen />, { wrapper });
 
@@ -207,7 +214,7 @@ describe('SettingsScreen', () => {
       },
       isUsingCloud: true,
       manualUrl: null,
-      rediscover: mockRediscover,
+      recheck: mockRecheck,
       setManualUrl: mockSetManualUrl,
     });
 
@@ -227,11 +234,25 @@ describe('SettingsScreen', () => {
     expect(getByText(/Command Center:.*192\.168\.1\.100:7703/)).toBeTruthy();
   });
 
-  it('should show Re-discover Services button', () => {
-    const { getByText } = render(<SettingsScreen />, { wrapper });
+  it('should show a Re-check Connection button that re-resolves the server URL', () => {
+    const { getByText, queryByText } = render(<SettingsScreen />, { wrapper });
 
-    const rediscoverBtn = getByText('Re-discover Services');
-    expect(rediscoverBtn).toBeTruthy();
+    fireEvent.press(getByText('Re-check Connection'));
+    expect(mockRecheck).toHaveBeenCalled();
+    expect(queryByText('Re-discover Services')).toBeNull();
+  });
+
+  it('says the server URL is required and does not claim auto-discovery', () => {
+    const { queryByText, getByText } = render(<SettingsScreen />, { wrapper });
+
+    expect(queryByText(/auto-discover/i)).toBeNull();
+    expect(getByText(/doesn't search the network/i)).toBeTruthy();
+  });
+
+  it('separates the Call details row with a divider like the rows above it', () => {
+    const { getByTestId } = render(<SettingsScreen />, { wrapper });
+    expect(getByTestId('settings-call-context-divider')).toBeTruthy();
+    expect(getByTestId('settings-call-context-row')).toBeTruthy();
   });
 
   it('should render Settings header', () => {

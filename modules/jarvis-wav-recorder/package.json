@@ -1,0 +1,10 @@
+{
+  "name": "jarvis-wav-recorder",
+  "version": "1.0.0",
+  "description": "Android 16 kHz mono PCM WAV recorder for Jarvis Node Mobile",
+  "main": "index.ts",
+  "types": "index.ts",
+  "license": "MIT",
+  "author": "Jarvis",
+  "homepage": "https://github.com/jarvis/jarvis-node-mobile"
+}

@@ -113,6 +113,24 @@ describe('provisioning wire contract — request bodies', () => {
     expect(body.provisioning_token).toBe(req.provisioning_token);
   });
 
+  it('provision() sends an explicit config_service_url over the phone\'s discovered one', async () => {
+    mockNodeApi.post.mockResolvedValue({ data: { success: true, message: 'ok' } });
+
+    await provision({
+      ssid: 'HomeWiFi',
+      password: 'pw',
+      room_name: 'kitchen',
+      command_center_url: 'http://192.168.1.50:7703',
+      config_service_url: 'http://192.168.1.50:7700',
+      household_id: 'hh',
+      node_id: 'n',
+      provisioning_token: 't',
+    });
+
+    const [, body] = mockNodeApi.post.mock.calls[0];
+    expect(body.config_service_url).toBe('http://192.168.1.50:7700');
+  });
+
   it('provisionK2() transforms camelCase -> snake_case on the wire (the fragile seam)', async () => {
     mockNodeApi.post.mockResolvedValue({ data: { success: true, node_id: 'n', kid: 'k' } });
 

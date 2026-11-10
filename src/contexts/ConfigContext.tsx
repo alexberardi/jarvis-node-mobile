@@ -14,11 +14,11 @@ import {
   ServiceConfig,
   clearCachedConfig,
   saveManualConfigUrl,
-  loadManualConfigUrl,
 } from '../config/serviceConfig';
 import {
   DiscoveryResult,
   discoverConfigService,
+  loadPinnedUrl,
 } from '../services/configDiscoveryService';
 
 interface ConfigContextValue {
@@ -27,6 +27,7 @@ interface ConfigContextValue {
   fallbackMessage: string | null;
   manualUrl: string | null;
   rediscover: () => Promise<void>;
+  recheck: () => Promise<void>;
   setManualUrl: (url: string | null) => Promise<void>;
 }
 
@@ -45,16 +46,24 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({
     setResult(discovered);
   }, []);
 
-  const runDiscovery = useCallback(async (skipNetworkScan = false) => {
-    const discovered = await discoverConfigService(skipNetworkScan);
+  const runDiscovery = useCallback(async () => {
+    const discovered = await discoverConfigService();
     applyResult(discovered);
   }, [applyResult]);
 
+  // Re-check the server URL (no network scan). Clearing the result remounts the whole app,
+  // which logout and delete-account rely on to reset in-memory state.
   const rediscover = useCallback(async () => {
     setResult(null);
     await clearCachedConfig();
-    // User-initiated rediscovery always scans the network
-    await runDiscovery(false);
+    await runDiscovery();
+  }, [runDiscovery]);
+
+  // Settings' Re-check Connection: same, but keeps the app mounted (and on Settings) until
+  // the new result lands.
+  const recheck = useCallback(async () => {
+    await clearCachedConfig();
+    await runDiscovery();
   }, [runDiscovery]);
 
   const setManualUrl = useCallback(async (url: string | null) => {
@@ -62,18 +71,13 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({
     setManualUrlState(url);
     setResult(null);
     await clearCachedConfig();
-    await runDiscovery(false);
+    await runDiscovery();
   }, [runDiscovery]);
 
   useEffect(() => {
     const init = async () => {
-      const manual = await loadManualConfigUrl();
-      setManualUrlState(manual);
-      // On first launch (no manual URL, no cache), skip the network scan
-      // to avoid racing the iOS local network permission dialog.
-      // The user can trigger discovery from the landing screen.
-      // On subsequent launches, cached config or manual URL handles it.
-      await runDiscovery(!manual);
+      setManualUrlState(await loadPinnedUrl());
+      await runDiscovery();
     };
     init();
   }, [runDiscovery]);
@@ -86,16 +90,17 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({
       fallbackMessage: result.fallbackMessage,
       manualUrl,
       rediscover,
+      recheck,
       setManualUrl,
     };
-  }, [result, manualUrl, rediscover, setManualUrl]);
+  }, [result, manualUrl, rediscover, recheck, setManualUrl]);
 
   if (!value) {
     return (
       <View style={styles.loading}>
         <ActivityIndicator size="large" />
         <Text variant="bodyLarge" style={styles.loadingText}>
-          Discovering Jarvis services...
+          Connecting...
         </Text>
       </View>
     );

@@ -23,21 +23,25 @@ import {
 } from '../../api/inboxApi';
 import { useAuth } from '../../auth/AuthContext';
 import { FirstRunCard } from '../../components/FirstRunCard';
+import InboxAttachmentThumb from '../../components/inbox/InboxAttachmentThumb';
 import { helpCopy } from '../../copy/help';
 import { useFirstRun } from '../../hooks/useFirstRun';
 import { InboxStackParamList } from '../../navigation/types';
+import { parseInboxAttachments } from '../../services/inboxMediaService';
+import { categoryChipColors, CHIP_FILLS } from '../../theme/categoryChip';
+import { parseServerDate } from '../../utils/serverTime';
 
 type Nav = NativeStackNavigationProp<InboxStackParamList>;
 
 const CATEGORY_COLORS: Record<string, string> = {
-  deep_research: '#6366f1',
-  alert: '#ef4444',
-  reminder: '#f59e0b',
-  confirmation: '#3b82f6',
-  adapter_proposal: '#10b981',
-  adapter_deployed: '#0ea5e9',
-  adapter_reverted: '#64748b',
-  interactive_list: '#8b5cf6',
+  deep_research: CHIP_FILLS.indigo,
+  alert: CHIP_FILLS.red,
+  reminder: CHIP_FILLS.amber,
+  confirmation: CHIP_FILLS.blue,
+  adapter_proposal: CHIP_FILLS.emerald,
+  adapter_deployed: CHIP_FILLS.sky,
+  adapter_reverted: CHIP_FILLS.slate,
+  interactive_list: CHIP_FILLS.violet,
 };
 
 const routeForCategory = (category: string): keyof InboxStackParamList => {
@@ -198,7 +202,7 @@ const InboxListScreen = () => {
   }, [selectedIds, exitSelectMode]);
 
   const formatDate = (iso: string) => {
-    const date = new Date(iso);
+    const date = parseServerDate(iso) ?? new Date(iso);
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
     const diffMins = Math.abs(Math.round(diffMs / (1000 * 60)));
@@ -223,6 +227,8 @@ const InboxListScreen = () => {
 
   const renderCard = (item: InboxItem) => {
     const isSelected = selectedIds.has(item.id);
+    const categoryColors = categoryChipColors(item.category, CATEGORY_COLORS, theme);
+    const firstAttachment = parseInboxAttachments(item)[0];
     return (
       <Card
         testID={`inbox-item-${item.id}`}
@@ -266,11 +272,8 @@ const InboxListScreen = () => {
               <View style={styles.cardHeader}>
                 <Chip
                   compact
-                  textStyle={styles.chipText}
-                  style={[
-                    styles.chip,
-                    { backgroundColor: CATEGORY_COLORS[item.category] ?? theme.colors.secondaryContainer },
-                  ]}
+                  textStyle={[styles.chipText, { color: categoryColors.color }]}
+                  style={[styles.chip, { backgroundColor: categoryColors.backgroundColor }]}
                 >
                   {item.category.replace(/_/g, ' ')}
                 </Chip>
@@ -296,6 +299,15 @@ const InboxListScreen = () => {
                 {stripThinkTags(item.summary)}
               </Text>
             </View>
+            {firstAttachment && (
+              <View style={styles.thumb}>
+                <InboxAttachmentThumb
+                  attachment={firstAttachment}
+                  size={56}
+                  testID={`inbox-item-thumb-${item.id}`}
+                />
+              </View>
+            )}
           </View>
         </Card.Content>
       </Card>
@@ -462,6 +474,7 @@ const styles = StyleSheet.create({
   emptyList: { flexGrow: 1, justifyContent: 'center', alignItems: 'center' },
   card: {},
   cardRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 4 },
+  thumb: { marginLeft: 8, alignSelf: 'center' },
   unreadCard: { borderLeftWidth: 3, borderLeftColor: '#6366f1' },
   unreadTitle: { fontWeight: '700' },
   cardHeader: {

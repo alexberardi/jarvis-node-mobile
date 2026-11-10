@@ -6,11 +6,13 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { listNodes } from '../api/nodeApi';
+import { getNode, listNodes } from '../api/nodeApi';
 import {
   requestSettingsSnapshot,
   pollSettingsResult,
+  provisionK2ToNode,
 } from '../api/nodeSettingsApi';
+import { generateK2, hasK2, storeK2 } from '../services/k2Service';
 import {
   decryptSettingsSnapshot,
   MissingK2KeyError,
@@ -26,7 +28,12 @@ export type SnapshotState =
   | 'loaded'
   | 'timeout'
   | 'error'
-  | 'no_access';
+  | 'no_access'
+  /** Neither this phone nor the node holds an encryption key (K2); see provisionKey. */
+  | 'needs_k2';
+
+export const NEEDS_K2_MESSAGE =
+  "This device doesn't have an encryption key yet, so it can't share its commands or settings.";
 
 interface UseSettingsSnapshotOptions {
   /** Specific node ID to fetch from. If omitted, uses the first available node. */
@@ -45,6 +52,27 @@ interface UseSettingsSnapshotReturn {
   resolvedNodeId: string | null;
   /** Re-fetch the snapshot. */
   refetch: () => void;
+  /**
+   * Set up an encryption key for the node (state 'needs_k2'), as Node Settings'
+   * "Generate Encryption Key" does, then fetch the snapshot.
+   */
+  provisionKey: () => Promise<void>;
+}
+
+/**
+ * True when neither this phone nor the node has K2. Such a node drops snapshot requests
+ * (it has nothing to seal them with), so asking would only time out. A desktop computer
+ * gets a new node id each time it signs in again and starts in this state. A node that
+ * holds a key from another phone is still asked (it answers; decryption says no_access).
+ */
+async function keyMissingOnBothSides(nodeId: string): Promise<boolean> {
+  if (await hasK2(nodeId)) return false;
+  try {
+    const node = await getNode(nodeId);
+    return node.needs_k2 === true;
+  } catch {
+    return false; // can't tell: ask the node as before
+  }
 }
 
 export function useSettingsSnapshot(
@@ -85,6 +113,14 @@ export function useSettingsSnapshot(
 
       if (!mountedRef.current) return;
       setResolvedNodeId(targetNodeId);
+
+      if (await keyMissingOnBothSides(targetNodeId)) {
+        if (mountedRef.current) {
+          setError(NEEDS_K2_MESSAGE);
+          setState('needs_k2');
+        }
+        return;
+      }
 
       // Request snapshot
       const { request_id } = await requestSettingsSnapshot(targetNodeId, includeValues);
@@ -175,5 +211,25 @@ export function useSettingsSnapshot(
     };
   }, [enabled, fetch, cleanup]);
 
-  return { snapshot, state, error, resolvedNodeId, refetch: fetch };
+  const provisionKey = useCallback(async () => {
+    const target = resolvedNodeId ?? nodeId;
+    if (!target) return;
+    setState('loading');
+    setError(null);
+    try {
+      const pair = await generateK2(target);
+      await provisionK2ToNode(target, pair.k2, pair.kid, pair.createdAt);
+      await storeK2(pair); // only once the node has acknowledged it
+    } catch (err) {
+      console.error('[useSettingsSnapshot] Key setup failed', err);
+      if (mountedRef.current) {
+        setError(err instanceof Error ? err.message : 'Failed to set up the encryption key');
+        setState('error');
+      }
+      return;
+    }
+    if (mountedRef.current) await fetch();
+  }, [resolvedNodeId, nodeId, fetch]);
+
+  return { snapshot, state, error, resolvedNodeId, refetch: fetch, provisionKey };
 }

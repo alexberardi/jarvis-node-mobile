@@ -23,6 +23,8 @@ import {
 } from '../../api/memoriesApi';
 import { useAuth } from '../../auth/AuthContext';
 import type { MemoriesStackParamList } from '../../navigation/types';
+import { parseServerDate } from '../../utils/serverTime';
+import KeyboardSafeView from '../../components/KeyboardSafeView';
 
 type Props = NativeStackScreenProps<MemoriesStackParamList, 'MemoryEdit'>;
 
@@ -144,7 +146,7 @@ const MemoriesEditScreen = ({ navigation, route }: Props) => {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <KeyboardSafeView style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <Appbar.Header mode="small">
         <Appbar.BackAction onPress={() => navigation.goBack()} />
         <Appbar.Content title={isNew ? 'New Memory' : 'Edit Memory'} />
@@ -232,7 +234,7 @@ const MemoriesEditScreen = ({ navigation, route }: Props) => {
               Source: {existing.source}
             </Text>
             <Text variant="bodySmall" style={styles.meta}>
-              Updated: {new Date(existing.updated_at).toLocaleString()}
+              Updated: {(parseServerDate(existing.updated_at) ?? new Date(existing.updated_at)).toLocaleString()}
             </Text>
           </View>
         )}
@@ -258,7 +260,7 @@ const MemoriesEditScreen = ({ navigation, route }: Props) => {
           </Text>
         )}
       </ScrollView>
-    </View>
+    </KeyboardSafeView>
   );
 };
 

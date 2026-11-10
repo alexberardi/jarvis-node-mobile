@@ -1,0 +1,30 @@
+appId: com.jarvis.nodemobile
+name: login-as
+# Logs in as LOGIN_EMAIL with PASSWORD (every seeded role shares it) and waits for Home.
+# Starts on the Landing screen: run it right after `launchApp: {clearState: true}`.
+#
+#   - runFlow:
+#       file: subflows/login-as.yaml
+#       env:
+#         LOGIN_EMAIL: ${EMAIL_MEMBER}
+---
+- extendedWaitUntil:
+    visible:
+      id: "landing-login-button"
+    timeout: 30000
+- tapOn:
+    id: "landing-login-button"
+- tapOn:
+    id: "email-input"
+- inputText: ${LOGIN_EMAIL}
+- tapOn:
+    id: "password-input"
+- inputText: ${PASSWORD}
+# The Login screen is a plain View (no ScrollView), so the button takes the tap with the
+# keyboard up; no keyboard dismissal needed on Android.
+- tapOn:
+    id: "login-button"
+- extendedWaitUntil:
+    visible:
+      id: "settings-button"
+    timeout: 30000

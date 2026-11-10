@@ -1,0 +1,11 @@
+appId: com.jarvis.nodemobile
+name: login
+# Reusable auth subflow: logs in as the seeded superuser (EMAIL / PASSWORD, from the runner;
+# see .maestro/README.md). Starts on the Landing screen, which is where
+# `launchApp: {clearState: true}` leaves the app. To log in as another role, use
+# login-as.yaml with LOGIN_EMAIL.
+---
+- runFlow:
+    file: login-as.yaml
+    env:
+      LOGIN_EMAIL: ${EMAIL}

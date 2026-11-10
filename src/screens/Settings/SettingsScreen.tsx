@@ -22,6 +22,7 @@ import {
   TouchableRipple,
   useTheme,
 } from 'react-native-paper';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '../../auth/AuthContext';
 import authApi from '../../api/authApi';
@@ -34,6 +35,7 @@ import { useThemePreference, ThemePreference } from '../../theme/ThemeProvider';
 import {
   getSmartHomeConfig,
   updateSmartHomeConfig,
+  type NodeOption,
   type SmartHomeConfig,
 } from '../../api/smartHomeApi';
 
@@ -45,16 +47,42 @@ import {
 } from '../../services/pushNotificationService';
 import { clearUserData } from '../../services/clearUserData';
 import { getVoiceProfileStatus } from '../../api/voiceProfileApi';
+import DisplayNameEditor from '../../components/DisplayNameEditor';
+import KeyboardSafeView from '../../components/KeyboardSafeView';
+import { NodeKindIcon } from '../../components/NodeKindIcon';
+import { useNodeKinds } from '../../hooks/useNodeKinds';
+import { isDesktopAgent, nodeDisplayName, NodeKindFields, sortPisFirst } from '../../utils/nodeKind';
 
 const THEME_BUTTONS = [
-  { value: 'light', label: 'Light', icon: 'white-balance-sunny' },
-  { value: 'dark', label: 'Dark', icon: 'moon-waning-crescent' },
-  { value: 'system', label: 'System', icon: 'cellphone' },
+  { value: 'light', label: 'Light', icon: 'white-balance-sunny', testID: 'theme-light' },
+  { value: 'dark', label: 'Dark', icon: 'moon-waning-crescent', testID: 'theme-dark' },
+  { value: 'system', label: 'System', icon: 'cellphone', testID: 'theme-system' },
 ] as const;
+
+/** Gap above the "Settings" title, measured from the top of the screen. */
+const HEADER_TOP_MARGIN = 48;
+
+/**
+ * A primary-node option's kind: the smart-home config's own node_kind (servers
+ * from jarvis-server #176), merged over what the household node list says.
+ * With neither, the node counts as a Pi.
+ */
+const primaryNodeKind = (
+  node: NodeOption,
+  kinds: Record<string, NodeKindFields>,
+): NodeKindFields => ({
+  ...kinds[node.node_id],
+  ...(node.node_kind !== undefined ? { node_kind: node.node_kind } : {}),
+});
 
 const SettingsScreen = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const theme = useTheme();
+  // Android shows this modal full-screen under a transparent (edge-to-edge)
+  // status bar, so keep the scroll area below it — otherwise content scrolls
+  // up over the clock. The iOS page sheet already starts below the status bar.
+  const insets = useSafeAreaInsets();
+  const topInset = Platform.OS === 'android' ? Math.min(insets.top, HEADER_TOP_MARGIN) : 0;
   const {
     state: authState,
     logout,
@@ -64,7 +92,7 @@ const SettingsScreen = () => {
     setBiometricEnabled,
     biometricAvailable,
   } = useAuth();
-  const { config, isUsingCloud, manualUrl, rediscover, setManualUrl } =
+  const { config, isUsingCloud, manualUrl, recheck, setManualUrl } =
     useConfig();
   const queryClient = useQueryClient();
   const { paperTheme, themePreference, setThemePreference } = useThemePreference();
@@ -176,6 +204,10 @@ const SettingsScreen = () => {
   const [hasVoiceProfile, setHasVoiceProfile] = useState<boolean | null>(null);
 
   const householdId = authState.activeHouseholdId;
+  const nodeKinds = useNodeKinds(
+    householdId,
+    smartHomeConfig?.nodes.map((n) => n.node_id) ?? [],
+  );
 
   // Load settings
   useEffect(() => {
@@ -294,8 +326,9 @@ const SettingsScreen = () => {
     setSaving(true);
     try {
       await setManualUrl(null);
-      // See handleSaveUrl — clearing the override is also an env change
-      // (manual → auto-discovered cloud), so wipe caches + log out.
+      // See handleSaveUrl — clearing the URL is also an env change (no
+      // server left to talk to), so wipe caches + log out; the user is
+      // asked for a server URL again on the landing screen.
       await clearUserData({ queryClient });
     } catch (err) {
       console.error('[SettingsScreen] Failed to clear config URL', err);
@@ -308,8 +341,9 @@ const SettingsScreen = () => {
   return (
     <Portal.Host>
     <HelpProvider>
-    <ScrollView style={[styles.container, { backgroundColor: paperTheme.colors.background }]} contentContainerStyle={styles.content}>
-      <View style={styles.header}>
+    <KeyboardSafeView style={[styles.container, { backgroundColor: paperTheme.colors.background, paddingTop: topInset }]}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <View style={[styles.header, { marginTop: HEADER_TOP_MARGIN - topInset }]}>
         <Text variant="headlineMedium" style={styles.title}>
           Settings
         </Text>
@@ -319,15 +353,14 @@ const SettingsScreen = () => {
       </View>
 
       {/* Account */}
-      <Card style={styles.card}>
+      <Card style={styles.card} testID="settings-section-account">
         <Card.Content>
           <Text variant="titleMedium" style={styles.sectionTitle}>
             Account
           </Text>
-          <Text variant="bodyMedium" style={styles.label}>
-            {authState.user?.username || authState.user?.email}
-          </Text>
+          <DisplayNameEditor />
           <Button
+            testID="settings-logout"
             mode="outlined"
             onPress={logout}
             style={styles.logoutButton}
@@ -358,7 +391,7 @@ const SettingsScreen = () => {
       </Card>
 
       {/* Household */}
-      <Card style={styles.card}>
+      <Card style={styles.card} testID="settings-section-household">
         <Card.Content>
           <Text variant="titleMedium" style={styles.sectionTitle}>
             Household
@@ -474,12 +507,12 @@ const SettingsScreen = () => {
 
       {/* Voice */}
       {householdId && (
-        <Card style={styles.card}>
+        <Card style={styles.card} testID="settings-section-voice">
           <Card.Content>
             <Text variant="titleMedium" style={styles.sectionTitle}>
               Voice
             </Text>
-            <TouchableRipple onPress={() => navigation.navigate('VoiceProfile')}>
+            <TouchableRipple testID="settings-voice-profile-row" onPress={() => navigation.navigate('VoiceProfile')}>
               <View style={styles.switchRow}>
                 <View style={{ flex: 1 }}>
                   <Text variant="bodyMedium">Voice Profile</Text>
@@ -495,7 +528,7 @@ const SettingsScreen = () => {
               </View>
             </TouchableRipple>
             <Divider style={{ marginVertical: 4 }} />
-            <TouchableRipple onPress={() => navigation.navigate('RecentCommands')}>
+            <TouchableRipple testID="settings-command-feedback-row" onPress={() => navigation.navigate('RecentCommands')}>
               <View style={styles.switchRow}>
                 <View style={{ flex: 1 }}>
                   <Text variant="bodyMedium">Command Feedback</Text>
@@ -507,7 +540,7 @@ const SettingsScreen = () => {
               </View>
             </TouchableRipple>
             <Divider style={{ marginVertical: 4 }} />
-            <TouchableRipple onPress={() => navigation.navigate('Memories')}>
+            <TouchableRipple testID="settings-memories-row" onPress={() => navigation.navigate('Memories')}>
               <View style={styles.switchRow}>
                 <View style={{ flex: 1 }}>
                   <Text variant="bodyMedium">Memories</Text>
@@ -533,7 +566,7 @@ const SettingsScreen = () => {
                 <Icon source="chevron-right" size={24} />
               </View>
             </TouchableRipple>
-
+            <Divider testID="settings-call-context-divider" style={{ marginVertical: 4 }} />
             <TouchableRipple
               testID="settings-call-context-row"
               onPress={() => navigation.navigate('CallContext')}
@@ -554,7 +587,7 @@ const SettingsScreen = () => {
       )}
 
       {/* Appearance */}
-      <Card style={styles.card}>
+      <Card style={styles.card} testID="settings-section-appearance">
         <Card.Content>
           <Text variant="titleMedium" style={styles.sectionTitle}>
             Appearance
@@ -568,7 +601,7 @@ const SettingsScreen = () => {
       </Card>
 
       {/* Chat */}
-      <Card style={styles.card}>
+      <Card style={styles.card} testID="settings-section-chat">
         <Card.Content>
           <Text variant="titleMedium" style={styles.sectionTitle}>
             Chat
@@ -591,7 +624,7 @@ const SettingsScreen = () => {
 
       {/* Security — biometric login (only on capable devices) */}
       {biometricAvailable && (
-        <Card style={styles.card}>
+        <Card style={styles.card} testID="settings-section-security">
           <Card.Content>
             <Text variant="titleMedium" style={styles.sectionTitle}>
               Security
@@ -615,7 +648,7 @@ const SettingsScreen = () => {
       )}
 
       {/* Privacy */}
-      <Card style={styles.card}>
+      <Card style={styles.card} testID="settings-section-privacy">
         <Card.Content>
           <Text variant="titleMedium" style={styles.sectionTitle}>
             Privacy
@@ -636,7 +669,7 @@ const SettingsScreen = () => {
       </Card>
 
       {/* Connection Status */}
-      <Card style={styles.card}>
+      <Card style={styles.card} testID="settings-section-connection">
         <Card.Content>
           <Text variant="titleMedium" style={styles.sectionTitle}>
             Connection
@@ -669,20 +702,21 @@ const SettingsScreen = () => {
           )}
           <View style={styles.rediscoverRow}>
             <Button
+              testID="settings-recheck-connection"
               mode="outlined"
-              onPress={rediscover}
+              onPress={recheck}
               icon="refresh"
             >
-              Re-discover Services
+              Re-check Connection
             </Button>
-            <HelpIcon text={helpCopy.settings.rediscoverServices} size={16} />
+            <HelpIcon text={helpCopy.settings.recheckConnection} size={16} />
           </View>
         </Card.Content>
       </Card>
 
       {/* Smart Home */}
       {householdId && (
-        <Card style={styles.card}>
+        <Card style={styles.card} testID="settings-section-smart-home">
           <Card.Content>
             <Text variant="titleMedium" style={styles.sectionTitle}>
               Smart Home
@@ -702,13 +736,19 @@ const SettingsScreen = () => {
                     <Text variant="bodySmall" style={[styles.hint, { marginBottom: 8 }]}>
                       The node that handles device discovery for your household
                     </Text>
-                    {smartHomeConfig.nodes.map((node, i, arr) => {
+                    {sortPisFirst(smartHomeConfig.nodes, (n) => primaryNodeKind(n, nodeKinds)).map((node, i, arr) => {
                       const isSelected = node.node_id === smartHomeConfig.primary_node_id;
-                      const label = node.room
-                        ? `${node.room} (${node.node_id.slice(0, 8)}…)`
+                      const kind = primaryNodeKind(node, nodeKinds);
+                      const isComputer = isDesktopAgent(kind);
+                      const name = nodeDisplayName(
+                        { ...node, ...kind, name: node.name !== undefined ? node.name : nodeKinds[node.node_id]?.name },
+                        '',
+                      );
+                      const label = name
+                        ? `${name} (${node.node_id.slice(0, 8)}…)`
                         : node.node_id.slice(0, 16) + '…';
                       return (
-                        <View key={node.node_id}>
+                        <View key={node.node_id} testID={`primary-node-row-${node.node_id}`}>
                           <TouchableRipple onPress={() => handlePrimaryNodeChange(node.node_id)}>
                             <View style={styles.radioRow}>
                               <Icon
@@ -716,9 +756,35 @@ const SettingsScreen = () => {
                                 size={22}
                                 color={isSelected ? theme.colors.primary : theme.colors.onSurfaceVariant}
                               />
-                              <Text variant="bodyMedium" style={{ flex: 1, marginLeft: 12, fontWeight: '500' }}>
-                                {label}
-                              </Text>
+                              <NodeKindIcon
+                                node={kind}
+                                size={20}
+                                testID={`primary-node-kind-${node.node_id}`}
+                                style={{ marginLeft: 12 }}
+                              />
+                              <View style={{ flex: 1, marginLeft: 8 }}>
+                                <Text variant="bodyMedium" style={{ fontWeight: '500' }}>
+                                  {label}
+                                </Text>
+                                {!node.online && (
+                                  <Text
+                                    variant="bodySmall"
+                                    style={{ color: theme.colors.error }}
+                                    testID={`primary-node-offline-${node.node_id}`}
+                                  >
+                                    Offline
+                                  </Text>
+                                )}
+                                {isComputer && (
+                                  <Text
+                                    variant="bodySmall"
+                                    style={styles.hint}
+                                    testID={`primary-node-note-${node.node_id}`}
+                                  >
+                                    {helpCopy.settings.primaryNodeComputer}
+                                  </Text>
+                                )}
+                              </View>
                             </View>
                           </TouchableRipple>
                           {i < arr.length - 1 && <Divider style={{ marginVertical: 2 }} />}
@@ -757,7 +823,7 @@ const SettingsScreen = () => {
       )}
 
       {/* Manual Config URL */}
-      <Card style={styles.card}>
+      <Card style={styles.card} testID="settings-section-config-url">
         <Card.Content>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <Text variant="titleMedium" style={styles.sectionTitle}>
@@ -766,8 +832,9 @@ const SettingsScreen = () => {
             <HelpIcon text={helpCopy.settings.configServiceUrl} size={16} />
           </View>
           <Text variant="bodySmall" style={styles.hint}>
-            Override auto-discovery with a specific URL. Leave empty to
-            auto-discover on the local network.
+            The address of your Jarvis server, e.g.
+            http://192.168.1.100:7700. Required — the app doesn't search the
+            network for it.
           </Text>
           <TextInput
             mode="outlined"
@@ -796,7 +863,7 @@ const SettingsScreen = () => {
                 onPress={handleClearUrl}
                 disabled={saving}
               >
-                Clear Override
+                Clear server URL
               </Button>
             )}
           </View>
@@ -809,6 +876,7 @@ const SettingsScreen = () => {
       </Text>
 
     </ScrollView>
+    </KeyboardSafeView>
 
     {/* Delete Account confirmation dialog */}
     <Portal>
@@ -882,14 +950,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 48,
     marginBottom: 16,
   },
   closeButton: { padding: 4 },
   title: { fontWeight: 'bold' },
   card: { marginBottom: 16 },
   sectionTitle: { fontWeight: '600', marginBottom: 8 },
-  label: { opacity: 0.7, marginBottom: 8 },
   logoutButton: { alignSelf: 'flex-start', marginTop: 4 },
   dangerZone: {
     marginTop: 20,

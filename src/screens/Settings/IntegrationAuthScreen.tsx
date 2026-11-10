@@ -20,6 +20,7 @@ import { ActivityIndicator, Button, Text, TextInput } from 'react-native-paper';
 import { createAuthSession, exchangeCode, getAuthSessionStatus } from '../../api/authSessionApi';
 import { discoverService } from '../../services/networkDiscoveryService';
 import type { AuthenticationConfig } from '../../types/SmartHome';
+import KeyboardSafeView from '../../components/KeyboardSafeView';
 
 /** Route params — works from any stack that declares these params. */
 type IntegrationAuthParams = {
@@ -213,7 +214,7 @@ const IntegrationAuthScreen = () => {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 
   return (
-    <View style={styles.container}>
+    <KeyboardSafeView style={styles.container}>
       <Text variant="headlineSmall" style={styles.title}>
         Connect {providerLabel}
       </Text>
@@ -339,7 +340,7 @@ const IntegrationAuthScreen = () => {
           Back
         </Button>
       )}
-    </View>
+    </KeyboardSafeView>
   );
 };
 

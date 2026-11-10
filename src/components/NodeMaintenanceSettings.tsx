@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import {
-  ActivityIndicator,
   Button,
   Card,
   Divider,
@@ -15,6 +14,7 @@ import {
 
 import { updateNodeConfig } from '../api/nodeApi';
 import { useSettingsSnapshot } from '../hooks/useSettingsSnapshot';
+import { SnapshotStatus } from './SnapshotStatus';
 
 interface Props {
   nodeId: string;
@@ -71,7 +71,8 @@ export const NodeMaintenanceSettings = ({ nodeId }: Props) => {
   const [pickerOpen, setPickerOpen] = useState(false);
   const seededRef = useRef(false);
 
-  const { snapshot, state: snapshotState } = useSettingsSnapshot({ nodeId });
+  const { snapshot, state: snapshotState, error: snapshotError, refetch, provisionKey } =
+    useSettingsSnapshot({ nodeId });
 
   // Seed once when the snapshot lands.
   useEffect(() => {
@@ -156,13 +157,14 @@ export const NodeMaintenanceSettings = ({ nodeId }: Props) => {
             </View>
           )}
         />
-        <Card.Content style={styles.loadingBody}>
-          <ActivityIndicator animating size="small" />
-          <Text variant="bodySmall" style={{ marginLeft: 12, opacity: 0.7 }}>
-            {snapshotState === 'error'
-              ? 'Could not reach the node — try again in a moment.'
-              : 'Loading current settings from the node…'}
-          </Text>
+        <Card.Content>
+          <SnapshotStatus
+            state={snapshotState === 'loaded' && snapshot?.node_config ? 'loading' : snapshotState}
+            error={snapshotError}
+            onRetry={refetch}
+            onProvisionKey={provisionKey}
+            emptyMessage="This node doesn't report maintenance settings."
+          />
         </Card.Content>
       </Card>
     );
@@ -323,15 +325,6 @@ export const NodeMaintenanceSettings = ({ nodeId }: Props) => {
 const styles = StyleSheet.create({
   card: {
     marginBottom: 16,
-  },
-  // Matches NodeVoiceSettings.loadingBody — horizontal layout with the
-  // spinner on the left, status text alongside, so the loading card has
-  // the same vertical footprint as the real one and the tab doesn't
-  // jump when the snapshot lands.
-  loadingBody: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
   },
   iconCircle: {
     width: 36,

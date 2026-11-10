@@ -32,6 +32,7 @@ import {
   type SignalAutomation,
 } from '../../api/signalAutomationsApi';
 import type { RootStackParamList } from '../../navigation/types';
+import KeyboardSafeView from '../../components/KeyboardSafeView';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SignalAutomations'>;
 
@@ -266,13 +267,13 @@ const SignalAutomationsScreen = ({ navigation, route }: Props) => {
   };
 
   return (
-    <View style={[styles.screen, { backgroundColor: theme.colors.background }]}>
+    <KeyboardSafeView style={[styles.screen, { backgroundColor: theme.colors.background }]}>
       <Appbar.Header>
         <Appbar.BackAction onPress={() => navigation.goBack()} />
         <Appbar.Content title="Automations" />
       </Appbar.Header>
       {renderBody()}
-    </View>
+    </KeyboardSafeView>
   );
 };
 

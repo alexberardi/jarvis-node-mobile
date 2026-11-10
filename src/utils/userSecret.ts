@@ -1,8 +1,9 @@
 import type { HouseholdMember } from '../api/householdApi';
+import { displayNameOf } from './displayName';
 
-/** Display name for a household member — username preferred, email fallback. */
+/** Display name for a household member — display name, then username, then email. */
 export function memberDisplayName(member: HouseholdMember): string {
-  return member.username || member.email;
+  return displayNameOf(member);
 }
 
 /**

@@ -27,6 +27,8 @@ import {
 } from '../../api/smartHomeApi';
 import { useAuth } from '../../auth/AuthContext';
 import type { Room } from '../../types/SmartHome';
+import { pageTitleStyle } from '../../theme';
+import KeyboardSafeView from '../../components/KeyboardSafeView';
 
 /** Compute depth of each room in the hierarchy. */
 function computeDepths(rooms: Room[]): Map<string, number> {
@@ -222,10 +224,10 @@ const RoomManagementScreen = () => {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <KeyboardSafeView style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <Appbar.Header>
         <Appbar.BackAction onPress={() => navigation.goBack()} />
-        <Appbar.Content title="Rooms" />
+        <Appbar.Content title="Rooms" titleStyle={pageTitleStyle(theme)} />
       </Appbar.Header>
 
       {/* Add room */}
@@ -351,6 +353,7 @@ const RoomManagementScreen = () => {
               value={editName}
               onChangeText={setEditName}
               label="Room name"
+              testID="room-edit-name-input"
               autoFocus
               style={{ marginBottom: 12 }}
             />
@@ -407,7 +410,7 @@ const RoomManagementScreen = () => {
       >
         {snackbar}
       </Snackbar>
-    </View>
+    </KeyboardSafeView>
   );
 };
 

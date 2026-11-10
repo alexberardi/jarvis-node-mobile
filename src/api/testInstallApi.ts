@@ -54,3 +54,27 @@ export const pollTestInstallStatus = async (
     details: res.data.details,
   };
 };
+
+/** A run of a test-installed command during the node's test window (jarvisd records them). */
+export interface TestRun {
+  command: string;
+  arguments: unknown;
+  output: unknown;
+  at: string;
+}
+
+/** The runs so far, from the same poll route. */
+export const fetchTestRuns = async (nodeId: string, requestId: string): Promise<TestRun[]> => {
+  const res = await apiClient.get<{ runs?: TestRun[] }>(
+    `${getBaseUrl()}/api/v0/nodes/${nodeId}/test-install/${requestId}`,
+  );
+  return res.data.runs ?? [];
+};
+
+/** Send to Forge: jarvisd sends the install result, the runs and the note to the draft. */
+export const sendToForge = async (nodeId: string, requestId: string, note: string): Promise<void> => {
+  await apiClient.post(
+    `${getBaseUrl()}/api/v0/nodes/${nodeId}/test-install/${requestId}/feedback`,
+    note.trim() ? { note: note.trim() } : {},
+  );
+};

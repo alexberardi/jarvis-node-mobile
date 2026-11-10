@@ -3,6 +3,8 @@ import authApi from './authApi';
 export interface HouseholdMember {
   user_id: number;
   username: string;
+  /** Optional friendly name (jarvisd). Missing or null on older servers. */
+  display_name?: string | null;
   email: string;
   role: string;
 }

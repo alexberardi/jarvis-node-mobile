@@ -39,6 +39,8 @@ import {
   startNodeVerification,
 } from '../../api/voiceProfileApi';
 import { listNodes, type NodeInfo } from '../../api/nodeApi';
+import { NodeKindIcon } from '../../components/NodeKindIcon';
+import { isDesktopAgent, nodeDisplayName } from '../../utils/nodeKind';
 
 // --- Types ---
 
@@ -108,6 +110,9 @@ const VoiceProfileScreen = () => {
   const [confidence, setConfidence] = useState(0);
   const [matched, setMatched] = useState(false);
   const [sampleCount, setSampleCount] = useState(0);
+  // Household's voice.recognition_enabled (off by default; enrolling does not
+  // turn it on). null = unknown (older server that doesn't report it).
+  const [recognitionEnabled, setRecognitionEnabled] = useState<boolean | null>(null);
 
   // Multi-take wizard state. Null when not in a wizard.
   // Mirrored in a ref so async polling closures can read the latest value
@@ -160,6 +165,9 @@ const VoiceProfileScreen = () => {
     try {
       const status = await getVoiceProfileStatus(householdId);
       setSampleCount(status.sample_count);
+      setRecognitionEnabled(
+        typeof status.recognition_enabled === 'boolean' ? status.recognition_enabled : null,
+      );
       setPhase(status.has_profile ? 'enrolled' : 'idle');
     } catch (e) {
       console.error('[VoiceProfile] status check failed:', e);
@@ -398,6 +406,30 @@ const VoiceProfileScreen = () => {
 
   // --- Render helpers ---
 
+  // Shown above every phase once the status says recognition is off, so it's
+  // visible before AND after enrolling. Enrollment stays fully usable.
+  const renderRecognitionOffNotice = () => (
+    <Card
+      testID="voice-recognition-off-notice"
+      style={[styles.card, { backgroundColor: paperTheme.colors.secondaryContainer }]}
+    >
+      <Card.Content>
+        <View style={styles.noticeRow}>
+          <Icon source="information-outline" size={24} color={paperTheme.colors.onSecondaryContainer} />
+          <Text
+            variant="titleSmall"
+            style={[styles.noticeTitle, { color: paperTheme.colors.onSecondaryContainer }]}
+          >
+            {helpCopy.voiceProfile.recognitionOffTitle}
+          </Text>
+        </View>
+        <Text variant="bodySmall" style={{ color: paperTheme.colors.onSecondaryContainer }}>
+          {helpCopy.voiceProfile.recognitionOff}
+        </Text>
+      </Card.Content>
+    </Card>
+  );
+
   const renderLoading = () => (
     <View style={styles.center}>
       <ActivityIndicator size="large" />
@@ -408,7 +440,7 @@ const VoiceProfileScreen = () => {
   );
 
   const renderIdle = () => (
-    <Card style={styles.card}>
+    <Card style={styles.card} testID="voice-idle">
       <Card.Content>
         <Icon source="account-voice" size={48} color={paperTheme.colors.primary} />
         <Text variant="titleMedium" style={styles.title}>
@@ -421,6 +453,7 @@ const VoiceProfileScreen = () => {
           tone shifts in your everyday speech.
         </Text>
         <Button
+          testID="voice-start-enrollment"
           mode="contained"
           icon="microphone"
           onPress={() => openTargetPicker()}
@@ -458,7 +491,7 @@ const VoiceProfileScreen = () => {
       }
     };
     return (
-      <Card style={styles.card}>
+      <Card style={styles.card} testID="voice-select-target">
         <Card.Content>
           <Icon source="microphone-settings" size={48} color={paperTheme.colors.primary} />
           <Text variant="titleMedium" style={styles.title}>
@@ -476,22 +509,42 @@ const VoiceProfileScreen = () => {
             </Text>
           ) : (
             <View>
-              {nodes.map((node) => (
-                <List.Item
-                  key={node.node_id}
-                  title={node.room || 'Unnamed node'}
-                  description={node.user || node.node_id.substring(0, 8)}
-                  left={(props) => <List.Icon {...props} icon="speaker" />}
-                  onPress={() => onPickNode(node)}
-                  style={styles.nodeRow}
-                />
-              ))}
+              {nodes.map((node) => {
+                // A computer needs no enrollment (Jarvis uses the account
+                // signed in to the agent), and the agent has no enroll_voice /
+                // verify_voice handler, so a pick would wait out the 60 s poll.
+                const desktop = isDesktopAgent(node);
+                return (
+                  <List.Item
+                    key={node.node_id}
+                    title={nodeDisplayName(node, 'Unnamed node')}
+                    description={
+                      desktop
+                        ? 'Not needed: Jarvis uses the account signed in to the agent'
+                        : node.user || node.node_id.substring(0, 8)
+                    }
+                    left={(props) => (
+                      <NodeKindIcon
+                        node={node}
+                        size={24}
+                        color={props.color}
+                        testID={`voice-target-kind-${node.node_id}`}
+                        style={[props.style, { justifyContent: 'center' }]}
+                      />
+                    )}
+                    onPress={desktop ? undefined : () => onPickNode(node)}
+                    disabled={desktop}
+                    style={[styles.nodeRow, desktop && { opacity: 0.5 }]}
+                  />
+                );
+              })}
             </View>
           )}
 
           <Divider style={{ marginVertical: 12 }} />
 
           <Button
+            testID="voice-select-target-cancel"
             mode="text"
             onPress={() =>
               setPhase(sampleCount > 0 ? 'enrolled' : 'idle')
@@ -519,7 +572,7 @@ const VoiceProfileScreen = () => {
         <Card.Content style={styles.center}>
           <Icon source="microphone" size={64} color={paperTheme.colors.primary} />
           <Text variant="titleMedium" style={styles.title}>
-            {isVerify ? 'Testing' : 'Recording'} on {activeNode?.room || 'node'}
+            {isVerify ? 'Testing' : 'Recording'} on {activeNode ? nodeDisplayName(activeNode, 'node') : 'node'}
             {titleSuffix}
           </Text>
           <ActivityIndicator size="large" style={{ marginVertical: 12 }} />
@@ -551,7 +604,7 @@ const VoiceProfileScreen = () => {
           Enrollment Complete
         </Text>
         <Text variant="bodyMedium" style={styles.body}>
-          {sampleCount} samples enrolled on {activeNode?.room || 'the node'}.
+          {sampleCount} samples enrolled on {activeNode ? nodeDisplayName(activeNode, 'the node') : 'the node'}.
           Now let's verify it works — speak to the same node.
         </Text>
         <Button
@@ -562,7 +615,7 @@ const VoiceProfileScreen = () => {
           }
           style={styles.button}
         >
-          Test My Voice{activeNode ? ` on ${activeNode.room || 'node'}` : ''}
+          Test My Voice{activeNode ? ` on ${nodeDisplayName(activeNode, 'node')}` : ''}
         </Button>
         <Button
           mode="text"
@@ -727,6 +780,7 @@ const VoiceProfileScreen = () => {
             {error}
           </Text>
         )}
+        {recognitionEnabled === false && phase !== 'loading' && renderRecognitionOffNotice()}
         {renderPhase()}
       </View>
     </View>
@@ -781,6 +835,16 @@ const styles = StyleSheet.create({
   error: {
     textAlign: 'center',
     marginBottom: 12,
+  },
+  noticeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+  },
+  noticeTitle: {
+    flex: 1,
+    fontWeight: '600',
   },
 });
 

@@ -1,0 +1,137 @@
+appId: com.jarvis.nodemobile
+name: Signal automations, write and clear a rule
+# Automations (src/screens/Settings/SignalAutomationsScreen.tsx), opened from Household
+# Settings as the admin: the catalog lists "I leave home" (presence.left); a rule is
+# written, set to run automatically, enabled and saved; it is there when the screen is
+# reopened; then it is cleared again (an empty instruction saves as "Clear").
+# State: sets the household's presence.left rule and clears it. If the flow dies in
+# between, the rule stays (it fires only on a real presence.left signal).
+tags:
+  - settings
+  - household
+  - e2e
+env:
+  EMAIL: "test@jarvisautomation.io"
+  PASSWORD: "DevPass123!"
+  RULE: "E2E lock the front door when I leave"
+---
+- launchApp:
+    clearState: true
+- runFlow: subflows/login.yaml
+- runFlow: subflows/open-household.yaml
+# The Automations card sits below every other admin card (persona, web search, pantry,
+# watches & errands, memory, calls, K2, presence), and PR #121 made the screen longer: one
+# scrollUntilVisible from the top gives up before reaching it. Stage the scroll through the
+# same anchors household-edit.yaml uses on this screen, and center the button for the tap.
+- scrollUntilVisible:
+    element:
+      id: "household-persona-input"
+    direction: DOWN
+- scrollUntilVisible:
+    element:
+      id: "household-web-search-toggle"
+    direction: DOWN
+- scrollUntilVisible:
+    element:
+      id: "household-memory-toggle"
+    direction: DOWN
+- scrollUntilVisible:
+    element:
+      id: "household-location-input"
+    direction: DOWN
+- scrollUntilVisible:
+    element:
+      id: "open-signal-automations"
+    direction: DOWN
+    centerElement: true
+- tapOn:
+    id: "open-signal-automations"
+- extendedWaitUntil:
+    visible:
+      id: "automation-presence.left"
+    timeout: 15000
+- assertVisible:
+    text: "I leave home"
+- assertVisible:
+    id: "automation-presence.seen"
+
+# Write, enable, save
+- runFlow:
+    file: subflows/clear-field.yaml
+    env:
+      FIELD_ID: "instruction-presence.left"
+- inputText: ${RULE}
+- hideKeyboard
+- tapOn:
+    id: "delivery-automatic-presence.left"
+- assertVisible:
+    text: "Runs the moment it fires."
+- scrollUntilVisible:
+    element:
+      id: "save-presence.left"
+    direction: DOWN
+- tapOn:
+    id: "enabled-presence.left"
+- tapOn:
+    id: "save-presence.left"
+- extendedWaitUntil:
+    visible:
+      id: "save-presence.left"
+      enabled: false
+    timeout: 10000
+
+# Reopen: it was saved
+- back
+# Back keeps HouseholdEdit mounted, so the scroll position usually survives — but don't
+# trust where it landed: scroll the button back into view before tapping.
+- scrollUntilVisible:
+    element:
+      id: "open-signal-automations"
+    direction: DOWN
+    centerElement: true
+- tapOn:
+    id: "open-signal-automations"
+- extendedWaitUntil:
+    visible:
+      text: ${RULE}
+    timeout: 15000
+- assertVisible:
+    text: "Runs the moment it fires."
+
+# Clear it
+- runFlow:
+    file: subflows/clear-field.yaml
+    env:
+      FIELD_ID: "instruction-presence.left"
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: "save-presence.left"
+    direction: DOWN
+# One selector: on Android the button's label is likely folded into the button's own node, so
+# there is no child with the text "Clear".
+- assertVisible:
+    id: "save-presence.left"
+    text: "Clear"
+- tapOn:
+    id: "save-presence.left"
+- extendedWaitUntil:
+    visible:
+      id: "save-presence.left"
+      enabled: false
+    timeout: 10000
+- back
+# Same as the first reopen: scroll to the button instead of tapping where it last was.
+- scrollUntilVisible:
+    element:
+      id: "open-signal-automations"
+    direction: DOWN
+    centerElement: true
+- tapOn:
+    id: "open-signal-automations"
+- extendedWaitUntil:
+    visible:
+      id: "automation-presence.left"
+    timeout: 15000
+- assertNotVisible:
+    text: ${RULE}

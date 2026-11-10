@@ -14,6 +14,18 @@
  * if the refresh itself fails — forces a logout so the user lands on the
  * login screen instead of an empty screen.
  *
+ * It is also the ONE place that decides a session is over. Two signals end it:
+ *  - a 401 that survives the refresh attempt (refresh token expired/revoked,
+ *    user deleted) → reason `session_expired`;
+ *  - a 403 `{"code": "password_change_required"}` (an admin issued a
+ *    temp-password reset; jarvisd cuts off every route but GET /auth/me and
+ *    POST /auth/change-password, even for tokens issued before the reset)
+ *    → reason `password_reset`. Ignored while the app is already showing the
+ *    forced-change screen (`isPasswordChangePending`), where it's expected.
+ * `forceLogout` fires at most once per access token, and never once the token
+ * is gone, so a burst of failing requests produces one logout and one notice,
+ * and nothing after the logout can loop back into it.
+ *
  * Token getter/setter are wired up by AuthContext at mount time via
  * `configureApiClient()`.
  */
@@ -27,12 +39,20 @@ import { readDurableRefreshToken } from '../services/tokenStorage';
 type TokenGetter = () => string | null;
 type RefreshTokenGetter = () => string | null;
 type TokenUpdater = (access: string, refresh: string) => void | Promise<void>;
-type LogoutFn = () => void;
+/** Why the client ended the session — drives the notice on the login screen. */
+export type ForceLogoutReason = 'session_expired' | 'password_reset';
+type LogoutFn = (reason: ForceLogoutReason) => void;
 
 let getAccessToken: TokenGetter = () => null;
 let getRefreshToken: RefreshTokenGetter = () => null;
 let updateTokens: TokenUpdater = () => {};
 let onForceLogout: LogoutFn = () => {};
+let isPasswordChangePending: () => boolean = () => false;
+
+// The access token a forced logout was last fired for. Requests in flight when
+// the session dies all carry (and see) that same token until AuthContext's
+// state update lands, so this collapses a burst into one logout.
+let loggedOutToken: string | null = null;
 
 /**
  * Called once by AuthProvider to wire up token access.
@@ -42,11 +62,34 @@ export const configureApiClient = (opts: {
   getRefreshToken: RefreshTokenGetter;
   updateTokens: TokenUpdater;
   onForceLogout: LogoutFn;
+  /** True while the forced password-change screen is up (temp-password
+   *  session): a `password_change_required` 403 is expected then. */
+  isPasswordChangePending?: () => boolean;
 }): void => {
   getAccessToken = opts.getAccessToken;
   getRefreshToken = opts.getRefreshToken;
   updateTokens = opts.updateTokens;
   onForceLogout = opts.onForceLogout;
+  isPasswordChangePending = opts.isPasswordChangePending ?? (() => false);
+  loggedOutToken = null;
+};
+
+/**
+ * End the session once. No-op when there is no session left (already logged
+ * out — e.g. a straggler request, or the best-effort /auth/logout revoke) or
+ * when this session was already ended.
+ */
+const forceLogout = (reason: ForceLogoutReason): void => {
+  const token = getAccessToken();
+  if (!token || token === loggedOutToken) return;
+  loggedOutToken = token;
+  onForceLogout(reason);
+};
+
+/** jarvisd's "temp password must be changed first" answer (403, not 401). */
+export const isPasswordChangeRequiredError = (error: unknown): boolean => {
+  const response = (error as AxiosError<{ code?: string }> | undefined)?.response;
+  return response?.status === 403 && response.data?.code === 'password_change_required';
 };
 
 // ── Axios instance ─────────────────────────────────────────────────────
@@ -74,7 +117,7 @@ const doRefresh = async (): Promise<string | null> => {
   if (!refreshToken) {
     // No session left to refresh — drop to the login screen rather than
     // lingering authenticated-but-broken behind empty/stale screens.
-    onForceLogout();
+    forceLogout('session_expired');
     return null;
   }
 
@@ -117,11 +160,11 @@ const doRefresh = async (): Promise<string | null> => {
           return retryAccess;
         } catch (retryErr) {
           const retryStatus = (retryErr as AxiosError)?.response?.status;
-          if (retryStatus === 401 || retryStatus === 403) onForceLogout();
+          if (retryStatus === 401 || retryStatus === 403) forceLogout('session_expired');
           return null;
         }
       }
-      onForceLogout();
+      forceLogout('session_expired');
     }
     return null;
   }
@@ -144,14 +187,16 @@ export const refreshAuthToken = (): Promise<string | null> => {
 };
 
 // Auth-service endpoints where a 401 is NOT a stale-session signal: the
-// refresh call itself (retrying it would recurse) and the credential
-// endpoints where a 401 means bad credentials, not an expired session.
+// refresh call itself (retrying it would recurse), the credential
+// endpoints where a 401 means bad credentials, not an expired session, and
+// the best-effort logout revoke (the session is already being torn down).
 // Everything else on the auth service (/households, /invites,
 // /auth/switch-household) gets the refresh-and-retry treatment.
 const SKIP_REFRESH_PATHS = new Set<string>([
   '/auth/login',
   '/auth/register',
   '/auth/refresh',
+  '/auth/logout',
   '/auth/me',
   '/auth/change-password',
 ]);
@@ -174,10 +219,20 @@ const attachAuthRefresh = (instance: AxiosInstance): void => {
         | (InternalAxiosRequestConfig & { _retried?: boolean })
         | undefined;
 
+      // Temp-password reset: sign out (once) so the user signs in with the
+      // temp password and lands in the forced-change flow. Not while that
+      // flow is already showing — there the 403 is the expected answer.
+      if (isPasswordChangeRequiredError(error)) {
+        if (!isPasswordChangePending()) forceLogout('password_reset');
+        return Promise.reject(error);
+      }
+
       // Only intercept 401s we can act on, only retry once, and never try
-      // to refresh against the credential/refresh endpoints themselves.
+      // to refresh against the credential/refresh endpoints themselves. With
+      // no access token there's no session to refresh (we're logged out).
       if (
         !original ||
+        !getAccessToken() ||
         error.response?.status !== 401 ||
         original._retried ||
         SKIP_REFRESH_PATHS.has(original.url ?? '')

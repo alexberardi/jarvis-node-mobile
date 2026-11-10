@@ -20,6 +20,7 @@ import type { InstalledPackage } from '../../api/chatApi';
 import { useAuth } from '../../auth/AuthContext';
 import { HelpIcon } from '../../components/HelpIcon';
 import { getDownloadInfo, getPackageDetail } from '../../api/pantryApi';
+import { isPantryDisabledError } from '../../api/householdSettingsApi';
 import {
   pollRevertStatus,
   requestCCInstall,
@@ -28,9 +29,11 @@ import {
 } from '../../api/packageInstallApi';
 import { getServiceConfig } from '../../config/serviceConfig';
 import { helpCopy } from '../../copy/help';
+import { usePantryGate } from '../../components/PantryGate';
 import { StoreStackParamList } from '../../navigation/types';
 import type { PackageDetail } from '../../types/Package';
 import { anyHealthFailed, getRevertTarget, isTerminalInstallStatus } from '../../utils/packageStatus';
+import { computerCanRun, isDesktopAgent, nodeDisplayName } from '../../utils/nodeKind';
 import { compareSemver, isUpdateAvailable } from '../../utils/semver';
 
 type Nav = NativeStackNavigationProp<StoreStackParamList>;
@@ -40,6 +43,11 @@ interface NodeInfo {
   node_id: string;
   room: string | null;
   household_id: string | null;
+  // Passed through to the node picker for its robot / Raspberry Pi icon and
+  // its label (a computer is named by its registered name: nodeDisplayName).
+  node_kind?: string | null;
+  install_mode?: string | null;
+  name?: string | null;
 }
 
 const DANGER_LABELS: Record<number, string> = {
@@ -60,7 +68,7 @@ const DANGER_COLORS: Record<number, string> = {
 
 const COMPONENT_ICONS: Record<string, string> = {
   command: 'console-line',
-  agent: 'robot',
+  agent: 'timer-cog-outline',
   device_protocol: 'access-point',
   device_manager: 'devices',
   prompt_provider: 'brain',
@@ -88,6 +96,7 @@ const StoreDetailScreen = () => {
   // Bumped after a revert completes so the version-discovery effect re-runs.
   const [refreshTick, setRefreshTick] = useState(0);
 
+  const { markDisabled } = usePantryGate();
   const activeHousehold = authState.households.find(
     (h) => h.id === authState.activeHouseholdId,
   );
@@ -289,6 +298,26 @@ const StoreDetailScreen = () => {
         return;
       }
 
+      // Get household nodes (we already fetched versions, but refresh node
+      // list in case any joined/left since screen mount). A computer is left
+      // out for a package it can't run (Pi-only targets or system setup); the
+      // server refuses that install too.
+      const allNodes = await fetchHouseholdNodes();
+      const runsOnComputers = computerCanRun(downloadInfo.manifest);
+      const nodes = allNodes.filter((n) => runsOnComputers || !isDesktopAgent(n));
+
+      if (allNodes.length === 0) {
+        Alert.alert('No Nodes', 'No registered nodes found to install this package on.');
+        return;
+      }
+      if (nodes.length === 0) {
+        Alert.alert(
+          'Not for computers',
+          `${detail.display_name || commandName} is made for Raspberry Pi nodes and can't run on a computer.`,
+        );
+        return;
+      }
+
       const aptPackages: string[] =
         (downloadInfo.manifest as { apt_packages?: string[] })?.apt_packages ?? [];
       if (aptPackages.length > 0) {
@@ -307,15 +336,6 @@ const StoreDetailScreen = () => {
           setInstalling(false);
           return;
         }
-      }
-
-      // Get household nodes (we already fetched versions, but refresh node
-      // list in case any joined/left since screen mount).
-      const nodes = await fetchHouseholdNodes();
-
-      if (nodes.length === 0) {
-        Alert.alert('No Nodes', 'No registered nodes found to install this package on.');
-        return;
       }
 
       // Classify nodes by install state using the version map.
@@ -347,7 +367,7 @@ const StoreDetailScreen = () => {
             {
               requestId: result.id,
               nodeId: node.node_id,
-              nodeName: node.room || node.node_id.slice(0, 8),
+              nodeName: nodeDisplayName(node),
             },
           ]),
           packageName: detail.display_name || detail.command_name,
@@ -374,6 +394,10 @@ const StoreDetailScreen = () => {
         });
       }
     } catch (e: unknown) {
+      if (isPantryDisabledError(e)) {
+        markDisabled();
+        return;
+      }
       Alert.alert('Install Error', e instanceof Error ? e.message : 'Failed to start install');
     } finally {
       setInstalling(false);

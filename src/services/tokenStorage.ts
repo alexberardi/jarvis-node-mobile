@@ -40,6 +40,7 @@
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
 
 import {
   ACCESS_TOKEN_KEY as LEGACY_ACCESS_KEY,
@@ -75,8 +76,14 @@ const BG_PLAIN_OPTS: SecureStore.SecureStoreOptions = {
   keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY,
 };
 
-/** Whether background presence is on — drives the at-rest keychain policy. */
+/** Whether background presence is on — drives the at-rest keychain policy.
+ *  Read straight from AsyncStorage rather than via presenceService's
+ *  `isBackgroundPresenceEnabled` to avoid an import cycle (presenceService
+ *  imports this module), so the platform gate is repeated here: Android ships
+ *  without background presence (see BACKGROUND_PRESENCE_SUPPORTED), and must
+ *  never relax the policy off a flag an older build left set. */
 async function backgroundPresenceEnabled(): Promise<boolean> {
+  if (Platform.OS === 'android') return false;
   try {
     return (await AsyncStorage.getItem(BG_PRESENCE_ENABLED_KEY)) === 'true';
   } catch {

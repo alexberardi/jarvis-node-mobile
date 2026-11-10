@@ -1,5 +1,5 @@
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Linking, RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import {
@@ -23,15 +23,23 @@ import { useAuth } from '../../auth/AuthContext';
 import ActionButtons from '../../components/ActionButtons';
 import EditableDateTimeField from '../../components/EditableDateTimeField';
 import InboxAudioPlayer from '../../components/InboxAudioPlayer';
+import InboxAttachments from '../../components/inbox/InboxAttachments';
 import InteractiveElementsSection from '../../components/InteractiveElementsSection';
+import AutonomyRanCard from '../../components/inbox/AutonomyRanCard';
+import WatchAlertCard from '../../components/inbox/WatchAlertCard';
 import { InboxStackParamList } from '../../navigation/types';
 import { JarvisButton, normalizeButton } from '../../types/SmartHome';
+import { parseRanCard, parseWatchAlert } from '../../types/autonomyCards';
 import { parseInboxAudio } from '../../services/inboxAudioService';
+import { parseInboxAttachments } from '../../services/inboxMediaService';
 import {
   parseExpiresAt,
   parseInboxEditors,
   type EditorField,
 } from '../../utils/inboxEditors';
+import { parseServerDate } from '../../utils/serverTime';
+import KeyboardSafeView from '../../components/KeyboardSafeView';
+import { useInboxMarkdownStyles } from '../../hooks/useInboxMarkdownStyles';
 
 type DetailRoute = RouteProp<InboxStackParamList, 'InboxDetail'>;
 
@@ -200,77 +208,7 @@ const InboxDetailScreen = () => {
     }
   }, [authState.accessToken, item]);
 
-  const markdownStyles = useMemo(
-    () => ({
-      body: { color: theme.colors.onSurface, fontSize: 14, lineHeight: 20 },
-      heading1: {
-        color: theme.colors.onSurface,
-        fontSize: 20,
-        fontWeight: 'bold' as const,
-        marginTop: 16,
-        marginBottom: 8,
-      },
-      heading2: {
-        color: theme.colors.onSurface,
-        fontSize: 18,
-        fontWeight: 'bold' as const,
-        marginTop: 14,
-        marginBottom: 6,
-      },
-      heading3: {
-        color: theme.colors.onSurface,
-        fontSize: 16,
-        fontWeight: 'bold' as const,
-        marginTop: 12,
-        marginBottom: 4,
-      },
-      link: { color: theme.colors.primary },
-      bullet_list: { marginLeft: 8 },
-      ordered_list: { marginLeft: 8 },
-      hr: { backgroundColor: theme.colors.outlineVariant },
-      strong: { fontWeight: 'bold' as const },
-      // Without these, the library's light-theme code defaults leak through
-      // in dark mode (light-gray box, unreadable light text).
-      code_inline: {
-        backgroundColor: theme.colors.surfaceVariant,
-        color: theme.colors.onSurfaceVariant,
-        paddingHorizontal: 4,
-        borderRadius: 3,
-        fontSize: 13,
-      },
-      code_block: {
-        backgroundColor: theme.colors.surfaceVariant,
-        color: theme.colors.onSurfaceVariant,
-        borderColor: theme.colors.outlineVariant,
-        padding: 8,
-        borderRadius: 6,
-        fontSize: 13,
-      },
-      fence: {
-        backgroundColor: theme.colors.surfaceVariant,
-        color: theme.colors.onSurfaceVariant,
-        borderColor: theme.colors.outlineVariant,
-        padding: 8,
-        borderRadius: 6,
-        fontSize: 13,
-      },
-      // Like code_block above, the library's default blockquote is a light box
-      // with light text that's unreadable in dark mode (it made the mid-call
-      // escalation card — which quotes the callee's question in a blockquote —
-      // render as a broken-looking gray input). Theme it explicitly.
-      blockquote: {
-        backgroundColor: theme.colors.surfaceVariant,
-        color: theme.colors.onSurfaceVariant,
-        borderColor: theme.colors.primary,
-        borderLeftWidth: 3,
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-        borderRadius: 6,
-        marginVertical: 4,
-      },
-    }),
-    [theme],
-  );
+  const markdownStyles = useInboxMarkdownStyles();
 
   if (loading) {
     return (
@@ -311,9 +249,12 @@ const InboxDetailScreen = () => {
   const isExpired =
     expiredByServer || (expiresAt !== null && expiresAt.getTime() <= Date.now());
   const inboxAudio = parseInboxAudio(item.metadata);
+  const attachments = parseInboxAttachments(item);
+  const ranCard = parseRanCard(item.metadata);
+  const watchAlert = parseWatchAlert(item.metadata);
 
   const formatDate = (iso: string) => {
-    const d = new Date(iso);
+    const d = parseServerDate(iso) ?? new Date(iso);
     return d.toLocaleString();
   };
 
@@ -327,7 +268,7 @@ const InboxDetailScreen = () => {
       : null;
 
   return (
-    <View style={styles.container}>
+    <KeyboardSafeView style={styles.container}>
       <View style={[styles.header, { backgroundColor: theme.colors.background }]}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
@@ -387,7 +328,11 @@ const InboxDetailScreen = () => {
 
       <Divider style={{ marginBottom: 16 }} />
 
-      {linkUrl ? (
+      {ranCard ? (
+        <AutonomyRanCard data={ranCard} />
+      ) : watchAlert ? (
+        <WatchAlertCard data={watchAlert} />
+      ) : linkUrl ? (
         <>
           {item.summary && item.summary !== linkUrl && (
             <Text variant="bodyMedium" style={[styles.body, { marginBottom: 16 }]}>
@@ -427,6 +372,10 @@ const InboxDetailScreen = () => {
           recording). Downloaded through the authenticated cache path;
           absent metadata renders nothing. */}
       {inboxAudio && <InboxAudioPlayer audio={inboxAudio} />}
+
+      {/* Media attachments (images, video). Older servers send none, and
+          then nothing renders. */}
+      <InboxAttachments attachments={attachments} />
 
       {/* FAIL-CLOSED editor guard: this card declares editors the build
           can't render (unknown field type / newer editor_schema). Submitting
@@ -607,7 +556,7 @@ const InboxDetailScreen = () => {
       )}
 
       </ScrollView>
-    </View>
+    </KeyboardSafeView>
   );
 };
 

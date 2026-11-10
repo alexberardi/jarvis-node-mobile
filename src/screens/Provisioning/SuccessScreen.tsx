@@ -11,6 +11,7 @@ import { usePendingNode } from '../../contexts/PendingNodeContext';
 import { useProvisioningContext } from '../../contexts/ProvisioningContext';
 import { helpCopy } from '../../copy/help';
 import { ProvisioningStackParamList, RootStackParamList } from '../../navigation/types';
+import KeyboardSafeView from '../../components/KeyboardSafeView';
 
 type Props = NativeStackScreenProps<ProvisioningStackParamList, 'Success'>;
 
@@ -79,7 +80,7 @@ const SuccessScreen = ({ navigation }: Props) => {
   }
 
   return (
-    <View style={styles.container}>
+    <KeyboardSafeView style={styles.container}>
       <View style={styles.content}>
         <Text variant="displaySmall" style={[styles.checkmark, { color: theme.colors.secondary }]}>
           ✓
@@ -132,7 +133,7 @@ const SuccessScreen = ({ navigation }: Props) => {
           Done
         </Button>
       </View>
-    </View>
+    </KeyboardSafeView>
   );
 };
 

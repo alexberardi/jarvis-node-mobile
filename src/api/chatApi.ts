@@ -48,6 +48,67 @@ export interface ChatMessage {
   actionPreview?: string;
   reasoning?: string;
   traceSummary?: TraceSummary;
+  /** Images the user attached (local URIs — the server does not persist them). */
+  images?: ChatImageRef[];
+}
+
+/** A locally-held image shown in a chat bubble. */
+export interface ChatImageRef {
+  uri: string;
+  width?: number;
+  height?: number;
+}
+
+/** One image as sent on the wire to POST /mobile/chat. */
+export interface ChatImagePayload {
+  mime: 'image/jpeg' | 'image/png' | 'image/webp';
+  /** Base64 (no data: prefix). */
+  data: string;
+}
+
+/** GET /mobile/chat/capabilities. */
+export interface ChatCapabilities {
+  images: boolean;
+  max_images: number;
+  max_image_bytes: number;
+}
+
+export const NO_CHAT_CAPABILITIES: ChatCapabilities = {
+  images: false,
+  max_images: 0,
+  max_image_bytes: 0,
+};
+
+/** Error codes the server returns (422) for a rejected image send. */
+export type ChatImageErrorCode = 'images_unavailable' | 'images_invalid';
+
+/** A non-2xx response from POST /mobile/chat. `code` is parsed from the JSON body when present. */
+export class ChatRequestError extends Error {
+  readonly status: number;
+  readonly code: string | null;
+
+  constructor(status: number, body: string) {
+    super(`Chat request failed (${status})${body ? `: ${body}` : ''}`);
+    this.name = 'ChatRequestError';
+    this.status = status;
+    this.code = parseErrorCode(body);
+  }
+}
+
+/** Pull `code` out of `{"code": …}` or FastAPI-style `{"detail": {"code": …}}`. */
+function parseErrorCode(body: string): string | null {
+  if (!body) return null;
+  try {
+    const parsed = JSON.parse(body) as Record<string, unknown>;
+    if (typeof parsed.code === 'string') return parsed.code;
+    const detail = parsed.detail as Record<string, unknown> | undefined;
+    if (detail && typeof detail === 'object' && typeof detail.code === 'string') {
+      return detail.code;
+    }
+  } catch {
+    // Not JSON
+  }
+  return null;
 }
 
 export interface ChatStreamEvent {
@@ -74,6 +135,8 @@ export interface SendChatRequest {
   client_tools?: Record<string, unknown>[];
   available_commands?: Record<string, unknown>[];
   include_reasoning?: boolean;
+  /** Only sent when the server's capabilities report `images: true`. */
+  images?: ChatImagePayload[];
 }
 
 export interface InstalledPackage {
@@ -192,7 +255,7 @@ export const sendChatMessage = (
             })
             .catch(() => reject(new Error(`Chat request failed (${xhr.status})`)));
         } else {
-          reject(new Error(`Chat request failed (${xhr.status}): ${xhr.responseText}`));
+          reject(new ChatRequestError(xhr.status, xhr.responseText));
         }
       };
 
@@ -210,6 +273,46 @@ export const sendChatMessage = (
 
     run(accessToken, false);
   });
+};
+
+// ─── Chat Capabilities API ───────────────────────────────────────────────────
+
+// Per-server cache (keyed by command-center base URL) so reopening the chat
+// screen renders the attach button immediately while a fresh read is in flight.
+const capabilitiesCache = new Map<string, ChatCapabilities>();
+
+/** Last-known capabilities for the current server, or null if never fetched. */
+export const getCachedChatCapabilities = (): ChatCapabilities | null =>
+  capabilitiesCache.get(getCommandCenterUrl()) ?? null;
+
+/** Test hook. */
+export const clearChatCapabilitiesCache = (): void => capabilitiesCache.clear();
+
+/**
+ * Read what the chat endpoint accepts beyond text. A legacy server (404) or
+ * any failure means "no images" — the chat stays text-only, exactly as before.
+ */
+export const fetchChatCapabilities = async (): Promise<ChatCapabilities> => {
+  const baseUrl = getCommandCenterUrl();
+  let caps: ChatCapabilities = NO_CHAT_CAPABILITIES;
+  try {
+    const res = await apiClient.get<Partial<ChatCapabilities>>(
+      `${baseUrl}/api/v0/mobile/chat/capabilities`,
+      { timeout: 10000 },
+    );
+    const d = res.data ?? {};
+    const maxImages = typeof d.max_images === 'number' ? d.max_images : 0;
+    const maxBytes = typeof d.max_image_bytes === 'number' ? d.max_image_bytes : 0;
+    caps = {
+      images: d.images === true && maxImages > 0 && maxBytes > 0,
+      max_images: maxImages,
+      max_image_bytes: maxBytes,
+    };
+  } catch {
+    caps = NO_CHAT_CAPABILITIES;
+  }
+  capabilitiesCache.set(baseUrl, caps);
+  return caps;
 };
 
 // ─── Audio API ───────────────────────────────────────────────────────────────

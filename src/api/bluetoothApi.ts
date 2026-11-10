@@ -34,8 +34,11 @@ export interface BluetoothScanResponse {
 export interface BluetoothScanPollResponse {
   status: 'pending' | 'completed' | 'failed';
   request_id: string;
+  /** Devices found so far; present while `pending` too (the node posts them as it scans). */
   devices?: BluetoothDevice[];
   device_count?: number;
+  /** The node's scan progress while `pending`, e.g. "scanning". */
+  progress?: string | null;
   error_message?: string;
 }
 

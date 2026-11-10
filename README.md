@@ -8,7 +8,7 @@ Built with Expo / React Native (iOS and Android).
 
 - **Voice & chat** — send voice commands and chat with Jarvis from your phone (microphone access).
 - **Node provisioning** — scan a QR code to pair a Pi Zero voice node, then push WiFi/config to headless nodes.
-- **Server discovery** — auto-discover your self-hosted `jarvis-config-service` on the local network (Bonjour / zeroconf).
+- **Server URL** — enter your self-hosted `jarvis-config-service` address (e.g. `http://192.168.1.100:7700`); the app resolves the other service URLs from it and does not search the network.
 - **Smart home** — Home Assistant device discovery and control.
 - **Rooms & devices** — organize and manage paired nodes and devices.
 - **Secure storage** — auth tokens kept in the platform keychain (`expo-secure-store`).
@@ -20,7 +20,7 @@ Built with Expo / React Native (iOS and Android).
 - React Navigation 7 (bottom tabs + native stacks)
 - React Native Paper (Material Design UI)
 - TanStack React Query 5 (data fetching)
-- expo-camera (QR scanning), expo-secure-store (keychain), react-native-zeroconf (discovery)
+- expo-camera (QR scanning), expo-secure-store (keychain)
 - Local crypto module in `modules/jarvis-crypto`
 
 ## Requirements

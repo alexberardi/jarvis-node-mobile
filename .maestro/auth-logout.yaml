@@ -1,0 +1,20 @@
+appId: com.jarvis.nodemobile
+name: Log out ends the session
+# Settings → Log Out lands on Landing, and the session is gone for good: a
+# relaunch (state kept) stays logged out instead of restoring it.
+tags:
+  - auth
+  - e2e
+---
+- launchApp:
+    clearState: true
+- runFlow: subflows/login.yaml
+- runFlow: subflows/logout.yaml
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible:
+      id: "landing-login-button"
+    timeout: 60000
+- assertNotVisible:
+    id: "tab-home"

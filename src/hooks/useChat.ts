@@ -8,7 +8,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
+  ChatImageErrorCode,
+  ChatImagePayload,
+  ChatImageRef,
   ChatMessage,
+  ChatRequestError,
   ChatStreamEvent,
   fetchNodeTools,
   NodeToolsResponse,
@@ -48,6 +52,27 @@ function extractToolInfos(tools: Record<string, unknown>[]): ToolInfo[] {
     .filter((t): t is ToolInfo => t !== null);
 }
 
+/** Images attached to an outgoing message: what to show locally + what to send. */
+export interface OutgoingChatImages {
+  refs: ChatImageRef[];
+  payload: ChatImagePayload[];
+}
+
+/** User-facing text for a 422 image rejection. */
+export const IMAGE_ERROR_MESSAGES: Record<ChatImageErrorCode, string> = {
+  images_unavailable:
+    'Images are turned off on the Jarvis server, so this message wasn’t sent. Try again with text only.',
+  images_invalid:
+    'The server couldn’t accept these images (too many, too large, or an unsupported type). Try fewer or smaller photos.',
+};
+
+// Structural (not instanceof) so a mocked chatApi module can't break it.
+function imageErrorCode(err: unknown): ChatImageErrorCode | null {
+  const e = err as Partial<ChatRequestError> | null;
+  if (!e || typeof e !== 'object' || e.status !== 422) return null;
+  return e.code === 'images_unavailable' || e.code === 'images_invalid' ? e.code : null;
+}
+
 export type WarmupState = 'idle' | 'loading_tools' | 'warming_up' | 'ready';
 
 interface UseChatOptions {
@@ -56,6 +81,8 @@ interface UseChatOptions {
   accessToken: string | null;
   timezone?: string;
   onAssistantDone?: (text: string) => void;
+  /** The server rejected attached images with a 422 (see IMAGE_ERROR_MESSAGES). */
+  onImagesRejected?: (code: ChatImageErrorCode) => void;
 }
 
 interface UseChatReturn {
@@ -72,7 +99,7 @@ interface UseChatReturn {
   toolsPending: boolean;
   /** Non-null when the command center is unreachable. */
   connectionError: string | null;
-  sendMessage: (text: string) => void;
+  sendMessage: (text: string, images?: OutgoingChatImages) => void;
   clearConversation: () => void;
   /** Manually re-run the tool fetch + warmup (wired to pull-to-refresh). */
   refreshTools: () => void;
@@ -84,6 +111,7 @@ export function useChat({
   accessToken,
   timezone = 'America/New_York',
   onAssistantDone,
+  onImagesRejected,
 }: UseChatOptions): UseChatReturn {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -110,6 +138,8 @@ export function useChat({
   // tool refresh (refreshNonce) or Pantry install (toolsVersion), which re-run
   // the effect but must preserve an in-progress conversation.
   const conversationIdentityRef = useRef<string | null>(null);
+  const onImagesRejectedRef = useRef(onImagesRejected);
+  onImagesRejectedRef.current = onImagesRejected;
   const accessTokenRef = useRef(accessToken);
   accessTokenRef.current = accessToken;
   // Track auth readiness (changes once: false → true), not the token value (changes on every refresh)
@@ -285,8 +315,10 @@ export function useChat({
   }, [nodeId, householdId, isAuthenticated, timezone, toolsVersion, refreshNonce]);
 
   const sendMessage = useCallback(
-    (text: string) => {
+    (text: string, images?: OutgoingChatImages) => {
       if (!nodeId || !householdId || !accessTokenRef.current || isLoading) return;
+      const hasImages = !!images && images.payload.length > 0;
+      if (!text.trim() && !hasImages) return;
 
       // Mark the conversation as user-started so the background tool poll won't
       // re-warm over it once the node's tools become available.
@@ -297,6 +329,7 @@ export function useChat({
         role: 'user',
         content: text.trim(),
         timestamp: Date.now(),
+        ...(hasImages ? { images: images.refs } : {}),
       };
 
       const assistantId = generateId();
@@ -429,6 +462,7 @@ export function useChat({
           conversation_id: conversationId ?? undefined,
           timezone,
           include_reasoning: true,
+          ...(hasImages ? { images: images.payload } : {}),
           ...(includeTools
             ? {
                 client_tools: tools.client_tools,
@@ -441,6 +475,20 @@ export function useChat({
         controller.signal,
       ).catch((err) => {
         if (err instanceof Error && err.name === 'AbortError') return;
+        const imgCode = imageErrorCode(err);
+        if (imgCode) {
+          // The server is reachable — it just refused the images.
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === assistantIdRef.current
+                ? { ...msg, role: 'assistant' as const, content: IMAGE_ERROR_MESSAGES[imgCode] }
+                : msg,
+            ),
+          );
+          setIsLoading(false);
+          onImagesRejectedRef.current?.(imgCode);
+          return;
+        }
         const errorMsg = err instanceof Error ? err.message : 'Connection failed.';
         setMessages((prev) =>
           prev.map((msg) => {

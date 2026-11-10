@@ -9,6 +9,7 @@ import { getCommandCenterUrl } from '../config/serviceConfig';
 import type {
   ResponseLength,
   Routine,
+  RoutineMode,
   RoutineSchedule,
   RoutineStep,
 } from '../types/Routine';
@@ -18,6 +19,8 @@ const base = (householdId: string) =>
   `${getCommandCenterUrl()}/api/v0/households/${householdId}/routines`;
 
 export interface RoutineWrite {
+  mode?: RoutineMode;
+  utterance?: string;
   name: string;
   trigger_phrases: string[];
   steps: RoutineStep[];
@@ -30,6 +33,13 @@ export interface RoutineWrite {
 export const listRoutines = async (householdId: string): Promise<Routine[]> => {
   const res = await apiClient.get<{ routines: Routine[] }>(base(householdId));
   return res.data.routines;
+};
+
+/** Older servers ignore unknown write fields, so check support before offering Simple. */
+export const getRoutineModes = async (householdId: string): Promise<RoutineMode[]> => {
+  const res = await apiClient.get<{ supported_modes?: unknown }>(base(householdId));
+  const modes = res.data.supported_modes;
+  return Array.isArray(modes) && modes.includes('simple') ? ['advanced', 'simple'] : ['advanced'];
 };
 
 export const getRoutine = async (
@@ -75,6 +85,16 @@ export interface RunNowResult {
   failed: number;
 }
 
+/**
+ * How long run-now may take before the phone gives up. The server holds the
+ * request open until the node reports (jarvisd waits up to 60 s —
+ * `routineWait` in internal/modules/cc/routines.go — then answers
+ * `status: "timeout"`), and composing a routine's spoken summary regularly
+ * takes longer than the shared apiClient's 10 s default. 90 s leaves headroom
+ * so the server's own timeout answer arrives instead of an axios abort.
+ */
+export const RUN_NOW_TIMEOUT_MS = 90_000;
+
 export const runRoutineNow = async (
   householdId: string,
   routineId: string,
@@ -83,6 +103,7 @@ export const runRoutineNow = async (
   const res = await apiClient.post<RunNowResult>(
     `${base(householdId)}/${routineId}/run-now`,
     { node_id: nodeId ?? null },
+    { timeout: RUN_NOW_TIMEOUT_MS },
   );
   return res.data;
 };

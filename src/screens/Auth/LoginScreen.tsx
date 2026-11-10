@@ -5,6 +5,7 @@ import { Appbar, Button, Checkbox, HelperText, TextInput, useTheme } from 'react
 
 import { useAuth } from '../../auth/AuthContext';
 import { AuthStackParamList } from '../../navigation/types';
+import KeyboardSafeView from '../../components/KeyboardSafeView';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Login'>;
 
@@ -21,6 +22,7 @@ const LoginScreen = ({ navigation }: Props) => {
     state,
   } = useAuth();
   const biometricEnabled = state?.biometricEnabled ?? false;
+  const signOutNotice = state?.signOutNotice ?? null;
   const theme = useTheme();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -77,12 +79,17 @@ const LoginScreen = ({ navigation }: Props) => {
   };
 
   return (
-    <>
+    <KeyboardSafeView>
       <Appbar.Header>
         <Appbar.BackAction onPress={() => navigation.goBack()} color={theme.colors.onSurface} />
         <Appbar.Content title="Log In" />
       </Appbar.Header>
       <View style={styles.container}>
+        {signOutNotice ? (
+          <HelperText testID="sign-out-notice" type="info" visible>
+            {signOutNotice}
+          </HelperText>
+        ) : null}
         <TextInput
           testID="email-input"
           label="Email"
@@ -100,7 +107,7 @@ const LoginScreen = ({ navigation }: Props) => {
           onChangeText={setPassword}
         />
         {error ? (
-          <HelperText type="error" visible>
+          <HelperText testID="login-error" type="error" visible>
             {error}
           </HelperText>
         ) : null}
@@ -142,7 +149,7 @@ const LoginScreen = ({ navigation }: Props) => {
           Need an account? Create one
         </Button>
       </View>
-    </>
+    </KeyboardSafeView>
   );
 };
 

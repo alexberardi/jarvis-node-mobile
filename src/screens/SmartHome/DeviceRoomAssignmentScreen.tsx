@@ -25,6 +25,7 @@ import {
 } from '../../types/SmartHome';
 import { SmartHomeSetupParamList } from '../../navigation/types';
 import { safeJsonParse } from '../../utils/safeJson';
+import KeyboardSafeView from '../../components/KeyboardSafeView';
 
 type Props = NativeStackScreenProps<
   SmartHomeSetupParamList,
@@ -242,7 +243,7 @@ const DeviceRoomAssignmentScreen = ({ navigation, route }: Props) => {
   );
 
   return (
-    <View style={styles.container}>
+    <KeyboardSafeView style={styles.container}>
       <Text variant="headlineSmall" style={styles.title}>
         Assign Rooms
       </Text>
@@ -314,7 +315,7 @@ const DeviceRoomAssignmentScreen = ({ navigation, route }: Props) => {
           Back
         </Button>
       </View>
-    </View>
+    </KeyboardSafeView>
   );
 };
 

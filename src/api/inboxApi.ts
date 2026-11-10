@@ -11,6 +11,8 @@ export interface InboxItem {
   category: string;
   source_service: string;
   metadata: Record<string, any> | null;
+  /** Media attachments (newer servers only); parse with parseInboxAttachments. */
+  attachments?: unknown;
   content_format: 'markdown' | 'html' | 'plain' | null;
   is_read: boolean;
   created_at: string;

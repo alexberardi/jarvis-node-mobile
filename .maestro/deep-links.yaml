@@ -1,0 +1,70 @@
+appId: com.jarvis.nodemobile
+name: Quick-open deep links
+# The quick-open links (src/navigation/deepLinks.ts, handled in App.tsx and HomeScreen):
+# - com.jarvis.app://chat, and its alias ://open, bring the chat (Home) to the front from
+#   anywhere, here from Settings;
+# - a com.jarvis.app link with another host is ignored: Settings stays up;
+# - com.jarvis.app://stt opens the chat and starts listening: the flow only checks that
+#   it tried (the listening bar, or the "couldn't start" hint); nothing is said or sent;
+# - a link that arrives before login is held, and login still lands on the chat.
+# Android only routes com.jarvis.app to the app through app.json's android.intentFilters.
+# Not covered: the https://docs.jarvisautomation.dev/app/... Universal Link, an iOS-only
+# entry point (Control Center) with no Android App Link behind it.
+tags:
+  - deep-links
+  - e2e
+env:
+  EMAIL: "test@jarvisautomation.io"
+  PASSWORD: "DevPass123!"
+---
+- launchApp:
+    clearState: true
+- runFlow: subflows/login.yaml
+
+# ://chat from Settings
+- runFlow: subflows/open-settings.yaml
+- openLink: "com.jarvis.app://chat"
+- extendedWaitUntil:
+    visible:
+      id: "send-button"
+    timeout: 15000
+- assertNotVisible:
+    id: "settings-section-account"
+
+# ://open, the alias
+- runFlow: subflows/open-settings.yaml
+- openLink: "com.jarvis.app://open"
+- extendedWaitUntil:
+    visible:
+      id: "send-button"
+    timeout: 15000
+- assertNotVisible:
+    id: "settings-section-account"
+
+# Another host: ignored
+- runFlow: subflows/open-settings.yaml
+- openLink: "com.jarvis.app://nowhere"
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertVisible:
+    id: "settings-section-account"
+
+# ://stt: chat, and listening (or the hint that the mic could not start)
+- openLink: "com.jarvis.app://stt"
+- extendedWaitUntil:
+    visible:
+      id: "send-button"
+    timeout: 15000
+- extendedWaitUntil:
+    visible:
+      text: "(Listening. tap the mic to send\\.?|Couldn.t start listening\\. Tap the mic to try again\\.)"
+    timeout: 20000
+- stopApp
+
+# Before login: the link is held, and login still ends on the chat
+- launchApp:
+    clearState: true
+- openLink: "com.jarvis.app://chat"
+- runFlow: subflows/login.yaml
+- assertVisible:
+    id: "send-button"

@@ -35,6 +35,11 @@ jest.mock('../../src/api/routineApi', () => ({
   runRoutineNow: jest.fn(),
 }));
 jest.mock('../../src/api/smartHomeApi', () => ({ getSmartHomeConfig: jest.fn() }));
+// Kinds for the run-on-node menu's icons (smart-home config carries none).
+const mockListNodes = jest.fn().mockResolvedValue([]);
+jest.mock('../../src/api/nodeApi', () => ({
+  listNodes: (...args: unknown[]) => mockListNodes(...args),
+}));
 
 // Expose the swipe delete action without a real gesture (same pattern as memories).
 jest.mock('react-native-gesture-handler/ReanimatedSwipeable', () => {
@@ -90,6 +95,37 @@ describe('Routines list — flow integration (load, run, delete, create)', () =>
     expect(listRoutines).toHaveBeenCalledWith('hh-1');
   });
 
+  it('shows a Simple instruction and runs only on a compatible node', async () => {
+    (listRoutines as jest.Mock).mockResolvedValue([{ ...ROUTINE, mode: 'simple', utterance: 'Dim the lights', steps: [] }]);
+    (getSmartHomeConfig as jest.Mock).mockResolvedValue({ nodes: [{ node_id: 'old' }, { node_id: 'new' }] });
+    mockListNodes.mockResolvedValue([
+      { node_id: 'old', capabilities: {} },
+      { node_id: 'new', capabilities: { simple_routines: true } },
+    ]);
+    const alertSpy = jest.spyOn(Alert, 'alert');
+    const screen = renderScreen();
+    await screen.findByText('Dim the lights');
+    expect(screen.getByText('Simple')).toBeTruthy();
+    await waitFor(() => expect(screen.getByTestId('routine-run-r1')).toBeEnabled());
+    fireEvent.press(screen.getByTestId('routine-run-r1'));
+    await waitFor(() => expect(runRoutineNow).toHaveBeenCalledWith('hh-1', 'r1', 'new'));
+    alertSpy.mockRestore();
+  });
+
+  it('explains that an older node needs an update without dispatching Simple', async () => {
+    (listRoutines as jest.Mock).mockResolvedValue([{ ...ROUTINE, mode: 'simple', utterance: 'Play music' }]);
+    (getSmartHomeConfig as jest.Mock).mockResolvedValue({ nodes: [{ node_id: 'old' }] });
+    mockListNodes.mockResolvedValue([{ node_id: 'old', capabilities: {} }]);
+    const alertSpy = jest.spyOn(Alert, 'alert');
+    const screen = renderScreen();
+    await screen.findByText('Play music');
+    await waitFor(() => expect(screen.getByTestId('routine-run-r1')).toBeEnabled());
+    fireEvent.press(screen.getByTestId('routine-run-r1'));
+    expect(runRoutineNow).not.toHaveBeenCalled();
+    expect(alertSpy).toHaveBeenCalledWith('Update required', expect.stringContaining('Simple'));
+    alertSpy.mockRestore();
+  });
+
   it('runs the routine on the only known node and alerts the result', async () => {
     (getSmartHomeConfig as jest.Mock).mockResolvedValue({
       nodes: [{ node_id: 'n1', room: 'Living Room' }],
@@ -104,6 +140,50 @@ describe('Routines list — flow integration (load, run, delete, create)', () =>
     await waitFor(() => expect(runRoutineNow).toHaveBeenCalledWith('hh-1', 'r1', 'n1'));
     await waitFor(() => expect(alertSpy).toHaveBeenCalledWith('Movie night', 'Lights dimmed'));
     alertSpy.mockRestore();
+  });
+
+  it('shows a working state while run-now is in flight, then clears it', async () => {
+    (getSmartHomeConfig as jest.Mock).mockResolvedValue({
+      nodes: [{ node_id: 'n1', room: 'Living Room' }],
+      primary_node_id: 'n1',
+    });
+    let resolveRun: (v: unknown) => void = () => {};
+    (runRoutineNow as jest.Mock).mockReturnValue(new Promise((r) => { resolveRun = r; }));
+    const alertSpy = jest.spyOn(Alert, 'alert');
+    const { findByText, getByTestId, findByTestId, queryByTestId } = renderScreen();
+    await findByText('Movie night');
+
+    fireEvent.press(getByTestId('routine-run-r1'));
+
+    await findByTestId('routine-running-r1');
+    expect(queryByTestId('routine-run-r1')).toBeNull();
+
+    await act(async () => {
+      resolveRun({ success: true, status: 'success', message: 'Lights dimmed' });
+    });
+    await waitFor(() => expect(queryByTestId('routine-running-r1')).toBeNull());
+    expect(getByTestId('routine-run-r1')).toBeTruthy();
+    alertSpy.mockRestore();
+  });
+
+  it('says the routine may still be running when our own long timeout fires', async () => {
+    (getSmartHomeConfig as jest.Mock).mockResolvedValue({
+      nodes: [{ node_id: 'n1', room: 'Living Room' }],
+      primary_node_id: 'n1',
+    });
+    (runRoutineNow as jest.Mock).mockRejectedValue(
+      Object.assign(new Error('timeout of 90000ms exceeded'), { code: 'ECONNABORTED' }),
+    );
+    const alertSpy = jest.spyOn(Alert, 'alert');
+    const errSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const { findByText, getByTestId } = renderScreen();
+    await findByText('Movie night');
+
+    fireEvent.press(getByTestId('routine-run-r1'));
+
+    await waitFor(() => expect(alertSpy).toHaveBeenCalledWith('Still running', expect.any(String)));
+    alertSpy.mockRestore();
+    errSpy.mockRestore();
   });
 
   it('swipe-delete → Alert confirm → deleteRoutine → refetch', async () => {
@@ -142,3 +222,34 @@ describe('Routines list — flow integration (load, run, delete, create)', () =>
     await findByText('Movie night');
   });
 });
+
+describe('Routines list — run-on-node menu kinds', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (listRoutines as jest.Mock).mockResolvedValue([ROUTINE]);
+  });
+
+  it('shows the robot for a computer and the Raspberry Pi for a Pi', async () => {
+    (getSmartHomeConfig as jest.Mock).mockResolvedValue({
+      nodes: [
+        { node_id: 'n1', room: 'Living Room' },
+        { node_id: 'agent-1', room: 'Office PC' },
+      ],
+      primary_node_id: null,
+    });
+    mockListNodes.mockResolvedValue([
+      { node_id: 'n1', install_mode: 'tarball', node_kind: null },
+      { node_id: 'agent-1', install_mode: 'desktop-agent', node_kind: 'desktop' },
+    ]);
+    const { findByText, getByTestId, findByTestId } = renderScreen();
+    await findByText('Movie night');
+    await waitFor(() => expect(mockListNodes).toHaveBeenCalledWith('hh-1'));
+
+    fireEvent.press(getByTestId('routine-run-r1'));
+
+    const agent = await findByTestId('routine-run-node-kind-agent-1');
+    expect(agent.props.accessibilityLabel).toBe('Computer');
+    expect(getByTestId('routine-run-node-kind-n1').props.accessibilityLabel).toBe('Raspberry Pi');
+  });
+});
+

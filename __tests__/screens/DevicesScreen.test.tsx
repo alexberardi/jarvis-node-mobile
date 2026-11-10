@@ -4,17 +4,23 @@ import { PaperProvider } from 'react-native-paper';
 
 import DevicesScreen from '../../src/screens/Devices/DevicesScreen';
 import { lightTheme } from '../../src/theme';
+import { listNodes } from '../../src/api/nodeApi';
 
 const mockNavigate = jest.fn();
 const mockGoBack = jest.fn();
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({
-    navigate: mockNavigate,
-    goBack: mockGoBack,
-  }),
-  useFocusEffect: jest.fn((cb) => cb()),
-}));
+// useFocusEffect runs its callback as an effect, like the real hook on a
+// focused screen; calling it during render re-rendered forever.
+jest.mock('@react-navigation/native', () => {
+  const mockReact = require('react');
+  return {
+    useNavigation: () => ({
+      navigate: mockNavigate,
+      goBack: mockGoBack,
+    }),
+    useFocusEffect: (cb: () => void) => mockReact.useEffect(cb, [cb]),
+  };
+});
 
 const mockInvalidateQueries = jest.fn();
 let mockDevicesQuery: Record<string, unknown> = {
@@ -31,11 +37,13 @@ let mockRoomsQuery: Record<string, unknown> = {
   error: null,
 };
 
+let mockConfigQuery: Record<string, unknown> = { data: null, isLoading: false, isError: false, error: null };
+
 jest.mock('@tanstack/react-query', () => ({
   useQuery: (opts: { queryKey: string[] }) => {
     if (opts.queryKey[0] === 'devices') return mockDevicesQuery;
     if (opts.queryKey[0] === 'rooms') return mockRoomsQuery;
-    if (opts.queryKey[0] === 'smartHomeConfig') return { data: null, isLoading: false, isError: false, error: null };
+    if (opts.queryKey[0] === 'smartHomeConfig') return mockConfigQuery;
     return { data: undefined, isLoading: false, isError: false, error: null };
   },
   useQueryClient: () => ({
@@ -69,8 +77,7 @@ const wrapper = ({ children }: { children: React.ReactNode }) => (
   <PaperProvider theme={lightTheme}>{children}</PaperProvider>
 );
 
-// TODO: Fix mock — useQuery mock causes infinite re-render loop
-describe.skip('DevicesScreen', () => {
+describe('DevicesScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockAuthState = {
@@ -88,6 +95,7 @@ describe.skip('DevicesScreen', () => {
       data: undefined,
       isLoading: false,
     };
+    mockConfigQuery = { data: null, isLoading: false, isError: false, error: null };
   });
 
   it('should render "Devices" title', () => {
@@ -214,6 +222,33 @@ describe.skip('DevicesScreen', () => {
     expect(getByText('Smart Plug')).toBeTruthy();
   });
 
+  it('opens a device row in DeviceEdit by its testID', () => {
+    mockDevicesQuery = {
+      data: [
+        {
+          id: 'dev-1', household_id: 'hh-1', room_id: null, entity_id: 'light.kitchen',
+          name: 'Kitchen Ceiling', domain: 'light', device_class: null, manufacturer: null,
+          model: null, source: 'direct', protocol: null, local_ip: null, mac_address: null,
+          cloud_id: null, ha_device_id: null, is_controllable: true, is_active: true,
+          room_name: null, supported_actions: null, created_at: '', updated_at: '',
+        },
+      ],
+      isLoading: false,
+      refetch: jest.fn(),
+    };
+
+    const { getByTestId } = render(<DevicesScreen />, { wrapper });
+    fireEvent.press(getByTestId('device-row-dev-1'));
+
+    expect(mockNavigate).toHaveBeenCalledWith('DeviceEdit', { deviceId: 'dev-1', householdId: 'hh-1' });
+  });
+
+  it('opens Rooms from the devices-rooms-button', () => {
+    const { getByTestId } = render(<DevicesScreen />, { wrapper });
+    fireEvent.press(getByTestId('devices-rooms-button'));
+    expect(mockNavigate).toHaveBeenCalledWith('RoomManagement');
+  });
+
   it('should show FAB button', () => {
     mockDevicesQuery = {
       data: [],
@@ -243,5 +278,61 @@ describe.skip('DevicesScreen', () => {
     // Actually, Appbar.Action renders as an IconButton, which may have no label.
     // We'll verify the Devices title is rendered as a proxy that the appbar is correct.
     expect(getByLabelText).toBeDefined();
+  });
+
+  describe('Add device scan', () => {
+    const node = (node_id: string, room: string, online: boolean) => ({ node_id, room, online });
+
+    beforeEach(() => {
+      mockDevicesQuery = { data: [], isLoading: false, refetch: jest.fn() };
+      mockConfigQuery = {
+        data: { use_external_devices: false, primary_node_id: 'zero' },
+        isLoading: false,
+      };
+    });
+
+    it('scans with the primary node when it is online', async () => {
+      (listNodes as jest.Mock).mockResolvedValue([
+        node('zero', 'Kitchen', true),
+        node('pi4', 'Office', true),
+      ]);
+      const { getByLabelText } = render(<DevicesScreen />, { wrapper });
+      fireEvent.press(getByLabelText('Add device'));
+
+      await waitFor(() =>
+        expect(mockNavigate).toHaveBeenCalledWith('DeviceDiscovery', { nodeId: 'zero' }),
+      );
+    });
+
+    it('skips an offline primary node and says which node scans', async () => {
+      (listNodes as jest.Mock).mockResolvedValue([
+        node('zero', 'Kitchen', false),
+        node('pi4', 'Office', true),
+      ]);
+      const { getByLabelText, findByText } = render(<DevicesScreen />, { wrapper });
+      fireEvent.press(getByLabelText('Add device'));
+
+      await waitFor(() =>
+        expect(mockNavigate).toHaveBeenCalledWith('DeviceDiscovery', { nodeId: 'pi4' }),
+      );
+      expect(await findByText('Kitchen is offline, scanning with Office')).toBeTruthy();
+    });
+
+    it('says so and does not open the scan when no node is online', async () => {
+      (listNodes as jest.Mock).mockResolvedValue([
+        node('zero', 'Kitchen', false),
+        node('pi4', 'Office', false),
+      ]);
+      const { getByLabelText, findByText } = render(<DevicesScreen />, { wrapper });
+      fireEvent.press(getByLabelText('Add device'));
+
+      expect(await findByText('No node is online to scan for devices')).toBeTruthy();
+      expect(mockNavigate).not.toHaveBeenCalledWith('DeviceDiscovery', expect.anything());
+    });
+
+    it('refreshes the device list when the tab is focused again', () => {
+      render(<DevicesScreen />, { wrapper });
+      expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ['devices', 'hh-1'] });
+    });
   });
 });

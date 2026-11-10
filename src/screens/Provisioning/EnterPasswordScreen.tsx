@@ -7,6 +7,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { useProvisioningContext } from '../../contexts/ProvisioningContext';
 import { ProvisioningStackParamList } from '../../navigation/types';
 import { ROOM_OPTIONS } from '../../types/Provisioning';
+import KeyboardSafeView from '../../components/KeyboardSafeView';
 
 type Props = NativeStackScreenProps<ProvisioningStackParamList, 'EnterPassword'>;
 
@@ -34,7 +35,7 @@ const EnterPasswordScreen = ({ navigation }: Props) => {
   const isValid = password.length > 0 && roomName.length > 0 && !!householdId;
 
   return (
-    <>
+    <KeyboardSafeView>
       <Appbar.Header>
         <Appbar.BackAction onPress={() => navigation.goBack()} />
         <Appbar.Content title="Configure" />
@@ -106,7 +107,7 @@ const EnterPasswordScreen = ({ navigation }: Props) => {
           Provision Node
         </Button>
       </ScrollView>
-    </>
+    </KeyboardSafeView>
   );
 };
 

@@ -25,6 +25,12 @@ jest.mock('../../src/auth/AuthContext', () => ({
 
 jest.mock('../../src/api/smartHomeApi');
 
+// The Devices-stack import invalidates the devices query.
+const mockInvalidateQueries = jest.fn();
+jest.mock('@tanstack/react-query', () => ({
+  useQueryClient: () => ({ invalidateQueries: mockInvalidateQueries }),
+}));
+
 const requestDeviceScan = smartHomeApi.requestDeviceScan as jest.Mock;
 const pollDeviceScan = smartHomeApi.pollDeviceScan as jest.Mock;
 const importDevices = smartHomeApi.importDevices as jest.Mock;
@@ -343,16 +349,16 @@ describe('Device discovery — flow integration (scan poll, select/filter, impor
     });
     expect(getByText('Scanning for devices...')).toBeTruthy();
 
-    // Jump the clock past the 2-minute give-up window, then fire the scheduled
+    // Jump the clock past the 30 s give-up window, then fire the scheduled
     // poll → its elapsed check trips → timeout view.
-    now += 130_000;
+    now += 31_000;
     await act(async () => {
       jest.advanceTimersByTime(2000);
       await Promise.resolve();
       await Promise.resolve();
     });
 
-    expect(getByText('Scan timed out. Is the node online?')).toBeTruthy();
+    expect(getByText("The node didn't answer the scan. Is it online?")).toBeTruthy();
 
     dateSpy.mockRestore();
     jest.useRealTimers();

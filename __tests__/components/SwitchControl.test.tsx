@@ -37,8 +37,8 @@ describe('SwitchControl', () => {
     });
   });
 
-  it('shows Turn On and Turn Off buttons when no live state', () => {
-    const state = makeState({ state: null });
+  it('shows Unknown with Turn On and Turn Off buttons when no live state', () => {
+    const state = makeState({ state: null, error: 'Device unreachable' });
     const { getByText } = render(
       <SwitchControl
         householdId="hh-1"
@@ -48,6 +48,7 @@ describe('SwitchControl', () => {
       />,
       { wrapper },
     );
+    expect(getByText('Unknown')).toBeTruthy();
     expect(getByText('Turn On')).toBeTruthy();
     expect(getByText('Turn Off')).toBeTruthy();
   });
@@ -102,5 +103,53 @@ describe('SwitchControl', () => {
     await waitFor(() => {
       expect(onStateChange).toHaveBeenCalled();
     });
+  });
+
+  // The action comes from the Switch's new value, not from the believed state,
+  // so a wrong believed state can't turn "switch off" into turn_on (#518).
+  it.each([
+    ['off', false, 'turn_off'],
+    ['on', false, 'turn_off'],
+    ['off', true, 'turn_on'],
+    ['on', true, 'turn_on'],
+  ])('believed %s, switch set to %s sends %s', async (believed, value, action) => {
+    const { getByTestId } = render(
+      <SwitchControl
+        householdId="hh-1"
+        deviceId="dev-1"
+        state={makeState({ state: { state: believed } })}
+        onStateChange={jest.fn()}
+      />,
+      { wrapper },
+    );
+
+    fireEvent(getByTestId('switch-power-switch'), 'valueChange', value);
+
+    await waitFor(() => expect(mockedControl).toHaveBeenCalledWith('hh-1', 'dev-1', action));
+    expect(mockedControl).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows an unknown state as indeterminate, with Turn On and Turn Off', async () => {
+    const onStateChange = jest.fn();
+    const { getByTestId, getByText, queryByTestId, queryByText } = render(
+      <SwitchControl
+        householdId="hh-1"
+        deviceId="dev-1"
+        state={makeState({ state: { state: 'unknown' } })}
+        onStateChange={onStateChange}
+      />,
+      { wrapper },
+    );
+
+    expect(getByText('Unknown')).toBeTruthy();
+    expect(queryByText('Off')).toBeNull();
+    expect(queryByText('On')).toBeNull();
+    expect(queryByTestId('switch-power-switch')).toBeNull();
+
+    fireEvent.press(getByTestId('switch-power-off'));
+    await waitFor(() => expect(mockedControl).toHaveBeenCalledWith('hh-1', 'dev-1', 'turn_off'));
+    await waitFor(() => expect(onStateChange).toHaveBeenCalled());
+    fireEvent.press(getByTestId('switch-power-on'));
+    await waitFor(() => expect(mockedControl).toHaveBeenCalledWith('hh-1', 'dev-1', 'turn_on'));
   });
 });

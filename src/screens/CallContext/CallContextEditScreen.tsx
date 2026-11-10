@@ -19,6 +19,7 @@ import {
   putCallContext,
 } from '../../api/callContextApi';
 import type { CallContextStackParamList } from '../../navigation/types';
+import KeyboardSafeView from '../../components/KeyboardSafeView';
 
 type Props = NativeStackScreenProps<CallContextStackParamList, 'CallContextEdit'>;
 
@@ -110,7 +111,7 @@ const CallContextEditScreen = ({ navigation, route }: Props) => {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <KeyboardSafeView style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <Appbar.Header mode="small">
         <Appbar.BackAction onPress={() => navigation.goBack()} />
         <Appbar.Content title={isNew ? 'Add detail' : 'Edit detail'} />
@@ -262,7 +263,7 @@ const CallContextEditScreen = ({ navigation, route }: Props) => {
           {isNew ? 'Save' : 'Update'}
         </Button>
       </ScrollView>
-    </View>
+    </KeyboardSafeView>
   );
 };
 

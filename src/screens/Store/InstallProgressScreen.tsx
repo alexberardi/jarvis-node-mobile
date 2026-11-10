@@ -12,13 +12,16 @@ import {
   useTheme,
 } from 'react-native-paper';
 
+import { isPantryDisabledError } from '../../api/householdSettingsApi';
 import { pollCCInstallStatus, pollInstallStatus, requestInstall } from '../../api/packageInstallApi';
 import { pollTestInstallStatus } from '../../api/testInstallApi';
 import { useToolsVersion } from '../../contexts/ToolsContext';
+import { usePantryGate } from '../../components/PantryGate';
 import { StoreStackParamList } from '../../navigation/types';
 import type { InstallStatus, InstallStatusValue } from '../../types/Package';
 import { installStatusLabel, isTerminalInstallStatus } from '../../utils/packageStatus';
 import { safeJsonParse } from '../../utils/safeJson';
+import SendToForgeCard from './SendToForgeCard';
 
 type Nav = NativeStackNavigationProp<StoreStackParamList>;
 type Route = RouteProp<StoreStackParamList, 'InstallProgress'>;
@@ -34,6 +37,7 @@ const MAX_CONSECUTIVE_FAILURES = 5;
 
 const InstallProgressScreen = () => {
   const navigation = useNavigation<Nav>();
+  const { markDisabled } = usePantryGate();
   const route = useRoute<Route>();
   const theme = useTheme();
   const { invalidateTools } = useToolsVersion();
@@ -160,6 +164,10 @@ const InstallProgressScreen = () => {
         intervalRef.current = setInterval(pollAll, POLL_INTERVAL_MS);
       }
     } catch (e: unknown) {
+      if (isPantryDisabledError(e)) {
+        markDisabled();
+        return;
+      }
       const msg = e instanceof Error ? e.message : 'Retry failed';
       setStatuses((prev) => {
         const next = new Map(prev);
@@ -261,6 +269,10 @@ const InstallProgressScreen = () => {
             </Card>
           );
         })}
+        {isTestInstall &&
+          installs
+            .filter((entry) => statuses.get(entry.requestId) && isTerminalInstallStatus(statuses.get(entry.requestId)!.status))
+            .map((entry) => <SendToForgeCard key={`forge-${entry.requestId}`} nodeId={entry.nodeId} requestId={entry.requestId} />)}
       </ScrollView>
 
       {(allDone || pollError) && (

@@ -8,20 +8,9 @@ jest.mock('../../src/config/env', () => ({
   MANUAL_CONFIG_URL: 'http://localhost:7700',
 }));
 
-// Native module stubs (same as configDiscoveryService.test.ts).
-jest.mock('react-native-zeroconf', () =>
-  jest.fn().mockImplementation(() => ({
-    on: jest.fn(),
-    scan: jest.fn(),
-    stop: jest.fn(),
-    removeAllListeners: jest.fn(),
-  })),
-);
-jest.mock('expo-network', () => ({
-  getIpAddressAsync: jest.fn().mockResolvedValue('192.168.1.50'),
-}));
 jest.mock('../../src/config/serviceConfig', () => ({
   loadManualConfigUrl: jest.fn(),
+  saveManualConfigUrl: jest.fn().mockResolvedValue(undefined),
   loadCachedConfig: jest.fn().mockResolvedValue(null),
   cacheConfig: jest.fn().mockResolvedValue(undefined),
   setServiceConfig: jest.fn(),
@@ -52,9 +41,9 @@ describe('discoverConfigService — DEV_MODE baked config URL (EXPO_PUBLIC_MANUA
     mockedSC.loadManualConfigUrl.mockResolvedValue(null);
     mockFetch.mockResolvedValue(servicesPayload('localhost'));
 
-    const result = await discoverConfigService(false);
+    const result = await discoverConfigService();
 
-    // Resolved against the baked URL via Tier 0 — never fell through to mDNS/scan.
+    // Resolved against the baked URL via Tier 0 — not saved as a pinned URL.
     expect(mockFetch).toHaveBeenCalledWith(
       `${BAKED}/services?style=external`,
       expect.anything(),
@@ -62,13 +51,14 @@ describe('discoverConfigService — DEV_MODE baked config URL (EXPO_PUBLIC_MANUA
     expect(result.config.configServiceUrl).toBe(BAKED);
     expect(result.config.commandCenterUrl).toBe('http://localhost:7703');
     expect(result.fallbackMessage).toBeNull();
+    expect(mockedSC.saveManualConfigUrl).not.toHaveBeenCalled();
   });
 
   it('a UI-pinned URL still wins over the baked env URL', async () => {
     mockedSC.loadManualConfigUrl.mockResolvedValue(PINNED);
     mockFetch.mockResolvedValue(servicesPayload('192.168.1.99'));
 
-    const result = await discoverConfigService(false);
+    const result = await discoverConfigService();
 
     expect(mockFetch).toHaveBeenCalledWith(
       `${PINNED}/services?style=external`,

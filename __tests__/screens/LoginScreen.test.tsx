@@ -14,6 +14,7 @@ const mockGoBack = jest.fn();
 // are mock-prefixed so the jest.mock factory may close over them.
 let mockBiometricAvailable = false;
 let mockBiometricEnabled = false;
+let mockSignOutNotice: string | null = null;
 
 jest.mock('../../src/auth/AuthContext', () => ({
   useAuth: () => ({
@@ -23,7 +24,7 @@ jest.mock('../../src/auth/AuthContext', () => ({
       return mockBiometricAvailable;
     },
     get state() {
-      return { biometricEnabled: mockBiometricEnabled };
+      return { biometricEnabled: mockBiometricEnabled, signOutNotice: mockSignOutNotice };
     },
   }),
 }));
@@ -42,6 +43,29 @@ describe('LoginScreen', () => {
     jest.clearAllMocks();
     mockBiometricAvailable = false;
     mockBiometricEnabled = false;
+    mockSignOutNotice = null;
+  });
+
+  it('shows why the app signed the user out', () => {
+    mockSignOutNotice = 'Your password was reset. Sign in to set a new one.';
+
+    const { getByTestId } = render(
+      <LoginScreen navigation={mockNavigation} route={{} as any} />,
+      { wrapper }
+    );
+
+    expect(getByTestId('sign-out-notice')).toHaveTextContent(
+      'Your password was reset. Sign in to set a new one.',
+    );
+  });
+
+  it('shows no notice after an ordinary sign-out', () => {
+    const { queryByTestId } = render(
+      <LoginScreen navigation={mockNavigation} route={{} as any} />,
+      { wrapper }
+    );
+
+    expect(queryByTestId('sign-out-notice')).toBeNull();
   });
 
   it('should render the Log In header and button', () => {

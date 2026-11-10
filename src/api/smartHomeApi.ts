@@ -195,6 +195,10 @@ export interface NodeOption {
   room: string | null;
   online: boolean;
   last_seen: string | null;
+  /** "desktop" for a computer; null for a Pi. Missing from servers before jarvis-server #176. */
+  node_kind?: string | null;
+  /** Registered name (a computer's name; see nodeDisplayName). Missing from servers before jarvis-server #177. */
+  name?: string | null;
 }
 
 export interface SmartHomeConfig {

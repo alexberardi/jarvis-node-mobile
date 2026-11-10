@@ -16,15 +16,15 @@ tags:
   - schedules
   - e2e
 env:
-  EMAIL: "ci-node-test@example.com"
-  PASSWORD: "ci-node-test-password"
+  EMAIL: "test@jarvisautomation.io"
+  PASSWORD: "DevPass123!"
 ---
 - launchApp:
     clearState: true
-- runFlow: login.yaml
+- runFlow: subflows/login.yaml
 # Open the Routines tab, then the Scheduled errands screen from its header button.
 - tapOn:
-    text: "Routines"
+    id: "tab-routines"
 - assertVisible:
     id: "open-schedules"
 - tapOn:

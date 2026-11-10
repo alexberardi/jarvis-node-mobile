@@ -19,7 +19,12 @@ jest.mock('expo-location', () => ({
 jest.mock('../../src/services/presenceService', () => ({
   reportPresenceBg: jest.fn(),
   isBackgroundPresenceEnabled: jest.fn(),
+  setBackgroundPresenceEnabled: jest.fn(),
   getHomeGeofence: jest.fn(),
+  // Background geofencing is iOS-only; this suite covers the supported
+  // platform. The unsupported (Android) path lives in
+  // backgroundPresenceAndroid.test.ts.
+  BACKGROUND_PRESENCE_SUPPORTED: true,
 }));
 
 import * as Location from 'expo-location';

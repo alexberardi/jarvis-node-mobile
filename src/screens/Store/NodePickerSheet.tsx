@@ -4,10 +4,14 @@ import React, { useMemo, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { Button, Checkbox, Icon, List, Text, useTheme } from 'react-native-paper';
 
+import { isPantryDisabledError } from '../../api/householdSettingsApi';
 import { requestInstall } from '../../api/packageInstallApi';
+import { usePantryGate } from '../../components/PantryGate';
 import { StoreStackParamList } from '../../navigation/types';
 import { compareSemver } from '../../utils/semver';
 import { safeJsonParse } from '../../utils/safeJson';
+import { NodeKindIcon } from '../../components/NodeKindIcon';
+import { nodeDisplayName } from '../../utils/nodeKind';
 
 type Nav = NativeStackNavigationProp<StoreStackParamList>;
 type Route = RouteProp<StoreStackParamList, 'NodePickerSheet'>;
@@ -15,12 +19,16 @@ type Route = RouteProp<StoreStackParamList, 'NodePickerSheet'>;
 interface NodeInfo {
   node_id: string;
   room: string | null;
+  name?: string | null;
+  node_kind?: string | null;
+  install_mode?: string | null;
 }
 
 type NodeState = 'not-installed' | 'outdated' | 'up-to-date';
 
 const NodePickerSheet = () => {
   const navigation = useNavigation<Nav>();
+  const { markDisabled } = usePantryGate();
   const route = useRoute<Route>();
   const theme = useTheme();
 
@@ -99,7 +107,7 @@ const NodePickerSheet = () => {
           return {
             requestId: result.id,
             nodeId: node.node_id,
-            nodeName: node.room || node.node_id.slice(0, 8),
+            nodeName: nodeDisplayName(node),
           };
         }),
       );
@@ -112,6 +120,10 @@ const NodePickerSheet = () => {
         gitTag: gitTag || null,
       });
     } catch (e: unknown) {
+      if (isPantryDisabledError(e)) {
+        markDisabled();
+        return;
+      }
       Alert.alert('Install Error', e instanceof Error ? e.message : 'Failed to start install');
     } finally {
       setInstalling(false);
@@ -168,9 +180,18 @@ const NodePickerSheet = () => {
             <List.Item
               key={node.node_id}
               testID={`node-picker-list-item-${node.node_id}`}
-              title={node.room || node.node_id.slice(0, 8)}
+              title={nodeDisplayName(node)}
               description={desc.text}
               descriptionStyle={desc.color ? { color: desc.color } : undefined}
+              right={(props) => (
+                <NodeKindIcon
+                  node={node}
+                  size={20}
+                  color={props.color}
+                  testID={`node-picker-kind-${node.node_id}`}
+                  style={[props.style, { justifyContent: 'center' }]}
+                />
+              )}
               style={isUpToDate ? { opacity: 0.6 } : undefined}
               left={(props) =>
                 isUpToDate ? (

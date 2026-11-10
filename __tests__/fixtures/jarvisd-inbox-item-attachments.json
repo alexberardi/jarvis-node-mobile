@@ -1,0 +1,18 @@
+{
+  "id": "0193f7a2-6c1e-7d3a-9b2f-5e8a4c1d2b3f",
+  "user_id": 1,
+  "household_id": "hh1",
+  "title": "pic",
+  "summary": "s",
+  "body": "b",
+  "category": "media",
+  "source_service": "comfyui",
+  "metadata": null,
+  "content_format": null,
+  "is_read": false,
+  "created_at": "2026-10-18T09:00:00Z",
+  "attachments": [
+    { "id": "att-png", "mime": "image/png", "size": 75, "width": 3, "height": 2, "duration_ms": null },
+    { "id": "att-mp4", "mime": "video/mp4", "size": 124, "width": null, "height": null, "duration_ms": null }
+  ]
+}

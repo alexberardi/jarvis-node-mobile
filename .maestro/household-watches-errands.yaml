@@ -1,0 +1,116 @@
+appId: com.jarvis.nodemobile
+name: Household watches and errand autonomy switches
+# Household Settings (src/screens/Settings/HouseholdEditScreen.tsx) as the household
+# admin (the seeded superuser): the "Watches & errands" card's two switches
+# (watches.enabled, errands.autonomous_enabled) each turn on, then back off.
+#
+# State: both settings default off. If an earlier run died with one left on, the
+# `when` steps turn it off first, and every switch ends off, as the flow found it.
+# Needs a server whose GET household settings returns both keys (jarvisd); the app
+# hides a switch whose key is absent.
+tags:
+  - settings
+  - household
+  - e2e
+env:
+  EMAIL: "test@jarvisautomation.io"
+  PASSWORD: "DevPass123!"
+---
+- launchApp:
+    clearState: true
+- runFlow: subflows/login.yaml
+- runFlow: subflows/open-household.yaml
+
+# Watches
+- scrollUntilVisible:
+    element:
+      id: "household-watches-toggle"
+    direction: DOWN
+    centerElement: true
+- runFlow:
+    when:
+      visible:
+        id: "household-watches-toggle"
+        checked: true
+    commands:
+      - tapOn:
+          id: "household-watches-toggle"
+      - extendedWaitUntil:
+          visible:
+            id: "household-watches-toggle"
+            checked: false
+            enabled: true
+          timeout: 10000
+- tapOn:
+    id: "household-watches-toggle"
+- extendedWaitUntil:
+    visible:
+      id: "household-watches-toggle"
+      checked: true
+      enabled: true
+    timeout: 10000
+- tapOn:
+    id: "household-watches-toggle"
+- extendedWaitUntil:
+    visible:
+      id: "household-watches-toggle"
+      checked: false
+      enabled: true
+    timeout: 10000
+
+# Errand autonomy
+- scrollUntilVisible:
+    element:
+      id: "household-errands-autonomy-toggle"
+    direction: DOWN
+    centerElement: true
+- runFlow:
+    when:
+      visible:
+        id: "household-errands-autonomy-toggle"
+        checked: true
+    commands:
+      - tapOn:
+          id: "household-errands-autonomy-toggle"
+      - extendedWaitUntil:
+          visible:
+            id: "household-errands-autonomy-toggle"
+            checked: false
+            enabled: true
+          timeout: 10000
+- tapOn:
+    id: "household-errands-autonomy-toggle"
+- extendedWaitUntil:
+    visible:
+      id: "household-errands-autonomy-toggle"
+      checked: true
+      enabled: true
+    timeout: 10000
+- tapOn:
+    id: "household-errands-autonomy-toggle"
+- extendedWaitUntil:
+    visible:
+      id: "household-errands-autonomy-toggle"
+      checked: false
+      enabled: true
+    timeout: 10000
+
+# Reopened, the saved (off) state comes back from the server
+- back
+- tapOn:
+    id: "household-edit-.*"
+- extendedWaitUntil:
+    visible:
+      id: "household-name-input"
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      id: "household-errands-autonomy-toggle"
+    direction: DOWN
+    centerElement: true
+- assertVisible:
+    id: "household-watches-toggle"
+    checked: false
+- assertVisible:
+    id: "household-errands-autonomy-toggle"
+    checked: false

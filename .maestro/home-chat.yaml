@@ -1,0 +1,33 @@
+appId: com.jarvis.nodemobile
+name: Chat round trip with the scripted model
+# Home's chat (src/screens/Home/HomeScreen.tsx) against the scripted model:
+# send CHAT_MESSAGE and see the model's exact reply, CHAT_REPLY, in the thread.
+# scripts/e2e mobile passes both (jarvis-server e2e/llm/mobile.json answers them).
+# The composer is usable once the seeded node is online and its tools are in:
+# its hint turns to "Message Jarvis..." (the same wait scripts/mobile-shot uses).
+tags:
+  - home
+  - chat
+  - e2e
+env:
+  CHAT_MESSAGE: "what is 12 times 7"
+  CHAT_REPLY: "12 times 7 is 84."
+---
+- launchApp:
+    clearState: true
+- runFlow: subflows/login.yaml
+- extendedWaitUntil:
+    visible:
+      text: "Message Jarvis.*"
+    timeout: 120000
+- tapOn:
+    id: "chat-input"
+- inputText: "${CHAT_MESSAGE}"
+- tapOn:
+    id: "send-button"
+- assertVisible:
+    text: "${CHAT_MESSAGE}"
+- extendedWaitUntil:
+    visible:
+      text: "${CHAT_REPLY}"
+    timeout: 240000

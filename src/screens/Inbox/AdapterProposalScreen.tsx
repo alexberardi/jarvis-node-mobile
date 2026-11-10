@@ -33,6 +33,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { HelpIcon, InfoHelperText } from '../../components/HelpIcon';
 import { helpCopy } from '../../copy/help';
 import { InboxStackParamList } from '../../navigation/types';
+import { parseServerDate } from '../../utils/serverTime';
 
 type Nav = NativeStackNavigationProp<InboxStackParamList>;
 type ProposalRoute = RouteProp<InboxStackParamList, 'AdapterProposal'>;
@@ -172,7 +173,7 @@ const AdapterProposalScreen = () => {
             style={{ color: theme.colors.onSurfaceVariant, flex: 1 }}
           >
             Trained on {proposal.trained_on_examples ?? '?'} examples · expires{' '}
-            {new Date(proposal.expires_at).toLocaleDateString()}
+            {(parseServerDate(proposal.expires_at) ?? new Date(proposal.expires_at)).toLocaleDateString()}
           </Text>
           <HelpIcon text={helpCopy.inbox.adapterStats} size={16} />
         </View>

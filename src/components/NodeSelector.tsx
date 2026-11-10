@@ -14,6 +14,10 @@ import { Button, Menu, Text, useTheme } from 'react-native-paper';
 import { getSmartHomeConfig, NodeOption } from '../api/smartHomeApi';
 import { LAST_NODE_KEY } from '../config/storageKeys';
 import { usePendingNode } from '../contexts/PendingNodeContext';
+import { useNodeKinds } from '../hooks/useNodeKinds';
+import type { NodeKindMap } from '../hooks/useNodeKinds';
+import { nodeDisplayName, nodeKindIcon, withKnownKind } from '../utils/nodeKind';
+import { NodeKindIcon } from './NodeKindIcon';
 
 /** While a freshly-provisioned node is booting, re-check the node list this often. */
 const PENDING_POLL_MS = 4000;
@@ -84,6 +88,8 @@ const NodeSelector = forwardRef<NodeSelectorHandle, NodeSelectorProps>(
     const onSelectedNodeReadyChangeRef = useRef(onSelectedNodeReadyChange);
     onSelectedNodeReadyChangeRef.current = onSelectedNodeReadyChange;
     const reqIdRef = useRef(0);
+    // The household node list's kinds and names (set below, from useNodeKinds).
+    const knownKindsRef = useRef<NodeKindMap>({});
 
     const loadConfig = useCallback(async (): Promise<void> => {
       if (!householdId) return;
@@ -109,7 +115,8 @@ const NodeSelector = forwardRef<NodeSelectorHandle, NodeSelectorProps>(
       const pendingNode = pending ? nodeList.find((n) => n.node_id === pending) : undefined;
       if (pending && pendingNode) {
         onSelectNodeRef.current(pending);
-        onPendingNodeReadyRef.current?.(pendingNode);
+        // Best effort: a node this new may not be in the kinds map yet.
+        onPendingNodeReadyRef.current?.(withKnownKind(pendingNode, knownKindsRef.current[pending]));
         clearPendingRef.current();
         return;
       }
@@ -181,6 +188,8 @@ const NodeSelector = forwardRef<NodeSelectorHandle, NodeSelectorProps>(
       return () => clearInterval(id);
     }, [householdId, waitingForNewNode, loadConfig]);
 
+    const kinds = useNodeKinds(householdId, nodes.map((n) => n.node_id));
+    knownKindsRef.current = kinds;
     const selectedNode = nodes.find((n) => n.node_id === selectedNodeId);
     const selectedOffline = selectedNode && !selectedNode.online;
 
@@ -193,8 +202,9 @@ const NodeSelector = forwardRef<NodeSelectorHandle, NodeSelectorProps>(
     useEffect(() => {
       onSelectedNodeReadyChangeRef.current?.(selectedNodeReady);
     }, [selectedNodeReady]);
+    const nodeLabel = (n: NodeOption) => nodeDisplayName(withKnownKind(n, kinds[n.node_id]));
     const label = selectedNode
-      ? `${selectedNode.room ?? selectedNodeId?.slice(0, 8)}${selectedOffline ? ' (offline)' : ''}`
+      ? `${nodeLabel(selectedNode)}${selectedOffline ? ' (offline)' : ''}`
       : selectedNodeId?.slice(0, 8) ?? 'Select node';
 
     const pendingIndicator = (
@@ -223,7 +233,13 @@ const NodeSelector = forwardRef<NodeSelectorHandle, NodeSelectorProps>(
             <Button
               mode="outlined"
               compact
-              icon={selectedOffline ? 'access-point-off' : 'access-point'}
+              icon={
+                selectedOffline
+                  ? 'access-point-off'
+                  : selectedNode
+                    ? nodeKindIcon(kinds[selectedNode.node_id])
+                    : 'access-point'
+              }
               onPress={() => setMenuVisible(true)}
               style={styles.button}
               labelStyle={{ fontSize: 13 }}
@@ -236,8 +252,19 @@ const NodeSelector = forwardRef<NodeSelectorHandle, NodeSelectorProps>(
           {nodes.map((node) => (
             <Menu.Item
               key={node.node_id}
-              title={`${node.room ?? node.node_id.slice(0, 8)}${node.online ? '' : ' (offline)'}`}
-              leadingIcon={node.node_id === selectedNodeId ? 'check' : node.online ? 'circle-small' : 'circle-off-outline'}
+              title={`${nodeLabel(node)}${node.online ? '' : ' (offline)'}`}
+              leadingIcon={
+                node.node_id === selectedNodeId
+                  ? 'check'
+                  : ({ size, color }) => (
+                      <NodeKindIcon
+                        node={kinds[node.node_id]}
+                        size={size}
+                        color={color}
+                        testID={`node-selector-kind-${node.node_id}`}
+                      />
+                    )
+              }
               onPress={() => {
                 onSelectNode(node.node_id);
                 setMenuVisible(false);

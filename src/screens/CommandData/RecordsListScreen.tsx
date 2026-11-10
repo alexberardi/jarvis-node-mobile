@@ -161,7 +161,7 @@ const RecordsListScreen = () => {
         <FAB
           testID="command-data-add-fab"
           icon="plus"
-          style={styles.fab}
+          style={[styles.fab, { backgroundColor: theme.colors.primary }]}
           color={theme.colors.onPrimary}
           onPress={() =>
             navigation.navigate('DataBrowserEdit', { nodeId, commandName })

@@ -21,6 +21,7 @@
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
+import { Platform } from 'react-native';
 
 import { reportPresence, type PresenceState } from '../api/presenceApi';
 import { getServiceConfig, loadCachedConfig } from '../config/serviceConfig';
@@ -338,13 +339,32 @@ export const reportIfChanged = async (
 // ── Background presence opt-in (Phase 3) ────────────────────────────────
 
 /**
+ * Whether TRUE background geofencing exists on this platform at all.
+ *
+ * iOS only. The Android build ships WITHOUT `ACCESS_BACKGROUND_LOCATION`:
+ * Google Play gates that permission behind a per-release background-location
+ * declaration + demo-video review, which blocks shipping the app at all, and
+ * home/away is not worth that. Android keeps foreground presence (sampled while
+ * the app is open — see `reportIfChanged`), which needs only While-Using
+ * location. Nothing here is conditionally compiled; this is the single choke
+ * point every background path is gated on, so the Android build simply never
+ * asks for, arms, or depends on background location.
+ */
+export const BACKGROUND_PRESENCE_SUPPORTED = Platform.OS !== 'android';
+
+/**
  * Whether the user has opted into TRUE background geofencing (Always-location +
  * an OS geofence that fires when the app is backgrounded/terminated). DISTINCT
  * from the foreground `HomeGeofence.enabled` flag: this one also downgrades
  * keychain token accessibility (see tokenStorage.computeAccessibility), so it's
  * only set once the user explicitly turns it on AND grants Always permission.
+ *
+ * Always false on Android (see BACKGROUND_PRESENCE_SUPPORTED) — including for a
+ * user upgrading from a build where they HAD turned it on, so a stale stored
+ * `true` can never re-arm a geofence or downgrade token accessibility.
  */
 export const isBackgroundPresenceEnabled = async (): Promise<boolean> => {
+  if (!BACKGROUND_PRESENCE_SUPPORTED) return false;
   try {
     return (await AsyncStorage.getItem(BG_PRESENCE_ENABLED_KEY)) === 'true';
   } catch {
@@ -352,9 +372,13 @@ export const isBackgroundPresenceEnabled = async (): Promise<boolean> => {
   }
 };
 
-/** Persist the background-presence opt-in (boolean only — never a token). */
+/** Persist the background-presence opt-in (boolean only — never a token). On a
+ *  platform without background presence only `false` is ever written, so the
+ *  Android cleanup path (backgroundPresenceTask.rearmIfNeeded) can clear a flag
+ *  left behind by an older build. */
 export const setBackgroundPresenceEnabled = async (enabled: boolean): Promise<void> => {
-  await AsyncStorage.setItem(BG_PRESENCE_ENABLED_KEY, enabled ? 'true' : 'false');
+  const value = enabled && BACKGROUND_PRESENCE_SUPPORTED;
+  await AsyncStorage.setItem(BG_PRESENCE_ENABLED_KEY, value ? 'true' : 'false');
 };
 
 // ── Deferred pending-edge queue (Phase 3 background fallback) ────────────

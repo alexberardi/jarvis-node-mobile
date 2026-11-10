@@ -1,8 +1,9 @@
 import { CommonActions } from '@react-navigation/native';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { BottomTabBar, createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import React from 'react';
 
+import MiniPlayer from '../components/NowPlaying/MiniPlayer';
 import DevicesStackNavigator from './DevicesStackNavigator';
 import NodesStackNavigator from './NodesStackNavigator';
 import RoutinesStackNavigator from './RoutinesStackNavigator';
@@ -13,11 +14,22 @@ import { useThemePreference } from '../theme/ThemeProvider';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
+type TabState = { index: number; routes: { state?: { index?: number } }[] };
+
+/** The mini-player sits on each tab's first screen only, never on a drill-in (P11). */
+export const onFirstScreen = (s: TabState): boolean => (s.routes[s.index]?.state?.index ?? 0) === 0;
+
 const MainTabNavigator = () => {
   const { paperTheme } = useThemePreference();
 
   return (
     <Tab.Navigator
+      tabBar={(props) => (
+        <>
+          {onFirstScreen(props.state) && <MiniPlayer />}
+          <BottomTabBar {...props} />
+        </>
+      )}
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: paperTheme.colors.primary,
@@ -33,6 +45,7 @@ const MainTabNavigator = () => {
         component={HomeScreen}
         options={{
           tabBarLabel: 'Home',
+          tabBarButtonTestID: 'tab-home',
           tabBarIcon: ({ color, size }) => (
             <MaterialCommunityIcons name="home" color={color} size={size} />
           ),
@@ -43,6 +56,7 @@ const MainTabNavigator = () => {
         component={DevicesStackNavigator}
         options={{
           tabBarLabel: 'Devices',
+          tabBarButtonTestID: 'tab-devices',
           tabBarIcon: ({ color, size }) => (
             <MaterialCommunityIcons name="devices" color={color} size={size} />
           ),
@@ -53,6 +67,7 @@ const MainTabNavigator = () => {
         component={StoreStackNavigator}
         options={{
           tabBarLabel: 'Pantry',
+          tabBarButtonTestID: 'tab-pantry',
           tabBarIcon: ({ color, size }) => (
             <MaterialCommunityIcons name="package-variant-closed" color={color} size={size} />
           ),
@@ -63,8 +78,9 @@ const MainTabNavigator = () => {
         component={RoutinesStackNavigator}
         options={{
           tabBarLabel: 'Routines',
+          tabBarButtonTestID: 'tab-routines',
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="robot" color={color} size={size} />
+            <MaterialCommunityIcons name="playlist-play" color={color} size={size} />
           ),
         }}
       />
@@ -73,6 +89,7 @@ const MainTabNavigator = () => {
         component={NodesStackNavigator}
         options={{
           tabBarLabel: 'Nodes',
+          tabBarButtonTestID: 'tab-nodes',
           tabBarIcon: ({ color, size }) => (
             <MaterialCommunityIcons name="raspberry-pi" color={color} size={size} />
           ),

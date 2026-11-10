@@ -51,6 +51,10 @@ export interface CommandSettingsEntry {
   enabled?: boolean;
   parameters?: CommandParameterEntry[];
   fast_paths?: FastPathEntry[];
+  /** Present for a command that shares context with phone call plans (a calendar's
+   * availability, a loyalty number): whether it shares (the "Share with phone calls" switch,
+   * on by default) and what it shares, in the command's words. Absent: nothing to switch. */
+  call_context?: { enabled: boolean; description?: string };
   /** Field tags from the node when third-party property access failed
    * (e.g. `required_secrets`, `parameters`). Surface a configuration-error
    * badge in the UI when non-empty. */
@@ -120,6 +124,8 @@ export interface NodeHardwareInfo {
 
 export interface NodeConfigSnapshot {
   wake_word_threshold?: number;
+  /** The Go node reports it; the Python node never has. */
+  wake_word_threshold_auto?: boolean;
   silence_threshold?: number;
   silence_duration?: number;
   min_record_seconds?: number;

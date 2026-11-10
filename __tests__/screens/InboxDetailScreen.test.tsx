@@ -644,3 +644,201 @@ describe('phone-call prereqs (typed editors / server plane / expiry / guard)', (
     expect(queryByTestId('inbox-audio-player')).toBeNull();
   });
 });
+
+// "Ran on its own" card (jarvis-server autonomy, card_type autonomy_ran).
+const sampleRanItem = {
+  ...sampleItem,
+  category: 'autonomy',
+  title: '🤖 Ran on its own: Find a plumber',
+  body: 'I ran this on its own because your household\'s rules allow it.',
+  metadata: {
+    household_id: 'household-1',
+    card_type: 'autonomy_ran',
+    state: 'running',
+    workflow_id: 'wf_1',
+    plan_id: 'pl_1',
+    source: { kind: 'errand', label: 'Errand' },
+    steps: [
+      { label: 'Search the web', command: 'quick_search', status: 'ok', result: '5 results' },
+    ],
+    rules: [
+      {
+        tool: 'quick_search',
+        effect: 'allow',
+        scope: 'tool',
+        rule_id: null,
+        note: '',
+        reason: 'the tool declares run_without_confirmation',
+      },
+    ],
+    interactive_elements: [
+      {
+        id: 'stop-errand',
+        label: 'Stop',
+        command: 'errand',
+        callback: 'stop_errand',
+        target: 'server',
+        data: { workflow_id: 'wf_1', revision: 1 },
+      },
+    ],
+  },
+};
+
+describe('"Ran on its own" card', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('renders the card instead of the body, and keeps Stop', async () => {
+    mockGetInboxItem.mockResolvedValue(sampleRanItem);
+
+    const { getByTestId, getByText, queryByText } = render(<InboxDetailScreen />, { wrapper });
+    await waitFor(() => expect(getByTestId('ran-card')).toBeTruthy());
+
+    expect(getByText('Search the web')).toBeTruthy();
+    expect(queryByText(sampleRanItem.body)).toBeNull();
+    expect(getByText('Stop')).toBeTruthy();
+  });
+
+  it("shows the errand's answer from metadata.answer", async () => {
+    mockGetInboxItem.mockResolvedValue({
+      ...sampleRanItem,
+      metadata: { ...sampleRanItem.metadata, state: 'done', answer: 'The Bambino Plus wins.' },
+    });
+
+    const { getByTestId, getByText } = render(<InboxDetailScreen />, { wrapper });
+    await waitFor(() => expect(getByTestId('ran-answer')).toBeTruthy());
+    expect(getByText('The Bambino Plus wins.')).toBeTruthy();
+  });
+
+  it('renders the body as before without card_type', async () => {
+    mockGetInboxItem.mockResolvedValue(sampleItem);
+
+    const { getByText, queryByTestId } = render(<InboxDetailScreen />, { wrapper });
+    await waitFor(() =>
+      expect(getByText('This is the full body of the research results.')).toBeTruthy(),
+    );
+    expect(queryByTestId('ran-card')).toBeNull();
+  });
+});
+
+// Watch alert card (jarvis-server autonomy, card_type watch_alert).
+const sampleWatchItem = {
+  ...sampleItem,
+  category: 'watch_alert',
+  title: '👀 Cheaper item',
+  body: 'The price on example.com is now $99 (was $129).',
+  metadata: {
+    household_id: 'household-1',
+    card_type: 'watch_alert',
+    watch_id: 'wt_1',
+    state: 'active',
+    looking_for: 'the price to drop below 100 on example.com',
+    value: '$99',
+    previous: '$129',
+    checked_at: '2026-10-16T14:00:00Z',
+    source_url: 'https://www.example.com/item',
+    source_label: 'example.com',
+    interactive_elements: [
+      {
+        id: 'pause-watch',
+        label: 'Pause',
+        command: 'watch',
+        callback: 'pause_watch',
+        target: 'server',
+        data: { watch_id: 'wt_1' },
+      },
+      {
+        id: 'stop-watch',
+        label: 'Stop watching',
+        command: 'watch',
+        callback: 'cancel_watch',
+        target: 'server',
+        data: { watch_id: 'wt_1' },
+      },
+    ],
+  },
+};
+
+describe('watch-alert card', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('renders the card instead of the body, and keeps Pause and Stop watching', async () => {
+    mockGetInboxItem.mockResolvedValue(sampleWatchItem);
+
+    const { getByTestId, getByText, queryByText } = render(<InboxDetailScreen />, { wrapper });
+    await waitFor(() => expect(getByTestId('watch-card')).toBeTruthy());
+
+    expect(getByTestId('watch-change')).toHaveTextContent('$129 → $99');
+    expect(queryByText(sampleWatchItem.body)).toBeNull();
+    expect(getByText('Pause')).toBeTruthy();
+    expect(getByText('Stop watching')).toBeTruthy();
+  });
+
+  it('renders the body as before without card_type', async () => {
+    mockGetInboxItem.mockResolvedValue(sampleItem);
+
+    const { getByText, queryByTestId } = render(<InboxDetailScreen />, { wrapper });
+    await waitFor(() =>
+      expect(getByText('This is the full body of the research results.')).toBeTruthy(),
+    );
+    expect(queryByTestId('watch-card')).toBeNull();
+  });
+});
+
+const mockDownloadInboxMedia = jest.fn();
+jest.mock('../../src/services/inboxMediaService', () => ({
+  ...jest.requireActual('../../src/services/inboxMediaService'),
+  downloadInboxMedia: (...args: any[]) => mockDownloadInboxMedia(...args),
+}));
+
+describe('InboxDetailScreen attachments', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockDownloadInboxMedia.mockResolvedValue('file:///cache/inbox-media/a.png');
+  });
+
+  it('shows the attachment strip and opens the viewer', async () => {
+    mockGetInboxItem.mockResolvedValue({
+      ...sampleItem,
+      attachments: [
+        // jarvisd's shape (see __tests__/fixtures/jarvisd-inbox-item-attachments.json).
+        { id: 'a1', mime: 'image/png', size: 75, width: 3, height: 2, duration_ms: null },
+        { id: 'a2', mime: 'video/mp4', size: 124, width: null, height: null, duration_ms: null },
+      ],
+    });
+
+    const { findByTestId, getByTestId } = render(<InboxDetailScreen />, { wrapper });
+
+    fireEvent.press(await findByTestId('inbox-attachment-0'));
+    expect(getByTestId('inbox-attachment-1')).toBeTruthy();
+    expect(await findByTestId('attachment-image')).toBeTruthy();
+    expect(mockDownloadInboxMedia).toHaveBeenCalledWith(
+      '/api/v0/inbox/test-id/attachments/a1',
+      'image/png',
+    );
+  });
+
+  it('reads attachments from metadata too', async () => {
+    mockGetInboxItem.mockResolvedValue({
+      ...sampleItem,
+      metadata: { attachments: [{ kind: 'image', url: '/a.png' }] },
+    });
+
+    const { findByTestId } = render(<InboxDetailScreen />, { wrapper });
+
+    expect(await findByTestId('inbox-attachment-0')).toBeTruthy();
+  });
+
+  it('renders an older item without attachments as before', async () => {
+    mockGetInboxItem.mockResolvedValue(sampleItem);
+
+    const { findByText, queryByTestId } = render(<InboxDetailScreen />, { wrapper });
+
+    expect(await findByText('Deep Research Results')).toBeTruthy();
+    expect(queryByTestId('inbox-attachment-0')).toBeNull();
+    expect(mockDownloadInboxMedia).not.toHaveBeenCalled();
+  });
+});

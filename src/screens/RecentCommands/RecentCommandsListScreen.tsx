@@ -9,12 +9,13 @@ import { useAuth } from '../../auth/AuthContext';
 import { InfoHelperText } from '../../components/HelpIcon';
 import { helpCopy } from '../../copy/help';
 import { RecentCommandsStackParamList } from '../../navigation/types';
+import { parseServerTimestamp } from '../../utils/serverTime';
 
 type Nav = NativeStackNavigationProp<RecentCommandsStackParamList>;
 
 const formatRelative = (iso: string): string => {
   const now = Date.now();
-  const ts = new Date(iso).getTime();
+  const ts = parseServerTimestamp(iso) ?? new Date(iso).getTime();
   const diffMin = Math.round((now - ts) / 60_000);
   if (diffMin < 1) return 'just now';
   if (diffMin < 60) return `${diffMin}m ago`;
@@ -22,7 +23,7 @@ const formatRelative = (iso: string): string => {
   if (diffHr < 24) return `${diffHr}h ago`;
   const diffDay = Math.round(diffHr / 24);
   if (diffDay < 7) return `${diffDay}d ago`;
-  return new Date(iso).toLocaleDateString();
+  return new Date(ts).toLocaleDateString();
 };
 
 const summarizeToolCall = (item: Transcript): string => {

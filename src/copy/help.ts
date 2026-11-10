@@ -56,8 +56,9 @@ export const helpCopy = {
 
   settings: {
     primaryNode: "One node speaks to your smart-home gear on behalf of all others. Pick whichever's most reliable.",
+    primaryNodeComputer: "Can't find smart-home devices · runs routines only while it's on",
     useExternalDevices: "Pull live state from Home Assistant or another hub instead of Jarvis's local copy.",
-    rediscoverServices: 'Re-scan your network for Jarvis services. Use after changing WiFi or moving to a new router.',
+    recheckConnection: 'Reconnect to your server URL and reload the service addresses. Use after changing WiFi.',
     configServiceUrl: 'Switches environments. Saving logs you out and clears local data — be ready to re-sign-in.',
     statusChip: 'Local = Jarvis running on your network. Cloud = a hosted Jarvis at jarvis.live.',
     pushNotifications: "When off, the app won't be reachable from outside your WiFi for alerts.",
@@ -70,10 +71,17 @@ export const helpCopy = {
     addVsRerecord: 'Add one keeps your existing samples. Re-record wipes them and rebuilds from scratch.',
     testMatch: 'Records a short sample and checks whether it matches your enrolled profile.',
     confidenceAnchor: 'Above ~70% reliably identifies you. Lower means add more samples from the same node.',
+    recognitionOffTitle: 'Speaker recognition is off for this household',
+    recognitionOff:
+      "Your voice samples are saved, but Jarvis won't recognize who is speaking until an admin turns on Speaker recognition: in the Jarvis admin, Settings → stt → voice.recognition_enabled, or the setup wizard's Privacy step.",
   },
 
   hardware: {
     tabIntro: 'Physical settings: mic, speakers, LEDs, Bluetooth. Hidden for Docker-hosted nodes.',
+    desktopTabIntro:
+      'This computer runs the Jarvis Automation agent. Its microphone, speakers and Bluetooth are set up on the computer itself.',
+    desktopVoiceIdentity:
+      "Jarvis knows it's you on this computer: it uses the account signed in to the agent",
     voiceMode: 'How chatty Jarvis is by default. "Brief" answers in a sentence; "conversational" adds context.',
     adapterHash: 'Identifier for the language-model fine-tune this node uses. Useful when reporting bugs.',
     wakeAckAudio: 'The "On it" sound after the wake word. Turn off if you find it slows down quick commands.',
@@ -116,7 +124,7 @@ export const helpCopy = {
     hardwareTab: 'Physical settings: mic, speakers, LEDs, Bluetooth. Hidden for Docker-hosted nodes.',
     packagesEmpty: 'Install commands from the Pantry tab to expand what this node can do.',
     activityTab: 'Recent routine runs on this node. Voice commands show up in Recent Commands instead.',
-    deleteNode: 'Wipes credentials and reflashes a still-online node back to factory setup. Use also if the Pi is gone.',
+    deleteNode: 'Factory-resets the node: it wipes itself, leaves the household and reboots into setup. An offline node resets when it reconnects.',
     missingCog: 'Settings hidden because this node was paired on a different phone. Import its encryption key to manage.',
   },
 

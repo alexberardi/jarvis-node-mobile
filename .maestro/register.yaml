@@ -1,0 +1,91 @@
+appId: com.jarvis.nodemobile
+name: Register with an invite code
+# Create Account (src/screens/Auth/RegisterScreen.tsx): the form's own checks, then a real
+# registration with an invite code from the household admin (the sandbox has open
+# registration closed, so the invite is the way in). The new account lands on Home, in
+# Avery Household as a member, and deletes itself at the end.
+# State: if the flow dies before the delete, one e2e-<time>@jarvisautomation.io account
+# stays in Avery Household (unique per run).
+tags:
+  - auth
+  - register
+  - e2e
+env:
+  EMAIL: "test@jarvisautomation.io"
+  PASSWORD: "DevPass123!"
+---
+# The form's checks, before any account exists
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible:
+      id: "landing-register-button"
+    timeout: 30000
+- tapOn:
+    id: "landing-register-button"
+- tapOn:
+    id: "register-invite-input"
+- inputText: "ZZZZZZZZ"
+- tapOn:
+    id: "register-email-input"
+- extendedWaitUntil:
+    visible:
+      id: "register-invite-invalid"
+    timeout: 15000
+- inputText: "e2e-check@jarvisautomation.io"
+- tapOn:
+    id: "register-password-input"
+- inputText: "short"
+- tapOn:
+    id: "register-confirm-input"
+- inputText: "short"
+- hideKeyboard
+- assertVisible:
+    text: "Password must be at least 8 characters\\."
+- assertVisible:
+    id: "register-button"
+    enabled: false
+- tapOn:
+    id: "register-login-link"
+- assertVisible:
+    id: "login-button"
+
+# A real registration through an invite
+- launchApp:
+    clearState: true
+- runFlow: subflows/login.yaml
+- runFlow:
+    file: subflows/register-invited.yaml
+    env:
+      INVITE_ROLE: member
+- runFlow: subflows/open-settings.yaml
+- scrollUntilVisible:
+    element:
+      id: "household-role-.*"
+    direction: DOWN
+- assertVisible:
+    text: "Avery Household"
+- assertVisible:
+    id: "household-role-.*"
+    text: "member"
+- tapOn:
+    id: "settings-close"
+- runFlow: subflows/delete-account.yaml
+
+# The deleted account can't sign in any more
+- tapOn:
+    id: "landing-login-button"
+- tapOn:
+    id: "email-input"
+- inputText: ${output.newEmail}
+- tapOn:
+    id: "password-input"
+- inputText: ${PASSWORD}
+- tapOn:
+    id: "login-button"
+- extendedWaitUntil:
+    visible:
+      id: "login-error"
+    timeout: 15000
+- assertVisible:
+    id: "login-button"

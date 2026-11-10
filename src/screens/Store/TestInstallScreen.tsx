@@ -14,11 +14,16 @@ import {
 } from 'react-native-paper';
 
 import { listNodes, NodeInfo } from '../../api/nodeApi';
+import { NodeKindIcon } from '../../components/NodeKindIcon';
+import { nodeDisplayName } from '../../utils/nodeKind';
+import { isPantryDisabledError } from '../../api/householdSettingsApi';
 import { requestTestInstall } from '../../api/testInstallApi';
 import { useAuth } from '../../auth/AuthContext';
 import { InfoHelperText } from '../../components/HelpIcon';
 import { helpCopy } from '../../copy/help';
+import { usePantryGate } from '../../components/PantryGate';
 import { StoreStackParamList } from '../../navigation/types';
+import KeyboardSafeView from '../../components/KeyboardSafeView';
 
 type Nav = NativeStackNavigationProp<StoreStackParamList>;
 
@@ -26,6 +31,7 @@ const TestInstallScreen = () => {
   const navigation = useNavigation<Nav>();
   const theme = useTheme();
   const { state: authState } = useAuth();
+  const { markDisabled } = usePantryGate();
 
   const [shareCode, setShareCode] = useState('');
   const [nodes, setNodes] = useState<NodeInfo[]>([]);
@@ -72,7 +78,7 @@ const TestInstallScreen = () => {
           {
             requestId: result.id,
             nodeId: selectedNodeId,
-            nodeName: node?.room || selectedNodeId.slice(0, 8),
+            nodeName: node ? nodeDisplayName(node) : selectedNodeId.slice(0, 8),
           },
         ]),
         packageName: result.package_name,
@@ -82,6 +88,10 @@ const TestInstallScreen = () => {
         mode: 'test',
       });
     } catch (err: unknown) {
+      if (isPantryDisabledError(err)) {
+        markDisabled();
+        return;
+      }
       const detail =
         (err as { response?: { data?: { detail?: string } } })?.response?.data
           ?.detail ?? 'Failed to start test install';
@@ -94,7 +104,7 @@ const TestInstallScreen = () => {
   const codeValid = shareCode.trim().length === 6;
 
   return (
-    <View style={styles.container}>
+    <KeyboardSafeView style={styles.container}>
       <View style={[styles.header, { borderBottomColor: theme.colors.outlineVariant }]}>
         <IconButton testID="back-button" icon="arrow-left" onPress={() => navigation.goBack()} />
         <Text variant="headlineSmall" style={{ fontWeight: 'bold', flex: 1 }}>
@@ -158,8 +168,13 @@ const TestInstallScreen = () => {
                           styles.dot,
                           { backgroundColor: node.online ? '#22c55e' : theme.colors.outline },
                         ]} />
+                        <NodeKindIcon
+                          node={node}
+                          size={18}
+                          testID={`test-install-node-kind-${node.node_id}`}
+                        />
                         <Text variant="bodyMedium" style={{ fontWeight: '500' }}>
-                          {node.room || node.node_id.slice(0, 8)}
+                          {nodeDisplayName(node)}
                         </Text>
                       </View>
                       {selected && (
@@ -181,6 +196,23 @@ const TestInstallScreen = () => {
           </Text>
         </View>
 
+        {/* Unverified-code warning: a share code can come from anyone, and
+            the draft runs on the node like any installed command (no sandbox,
+            no Pantry review). */}
+        <View
+          testID="unverified-warning"
+          style={[styles.infoBanner, { backgroundColor: theme.colors.errorContainer }]}
+        >
+          <Icon source="alert-outline" size={18} color={theme.colors.onErrorContainer} />
+          <Text variant="bodySmall" style={{ flex: 1, color: theme.colors.onErrorContainer, marginLeft: 8 }}>
+            <Text variant="bodySmall" style={{ fontWeight: 'bold', color: theme.colors.onErrorContainer }}>
+              Unverified code.{' '}
+            </Text>
+            This draft hasn't been reviewed by Pantry. It runs on your node with the same access as
+            any installed command. Only install codes you created or trust.
+          </Text>
+        </View>
+
         {/* Install button */}
         <Button
           testID="install-button"
@@ -193,7 +225,7 @@ const TestInstallScreen = () => {
           Test Install
         </Button>
       </ScrollView>
-    </View>
+    </KeyboardSafeView>
   );
 };
 

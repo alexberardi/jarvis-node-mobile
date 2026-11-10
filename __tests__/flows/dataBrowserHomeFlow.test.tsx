@@ -21,6 +21,16 @@ jest.mock('@react-navigation/native', () => ({
   useRoute: () => ({ params: mockRouteParams }),
 }));
 
+// Kinds come from the node list (useNodeKinds): command-data's own node list
+// carries no node_kind.
+const mockListAllNodes = jest.fn();
+jest.mock('../../src/api/nodeApi', () => ({
+  listNodes: (...args: unknown[]) => mockListAllNodes(...args),
+}));
+jest.mock('../../src/auth/AuthContext', () => ({
+  useAuth: () => ({ state: { activeHouseholdId: 'hh-1' } }),
+}));
+
 jest.mock('../../src/api/commandDataApi', () => ({
   listNodes: jest.fn(),
   listCommands: jest.fn(),
@@ -47,6 +57,7 @@ describe('Data Browser home — flow integration (nodes, commands, nav, errors)'
   beforeEach(() => {
     jest.clearAllMocks();
     mockRouteParams = undefined; // not pinned → enumerate nodes
+    mockListAllNodes.mockResolvedValue([]);
     (listNodes as jest.Mock).mockResolvedValue([KITCHEN, BEDROOM]);
     (listCommands as jest.Mock).mockResolvedValue([TIMER, SHOPPING]);
   });
@@ -141,4 +152,32 @@ describe('Data Browser home — flow integration (nodes, commands, nav, errors)'
     const generic = renderScreen();
     await generic.findByText('Could not load commands.');
   });
+
+  it('labels each node chip with its kind (robot for a computer, Raspberry Pi otherwise)', async () => {
+    const AGENT = { node_id: 'agent-1', household_id: 'hh-1', room: 'Office PC' };
+    (listNodes as jest.Mock).mockResolvedValue([KITCHEN, AGENT]);
+    mockListAllNodes.mockResolvedValue([
+      { node_id: 'node-kitchen', node_kind: null, install_mode: 'tarball' },
+      { node_id: 'agent-1', node_kind: 'desktop', install_mode: 'desktop-agent' },
+    ]);
+    const utils = renderScreen();
+
+    await utils.findByLabelText('Office PC, Computer');
+    expect(mockListAllNodes).toHaveBeenCalledWith('hh-1');
+    expect(utils.getByLabelText('Kitchen, Raspberry Pi')).toBeTruthy();
+  });
+
+  it('a desktop agent that does not answer gets computer wording, not a stall-then-generic error', async () => {
+    mockRouteParams = { nodeId: 'agent-1' }; // pinned from the computer's settings
+    mockListAllNodes.mockResolvedValue([
+      { node_id: 'agent-1', node_kind: 'desktop', install_mode: 'desktop-agent' },
+    ]);
+    // The app's own 10 s timeout fired before cc's 504.
+    (listCommands as jest.Mock).mockRejectedValue({ code: 'ECONNABORTED', message: 'timeout' });
+    const utils = renderScreen();
+
+    await utils.findByText(/This computer didn't answer/);
+    expect(listCommands).toHaveBeenCalledWith('agent-1');
+  });
 });
+

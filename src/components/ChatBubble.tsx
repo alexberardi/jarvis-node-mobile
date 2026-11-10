@@ -1,11 +1,13 @@
 import React, { useMemo, useState } from 'react';
-import { LayoutChangeEvent, Pressable, StyleSheet, View } from 'react-native';
+import { Image, LayoutChangeEvent, Pressable, StyleSheet, View } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import { Button, IconButton, Text, useTheme } from 'react-native-paper';
 
 const COLLAPSE_HEIGHT = 400;
 
 import type { ChatAction, ChatMessage } from '../api/chatApi';
+import { DEV_MODE } from '../config/env';
+import { blend } from '../theme';
 import TraceWaterfall from './TraceWaterfall';
 
 /** Strip <think>...</think> blocks from LLM output (Qwen3 reasoning traces). */
@@ -36,7 +38,12 @@ interface ChatBubbleProps {
   onPlayTTS?: (text: string) => void;
   isSpeaking?: boolean;
   onAction?: (action: ChatAction, commandName: string, context: Record<string, unknown>) => Promise<void>;
+  /** Show developer diagnostics (round-trip time, request trace). Off unless
+   *  the build sets EXPO_PUBLIC_DEV_MODE=true. */
+  showDebugDetails?: boolean;
 }
+
+export const formatHops = (count: number): string => `${count} ${count === 1 ? 'hop' : 'hops'}`;
 
 const ChatBubble: React.FC<ChatBubbleProps> = ({
   message,
@@ -44,6 +51,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
   onPlayTTS,
   isSpeaking = false,
   onAction,
+  showDebugDetails = DEV_MODE,
 }) => {
   const theme = useTheme();
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
@@ -86,6 +94,8 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
   // replaced by the real response when delta events arrive.
   const isUser = message.role === 'user';
   const hasActions = !isUser && !isStreaming && message.actions && message.actions.length > 0 && !completionText;
+  const roundTripMs = showDebugDetails ? message.roundTripMs : undefined;
+  const showTTS = !hasActions && !!onPlayTTS;
 
   const handleActionPress = async (action: ChatAction) => {
     if (!onAction || !message.actionContext) return;
@@ -120,7 +130,15 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
         style={[
           styles.bubble,
           isUser
-            ? [styles.userBubble, { backgroundColor: theme.colors.primary }]
+            ? [
+                styles.userBubble,
+                {
+                  // The admin chat's soft violet bubble: primary over the background, with a
+                  // quiet primary border, so both themes stay in their own palette.
+                  backgroundColor: blend(theme.colors.background, theme.colors.primary, theme.dark ? 0.16 : 0.1),
+                  borderColor: `${theme.colors.primary}40`,
+                },
+              ]
             : [styles.assistantBubble, { backgroundColor: theme.colors.surfaceVariant }],
         ]}
       >
@@ -133,12 +151,30 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
           </Text>
         )}
         {isUser ? (
-          <Text
-            variant="bodyMedium"
-            style={{ color: theme.colors.onPrimary }}
-          >
-            {message.content}
-          </Text>
+          <>
+            {message.images && message.images.length > 0 && (
+              <View style={styles.imageGrid} testID="chat-bubble-images">
+                {message.images.map((img, i) => (
+                  <Image
+                    key={`${img.uri}-${i}`}
+                    source={{ uri: img.uri }}
+                    style={message.images!.length === 1 ? styles.imageSingle : styles.imageTile}
+                    resizeMode="cover"
+                    accessibilityLabel={`Attached image ${i + 1}`}
+                    testID="chat-bubble-image"
+                  />
+                ))}
+              </View>
+            )}
+            {message.content.length > 0 && (
+              <Text
+                variant="bodyMedium"
+                style={{ color: theme.colors.onSurface }}
+              >
+                {message.content}
+              </Text>
+            )}
+          </>
         ) : (
           <>
             {/* Collapsible reasoning section */}
@@ -254,19 +290,19 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
           </View>
         )}
 
-        {!isUser && message.content.length > 0 && !isStreaming && (
+        {!isUser && message.content.length > 0 && !isStreaming && (roundTripMs != null || showTTS) && (
           <View style={styles.ttsRow}>
-            {message.roundTripMs != null && (
+            {roundTripMs != null && (
               <Text
                 variant="labelSmall"
                 style={[styles.roundTrip, { color: theme.colors.outline }]}
               >
-                {message.roundTripMs < 1000
-                  ? `${message.roundTripMs}ms`
-                  : `${(message.roundTripMs / 1000).toFixed(1)}s`}
+                {roundTripMs < 1000
+                  ? `${roundTripMs}ms`
+                  : `${(roundTripMs / 1000).toFixed(1)}s`}
               </Text>
             )}
-            {!hasActions && onPlayTTS && (
+            {showTTS && (
               <IconButton
                 icon={isSpeaking ? 'stop' : 'volume-high'}
                 size={16}
@@ -279,7 +315,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
         )}
 
         {/* Trace toggle + waterfall */}
-        {!isUser && !isStreaming && message.traceSummary && (
+        {showDebugDetails && !isUser && !isStreaming && message.traceSummary && (
           <View style={styles.traceSection}>
             <Pressable
               onPress={() => setTraceExpanded((v) => !v)}
@@ -289,7 +325,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
                 variant="labelSmall"
                 style={{ color: theme.colors.outline, fontStyle: 'italic' }}
               >
-                {traceExpanded ? 'Hide trace' : `Show trace (${message.traceSummary.service_hops.length} hops)`}
+                {traceExpanded ? 'Hide trace' : `Show trace (${formatHops(message.traceSummary.service_hops.length)})`}
               </Text>
             </Pressable>
             {(traceExpanded || message.traceSummary.status === 'error') && (
@@ -308,6 +344,22 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
 };
 
 const styles = StyleSheet.create({
+  imageGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+    marginBottom: 4,
+  },
+  imageSingle: {
+    width: 200,
+    height: 200,
+    borderRadius: 10,
+  },
+  imageTile: {
+    width: 96,
+    height: 96,
+    borderRadius: 8,
+  },
   statusContainer: {
     alignItems: 'center',
     paddingVertical: 4,
@@ -333,6 +385,7 @@ const styles = StyleSheet.create({
   },
   userBubble: {
     borderBottomRightRadius: 4,
+    borderWidth: 1,
   },
   assistantBubble: {
     borderBottomLeftRadius: 4,

@@ -7,23 +7,12 @@ import { getLatestRelease, LatestRelease } from '../api/nodeUpdateApi';
 import { useNodeUpdate } from '../hooks/useNodeUpdate';
 import { useSettingsSnapshot } from '../hooks/useSettingsSnapshot';
 import { encryptAndPushConfig } from '../services/configPushService';
+import { isDesktopAgent } from '../utils/nodeKind';
+import { compareSemver } from '../utils/semver';
 
 interface Props {
   node: NodeInfo;
 }
-
-const compareVersions = (a: string, b: string): number => {
-  const parse = (v: string) =>
-    v.replace(/^v/, '').split('.').map((n) => parseInt(n, 10));
-  const aa = parse(a);
-  const bb = parse(b);
-  for (let i = 0; i < Math.max(aa.length, bb.length); i += 1) {
-    const x = aa[i] ?? 0;
-    const y = bb[i] ?? 0;
-    if (x !== y) return x - y;
-  }
-  return 0;
-};
 
 const stateLabel = (state: string): string => {
   switch (state) {
@@ -42,7 +31,29 @@ const stateLabel = (state: string): string => {
   }
 };
 
-export const NodeUpdateSection: React.FC<Props> = ({ node }) => {
+/**
+ * A desktop agent updates itself to follow the server's version (install plan 1.7): it shows
+ * its version only, never the Pi's release check, Update button or allow_updates K2 push.
+ */
+const AgentVersion: React.FC<Props> = ({ node }) => {
+  const theme = useTheme();
+  return (
+    <View style={styles.container}>
+      <Text variant="titleSmall">Agent version</Text>
+      <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
+        {node.last_seen_version ?? 'Unknown'}
+      </Text>
+      <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 2 }}>
+        Updates itself to match the server.
+      </Text>
+    </View>
+  );
+};
+
+export const NodeUpdateSection: React.FC<Props> = ({ node }) =>
+  isDesktopAgent(node) ? <AgentVersion node={node} /> : <PiNodeUpdateSection node={node} />;
+
+const PiNodeUpdateSection: React.FC<Props> = ({ node }) => {
   const theme = useTheme();
   const [latest, setLatest] = useState<LatestRelease | null>(null);
   const { task, error, loading, cancelling, rehydrating, trigger, cancel } =
@@ -121,23 +132,25 @@ export const NodeUpdateSection: React.FC<Props> = ({ node }) => {
 
   useEffect(() => {
     let cancelled = false;
-    getLatestRelease().then((info) => {
+    getLatestRelease(node.node_id).then((info) => {
       if (!cancelled) setLatest(info);
     });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [node.node_id]);
 
   // Update is only meaningful for tarball installs (the ones the node can
-  // upgrade itself). Docker / dev show version but no button.
+  // upgrade itself). Docker / dev show version but no button. Only a
+  // release strictly newer than the node's own is offered (semver
+  // precedence: 0.1.0-rc18 < 0.1.0-rc19 < 0.1.0).
   const supported = node.install_mode === 'tarball';
   const current = node.last_seen_version;
   const updateAvailable =
     supported &&
     !!latest &&
     !!current &&
-    compareVersions(latest.version, current) > 0;
+    compareSemver(latest.version, current) > 0;
 
   const isActive = task && task.state !== 'success' && task.state !== 'failed';
 

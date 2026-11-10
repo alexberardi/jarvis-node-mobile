@@ -3,6 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import { Appbar, Button, HelperText, Text, TextInput, useTheme } from 'react-native-paper';
 
 import { useAuth } from '../../auth/AuthContext';
+import KeyboardSafeView from '../../components/KeyboardSafeView';
 
 /**
  * Full-screen gate shown when the session was opened with an admin-issued
@@ -64,7 +65,7 @@ const ForcePasswordChangeScreen = () => {
   const showInlineError = error || passwordError;
 
   return (
-    <>
+    <KeyboardSafeView>
       <Appbar.Header>
         <Appbar.Content title="Set a New Password" />
       </Appbar.Header>
@@ -79,6 +80,7 @@ const ForcePasswordChangeScreen = () => {
 
         {needsCurrentPassword && (
           <TextInput
+            testID="force-temp-password-input"
             label="Temporary Password"
             secureTextEntry
             value={currentPassword}
@@ -88,6 +90,7 @@ const ForcePasswordChangeScreen = () => {
           />
         )}
         <TextInput
+          testID="force-new-password-input"
           label="New Password"
           secureTextEntry
           value={password}
@@ -95,6 +98,7 @@ const ForcePasswordChangeScreen = () => {
           error={!!passwordError}
         />
         <TextInput
+          testID="force-confirm-password-input"
           label="Confirm New Password"
           secureTextEntry
           value={confirmPassword}
@@ -103,12 +107,13 @@ const ForcePasswordChangeScreen = () => {
         />
 
         {showInlineError ? (
-          <HelperText type="error" visible>
+          <HelperText testID="force-password-error" type="error" visible>
             {showInlineError}
           </HelperText>
         ) : null}
 
         <Button
+          testID="force-password-submit"
           mode="contained"
           onPress={handleSubmit}
           loading={loading}
@@ -123,11 +128,11 @@ const ForcePasswordChangeScreen = () => {
         >
           Set Password
         </Button>
-        <Button mode="text" onPress={() => logout()} disabled={loading}>
+        <Button testID="force-password-logout" mode="text" onPress={() => logout()} disabled={loading}>
           Log Out
         </Button>
       </View>
-    </>
+    </KeyboardSafeView>
   );
 };
 

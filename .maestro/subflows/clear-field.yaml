@@ -1,0 +1,13 @@
+appId: com.jarvis.nodemobile
+name: clear-field
+# Focuses the input with testID FIELD_ID and empties it, leaving the cursor in it for the
+# next inputText. A plain `tapOn: {id}` taps the field's centre, so the cursor lands
+# mid-text, and Android's eraseText only deletes what is before the cursor: the new text
+# went in ahead of the old tail ("Avery HouseholdE2E"). So tap the bottom-right corner
+# (after the last character, also on a multiline input) and erase more than any field
+# holds.
+---
+- tapOn:
+    id: "${FIELD_ID}"
+    point: "98%,90%"
+- eraseText: 200

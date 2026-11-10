@@ -209,6 +209,15 @@ describe('Test Install — flow integration (load/auto-select, validation gates,
     expect(utils.getByTestId('install-button').props.accessibilityState?.disabled).toBe(true);
   });
 
+  it('warns that the share-code draft is unverified before installing', async () => {
+    const utils = renderScreen();
+
+    await utils.findByText('Kitchen');
+    expect(utils.getByTestId('unverified-warning')).toBeTruthy();
+    expect(utils.getByText(/Unverified code\./)).toBeTruthy();
+    expect(utils.getByText(/Only install codes you created or trust\./)).toBeTruthy();
+  });
+
   it('back button invokes navigation.goBack', async () => {
     const utils = renderScreen();
     await utils.findByText('Kitchen');
@@ -217,3 +226,19 @@ describe('Test Install — flow integration (load/auto-select, validation gates,
     expect(mockGoBack).toHaveBeenCalled();
   });
 });
+
+describe('Test Install — node kind icons', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('shows the robot for a computer and the Raspberry Pi for a Pi', async () => {
+    (listNodes as jest.Mock).mockResolvedValue([
+      makeNode({ install_mode: 'tarball' }),
+      makeNode({ node_id: 'agent-1', room: 'Office PC', node_kind: 'desktop', install_mode: 'desktop-agent' }),
+    ]);
+    const { findByTestId, getByTestId } = renderScreen();
+    const agent = await findByTestId('test-install-node-kind-agent-1');
+    expect(agent.props.accessibilityLabel).toBe('Computer');
+    expect(getByTestId('test-install-node-kind-node-aaaaaaaa-1111').props.accessibilityLabel).toBe('Raspberry Pi');
+  });
+});
+

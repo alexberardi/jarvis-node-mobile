@@ -24,8 +24,14 @@ import {
   getHouseholdSettings,
   getPersonaPresets,
   setHouseholdSetting,
+  settingErrorMessage,
   type PersonaPreset,
 } from '../../api/householdSettingsApi';
+import HouseholdTimezoneCard from '../../components/HouseholdTimezoneCard';
+import TwilioSettingsCard, {
+  twilioStateFromSettings,
+  type TwilioState,
+} from '../../components/TwilioSettingsCard';
 import { useAuth } from '../../auth/AuthContext';
 import type { RootStackParamList } from '../../navigation/types';
 import {
@@ -39,6 +45,7 @@ import {
   setPresenceNotifyEnabled,
 } from '../../services/presenceNotifications';
 import {
+  BACKGROUND_PRESENCE_SUPPORTED,
   captureCurrentLocation,
   clearHomeGeofence,
   clearLastPresenceState,
@@ -52,12 +59,20 @@ import {
   MIN_RADIUS_METERS,
   type HomeGeofence,
 } from '../../services/presenceService';
+import { displayNameOf, secondaryNameLine } from '../../utils/displayName';
+import { parseServerDate } from '../../utils/serverTime';
+import KeyboardSafeView from '../../components/KeyboardSafeView';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'HouseholdEdit'>;
+
+type MemoryKey = 'memory.enabled' | 'memory.extraction_enabled';
+// Watches and errand autonomy — both default off, admin-only to write.
+type AgentKey = 'watches.enabled' | 'errands.autonomous_enabled';
 
 interface Member {
   user_id: number;
   username: string;
+  display_name?: string | null;
   email: string;
   role: string;
 }
@@ -92,9 +107,25 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const [webSearchLoading, setWebSearchLoading] = useState(true);
   const [savingWebSearch, setSavingWebSearch] = useState(false);
+  // Pantry (package store) — default off on jarvisd; undefined = the server
+  // doesn't gate it (legacy stack), which hides the card.
+  const [pantryEnabled, setPantryEnabled] = useState<boolean | undefined>(undefined);
+  const [savingPantry, setSavingPantry] = useState(false);
+  // Watches + errand autonomy — default off; undefined = the server doesn't
+  // have the key, which hides that switch.
+  const [watchesEnabled, setWatchesEnabled] = useState<boolean | undefined>(undefined);
+  const [errandsAutonomous, setErrandsAutonomous] = useState<boolean | undefined>(undefined);
+  const [savingAgentKey, setSavingAgentKey] = useState<AgentKey | null>(null);
+  // Memory (D19): master toggle + "learn from voice" opt-out. Both default on.
+  const [memoryEnabled, setMemoryEnabled] = useState(true);
+  const [extractionEnabled, setExtractionEnabled] = useState(true);
+  const [savingMemoryKey, setSavingMemoryKey] = useState<MemoryKey | null>(null);
   const [location, setLocation] = useState('');
   const [savedLocation, setSavedLocation] = useState('');
   const [savingLocation, setSavingLocation] = useState(false);
+  // household.timezone ("" = automatic); undefined = the server doesn't have it
+  // (legacy stack), which hides the Time zone card.
+  const [timezone, setTimezone] = useState<string | undefined>(undefined);
 
   // Voice persona (household speaking style — shapes TONE only, not tools)
   const [persona, setPersona] = useState('');
@@ -103,6 +134,9 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
   const [personaPresets, setPersonaPresets] = useState<PersonaPreset[]>([]);
   const [personaDefaultId, setPersonaDefaultId] = useState<string | null>(null);
   const [personaMaxChars, setPersonaMaxChars] = useState(2000);
+
+  // The household's own Twilio account (write-only: only whether it is set).
+  const [twilio, setTwilio] = useState<TwilioState>({ sidSet: false, tokenSet: false, fromNumber: null });
 
   // Home presence (device-local geofence — the precise coordinate never leaves
   // this phone; only home/away is ever reported). Opt-in: `enabled` defaults to
@@ -115,6 +149,8 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
   // Background presence (Phase 3): true OS geofencing that fires even when the
   // app is closed. Separate opt-in from foreground "Presence detection" — it
   // needs Always-location permission and downgrades keychain accessibility.
+  // iOS only: the Android build ships without ACCESS_BACKGROUND_LOCATION (Play
+  // review), so the switch below is hidden and bgEnabled stays false there.
   const [bgEnabled, setBgEnabled] = useState(false);
   const [bgBusy, setBgBusy] = useState(false);
   // Arrive/leave notifications (opt-in) + the live "Currently: home/away" status.
@@ -177,12 +213,28 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
     try {
       const settings = await getHouseholdSettings(householdId);
       setWebSearchEnabled(!!settings['web_search.enabled']);
+      setPantryEnabled(
+        'pantry.enabled' in settings ? settings['pantry.enabled'] === true : undefined,
+      );
+      setWatchesEnabled(
+        'watches.enabled' in settings ? settings['watches.enabled'] === true : undefined,
+      );
+      setErrandsAutonomous(
+        'errands.autonomous_enabled' in settings
+          ? settings['errands.autonomous_enabled'] === true
+          : undefined,
+      );
+      setMemoryEnabled(settings['memory.enabled'] ?? true);
+      setExtractionEnabled(settings['memory.extraction_enabled'] ?? true);
       const loc = settings['household.location'] ?? '';
       setLocation(loc);
       setSavedLocation(loc);
+      const tz = settings['household.timezone'];
+      setTimezone(typeof tz === 'string' ? tz : undefined);
       const voice = settings['persona.household_prompt'] ?? '';
       setPersona(voice);
       setSavedPersona(voice);
+      setTwilio(twilioStateFromSettings(settings));
     } catch (error) {
       console.error('[HouseholdEditScreen] Failed to load household settings', error);
     } finally {
@@ -487,6 +539,36 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
     );
   }, [bgEnabled, teardownBackgroundPresence]);
 
+  // Toggle the Pantry (optimistic; revert on failure)
+  const handleTogglePantry = useCallback(async (next: boolean) => {
+    setPantryEnabled(next);
+    setSavingPantry(true);
+    try {
+      await setHouseholdSetting(householdId, 'pantry.enabled', next);
+    } catch (err: unknown) {
+      setPantryEnabled(!next);
+      Alert.alert('Error', settingErrorMessage(err, 'Failed to update Pantry setting'));
+    } finally {
+      setSavingPantry(false);
+    }
+  }, [householdId]);
+
+  // Toggle watches / errand autonomy (optimistic; revert on failure)
+  const handleToggleAgent = useCallback(async (key: AgentKey, next: boolean) => {
+    const apply = key === 'watches.enabled' ? setWatchesEnabled : setErrandsAutonomous;
+    apply(next);
+    setSavingAgentKey(key);
+    try {
+      await setHouseholdSetting(householdId, key, next);
+    } catch (err: unknown) {
+      apply(!next);
+      const what = key === 'watches.enabled' ? 'watches' : 'errand';
+      Alert.alert('Error', settingErrorMessage(err, `Failed to update ${what} setting`));
+    } finally {
+      setSavingAgentKey(null);
+    }
+  }, [householdId]);
+
   // Toggle web search (optimistic; revert on failure)
   const handleToggleWebSearch = useCallback(async (next: boolean) => {
     setWebSearchEnabled(next);
@@ -500,6 +582,21 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
       Alert.alert('Error', msg);
     } finally {
       setSavingWebSearch(false);
+    }
+  }, [householdId]);
+
+  // Toggle a memory setting (optimistic; revert on failure)
+  const handleToggleMemory = useCallback(async (key: MemoryKey, next: boolean) => {
+    const apply = key === 'memory.enabled' ? setMemoryEnabled : setExtractionEnabled;
+    apply(next);
+    setSavingMemoryKey(key);
+    try {
+      await setHouseholdSetting(householdId, key, next);
+    } catch (err: unknown) {
+      apply(!next);
+      Alert.alert('Error', settingErrorMessage(err, 'Failed to update memory setting'));
+    } finally {
+      setSavingMemoryKey(null);
     }
   }, [householdId]);
 
@@ -666,7 +763,7 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
   }, [householdId, headers]);
 
   const formatExpiry = (iso: string) => {
-    const date = new Date(iso);
+    const date = parseServerDate(iso) ?? new Date(iso);
     const now = new Date();
     if (date < now) return 'Expired';
     const days = Math.ceil((date.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
@@ -676,7 +773,7 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <KeyboardSafeView style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <Appbar.Header>
         <Appbar.BackAction onPress={() => navigation.goBack()} />
         <Appbar.Content title="Household Settings" />
@@ -755,12 +852,15 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
                   mode="outlined"
                   value={persona}
                   onChangeText={setPersona}
+                  // No numberOfLines: the box grows to fit the whole text. A
+                  // fixed-height box opened scrolled to the cursor at the end
+                  // (mid-sentence) on Android.
                   multiline
-                  numberOfLines={5}
                   maxLength={personaMaxChars}
                   placeholder="Describe how Jarvis should sound…"
                   disabled={!isAdmin}
                   style={styles.personaInput}
+                  contentStyle={styles.personaInputContent}
                 />
                 <View style={styles.personaFooter}>
                   <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
@@ -826,6 +926,140 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
           </Card.Content>
         </Card>
 
+        {/* Pantry (jarvisd only — hidden when the server doesn't gate it) */}
+        {pantryEnabled !== undefined && (
+          <Card style={styles.card}>
+            <Card.Content>
+              <Text variant="titleMedium" style={styles.sectionTitle}>Pantry</Text>
+              <View style={styles.toggleRow}>
+                <View style={{ flex: 1, paddingRight: 12 }}>
+                  <Text variant="bodyMedium">Use the Pantry</Text>
+                  <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 2 }}>
+                    Browse and install packages from the Pantry. When on, this app,
+                    your nodes and your server contact the Pantry, which sees your IP
+                    address and what you browse and install.
+                  </Text>
+                </View>
+                <Switch
+                  testID="household-pantry-toggle"
+                  value={pantryEnabled}
+                  onValueChange={handleTogglePantry}
+                  disabled={!isAdmin || savingPantry}
+                />
+              </View>
+              {!isAdmin && (
+                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 8 }}>
+                  Only a household admin can change this.
+                </Text>
+              )}
+            </Card.Content>
+          </Card>
+        )}
+
+        {/* Watches & errands (hidden when the server has neither key) */}
+        {(watchesEnabled !== undefined || errandsAutonomous !== undefined) && (
+          <Card style={styles.card}>
+            <Card.Content>
+              <Text variant="titleMedium" style={styles.sectionTitle}>Watches & errands</Text>
+              {watchesEnabled !== undefined && (
+                <View style={styles.toggleRow}>
+                  <View style={{ flex: 1, paddingRight: 12 }}>
+                    <Text variant="bodyMedium">Use watches</Text>
+                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 2 }}>
+                      Let household members ask Jarvis to watch a web page, a search
+                      or a signal and get told when it changes.
+                    </Text>
+                  </View>
+                  <Switch
+                    testID="household-watches-toggle"
+                    value={watchesEnabled}
+                    onValueChange={(v) => handleToggleAgent('watches.enabled', v)}
+                    disabled={!isAdmin || savingAgentKey !== null}
+                  />
+                </View>
+              )}
+              {errandsAutonomous !== undefined && (
+                <View style={[styles.toggleRow, watchesEnabled !== undefined && { marginTop: 12 }]}>
+                  <View style={{ flex: 1, paddingRight: 12 }}>
+                    <Text variant="bodyMedium">Let rules run errands without asking</Text>
+                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 2 }}>
+                      Let your household's rules start errands and run them in the
+                      background without asking anyone first.
+                    </Text>
+                  </View>
+                  <Switch
+                    testID="household-errands-autonomy-toggle"
+                    value={errandsAutonomous}
+                    onValueChange={(v) => handleToggleAgent('errands.autonomous_enabled', v)}
+                    disabled={!isAdmin || savingAgentKey !== null}
+                  />
+                </View>
+              )}
+              {!isAdmin && (
+                <Text
+                  testID="household-watches-admin-note"
+                  variant="bodySmall"
+                  style={{ color: theme.colors.onSurfaceVariant, marginTop: 8 }}
+                >
+                  Only a household admin can change this.
+                </Text>
+              )}
+            </Card.Content>
+          </Card>
+        )}
+
+        {/* Memory (D19) */}
+        <Card style={styles.card}>
+          <Card.Content>
+            <Text variant="titleMedium" style={styles.sectionTitle}>Memory</Text>
+            <View style={styles.toggleRow}>
+              <View style={{ flex: 1, paddingRight: 12 }}>
+                <Text variant="bodyMedium">Use memory</Text>
+                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 2 }}>
+                  Let Jarvis remember things you ask it to, recall them later, and
+                  forget them on request. When off, Jarvis neither stores nor uses
+                  memories for this household.
+                </Text>
+              </View>
+              {webSearchLoading ? (
+                <ActivityIndicator size="small" />
+              ) : (
+                <Switch
+                  testID="household-memory-toggle"
+                  value={memoryEnabled}
+                  onValueChange={(v) => handleToggleMemory('memory.enabled', v)}
+                  disabled={!isAdmin || savingMemoryKey !== null}
+                />
+              )}
+            </View>
+            <View style={[styles.toggleRow, { marginTop: 12 }]}>
+              <View style={{ flex: 1, paddingRight: 12 }}>
+                <Text variant="bodyMedium">Learn from voice</Text>
+                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 2 }}>
+                  Let Jarvis pick up useful facts from what you say to it, not just
+                  what you explicitly ask it to remember. Only applies to speakers it
+                  recognizes, so it also needs Speaker recognition turned on.
+                </Text>
+              </View>
+              {webSearchLoading ? (
+                <ActivityIndicator size="small" />
+              ) : (
+                <Switch
+                  testID="household-memory-extraction-toggle"
+                  value={memoryEnabled && extractionEnabled}
+                  onValueChange={(v) => handleToggleMemory('memory.extraction_enabled', v)}
+                  disabled={!isAdmin || !memoryEnabled || savingMemoryKey !== null}
+                />
+              )}
+            </View>
+            {!isAdmin && !webSearchLoading && (
+              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 8 }}>
+                Only a household admin can change this.
+              </Text>
+            )}
+          </Card.Content>
+        </Card>
+
         <Card style={styles.card}>
           <Card.Content>
             <Text variant="titleMedium" style={styles.sectionTitle}>Location</Text>
@@ -874,6 +1108,24 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
           </Card.Content>
         </Card>
 
+        {/* Time zone (jarvisd only; hidden against the legacy server) */}
+        <HouseholdTimezoneCard
+          householdId={householdId}
+          value={timezone}
+          loading={webSearchLoading}
+          canEdit={isAdmin}
+          onChanged={loadHouseholdSettings}
+        />
+
+        {/* Phone calls — the household's own Twilio account (write-only) */}
+        <TwilioSettingsCard
+          householdId={householdId}
+          state={twilio}
+          loading={webSearchLoading}
+          canEdit={isAdmin}
+          onChanged={loadHouseholdSettings}
+        />
+
         {/* Home Presence (device-local, opt-in) */}
         <Card style={styles.card}>
           <Card.Content>
@@ -909,9 +1161,10 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
                 </View>
 
                 {/* Background (Always) opt-in — offered only once foreground
-                    presence is on. Detects home/away even when the app is
-                    closed, using "Always" location. */}
-                {homeGeo?.enabled && (
+                    presence is on, and only where the platform supports it
+                    (iOS). Detects home/away even when the app is closed, using
+                    "Always" location. */}
+                {BACKGROUND_PRESENCE_SUPPORTED && homeGeo?.enabled && (
                   <View style={[styles.toggleRow, { marginTop: 12 }]}>
                     <View style={{ flex: 1, paddingRight: 12 }}>
                       <Text variant="bodyMedium">Detect in the background</Text>
@@ -1049,7 +1302,7 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
             <Button
               testID="open-signal-automations"
               mode="outlined"
-              icon="robot"
+              icon="flash-outline"
               onPress={() => navigation.navigate('SignalAutomations', { householdId })}
             >
               Manage automations
@@ -1074,12 +1327,16 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
               </View>
             )}
             {!membersLoading && !membersError && members.map((m) => (
-              <View key={m.user_id} style={styles.memberRow}>
+              // collapsable={false}: Android flattens this plain row and hoists the role Chip out
+              // of it, which breaks the e2e flows' childOf member-row-* assertions.
+              <View key={m.user_id} style={styles.memberRow} testID={`member-row-${m.email}`} collapsable={false}>
                 <View style={{ flex: 1 }}>
-                  <Text variant="bodyMedium">{m.username || m.email}</Text>
-                  <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                    {m.email}
-                  </Text>
+                  <Text variant="bodyMedium">{displayNameOf(m)}</Text>
+                  {!!secondaryNameLine(m) && (
+                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                      {secondaryNameLine(m)}
+                    </Text>
+                  )}
                 </View>
                 {isAdmin && m.user_id !== currentUser?.id ? (
                   <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -1104,7 +1361,7 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
                     />
                   </View>
                 ) : (
-                  <Chip compact>{ROLE_LABELS[m.role] || m.role}</Chip>
+                  <Chip testID={`member-role-${m.user_id}`} compact>{ROLE_LABELS[m.role] || m.role}</Chip>
                 )}
               </View>
             ))}
@@ -1139,7 +1396,7 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
               {invites.map((invite) => (
                 <View key={invite.id} style={styles.inviteRow}>
                   <View style={{ flex: 1 }}>
-                    <Text variant="bodyMedium" style={{ fontFamily: 'monospace', letterSpacing: 2 }}>
+                    <Text testID={`invite-code-${invite.id}`} variant="bodyMedium" style={{ fontFamily: 'monospace', letterSpacing: 2 }}>
                       {invite.code}
                     </Text>
                     <View style={styles.inviteMeta}>
@@ -1210,8 +1467,8 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
               onValueChange={setInviteRole}
               density="small"
               buttons={[
-                { value: 'member', label: 'Member' },
-                { value: 'power_user', label: 'Power User' },
+                { value: 'member', label: 'Member', testID: 'invite-role-member' },
+                { value: 'power_user', label: 'Power User', testID: 'invite-role-power_user' },
               ]}
             />
 
@@ -1221,14 +1478,15 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
               onValueChange={setInviteExpiry}
               density="small"
               buttons={[
-                { value: '1', label: '1' },
-                { value: '7', label: '7' },
-                { value: '30', label: '30' },
-                { value: '90', label: '90' },
+                { value: '1', label: '1', testID: 'invite-expiry-1' },
+                { value: '7', label: '7', testID: 'invite-expiry-7' },
+                { value: '30', label: '30', testID: 'invite-expiry-30' },
+                { value: '90', label: '90', testID: 'invite-expiry-90' },
               ]}
             />
 
             <TextInput
+              testID="invite-max-uses-input"
               mode="outlined"
               label="Max Uses (optional)"
               value={inviteMaxUses}
@@ -1248,7 +1506,7 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
         </Dialog>
       </Portal>
       </Portal.Host>
-    </View>
+    </KeyboardSafeView>
   );
 };
 
@@ -1261,7 +1519,10 @@ const styles = StyleSheet.create({
   toggleRow: { flexDirection: 'row', alignItems: 'center' },
   presetRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
   presetChip: { marginRight: 0 },
-  personaInput: { minHeight: 96 },
+  // bodyMedium size, matching the surrounding card text (TextInput defaults to 16).
+  personaInput: { minHeight: 96, fontSize: 14 },
+  // Without a label, Paper's outlined multiline puts the text flush against the border.
+  personaInputContent: { paddingTop: 12, paddingBottom: 12 },
   personaFooter: {
     flexDirection: 'row',
     alignItems: 'center',

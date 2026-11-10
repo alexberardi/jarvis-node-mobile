@@ -1,10 +1,11 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Alert, StyleSheet, View } from 'react-native';
 import {
   Banner,
   Button,
   Dialog,
+  HelperText,
   IconButton,
   Portal,
   Text,
@@ -13,6 +14,7 @@ import {
 } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useAuth } from '../../auth/AuthContext';
 import { useConfig } from '../../contexts/ConfigContext';
 import { AuthStackParamList } from '../../navigation/types';
 import { useThemePreference } from '../../theme/ThemeProvider';
@@ -21,13 +23,21 @@ type Props = NativeStackScreenProps<AuthStackParamList, 'Landing'>;
 
 const LandingScreen = ({ navigation }: Props) => {
   const { isDark, toggleTheme } = useThemePreference();
-  const { fallbackMessage, config, manualUrl, setManualUrl, rediscover } = useConfig();
+  const { fallbackMessage, config, manualUrl, setManualUrl } = useConfig();
   const insets = useSafeAreaInsets();
   const theme = useTheme();
+  const signOutNotice = useAuth().state.signOutNotice;
+
+  // The app signed the user out on its own (password reset, dead session):
+  // skip the landing page and put them on Login, where the notice explains
+  // why. Once per notice, so backing out to Landing isn't bounced again.
+  useEffect(() => {
+    if (signOutNotice) navigation.navigate('Login');
+  }, [signOutNotice, navigation]);
 
   const [dialogVisible, setDialogVisible] = useState(false);
   const [urlInput, setUrlInput] = useState('');
-  const [scanning, setScanning] = useState(false);
+  const [urlMissing, setUrlMissing] = useState(false);
 
   const displayUrl = manualUrl || config.configServiceUrl || null;
 
@@ -37,7 +47,12 @@ const LandingScreen = ({ navigation }: Props) => {
       Alert.alert('Error', 'Please enter a URL.');
       return;
     }
+    if (!/^https?:\/\//.test(trimmed)) {
+      Alert.alert('Invalid URL', 'URL must start with http:// or https://');
+      return;
+    }
     setDialogVisible(false);
+    setUrlMissing(false);
     await setManualUrl(trimmed);
   };
 
@@ -48,14 +63,17 @@ const LandingScreen = ({ navigation }: Props) => {
   };
 
   const openDialog = () => {
-    setUrlInput(manualUrl || '');
+    setUrlInput(displayUrl || '');
     setDialogVisible(true);
   };
 
-  const handleScanNetwork = async () => {
-    setScanning(true);
-    await rediscover();
-    setScanning(false);
+  // Log In and Create Account need a server to talk to.
+  const goTo = (screen: 'Login' | 'Register') => {
+    if (!displayUrl) {
+      setUrlMissing(true);
+      return;
+    }
+    navigation.navigate(screen);
   };
 
   return (
@@ -71,11 +89,6 @@ const LandingScreen = ({ navigation }: Props) => {
       )}
       <View style={[styles.topBar, { top: insets.top + 8 }]}>
         <IconButton
-          icon="server-network"
-          onPress={openDialog}
-          accessibilityLabel="Set server URL"
-        />
-        <IconButton
           icon={isDark ? 'weather-sunny' : 'weather-night'}
           onPress={toggleTheme}
           accessibilityLabel="Toggle dark mode"
@@ -90,6 +103,7 @@ const LandingScreen = ({ navigation }: Props) => {
         </Text>
         {displayUrl ? (
           <Button
+            testID="server-url-button"
             mode="text"
             compact
             onPress={openDialog}
@@ -99,32 +113,38 @@ const LandingScreen = ({ navigation }: Props) => {
           >
             {displayUrl}
           </Button>
-        ) : !config.configServiceUrl && (
+        ) : (
           <Button
+            testID="server-url-button"
             mode="outlined"
             compact
-            onPress={handleScanNetwork}
-            icon="lan"
-            loading={scanning}
-            disabled={scanning}
+            onPress={openDialog}
+            icon="server-network"
             style={styles.serverUrl}
           >
-            {scanning ? 'Scanning...' : 'Find Local Server'}
+            Set Server URL
           </Button>
+        )}
+        {urlMissing && !displayUrl && (
+          <HelperText type="error" visible>
+            Enter your server URL first.
+          </HelperText>
         )}
       </View>
 
       <View style={styles.buttons}>
         <Button
+          testID="landing-login-button"
           mode="contained"
-          onPress={() => navigation.navigate('Login')}
+          onPress={() => goTo('Login')}
           style={styles.button}
         >
           Log In
         </Button>
         <Button
+          testID="landing-register-button"
           mode="outlined"
-          onPress={() => navigation.navigate('Register')}
+          onPress={() => goTo('Register')}
           style={styles.button}
         >
           Create Account
@@ -136,7 +156,7 @@ const LandingScreen = ({ navigation }: Props) => {
           <Dialog.Title>Server URL</Dialog.Title>
           <Dialog.Content>
             <Text variant="bodySmall" style={{ marginBottom: 12, color: theme.colors.onSurfaceVariant }}>
-              Enter the URL of your Jarvis config service. Leave blank to auto-discover on your local network.
+              Enter the URL of your Jarvis server's config service.
             </Text>
             <TextInput
               mode="outlined"

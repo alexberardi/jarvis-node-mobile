@@ -66,6 +66,7 @@ import {
   substituteLabel,
   substituteUrl,
 } from '../../utils/interactiveList';
+import KeyboardSafeView from '../../components/KeyboardSafeView';
 
 type Nav = NativeStackNavigationProp<InboxStackParamList>;
 type ListRoute = RouteProp<InboxStackParamList, 'InteractiveList'>;
@@ -651,7 +652,7 @@ const InteractiveListScreen = () => {
   }
 
   return (
-    <View style={styles.container}>
+    <KeyboardSafeView style={styles.container}>
       {header}
 
       <View style={styles.titleBlock}>
@@ -725,7 +726,7 @@ const InteractiveListScreen = () => {
           {payload.actions.map(renderActionButton)}
         </View>
       </View>
-    </View>
+    </KeyboardSafeView>
   );
 };
 

@@ -18,6 +18,7 @@ import {
 import FieldEditor from '../../components/CommandData/FieldEditor';
 import { CommandSchema, deleteRecord, getRecord } from '../../api/commandDataApi';
 import type { CommandDataStackParamList } from '../../navigation/types';
+import KeyboardSafeView from '../../components/KeyboardSafeView';
 
 type Nav = NativeStackNavigationProp<CommandDataStackParamList, 'DataBrowserDetail'>;
 type Route = RouteProp<CommandDataStackParamList, 'DataBrowserDetail'>;
@@ -92,7 +93,7 @@ const RecordDetailScreen = () => {
   }, [nodeId, commandName, recordKey, record, navigation]);
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <KeyboardSafeView style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <Appbar.Header>
         <Appbar.BackAction onPress={() => navigation.goBack()} />
         <Appbar.Content title="Record" />
@@ -138,7 +139,7 @@ const RecordDetailScreen = () => {
           </Card>
         </ScrollView>
       ) : null}
-    </View>
+    </KeyboardSafeView>
   );
 };
 

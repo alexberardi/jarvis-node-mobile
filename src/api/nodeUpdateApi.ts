@@ -1,5 +1,3 @@
-import axios from 'axios';
-
 import { getCommandCenterUrl } from '../config/serviceConfig';
 import apiClient from './apiClient';
 
@@ -26,14 +24,21 @@ export interface LatestRelease {
   tag: string;
   version: string;
   published_at: string | null;
+  /** The node runtime the release is for; servers before #487 omit it. */
+  kind?: 'go' | 'python';
 }
 
 const base = () => getCommandCenterUrl();
 
-export const getLatestRelease = async (): Promise<LatestRelease | null> => {
+/**
+ * The latest release for this node's kind (go | python). Sent through
+ * apiClient so the server can check the caller is a member of the node's
+ * household; null when there is none or on any error (a 403 included).
+ */
+export const getLatestRelease = async (nodeId: string): Promise<LatestRelease | null> => {
   try {
-    const res = await axios.get<LatestRelease | null>(
-      `${base()}/api/v0/releases/latest`,
+    const res = await apiClient.get<LatestRelease | null>(
+      `${base()}/api/v0/releases/latest?node_id=${encodeURIComponent(nodeId)}`,
       { timeout: 6000 },
     );
     return res.data ?? null;

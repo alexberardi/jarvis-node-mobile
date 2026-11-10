@@ -29,6 +29,11 @@ import { getK2 } from '../../services/k2Service';
 import type { K2KeyPair } from '../../services/k2Service';
 
 import { useAuth } from '../../auth/AuthContext';
+import { NodeKindIcon } from '../../components/NodeKindIcon';
+import { useNodeKinds } from '../../hooks/useNodeKinds';
+import { isDesktopAgent, nodeDisplayName } from '../../utils/nodeKind';
+import { storedDataErrorMessage } from '../../utils/storedDataError';
+import { buildSyncPushes } from '../../services/syncPushes';
 import { NodesStackParamList, RootStackParamList } from '../../navigation/types';
 import {
   requestSettingsSnapshot,
@@ -56,6 +61,7 @@ import type { AuthenticationConfig } from '../../types/SmartHome';
 import { requestUninstall, pollUninstallStatus } from '../../api/packageInstallApi';
 import { configErrorBadge, needsSetupLabel } from '../../utils/packageStatus';
 import { userSecretDisplayValue } from '../../utils/userSecret';
+import KeyboardSafeView from '../../components/KeyboardSafeView';
 
 type ScreenRoute = RouteProp<NodesStackParamList, 'NodeSettings'>;
 
@@ -126,6 +132,7 @@ const NodeSettingsScreen: React.FC = () => {
 
   // Track enabled/disabled state per command (keyed by raw command_name)
   const [commandStates, setCommandStates] = useState<Record<string, boolean>>({});
+  const [contextSharing, setContextSharing] = useState<Record<string, boolean>>({});
 
   // Track enabled/disabled state per agent (keyed by raw agent_name)
   const [agentStates, setAgentStates] = useState<Record<string, boolean>>({});
@@ -144,6 +151,11 @@ const NodeSettingsScreen: React.FC = () => {
 
   // Export K2 flow
   const [exportKeyPair, setExportKeyPair] = useState<K2KeyPair | null>(null);
+
+  // This node's kind (desktop agent or Pi) — for the Stored Data error wording.
+  const thisNodeKinds = useNodeKinds(authState.activeHouseholdId, [nodeId]);
+  const isDesktopRef = useRef(false);
+  isDesktopRef.current = isDesktopAgent(thisNodeKinds[nodeId]);
 
   // Stored Data tab state
   const [storedDataCommands, setStoredDataCommands] = useState<CommandSummary[] | null>(null);
@@ -365,6 +377,11 @@ const NodeSettingsScreen: React.FC = () => {
                 states[cmd.command_name] = cmd.enabled !== false;
               }
               setCommandStates(states);
+              const sharing: Record<string, boolean> = {};
+              for (const cmd of snapshot.commands) {
+                if (cmd.call_context) sharing[cmd.command_name] = cmd.call_context.enabled !== false;
+              }
+              setContextSharing(sharing);
               const aStates: Record<string, boolean> = {};
               for (const a of snapshot.agents ?? []) {
                 aStates[a.agent_name] = a.enabled !== false;
@@ -431,22 +448,26 @@ const NodeSettingsScreen: React.FC = () => {
       setStoredDataCommands(commands);
     } catch (err) {
       console.error('[NodeSettings] listCommandDataCommands failed', err);
-      const status = (err as { response?: { status?: number } })?.response?.status;
-      if (status === 504) {
-        setStoredDataError('Node did not respond. It may be offline.');
-      } else {
-        setStoredDataError('Could not load stored data.');
-      }
+      setStoredDataError(
+        storedDataErrorMessage(err, isDesktopRef.current, 'Could not load stored data.'),
+      );
     } finally {
       setStoredDataLoading(false);
     }
   }, [nodeId]);
 
+  // Only the first open loads on its own. After a failure it waits for Retry:
+  // re-firing here would re-ask a node that isn't answering every 10 s, forever.
   useEffect(() => {
-    if (tab === 'stored_data' && storedDataCommands === null && !storedDataLoading) {
+    if (
+      tab === 'stored_data' &&
+      storedDataCommands === null &&
+      !storedDataLoading &&
+      storedDataError === null
+    ) {
       loadStoredDataCommands();
     }
-  }, [tab, storedDataCommands, storedDataLoading, loadStoredDataCommands]);
+  }, [tab, storedDataCommands, storedDataLoading, storedDataError, loadStoredDataCommands]);
 
   // Any "user"-type secret in the snapshot needs the household members list
   // (picker options + id → name previews).
@@ -541,11 +562,19 @@ const NodeSettingsScreen: React.FC = () => {
             text: 'Apply',
             onPress: async () => {
               try {
-                const payload = { ...presetValues };
-                if (authState.user?.id) {
-                  payload.__user_id__ = String(authState.user.id);
+                // Shared and personal keys go out separately (syncPushes.ts):
+                // a user-tagged push would file shared keys as this user's.
+                const pushes = buildSyncPushes(
+                  entries.map(([key]) => ({
+                    key,
+                    scope: allSecrets.find((s) => s.key === key)?.scope,
+                  })),
+                  presetValues,
+                  authState.user?.id,
+                );
+                for (const push of pushes) {
+                  await encryptAndPushConfig(nodeId, 'settings:secrets', push);
                 }
-                await encryptAndPushConfig(nodeId, 'settings:secrets', payload);
                 cleanup();
                 loadSettings();
               } catch {
@@ -784,6 +813,25 @@ const NodeSettingsScreen: React.FC = () => {
     [nodeId, authState.accessToken],
   );
 
+  // "Share with phone calls": whether the command answers call plans' context queries; the
+  // node enforces it (context_sharing push, jarvis-server#573).
+  const handleToggleContextSharing = useCallback(
+    async (commandName: string, enabled: boolean) => {
+      if (!authState.accessToken) return;
+      setContextSharing((prev) => ({ ...prev, [commandName]: enabled }));
+      try {
+        await encryptAndPushConfig(nodeId, 'context_sharing', {
+          command_name: commandName,
+          enabled: enabled ? 'true' : 'false',
+        });
+      } catch (err) {
+        console.error('Failed to switch context sharing:', err);
+        setContextSharing((prev) => ({ ...prev, [commandName]: !enabled }));
+      }
+    },
+    [nodeId, authState.accessToken],
+  );
+
   const handleToggleAgent = useCallback(
     async (agentName: string, enabled: boolean) => {
       const token = authState.accessToken;
@@ -904,26 +952,27 @@ const NodeSettingsScreen: React.FC = () => {
       }
     }
 
-    if (Object.keys(secretsMap).length === 0) {
+    // Shared and personal secrets go out as separate pushes: a push tagged
+    // with __user_id__ is filed entirely as that user's (see syncPushes.ts).
+    const pushes = buildSyncPushes(
+      syncGroup.secrets.filter((s) => selectedSecretKeys.has(s.key)),
+      secretsMap,
+      authState.user?.id,
+    );
+    if (pushes.length === 0) {
       Alert.alert('Nothing to Sync', 'No secret values available to sync.');
       setSyncing(false);
       return;
     }
 
-    // Include __user_id__ if any selected secrets are user-scoped
-    const hasUserScoped = syncGroup.secrets.some(
-      (s) => selectedSecretKeys.has(s.key) && s.scope === 'user',
-    );
-    if (hasUserScoped && authState.user?.id) {
-      secretsMap.__user_id__ = String(authState.user.id);
-    }
-
-    // Push to each selected node
+    // Push to each selected node; a node counts once all its pushes landed.
     let successCount = 0;
     let failCount = 0;
     for (const targetNodeId of selectedNodeIds) {
       try {
-        await encryptAndPushConfig(targetNodeId, 'settings:secrets', secretsMap);
+        for (const push of pushes) {
+          await encryptAndPushConfig(targetNodeId, 'settings:secrets', push);
+        }
         successCount++;
       } catch (err) {
         console.error(`Sync to ${targetNodeId} failed:`, err);
@@ -940,7 +989,7 @@ const NodeSettingsScreen: React.FC = () => {
     } else {
       Alert.alert('Sync Partial', `${successCount} succeeded, ${failCount} failed. Nodes without imported K2 keys cannot receive synced settings.`);
     }
-  }, [syncGroup, selectedNodeIds, selectedSecretKeys, nodeId]);
+  }, [syncGroup, selectedNodeIds, selectedSecretKeys, nodeId, authState.user?.id]);
 
   const toggleNodeSelection = (nid: string) => {
     setSelectedNodeIds((prev) => {
@@ -1352,6 +1401,22 @@ const NodeSettingsScreen: React.FC = () => {
             />
           </Menu>
         </View>
+        {cmd.call_context ? (
+          <View style={[styles.flatRow, { marginTop: 12 }]}>
+            <View style={{ flex: 1, paddingRight: 12 }}>
+              <Text variant="bodyMedium">Share with phone calls</Text>
+              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 2 }}>
+                {cmd.call_context.description || 'Shares details with the plan when Jarvis makes a call for you.'}
+              </Text>
+            </View>
+            <Switch
+              testID={`share-${cmd.command_name}`}
+              accessibilityLabel={`Share ${displayName} with phone calls`}
+              value={contextSharing[cmd.command_name] !== false}
+              onValueChange={(val) => handleToggleContextSharing(cmd.command_name, val)}
+            />
+          </View>
+        ) : null}
       </Surface>
     );
   };
@@ -1647,7 +1712,7 @@ const NodeSettingsScreen: React.FC = () => {
   const renderContent = () => {
     if (loadState === 'needs_k2') {
       return (
-        <View style={styles.center}>
+        <View style={styles.center} testID="node-settings-needs-k2">
           <Icon source="key-variant" size={48} color={theme.colors.primary} />
           <Text variant="titleMedium" style={{ marginTop: 16, marginBottom: 8 }}>
             Encryption Key Required
@@ -1669,7 +1734,7 @@ const NodeSettingsScreen: React.FC = () => {
 
     if (loadState === 'loading') {
       return (
-        <View style={styles.center}>
+        <View style={styles.center} testID="node-settings-loading">
           <ActivityIndicator size="large" />
           <Text style={styles.loadingText}>Requesting settings from node...</Text>
         </View>
@@ -1678,7 +1743,7 @@ const NodeSettingsScreen: React.FC = () => {
 
     if (loadState === 'error' || loadState === 'timeout') {
       return (
-        <View style={styles.center}>
+        <View style={styles.center} testID="node-settings-error">
           <Text
             variant="bodyLarge"
             style={{ color: theme.colors.error, textAlign: 'center', marginBottom: 16 }}
@@ -1699,7 +1764,7 @@ const NodeSettingsScreen: React.FC = () => {
 
     return (
       <View style={{ flex: 1 }}>
-        <View style={styles.tabSelectorContainer}>
+        <View style={styles.tabSelectorContainer} testID="node-settings-tabs">
           <SegmentedButtons
             value={tab}
             onValueChange={(v) => setTab(v as Tab)}
@@ -1885,7 +1950,7 @@ const NodeSettingsScreen: React.FC = () => {
   };
 
   return (
-    <View style={styles.container}>
+    <KeyboardSafeView style={styles.container}>
       <Appbar.Header>
         <Appbar.BackAction onPress={() => navigation.goBack()} />
         <Appbar.Content title={headerTitle} />
@@ -1940,8 +2005,14 @@ const NodeSettingsScreen: React.FC = () => {
                     onPress={() => n.hasK2 && toggleNodeSelection(n.node_id)}
                     disabled={!n.hasK2}
                   />
+                  <NodeKindIcon
+                    node={n}
+                    size={20}
+                    testID={`sync-node-kind-${n.node_id}`}
+                    style={{ marginRight: 8 }}
+                  />
                   <View style={{ flex: 1 }}>
-                    <Text variant="bodyMedium">{n.room || n.node_id.slice(0, 8)}</Text>
+                    <Text variant="bodyMedium">{nodeDisplayName(n)}</Text>
                     {!n.hasK2 && (
                       <Text variant="bodySmall" style={{ color: theme.colors.error }}>
                         K2 not imported — import key first
@@ -2087,7 +2158,7 @@ const NodeSettingsScreen: React.FC = () => {
       >
         This setting is personal — each household member configures their own.
       </Snackbar>
-    </View>
+    </KeyboardSafeView>
   );
 };
 

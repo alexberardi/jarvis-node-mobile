@@ -28,6 +28,7 @@ import {
 import DeviceControlPanel from '../../components/device-controls/DeviceControlPanel';
 import type { DeviceListItem, JarvisButton, Room } from '../../types/SmartHome';
 import type { DevicesStackParamList } from '../../navigation/types';
+import KeyboardSafeView from '../../components/KeyboardSafeView';
 
 type Props = NativeStackScreenProps<DevicesStackParamList, 'DeviceEdit'>;
 
@@ -186,7 +187,7 @@ const DeviceEditScreen = ({ navigation, route }: Props) => {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <KeyboardSafeView style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <Appbar.Header>
         <Appbar.BackAction onPress={() => navigation.goBack()} />
         <Appbar.Content title="Edit Device" />
@@ -195,6 +196,7 @@ const DeviceEditScreen = ({ navigation, route }: Props) => {
       <ScrollView contentContainerStyle={styles.content}>
         <TextInput
           label="Device Name"
+          testID="device-name-input"
           value={name}
           onChangeText={setName}
           mode="outlined"
@@ -297,6 +299,7 @@ const DeviceEditScreen = ({ navigation, route }: Props) => {
         <Button
           mode="contained"
           onPress={handleSave}
+          testID="device-save-button"
           loading={saving}
           disabled={saving || !name.trim()}
           style={styles.saveButton}
@@ -307,6 +310,7 @@ const DeviceEditScreen = ({ navigation, route }: Props) => {
         <Button
           mode="outlined"
           onPress={handleDelete}
+          testID="device-delete-button"
           textColor={theme.colors.error}
           style={styles.deleteButton}
         >
@@ -337,7 +341,7 @@ const DeviceEditScreen = ({ navigation, route }: Props) => {
           </Dialog.Actions>
         </Dialog>
       </Portal>
-    </View>
+    </KeyboardSafeView>
   );
 };
 

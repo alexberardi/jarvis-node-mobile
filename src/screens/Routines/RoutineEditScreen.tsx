@@ -1,12 +1,10 @@
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useQuery } from '@tanstack/react-query';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Dimensions,
-  KeyboardAvoidingView,
-  Platform,
   ScrollView,
   StyleSheet,
   View,
@@ -27,13 +25,16 @@ import {
   useTheme,
 } from 'react-native-paper';
 
-import { getSmartHomeConfig } from '../../api/smartHomeApi';
+import { getSmartHomeConfig, type NodeOption } from '../../api/smartHomeApi';
 import {
   createRoutine,
   deleteRoutine,
   getRoutine,
+  getRoutineModes,
   updateRoutine,
+  type RoutineWrite,
 } from '../../api/routineApi';
+import { listNodes } from '../../api/nodeApi';
 import { useAuth } from '../../auth/AuthContext';
 import { HelpIcon } from '../../components/HelpIcon';
 import ParameterArgRow from '../../components/ParameterArgRow';
@@ -47,9 +48,14 @@ import type {
   RoutineSchedule,
   RoutineStep,
   RoutineStepArg,
+  RoutineMode,
   ScheduleType,
 } from '../../types/Routine';
 import { ALL_DAYS, INTERVAL_PRESETS, WEEKDAYS, WEEKENDS } from '../../types/Routine';
+import KeyboardSafeView from '../../components/KeyboardSafeView';
+import { NodeKindIcon } from '../../components/NodeKindIcon';
+import { useNodeKinds } from '../../hooks/useNodeKinds';
+import { nodeDisplayName, withKnownKind } from '../../utils/nodeKind';
 
 type Nav = NativeStackNavigationProp<RoutinesStackParamList>;
 type Route = RouteProp<RoutinesStackParamList, 'RoutineEdit'>;
@@ -141,6 +147,9 @@ const RoutineEditScreen = () => {
   const isEditing = !!routineId;
 
   // Form state
+  const [mode, setMode] = useState<RoutineMode>(isEditing ? 'advanced' : 'simple');
+  const [utterance, setUtterance] = useState('');
+  const modeChosen = useRef(false);
   const [name, setName] = useState('');
   const [triggerInput, setTriggerInput] = useState('');
   const [triggerPhrases, setTriggerPhrases] = useState<string[]>([]);
@@ -149,6 +158,23 @@ const RoutineEditScreen = () => {
   const [responseLength, setResponseLength] = useState<ResponseLength>('short');
   const [saving, setSaving] = useState(false);
   const [loaded, setLoaded] = useState(!isEditing);
+
+  const modesQuery = useQuery({
+    queryKey: ['routineModes', householdId],
+    queryFn: () => getRoutineModes(householdId!),
+    enabled: !!householdId,
+    retry: false,
+  });
+  const supportsSimple = modesQuery.data?.includes('simple') === true;
+  useEffect(() => {
+    if (!isEditing && !modeChosen.current && modesQuery.data && !supportsSimple) setMode('advanced');
+  }, [isEditing, modesQuery.data, supportsSimple]);
+  const { data: nodeDetails } = useQuery({
+    queryKey: ['routineNodes', householdId],
+    queryFn: () => listNodes(householdId!),
+    enabled: !!householdId && mode === 'simple',
+  });
+  const supportsSimpleOn = (id: string) => nodeDetails?.some((n) => n.node_id === id && n.capabilities?.simple_routines === true) === true;
 
   // Schedule state
   const [schedEnabled, setSchedEnabled] = useState(false);
@@ -165,6 +191,7 @@ const RoutineEditScreen = () => {
     enabled: !!householdId,
   });
   const nodes = smartHomeConfig?.nodes ?? [];
+  const nodeKinds = useNodeKinds(householdId, nodes.map((n) => n.node_id));
   const primaryNodeId = smartHomeConfig?.primary_node_id || null;
   const [nodeMenuVisible, setNodeMenuVisible] = useState(false);
 
@@ -187,9 +214,14 @@ const RoutineEditScreen = () => {
     description: string;
     parameters?: CommandParameterEntry[];
   }
-  const { snapshot: cmdSnapshot, state: cmdState, error: commandsError } = useSettingsSnapshot({
+  const {
+    snapshot: cmdSnapshot,
+    state: cmdState,
+    error: commandsError,
+    provisionKey: provisionCatalogKey,
+  } = useSettingsSnapshot({
     nodeId: catalogNodeId ?? undefined,
-    enabled: !!authState.accessToken && !!catalogNodeId,
+    enabled: mode === 'advanced' && !!authState.accessToken && !!catalogNodeId,
   });
   const commandsLoading = cmdState === 'loading';
   const commandMap: Record<string, CommandMeta> = {};
@@ -225,6 +257,8 @@ const RoutineEditScreen = () => {
     if (!isEditing || !householdId) return;
     getRoutine(householdId, routineId!)
       .then((r) => {
+        setMode(r.mode ?? 'advanced');
+        setUtterance(r.utterance ?? '');
         setName(r.name);
         setTriggerPhrases(r.trigger_phrases);
         setSteps(r.steps);
@@ -349,25 +383,34 @@ const RoutineEditScreen = () => {
   const validationError = useMemo<string | null>(() => {
     if (!name.trim()) return 'Add a routine name';
     if (triggerPhrases.length === 0) return 'Add at least one trigger phrase';
-    if (steps.length === 0) return 'Add at least one step';
-    for (let i = 0; i < steps.length; i++) {
-      const s = steps[i];
-      if (!s.command) return `Step ${i + 1}: choose a command`;
-      const required = commandMap[s.command]?.parameters?.filter((p) => p.required) ?? [];
-      for (const p of required) {
-        const a = s.args.find((x) => x.key === p.name);
-        if (!a || a.value.trim() === '') return `Step ${i + 1}: "${p.name}" is required`;
+    if (modesQuery.isPending) return 'Checking routine support…';
+    if (utterance && !supportsSimple) return 'Check server support before saving the Simple instruction';
+    if (mode === 'simple') {
+      if (!supportsSimple) return modesQuery.isError ? 'Could not check Simple support. Retry above.' : 'Simple routines need a compatible server.';
+      if (!utterance.trim()) return 'Add an instruction for Jarvis';
+      if ([...utterance].length > 5000) return 'Keep the instruction within 5,000 characters';
+    } else {
+      if (steps.length === 0) return 'Add at least one step';
+      for (let i = 0; i < steps.length; i++) {
+        const s = steps[i];
+        if (!s.command) return `Step ${i + 1}: choose a command`;
+        const required = commandMap[s.command]?.parameters?.filter((p) => p.required) ?? [];
+        for (const p of required) {
+          const a = s.args.find((x) => x.key === p.name);
+          if (!a || a.value.trim() === '') return `Step ${i + 1}: "${p.name}" is required`;
+        }
       }
+      const labels = steps.map((s) => s.label || s.command);
+      if (new Set(labels).size !== labels.length) return 'Step labels must be unique';
     }
-    const labels = steps.map((s) => s.label || s.command);
-    if (new Set(labels).size !== labels.length) return 'Step labels must be unique';
     if (schedEnabled) {
       if (!targetNodeId) return 'Schedule: choose a node to run on';
+      if (mode === 'simple' && !supportsSimpleOn(targetNodeId)) return 'Schedule: choose a node with Simple routine support';
       if (schedType === 'cron' && cronDays.length === 0) return 'Schedule: pick at least one day';
       if (schedType === 'interval' && intervalMinutes <= 0) return 'Schedule: pick an interval';
     }
     return null;
-  }, [name, triggerPhrases, steps, commandMap, schedEnabled, targetNodeId, schedType, cronDays, intervalMinutes]);
+  }, [name, triggerPhrases, steps, commandMap, schedEnabled, targetNodeId, schedType, cronDays, intervalMinutes, mode, utterance, supportsSimple, modesQuery.isError, modesQuery.isPending, nodeDetails]);
 
   const buildSchedule = (): RoutineSchedule | null => {
     if (!schedEnabled) return null;
@@ -403,7 +446,7 @@ const RoutineEditScreen = () => {
       if (validationError) Alert.alert('Not ready', validationError);
       return;
     }
-    const body = {
+    const body: RoutineWrite = {
       name: name.trim(),
       trigger_phrases: triggerPhrases,
       steps: steps.map((s) => ({ ...s, label: s.label || s.command })),
@@ -411,6 +454,10 @@ const RoutineEditScreen = () => {
       response_length: responseLength,
       schedule: buildSchedule(),
     };
+    if (supportsSimple) {
+      body.mode = mode;
+      body.utterance = utterance;
+    }
     setSaving(true);
     try {
       if (isEditing) await updateRoutine(householdId, routineId!, body);
@@ -463,7 +510,7 @@ const RoutineEditScreen = () => {
                 </ScrollView>
               </Menu>
             ) : (
-              <TextInput mode="flat" label={commandsLoading ? 'Command (loading…)' : 'Command'}
+              <TextInput mode="flat" label={commandsLoading ? 'Command (loading…)' : 'Command'} testID={`routine-step-command-${index}`}
                 value={item.command} onChangeText={(v) => updateStep(index, { command: v, label: item.label || v })}
                 dense style={styles.stepInput} placeholder="e.g. get_weather" />
             )}
@@ -515,9 +562,13 @@ const RoutineEditScreen = () => {
   };
 
   const [intervalMenuVisible, setIntervalMenuVisible] = useState(false);
+  // A node's name in the pickers: a computer's name, else its room (nodeDisplayName).
+  const nodeLabel = (n: NodeOption): string => nodeDisplayName(withKnownKind(n, nodeKinds[n.node_id]), '');
+  const targetNode = nodes.find((n) => n.node_id === targetNodeId);
+  const catalogNode = nodes.find((n) => n.node_id === catalogNodeId);
   const targetNodeLabel =
-    nodes.find((n) => n.node_id === targetNodeId)?.room
-      ? `${nodes.find((n) => n.node_id === targetNodeId)?.room} (${targetNodeId})`
+    targetNode && nodeLabel(targetNode)
+      ? `${nodeLabel(targetNode)} (${targetNodeId})`
       : targetNodeId || 'Select node…';
   const dayPreset = dayPresetFor(cronDays);
 
@@ -530,21 +581,38 @@ const RoutineEditScreen = () => {
   }
 
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardSafeView style={styles.container} iosBehavior="padding">
       <View style={[styles.fixedHeader, { backgroundColor: theme.colors.background, borderBottomColor: theme.colors.outlineVariant }]}>
         <IconButton icon="arrow-left" onPress={() => navigation.goBack()} />
         <Text variant="headlineSmall" style={{ fontWeight: 'bold', flex: 1 }}>
           {isEditing ? 'Edit Routine' : 'New Routine'}
         </Text>
         {isEditing && (
-          <IconButton icon="delete-outline" onPress={handleDelete} iconColor={theme.colors.onSurfaceVariant} />
+          <IconButton icon="delete-outline" testID="routine-delete-button" onPress={handleDelete} iconColor={theme.colors.onSurfaceVariant} />
         )}
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll}>
+      {/* 'handled': with the default, the first tap on a button while the keyboard is up
+          only dismisses the keyboard, so Add / Add Step need two taps. */}
+      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" testID="routine-edit-scroll">
+        <View style={styles.section}>
+          <SegmentedButtons value={mode} onValueChange={(value) => {
+            modeChosen.current = true;
+            setMode(value as RoutineMode);
+          }} buttons={[
+            { value: 'simple', label: 'Simple', testID: 'routine-mode-simple', disabled: !!modesQuery.data && !supportsSimple },
+            { value: 'advanced', label: 'Advanced', testID: 'routine-mode-advanced' },
+          ]} />
+          {modesQuery.isPending && <Text variant="bodySmall" style={{ marginTop: 8 }}>Checking routine support…</Text>}
+          {modesQuery.data && !supportsSimple && <Text variant="bodySmall" style={{ marginTop: 8 }}>Update the server to use Simple routines.</Text>}
+          {modesQuery.isError && <View style={{ marginTop: 8 }}>
+            <Text variant="bodySmall">Could not check Simple routine support. Advanced is still available.</Text>
+            <Button compact onPress={() => modesQuery.refetch()}>Retry</Button>
+          </View>}
+        </View>
         {/* Name */}
         <View style={styles.section}>
-          <TextInput mode="flat" label="Routine Name" value={name} onChangeText={setName} style={styles.topInput} />
+          <TextInput mode="flat" label="Routine Name" testID="routine-name-input" value={name} onChangeText={setName} style={styles.topInput} />
         </View>
 
         {/* Trigger Phrases */}
@@ -554,19 +622,30 @@ const RoutineEditScreen = () => {
             <HelpIcon text={helpCopy.routines.triggerPhrases} size={16} />
           </View>
           <View style={styles.triggerRow}>
-            <TextInput mode="flat" label="Add phrase" value={triggerInput} onChangeText={setTriggerInput}
+            <TextInput mode="flat" label="Add phrase" testID="routine-trigger-input" value={triggerInput} onChangeText={setTriggerInput}
               onSubmitEditing={addTriggerPhrase} dense style={[styles.topInput, { flex: 1 }]} />
-            <Button mode="contained-tonal" onPress={addTriggerPhrase} compact style={{ marginLeft: 8, alignSelf: 'center' }}>Add</Button>
+            <Button mode="contained-tonal" testID="routine-trigger-add" onPress={addTriggerPhrase} compact style={{ marginLeft: 8, alignSelf: 'center' }}>Add</Button>
           </View>
           {triggerPhrases.length > 0 && (
             <View style={styles.chips}>
               {triggerPhrases.map((phrase) => (
-                <Chip key={phrase} onClose={() => removeTriggerPhrase(phrase)} compact textStyle={{ fontSize: 12 }}>{phrase}</Chip>
+                <Chip key={phrase} testID={`routine-trigger-${phrase}`} onClose={() => removeTriggerPhrase(phrase)} compact textStyle={{ fontSize: 12 }}>{phrase}</Chip>
               ))}
             </View>
           )}
         </View>
 
+        {mode === 'simple' ? (
+          <View style={styles.section}>
+            <TextInput mode="flat" label="What should Jarvis do?" testID="routine-utterance-input"
+              value={utterance} onChangeText={setUtterance} multiline numberOfLines={5}
+              placeholder="Turn on the living room lights and play Room Lights."
+              style={[styles.topInput, { minHeight: 128 }]} contentStyle={{ textAlignVertical: 'top' }} />
+            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+              Write what you'd normally ask Jarvis. It will interpret this each time.
+            </Text>
+          </View>
+        ) : (<>
         {/* Steps */}
         <View style={styles.section}>
           <Text variant="titleSmall" style={[styles.sectionTitle, { color: theme.colors.primary }]}>Steps</Text>
@@ -580,19 +659,32 @@ const RoutineEditScreen = () => {
                   <Button mode="outlined" compact icon="cellphone-link" onPress={() => setCatalogMenuVisible(true)} labelStyle={{ fontSize: 12 }}>
                     {commandsLoading
                       ? 'Loading…'
-                      : (nodes.find((n) => n.node_id === catalogNodeId)?.room || 'Select node')}
+                      : (catalogNode && nodeLabel(catalogNode)) || 'Select node'}
                   </Button>
                 }>
                 {nodes.map((n) => (
                   <Menu.Item key={n.node_id}
-                    leadingIcon={n.online ? 'circle' : 'circle-outline'}
-                    title={n.room ? `${n.room}${n.online ? '' : ' (offline)'}` : n.node_id}
+                    leadingIcon={({ size, color }) => (
+                      <NodeKindIcon node={nodeKinds[n.node_id]} size={size} color={color} />
+                    )}
+                    title={`${nodeLabel(n) || n.node_id}${n.online ? '' : ' (offline)'}`}
                     onPress={() => { setCatalogNodeId(n.node_id); setCatalogMenuVisible(false); }} />
                 ))}
               </Menu>
             </View>
           )}
-          {commandsError && (
+          {commandsError && cmdState === 'needs_k2' && (
+            <View style={{ marginBottom: 8 }} testID="routine-catalog-needs-k2">
+              <Text variant="bodySmall" style={{ color: theme.colors.error }}>
+                {commandsError} Set one up to list its commands, or pick a different node with “Commands from” above.
+              </Text>
+              <Button mode="outlined" icon="key-variant" compact onPress={provisionCatalogKey}
+                style={{ alignSelf: 'flex-start', marginTop: 6 }}>
+                Set up encryption key
+              </Button>
+            </View>
+          )}
+          {commandsError && cmdState !== 'needs_k2' && (
             <View style={{ marginBottom: 8 }}>
               <Text variant="bodySmall" style={{ color: theme.colors.error }}>
                 {commandsError} Pick a different node with “Commands from” above.
@@ -601,7 +693,7 @@ const RoutineEditScreen = () => {
           )}
           <DraggableFlatList data={steps} keyExtractor={(_, i) => `step-${i}`} renderItem={renderStep}
             onDragEnd={({ data }) => setSteps(data)} scrollEnabled={false} />
-          <Button mode="outlined" icon="plus" onPress={addStep} compact style={{ alignSelf: 'flex-start' }}>Add Step</Button>
+          <Button mode="outlined" icon="plus" testID="routine-add-step" onPress={addStep} compact style={{ alignSelf: 'flex-start' }}>Add Step</Button>
         </View>
 
         {/* Response Instruction */}
@@ -626,6 +718,8 @@ const RoutineEditScreen = () => {
             ]}
           />
         </View>
+
+        </>)}
 
         {/* Schedule */}
         <View style={styles.section}>
@@ -705,7 +799,8 @@ const RoutineEditScreen = () => {
                   }>
                   {nodes.map((n) => (
                     <Menu.Item key={n.node_id}
-                      title={n.room ? `${n.room} (${n.node_id})` : n.node_id}
+                      disabled={mode === 'simple' && !supportsSimpleOn(n.node_id)}
+                      title={`${nodeLabel(n) || n.node_id}${mode === 'simple' && !supportsSimpleOn(n.node_id) ? ' — update required' : ''}`}
                       onPress={() => { setTargetNodeId(n.node_id); setNodeMenuVisible(false); }} />
                   ))}
                 </Menu>
@@ -717,16 +812,16 @@ const RoutineEditScreen = () => {
         {/* Save */}
         <View style={styles.section}>
           {validationError && (
-            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 6 }}>
+            <Text variant="bodySmall" accessibilityLiveRegion="polite" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 6 }}>
               {validationError}
             </Text>
           )}
-          <Button mode="contained" onPress={handleSave} disabled={!!validationError || saving} loading={saving}>
+          <Button mode="contained" testID="routine-save-button" onPress={handleSave} disabled={!!validationError || saving} loading={saving}>
             {isEditing ? 'Save Changes' : 'Create Routine'}
           </Button>
         </View>
       </ScrollView>
-    </KeyboardAvoidingView>
+    </KeyboardSafeView>
   );
 };
 

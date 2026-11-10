@@ -1,0 +1,15 @@
+appId: com.jarvis.nodemobile
+name: logout
+# Shared subflow: from the main tabs, Home → Settings → Log Out, ending on
+# Landing. Log Out is in the first (Account) card, so no scroll is needed.
+---
+- tapOn:
+    id: "tab-home"
+- tapOn:
+    id: "settings-button"
+- tapOn:
+    id: "settings-logout"
+- extendedWaitUntil:
+    visible:
+      id: "landing-login-button"
+    timeout: 20000

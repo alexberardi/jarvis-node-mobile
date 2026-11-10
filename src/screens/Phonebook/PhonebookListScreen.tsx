@@ -108,7 +108,7 @@ const PhonebookListScreen = () => {
               compact
               icon="phone-off"
               testID={`phone-contact-dnc-${contact.id}`}
-              textStyle={styles.chipText}
+              textStyle={[styles.chipText, { color: theme.colors.onError }]}
               style={[styles.chip, { backgroundColor: theme.colors.error }]}
             >
               do not call

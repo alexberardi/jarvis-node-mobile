@@ -18,6 +18,7 @@ export type AuthStackParamList = {
 export type NodesStackParamList = {
   NodeList: undefined;
   AddNode: undefined;
+  AddComputer: undefined;
   NodeDetail: { nodeId: string; initialTab?: 'overview' | 'hardware' | 'packages' | 'activity' };
   NodeSettings: { nodeId: string; room: string | null };
   ImportKey: undefined;
@@ -211,4 +212,5 @@ export type RootStackParamList = {
   Memories: NavigatorScreenParams<MemoriesStackParamList> | undefined;
   Phonebook: NavigatorScreenParams<PhonebookStackParamList> | undefined;
   CallContext: NavigatorScreenParams<CallContextStackParamList> | undefined;
+  NowPlaying: undefined;
 };
