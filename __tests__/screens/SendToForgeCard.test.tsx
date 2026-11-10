@@ -4,14 +4,16 @@ import { PaperProvider } from 'react-native-paper';
 
 import SendToForgeCard from '../../src/screens/Store/SendToForgeCard';
 import { lightTheme } from '../../src/theme';
-import { fetchTestRuns, sendToForge } from '../../src/api/testInstallApi';
+import { fetchTestActivity, sendToForge } from '../../src/api/testInstallApi';
 
 jest.mock('../../src/api/testInstallApi', () => ({
-  fetchTestRuns: jest.fn(),
+  fetchTestActivity: jest.fn(),
   sendToForge: jest.fn(),
 }));
 
-const mockFetch = fetchTestRuns as jest.Mock;
+// The card reads runs and the event count from one poll; tests give it the runs.
+const mockActivity = fetchTestActivity as jest.Mock;
+const mockFetch = { mockResolvedValue: (runs: unknown[], events = 0) => mockActivity.mockResolvedValue({ runs, events }) };
 const mockSend = sendToForge as jest.Mock;
 
 const renderCard = () =>
@@ -34,7 +36,15 @@ describe('SendToForgeCard', () => {
     expect(await findByText("'timedelta' object has no attribute 'day'")).toBeTruthy();
     expect(getByText('days_until_date failed')).toBeTruthy();
     expect(getByText('47 days')).toBeTruthy();
-    expect(mockFetch).toHaveBeenCalledWith('node-1', 'req-A');
+    expect(mockActivity).toHaveBeenCalledWith('node-1', 'req-A');
+  });
+
+  it('says the node events go along', async () => {
+    mockFetch.mockResolvedValue([], 3);
+    const { findByTestId } = renderCard();
+    expect((await findByTestId('send-to-forge-events')).props.children.join('')).toBe(
+      'Also sends 3 node events: its log lines, device scans and controls.',
+    );
   });
 
   it('sends the note and says where to go next', async () => {

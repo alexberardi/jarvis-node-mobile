@@ -52,6 +52,7 @@ jest.mock('../../src/api/packageInstallApi', () => ({
 jest.mock('../../src/api/testInstallApi', () => ({
   pollTestInstallStatus: jest.fn(),
   fetchTestRuns: jest.fn(() => Promise.resolve([])),
+  fetchTestActivity: jest.fn(() => Promise.resolve({ runs: [], events: 0 })),
   sendToForge: jest.fn(),
 }));
 

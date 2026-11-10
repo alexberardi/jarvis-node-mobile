@@ -7,6 +7,7 @@ import AddComputerScreen from '../screens/Nodes/AddComputerScreen';
 import FastPathInspectScreen from '../screens/Nodes/FastPathInspectScreen';
 import ImportKeyScreen from '../screens/ImportKey/ImportKeyScreen';
 import NodeDetailScreen from '../screens/Nodes/NodeDetailScreen';
+import NodeForgeTestScreen from '../screens/Nodes/NodeForgeTestScreen';
 import NodeListScreen from '../screens/Nodes/NodeListScreen';
 import NodeSettingsScreen from '../screens/Nodes/NodeSettingsScreen';
 import IntegrationAuthScreen from '../screens/Settings/IntegrationAuthScreen';
@@ -30,6 +31,7 @@ const NodesStackNavigator = () => {
       <Stack.Screen name="AddComputer" component={AddComputerScreen} />
       <Stack.Screen name="NodeDetail" component={NodeDetailScreen} />
       <Stack.Screen name="NodeSettings" component={NodeSettingsScreen} />
+      <Stack.Screen name="NodeForgeTest" component={NodeForgeTestScreen} />
       <Stack.Screen name="ImportKey" component={ImportKeyWrapper} />
       <Stack.Screen name="IntegrationAuth" component={IntegrationAuthScreen} />
       <Stack.Screen name="FastPathInspect" component={FastPathInspectScreen} />

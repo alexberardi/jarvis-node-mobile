@@ -21,6 +21,7 @@ export type NodesStackParamList = {
   AddComputer: undefined;
   NodeDetail: { nodeId: string; initialTab?: 'overview' | 'hardware' | 'packages' | 'activity' };
   NodeSettings: { nodeId: string; room: string | null };
+  NodeForgeTest: { nodeId: string };
   ImportKey: undefined;
   IntegrationAuth: {
     authConfig: string;          // JSON-serialized AuthenticationConfig
