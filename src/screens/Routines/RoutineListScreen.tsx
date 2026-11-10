@@ -20,6 +20,7 @@ import {
 
 import { getSmartHomeConfig } from '../../api/smartHomeApi';
 import { deleteRoutine, listRoutines, runRoutineNow } from '../../api/routineApi';
+import { listNodes } from '../../api/nodeApi';
 import { useAuth } from '../../auth/AuthContext';
 import { RoutinesStackParamList } from '../../navigation/types';
 import { fabListPaddingBottom, fabStyle } from '../../theme/fab';
@@ -89,6 +90,14 @@ const RoutineListScreen = () => {
   const nodes = smartHomeConfig?.nodes ?? [];
   const primaryNodeId = smartHomeConfig?.primary_node_id || null;
   const nodeKinds = useNodeKinds(householdId, nodes.map((n) => n.node_id));
+  const hasSimple = routines.some((r) => r.mode === 'simple');
+  const nodeSupport = useQuery({
+    queryKey: ['routineNodes', householdId],
+    queryFn: () => listNodes(householdId!),
+    enabled: !!householdId && hasSimple,
+  });
+  const refreshNodeSupport = nodeSupport.refetch;
+  const supportsSimpleOn = (id: string) => nodeSupport.data?.some((n) => n.node_id === id && n.capabilities?.simple_routines === true) === true;
 
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
   const [runMenuOpen, setRunMenuOpen] = useState<string | null>(null);
@@ -96,8 +105,11 @@ const RoutineListScreen = () => {
 
   useFocusEffect(
     useCallback(() => {
-      if (householdId) refetch();
-    }, [householdId, refetch]),
+      if (householdId) {
+        refetch();
+        if (hasSimple) refreshNodeSupport();
+      }
+    }, [householdId, refetch, hasSimple, refreshNodeSupport]),
   );
 
   const handleDelete = useCallback(
@@ -124,12 +136,16 @@ const RoutineListScreen = () => {
 
   const runOnNode = useCallback(
     async (routine: Routine, nodeId: string) => {
+      if (routine.mode === 'simple' && !supportsSimpleOn(nodeId)) {
+        Alert.alert('Update required', 'Update Jarvis on this node to run Simple routines.');
+        return;
+      }
       setRunMenuOpen(null);
       setRunning(routine.id);
       try {
         const result = await runRoutineNow(householdId!, routine.id, nodeId);
         if (result.status === 'timeout') {
-          Alert.alert('No response', 'The node did not respond. Is it online?');
+          Alert.alert('No response', result.message || 'The node did not respond. Some actions may have run.');
         } else if (result.message) {
           Alert.alert(routine.name, result.message);
         } else {
@@ -147,24 +163,33 @@ const RoutineListScreen = () => {
         setRunning(null);
       }
     },
-    [householdId],
+    [householdId, nodeSupport.data],
   );
 
   const handleRun = useCallback(
     (routine: Routine) => {
       setMenuOpen(null);
-      if (nodes.length === 0) {
+      if (routine.mode === 'simple' && !nodeSupport.data) {
+        Alert.alert('Node support unavailable', 'Could not check node support. Refresh the routines list and try again.');
+        return;
+      }
+      const eligible = routine.mode === 'simple' ? nodes.filter((n) => supportsSimpleOn(n.node_id)) : nodes;
+      if (routine.mode === 'simple' && eligible.length === 0) {
+        Alert.alert('Update required', 'Update Jarvis on a node to run Simple routines.');
+        return;
+      }
+      if (eligible.length === 0) {
         // No known nodes — let the server fall back to the primary node.
         runOnNode(routine, primaryNodeId ?? '');
         return;
       }
-      if (nodes.length === 1) {
-        runOnNode(routine, nodes[0].node_id);
+      if (eligible.length === 1) {
+        runOnNode(routine, eligible[0].node_id);
         return;
       }
       setRunMenuOpen(routine.id);
     },
-    [nodes, primaryNodeId, runOnNode],
+    [nodes, primaryNodeId, runOnNode, nodeSupport.data],
   );
 
   const renderRightActions = (routine: Routine) => () => (
@@ -201,12 +226,14 @@ const RoutineListScreen = () => {
                   visible={runMenuOpen === item.id}
                   onDismiss={() => setRunMenuOpen(null)}
                   anchor={
-                    <IconButton testID={`routine-run-${item.id}`} icon="play-circle-outline" size={22} onPress={() => handleRun(item)} style={{ margin: -4 }} />
+                    <IconButton testID={`routine-run-${item.id}`} icon="play-circle-outline" size={22}
+                      disabled={item.mode === 'simple' && nodeSupport.isPending} onPress={() => handleRun(item)} style={{ margin: -4 }} />
                   }
                 >
                   {nodes.map((n) => (
                     <Menu.Item key={n.node_id}
-                      title={nodeDisplayName(withKnownKind(n, nodeKinds[n.node_id]), n.node_id)}
+                      disabled={item.mode === 'simple' && !supportsSimpleOn(n.node_id)}
+                      title={`${nodeDisplayName(withKnownKind(n, nodeKinds[n.node_id]), n.node_id)}${item.mode === 'simple' && !supportsSimpleOn(n.node_id) ? ' — update required' : ''}`}
                       leadingIcon={({ size, color }) => (
                         <NodeKindIcon
                           node={nodeKinds[n.node_id]}
@@ -236,15 +263,19 @@ const RoutineListScreen = () => {
               ))}
             </View>
             <View style={styles.metaRow}>
+              <Text variant="labelSmall" style={{ color: theme.colors.primary }}>{item.mode === 'simple' ? 'Simple' : 'Advanced'}</Text>
+              {item.mode !== 'simple' && (
               <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
                 {item.steps.length} step{item.steps.length !== 1 ? 's' : ''}
               </Text>
+              )}
               {schedule && (
                 <Chip compact style={styles.scheduleBadge} textStyle={[styles.chipText, { color: theme.colors.primary }]}>
                   {schedule}
                 </Chip>
               )}
             </View>
+            {item.mode === 'simple' && <Text variant="bodySmall" numberOfLines={2} style={{ color: theme.colors.onSurfaceVariant, marginTop: 6 }}>{item.utterance}</Text>}
           </Card.Content>
         </Card>
       </ReanimatedSwipeable>
@@ -291,7 +322,7 @@ const RoutineListScreen = () => {
         renderItem={renderRoutine}
         contentContainerStyle={routines.length === 0 ? styles.emptyList : styles.list}
         refreshing={isRefetching}
-        onRefresh={() => refetch()}
+        onRefresh={() => { refetch(); nodeSupport.refetch(); }}
         ListEmptyComponent={emptyComponent}
       />
       <FAB

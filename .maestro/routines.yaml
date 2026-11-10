@@ -45,6 +45,8 @@ env:
 - assertNotVisible:
     id: "routine-delete-button"
 - tapOn:
+    id: "routine-mode-advanced"
+- tapOn:
     id: "routine-name-input"
 - inputText: ${output.routine}
 - assertVisible:
