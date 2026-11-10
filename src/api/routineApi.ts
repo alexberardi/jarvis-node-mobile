@@ -9,6 +9,7 @@ import { getCommandCenterUrl } from '../config/serviceConfig';
 import type {
   ResponseLength,
   Routine,
+  RoutineMode,
   RoutineSchedule,
   RoutineStep,
 } from '../types/Routine';
@@ -18,6 +19,8 @@ const base = (householdId: string) =>
   `${getCommandCenterUrl()}/api/v0/households/${householdId}/routines`;
 
 export interface RoutineWrite {
+  mode?: RoutineMode;
+  utterance?: string;
   name: string;
   trigger_phrases: string[];
   steps: RoutineStep[];
@@ -30,6 +33,13 @@ export interface RoutineWrite {
 export const listRoutines = async (householdId: string): Promise<Routine[]> => {
   const res = await apiClient.get<{ routines: Routine[] }>(base(householdId));
   return res.data.routines;
+};
+
+/** Older servers ignore unknown write fields, so check support before offering Simple. */
+export const getRoutineModes = async (householdId: string): Promise<RoutineMode[]> => {
+  const res = await apiClient.get<{ supported_modes?: unknown }>(base(householdId));
+  const modes = res.data.supported_modes;
+  return Array.isArray(modes) && modes.includes('simple') ? ['advanced', 'simple'] : ['advanced'];
 };
 
 export const getRoutine = async (

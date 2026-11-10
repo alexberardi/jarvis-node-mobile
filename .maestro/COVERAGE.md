@@ -55,7 +55,7 @@ reason is in its `properties.skip_reason`).
 | Devices/DeviceEditScreen: light on/off (LightControl) | skip | devices-light-toggle.yaml: needs the fake Home Assistant (#154) |
 | Devices/RoomManagementScreen: add, rename, delete a room | flow | devices.yaml |
 | Devices/ExternalDeviceDetailScreen | later | needs the fake Home Assistant (#154) |
-| Routines/RoutineEditScreen: create, add a trigger phrase, delete | flow | routines.yaml (free-text step: the command catalog needs the node's key) |
+| Routines/RoutineEditScreen: create, add a trigger phrase, delete | flow | routines.yaml, simple-routines.yaml (Simple instructions, mode switching and inactive-content persistence; free-text step: the command catalog needs the node's key) |
 | Routines/RoutineEditScreen: command catalog, schedule | later | needs a node with its key (piece 7) |
 | Routines/RoutineListScreen: run now, swipe delete | later | run now needs a live node; delete is covered from the editor (routines.yaml) |
 | Inbox/InboxListScreen | flow | inbox.yaml, inbox-suggestion.yaml (opens from Home's inbox button, items picked by title) |

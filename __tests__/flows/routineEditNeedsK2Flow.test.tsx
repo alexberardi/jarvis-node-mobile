@@ -25,11 +25,13 @@ jest.mock('../../src/auth/AuthContext', () => ({
 }));
 jest.mock('../../src/api/smartHomeApi', () => ({ getSmartHomeConfig: jest.fn() }));
 jest.mock('../../src/api/routineApi', () => ({
+  getRoutineModes: jest.fn().mockResolvedValue(['advanced', 'simple']),
   createRoutine: jest.fn(),
   deleteRoutine: jest.fn(),
   getRoutine: jest.fn(),
   updateRoutine: jest.fn(),
 }));
+jest.mock('../../src/api/nodeApi', () => ({ listNodes: jest.fn().mockResolvedValue([]) }));
 jest.mock('../../src/components/HelpIcon', () => ({ HelpIcon: () => null }));
 jest.mock('../../src/hooks/useNodeKinds', () => ({ useNodeKinds: () => ({}) }));
 
@@ -70,6 +72,7 @@ describe('Routine editor — a catalog node with no encryption key', () => {
     });
 
     const screen = renderScreen();
+    fireEvent.press(screen.getByTestId('routine-mode-advanced'));
 
     await waitFor(() => expect(screen.getByTestId('routine-catalog-needs-k2')).toBeTruthy());
     expect(screen.queryByText(/did not respond/i)).toBeNull();
@@ -89,6 +92,7 @@ describe('Routine editor — a catalog node with no encryption key', () => {
     });
 
     const screen = renderScreen();
+    fireEvent.press(screen.getByTestId('routine-mode-advanced'));
 
     await waitFor(() => expect(screen.getByText(/did not respond in time/)).toBeTruthy());
     expect(screen.queryByText('Set up encryption key')).toBeNull();

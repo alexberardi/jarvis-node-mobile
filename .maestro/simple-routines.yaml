@@ -1,0 +1,102 @@
+appId: com.jarvis.nodemobile
+name: Simple routines, switch modes and preserve instructions
+tags:
+  - routines
+  - e2e
+env:
+  EMAIL: "test@jarvisautomation.io"
+  PASSWORD: "DevPass123!"
+---
+- launchApp:
+    clearState: true
+- runFlow: subflows/login.yaml
+- tapOn:
+    id: "tab-routines"
+- extendedWaitUntil:
+    visible:
+      id: "routine-add-fab"
+    timeout: 20000
+- evalScript: ${output.routine = 'E2E simple ' + Date.now()}
+- tapOn:
+    id: "routine-add-fab"
+- extendedWaitUntil:
+    visible:
+      id: "routine-utterance-input"
+    timeout: 10000
+- tapOn:
+    id: "routine-name-input"
+- inputText: ${output.routine}
+- tapOn:
+    id: "routine-trigger-input"
+- inputText: "start my demo"
+- tapOn:
+    id: "routine-trigger-add"
+- hideKeyboard
+- tapOn:
+    id: "routine-utterance-input"
+- inputText: "Turn on the kitchen lights and play the radio."
+- hideKeyboard
+- takeScreenshot: simple-routine-editor
+# Switching preserves both forms; saving activates only the selected mode.
+- tapOn:
+    id: "routine-mode-advanced"
+- scrollUntilVisible:
+    element:
+      id: "routine-add-step"
+    direction: DOWN
+- tapOn:
+    id: "routine-add-step"
+- tapOn:
+    id: "routine-step-command-0"
+- inputText: "get_weather"
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: "routine-mode-simple"
+    direction: UP
+- tapOn:
+    id: "routine-mode-simple"
+- assertVisible:
+    id: "routine-utterance-input"
+    text: "Turn on the kitchen lights and play the radio."
+- scrollUntilVisible:
+    element:
+      id: "routine-save-button"
+    direction: DOWN
+- tapOn:
+    id: "routine-save-button"
+- extendedWaitUntil:
+    visible:
+      id: "routine-add-fab"
+    timeout: 10000
+- scrollUntilVisible:
+    element:
+      text: ${output.routine}
+    direction: DOWN
+- tapOn:
+    text: ${output.routine}
+- extendedWaitUntil:
+    visible:
+      id: "routine-utterance-input"
+      text: "Turn on the kitchen lights and play the radio."
+    timeout: 10000
+- tapOn:
+    id: "routine-mode-advanced"
+- scrollUntilVisible:
+    element:
+      id: "routine-step-command-0"
+    direction: DOWN
+- assertVisible:
+    id: "routine-step-command-0"
+    text: "get_weather"
+- takeScreenshot: advanced-routine-editor
+- tapOn:
+    id: "routine-delete-button"
+- tapOn:
+    id: "android:id/button1"
+- extendedWaitUntil:
+    visible:
+      id: "routine-add-fab"
+    timeout: 10000
+- assertNotVisible:
+    text: ${output.routine}

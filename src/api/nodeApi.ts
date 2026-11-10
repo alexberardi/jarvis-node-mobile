@@ -31,6 +31,7 @@ export interface NodeInfo {
   // servers. node_kind is "desktop" for the Jarvis Automation agent on a
   // computer; owner_user_id is the member who paired the node.
   node_kind?: string | null;
+  capabilities?: Record<string, unknown>;
   owner_user_id?: number | null;
   // Registered name (jarvisd 2026-10-15): a desktop agent's computer name.
   // Null when registered without one; missing on older servers. Label nodes

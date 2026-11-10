@@ -6,7 +6,7 @@ import { PaperProvider } from 'react-native-paper';
 import RoutineEditScreen from '../../src/screens/Routines/RoutineEditScreen';
 import { lightTheme } from '../../src/theme';
 import { getSmartHomeConfig } from '../../src/api/smartHomeApi';
-import { createRoutine } from '../../src/api/routineApi';
+import { createRoutine, getRoutineModes } from '../../src/api/routineApi';
 
 // The controls .maestro/routines.yaml drives by testID: name, trigger phrase, a free-text
 // step command (no catalog without a key), save.
@@ -25,11 +25,13 @@ jest.mock('../../src/auth/AuthContext', () => ({
 }));
 jest.mock('../../src/api/smartHomeApi', () => ({ getSmartHomeConfig: jest.fn() }));
 jest.mock('../../src/api/routineApi', () => ({
+  getRoutineModes: jest.fn(),
   createRoutine: jest.fn(),
   deleteRoutine: jest.fn(),
   getRoutine: jest.fn(),
   updateRoutine: jest.fn(),
 }));
+jest.mock('../../src/api/nodeApi', () => ({ listNodes: jest.fn().mockResolvedValue([]) }));
 jest.mock('../../src/components/HelpIcon', () => ({ HelpIcon: () => null }));
 jest.mock('../../src/hooks/useNodeKinds', () => ({ useNodeKinds: () => ({}) }));
 jest.mock('../../src/hooks/useSettingsSnapshot', () => ({
@@ -62,10 +64,12 @@ describe('RoutineEditScreen — new routine by testID', () => {
       primary_node_id: 'desk-1',
     });
     (createRoutine as jest.Mock).mockResolvedValue({ id: 'r-1' });
+    (getRoutineModes as jest.Mock).mockResolvedValue(['advanced', 'simple']);
   });
 
   it('creates a routine from the name, trigger, step and save controls', async () => {
     const screen = renderScreen();
+    fireEvent.press(screen.getByTestId('routine-mode-advanced'));
 
     fireEvent.changeText(screen.getByTestId('routine-name-input'), 'E2E routine');
     fireEvent.changeText(screen.getByTestId('routine-trigger-input'), 'e2e phrase');
@@ -73,6 +77,7 @@ describe('RoutineEditScreen — new routine by testID', () => {
     expect(screen.getByTestId('routine-trigger-e2e phrase')).toBeTruthy();
     fireEvent.press(screen.getByTestId('routine-add-step'));
     fireEvent.changeText(screen.getByTestId('routine-step-command-0'), 'get_weather');
+    await waitFor(() => expect(screen.getByTestId('routine-save-button')).toBeEnabled());
     fireEvent.press(screen.getByTestId('routine-save-button'));
 
     await waitFor(() => expect(createRoutine).toHaveBeenCalledTimes(1));
@@ -85,6 +90,48 @@ describe('RoutineEditScreen — new routine by testID', () => {
       }),
     );
     await waitFor(() => expect(mockGoBack).toHaveBeenCalled());
+  });
+
+  it('saves Simple without steps or an encryption key', async () => {
+    const screen = renderScreen();
+    fireEvent.changeText(screen.getByTestId('routine-name-input'), 'Good morning');
+    fireEvent.changeText(screen.getByTestId('routine-trigger-input'), 'good morning');
+    fireEvent.press(screen.getByTestId('routine-trigger-add'));
+    fireEvent.changeText(screen.getByTestId('routine-utterance-input'), 'Turn on the lights and play Room Lights.');
+    expect(screen.queryByTestId('routine-add-step')).toBeNull();
+    expect(screen.queryByTestId('routine-catalog-needs-k2')).toBeNull();
+    await waitFor(() => expect(screen.getByTestId('routine-save-button')).toBeEnabled());
+    fireEvent.press(screen.getByTestId('routine-save-button'));
+    await waitFor(() => expect(createRoutine).toHaveBeenCalledWith('hh-1', expect.objectContaining({
+      mode: 'simple', utterance: 'Turn on the lights and play Room Lights.', steps: [],
+    })));
+  });
+
+  it('preserves both modes and saves the currently selected one', async () => {
+    const screen = renderScreen();
+    fireEvent.changeText(screen.getByTestId('routine-name-input'), 'Morning');
+    fireEvent.changeText(screen.getByTestId('routine-trigger-input'), 'morning shortcut');
+    fireEvent.press(screen.getByTestId('routine-trigger-add'));
+    fireEvent.changeText(screen.getByTestId('routine-utterance-input'), 'Play the radio');
+    fireEvent.press(screen.getByTestId('routine-mode-advanced'));
+    fireEvent.press(screen.getByTestId('routine-add-step'));
+    fireEvent.changeText(screen.getByTestId('routine-step-command-0'), 'get_weather');
+    fireEvent.press(screen.getByTestId('routine-mode-simple'));
+    expect(screen.getByTestId('routine-utterance-input').props.value).toBe('Play the radio');
+    await waitFor(() => expect(screen.getByTestId('routine-save-button')).toBeEnabled());
+    fireEvent.press(screen.getByTestId('routine-save-button'));
+    await waitFor(() => expect(createRoutine).toHaveBeenCalledWith('hh-1', expect.objectContaining({
+      mode: 'simple', utterance: 'Play the radio',
+      steps: [expect.objectContaining({ command: 'get_weather' })],
+    })));
+  });
+
+  it('keeps Advanced usable when an older server does not support Simple', async () => {
+    (getRoutineModes as jest.Mock).mockResolvedValue(['advanced']);
+    const screen = renderScreen();
+    await waitFor(() => expect(screen.getByTestId('routine-add-step')).toBeTruthy());
+    expect(screen.queryByTestId('routine-utterance-input')).toBeNull();
+    expect(screen.getByText('Update the server to use Simple routines.')).toBeTruthy();
   });
 
   it('has no delete button on a new routine', () => {
