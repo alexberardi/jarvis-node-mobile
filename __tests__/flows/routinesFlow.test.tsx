@@ -95,6 +95,37 @@ describe('Routines list — flow integration (load, run, delete, create)', () =>
     expect(listRoutines).toHaveBeenCalledWith('hh-1');
   });
 
+  it('shows a Simple instruction and runs only on a compatible node', async () => {
+    (listRoutines as jest.Mock).mockResolvedValue([{ ...ROUTINE, mode: 'simple', utterance: 'Dim the lights', steps: [] }]);
+    (getSmartHomeConfig as jest.Mock).mockResolvedValue({ nodes: [{ node_id: 'old' }, { node_id: 'new' }] });
+    mockListNodes.mockResolvedValue([
+      { node_id: 'old', capabilities: {} },
+      { node_id: 'new', capabilities: { simple_routines: true } },
+    ]);
+    const alertSpy = jest.spyOn(Alert, 'alert');
+    const screen = renderScreen();
+    await screen.findByText('Dim the lights');
+    expect(screen.getByText('Simple')).toBeTruthy();
+    await waitFor(() => expect(screen.getByTestId('routine-run-r1')).toBeEnabled());
+    fireEvent.press(screen.getByTestId('routine-run-r1'));
+    await waitFor(() => expect(runRoutineNow).toHaveBeenCalledWith('hh-1', 'r1', 'new'));
+    alertSpy.mockRestore();
+  });
+
+  it('explains that an older node needs an update without dispatching Simple', async () => {
+    (listRoutines as jest.Mock).mockResolvedValue([{ ...ROUTINE, mode: 'simple', utterance: 'Play music' }]);
+    (getSmartHomeConfig as jest.Mock).mockResolvedValue({ nodes: [{ node_id: 'old' }] });
+    mockListNodes.mockResolvedValue([{ node_id: 'old', capabilities: {} }]);
+    const alertSpy = jest.spyOn(Alert, 'alert');
+    const screen = renderScreen();
+    await screen.findByText('Play music');
+    await waitFor(() => expect(screen.getByTestId('routine-run-r1')).toBeEnabled());
+    fireEvent.press(screen.getByTestId('routine-run-r1'));
+    expect(runRoutineNow).not.toHaveBeenCalled();
+    expect(alertSpy).toHaveBeenCalledWith('Update required', expect.stringContaining('Simple'));
+    alertSpy.mockRestore();
+  });
+
   it('runs the routine on the only known node and alerts the result', async () => {
     (getSmartHomeConfig as jest.Mock).mockResolvedValue({
       nodes: [{ node_id: 'n1', room: 'Living Room' }],
