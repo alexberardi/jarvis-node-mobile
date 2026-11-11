@@ -106,9 +106,9 @@ describe('NodeForgeTestScreen', () => {
     const screen = renderScreen();
     await install(screen);
     expect(await screen.findByText('Device protocol zigbee2mqtt loaded. Set its settings, then scan for its devices.')).toBeTruthy();
-    fireEvent.press(screen.getByTestId('forge-test-protocol-settings'));
+    fireEvent.press(screen.getByTestId('forge-test-settings'));
     expect(mockNavigate).toHaveBeenCalledWith('NodeSettings', { nodeId: 'node-1', room: 'Office PC' });
-    fireEvent.press(screen.getByTestId('forge-test-protocol-scan'));
+    fireEvent.press(screen.getByTestId('forge-test-scan'));
     expect(mockParentNavigate).toHaveBeenCalledWith('DevicesTab', { screen: 'DeviceDiscovery', params: { nodeId: 'node-1' }, initial: false });
   });
 
@@ -118,7 +118,9 @@ describe('NodeForgeTestScreen', () => {
     await install(screen);
     expect(await screen.findByTestId('forge-test-agents')).toBeTruthy();
     expect(screen.getByText(/Background agent zigbee_watch loaded\. It ran once now/)).toBeTruthy();
-    expect(screen.queryByTestId('forge-test-protocols')).toBeNull();
+    // Settings and a device scan are there for any draft.
+    expect(screen.getByTestId('forge-test-settings')).toBeTruthy();
+    expect(screen.getByTestId('forge-test-scan')).toBeTruthy();
   });
 
   it("shows the node's error for a failed install and starts over", async () => {

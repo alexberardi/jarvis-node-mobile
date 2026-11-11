@@ -201,41 +201,43 @@ const NodeForgeTestScreen = () => {
         </View>
       ) : (
         <>
-          {protocols.length > 0 && (
-            <View testID="forge-test-protocols" style={[styles.protocols, { borderBottomColor: theme.colors.outlineVariant }]}>
+          {/* Always shown: any draft may have settings, and detecting which do isn't worth it. */}
+          <View testID="forge-test-tools" style={[styles.protocols, { borderBottomColor: theme.colors.outlineVariant }]}>
+            {protocols.length > 0 && (
               <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
                 Device protocol {protocols.join(', ')} loaded. Set its settings, then scan for its devices.
               </Text>
-              <View style={styles.protocolButtons}>
-                <Button
-                  testID="forge-test-protocol-settings"
-                  mode="outlined"
-                  compact
-                  icon="cog-outline"
-                  onPress={() => navigation.navigate('NodeSettings', { nodeId, room: node?.room ?? null })}
-                >
-                  Settings
-                </Button>
-                <Button
-                  testID="forge-test-protocol-scan"
-                  mode="outlined"
-                  compact
-                  icon="radar"
-                  onPress={() => navigation.getParent()?.navigate('DevicesTab', { screen: 'DeviceDiscovery', params: { nodeId }, initial: false })}
-                >
-                  Scan for devices
-                </Button>
-              </View>
-            </View>
-          )}
-          {agents.length > 0 && (
-            <View testID="forge-test-agents" style={[styles.protocols, { borderBottomColor: theme.colors.outlineVariant }]}>
-              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+            )}
+            {agents.length > 0 && (
+              <Text testID="forge-test-agents" variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
                 Background agent {agents.join(', ')} loaded. It ran once now and then runs on its schedule; Send to Forge
                 includes how each run went.
               </Text>
+            )}
+            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+              Change its settings, then Reinstall to run it with them. Devices it finds go when the test ends.
+            </Text>
+            <View style={styles.protocolButtons}>
+              <Button
+                testID="forge-test-settings"
+                mode="outlined"
+                compact
+                icon="cog-outline"
+                onPress={() => navigation.navigate('NodeSettings', { nodeId, room: node?.room ?? null })}
+              >
+                Settings
+              </Button>
+              <Button
+                testID="forge-test-scan"
+                mode="outlined"
+                compact
+                icon="radar"
+                onPress={() => navigation.getParent()?.navigate('DevicesTab', { screen: 'DeviceDiscovery', params: { nodeId }, initial: false })}
+              >
+                Scan for devices
+              </Button>
             </View>
-          )}
+          </View>
           {/* Keyed by the request: a reinstall starts a fresh chat, whose tools are the new version's. */}
           <TestChat key={requestId} nodeId={nodeId} householdId={node?.household_id ?? null} commands={commands} protocols={protocols} />
         </>
