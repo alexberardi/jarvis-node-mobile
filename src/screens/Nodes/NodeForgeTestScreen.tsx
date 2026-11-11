@@ -18,7 +18,7 @@ import {
 import type { ChatAction, ChatMessage } from '../../api/chatApi';
 import { sendNodeAction } from '../../api/commandCenterApi';
 import { getNode, type NodeInfo } from '../../api/nodeApi';
-import { fetchTestRuns, pollTestInstallStatus, requestTestInstall } from '../../api/testInstallApi';
+import { fetchTestRuns, pollTestInstallStatus, requestTestInstall, runTestAgents } from '../../api/testInstallApi';
 import { useAuth } from '../../auth/AuthContext';
 import ChatBubble from '../../components/ChatBubble';
 import KeyboardSafeView from '../../components/KeyboardSafeView';
@@ -61,6 +61,18 @@ const NodeForgeTestScreen = () => {
   const [install, setInstall] = useState<InstallStatus | null>(null);
   const [runCount, setRunCount] = useState(0);
   const [sheetOpen, setSheetOpen] = useState(false);
+  // "Run agents now": whether it's being sent, and the line shown after (sent, or the error)
+  const [agentRun, setAgentRun] = useState<{ busy: boolean; note: string | null; error: boolean }>({ busy: false, note: null, error: false });
+  const runAgents = useCallback(async () => {
+    if (!requestId) return;
+    setAgentRun({ busy: true, note: null, error: false });
+    try {
+      await runTestAgents(nodeId, requestId);
+      setAgentRun({ busy: false, note: 'Sent. Send to Forge includes how the run went.', error: false });
+    } catch (err) {
+      setAgentRun({ busy: false, note: errorDetail(err, "Couldn't run the agents."), error: true });
+    }
+  }, [nodeId, requestId]);
 
   useEffect(() => {
     getNode(nodeId).then(setNode).catch(() => {});
@@ -106,6 +118,7 @@ const NodeForgeTestScreen = () => {
     setInstall(null);
     setRunCount(0);
     setSheetOpen(false);
+    setAgentRun({ busy: false, note: null, error: false });
   }, []);
   const restart = useCallback(() => startTest(null), [startTest]);
 
@@ -214,10 +227,24 @@ const NodeForgeTestScreen = () => {
                 includes how each run went.
               </Text>
             )}
+            {agents.length > 0 && agentRun.note && (
+              <Text
+                testID="forge-test-agents-run-note"
+                variant="bodySmall"
+                style={{ color: agentRun.error ? theme.colors.error : theme.colors.onSurfaceVariant }}
+              >
+                {agentRun.note}
+              </Text>
+            )}
             <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
               Change its settings, then Reinstall to run it with them. Devices it finds go when the test ends.
             </Text>
             <View style={styles.protocolButtons}>
+              {agents.length > 0 && (
+                <Button testID="forge-test-run-agents" mode="contained" compact icon="play" loading={agentRun.busy} disabled={agentRun.busy} onPress={runAgents}>
+                  Run agents now
+                </Button>
+              )}
               <Button
                 testID="forge-test-settings"
                 mode="outlined"

@@ -5,7 +5,7 @@ import { PaperProvider } from 'react-native-paper';
 import NodeForgeTestScreen, { normalizeShareCode } from '../../src/screens/Nodes/NodeForgeTestScreen';
 import { lightTheme } from '../../src/theme';
 import { getNode } from '../../src/api/nodeApi';
-import { fetchTestRuns, pollTestInstallStatus, requestTestInstall } from '../../src/api/testInstallApi';
+import { fetchTestRuns, pollTestInstallStatus, requestTestInstall, runTestAgents } from '../../src/api/testInstallApi';
 import { useChat } from '../../src/hooks/useChat';
 
 // The node's Forge test: share code → install → a chat pinned to that node, with Send to Forge
@@ -22,6 +22,7 @@ jest.mock('../../src/api/testInstallApi', () => ({
   requestTestInstall: jest.fn(),
   pollTestInstallStatus: jest.fn(),
   fetchTestRuns: jest.fn(),
+  runTestAgents: jest.fn(),
 }));
 jest.mock('../../src/api/commandCenterApi', () => ({ sendNodeAction: jest.fn() }));
 jest.mock('../../src/hooks/useChat', () => ({ useChat: jest.fn() }));
@@ -121,6 +122,12 @@ describe('NodeForgeTestScreen', () => {
     // Settings and a device scan are there for any draft.
     expect(screen.getByTestId('forge-test-settings')).toBeTruthy();
     expect(screen.getByTestId('forge-test-scan')).toBeTruthy();
+
+    // Run agents now: the node runs them at once.
+    (runTestAgents as jest.Mock).mockResolvedValue(undefined);
+    fireEvent.press(screen.getByTestId('forge-test-run-agents'));
+    expect(await screen.findByText('Sent. Send to Forge includes how the run went.')).toBeTruthy();
+    expect(runTestAgents).toHaveBeenCalledWith('node-1', expect.any(String));
   });
 
   it("shows the node's error for a failed install and starts over", async () => {
