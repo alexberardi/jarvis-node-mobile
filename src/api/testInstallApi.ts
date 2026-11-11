@@ -82,6 +82,11 @@ export const fetchTestActivity = async (
 };
 
 /** Send to Forge: jarvisd sends the install result, the runs and the note to the draft. */
+/** Asks the node to run the draft's background agents now; their runs reach Send to Forge as events. */
+export const runTestAgents = async (nodeId: string, requestId: string): Promise<void> => {
+  await apiClient.post(`${getBaseUrl()}/api/v0/nodes/${nodeId}/test-install/${requestId}/run-agents`);
+};
+
 export const sendToForge = async (nodeId: string, requestId: string, note: string): Promise<void> => {
   await apiClient.post(
     `${getBaseUrl()}/api/v0/nodes/${nodeId}/test-install/${requestId}/feedback`,
