@@ -124,6 +124,7 @@ const NodeForgeTestScreen = () => {
   const name = node ? nodeDisplayName(node, isDesktopAgent(node) ? 'this computer' : 'this node') : 'this node';
   const commands: string[] = Array.isArray(install?.details?.commands) ? install!.details!.commands : [];
   const protocols: string[] = Array.isArray(install?.details?.protocols) ? install!.details!.protocols : [];
+  const agents: string[] = Array.isArray(install?.details?.agents) ? install!.details!.agents : [];
 
   return (
     <KeyboardSafeView style={styles.container}>
@@ -225,6 +226,14 @@ const NodeForgeTestScreen = () => {
                   Scan for devices
                 </Button>
               </View>
+            </View>
+          )}
+          {agents.length > 0 && (
+            <View testID="forge-test-agents" style={[styles.protocols, { borderBottomColor: theme.colors.outlineVariant }]}>
+              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                Background agent {agents.join(', ')} loaded. It ran once now and then runs on its schedule; Send to Forge
+                includes how each run went.
+              </Text>
             </View>
           )}
           {/* Keyed by the request: a reinstall starts a fresh chat, whose tools are the new version's. */}

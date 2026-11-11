@@ -112,6 +112,15 @@ describe('NodeForgeTestScreen', () => {
     expect(mockParentNavigate).toHaveBeenCalledWith('DevicesTab', { screen: 'DeviceDiscovery', params: { nodeId: 'node-1' }, initial: false });
   });
 
+  it('says a background agent loaded and that Send to Forge carries its runs', async () => {
+    (pollTestInstallStatus as jest.Mock).mockResolvedValue({ ...DONE, command_name: 'zigbee-watch', details: { commands: [], agents: ['zigbee_watch'] } });
+    const screen = renderScreen();
+    await install(screen);
+    expect(await screen.findByTestId('forge-test-agents')).toBeTruthy();
+    expect(screen.getByText(/Background agent zigbee_watch loaded\. It ran once now/)).toBeTruthy();
+    expect(screen.queryByTestId('forge-test-protocols')).toBeNull();
+  });
+
   it("shows the node's error for a failed install and starts over", async () => {
     (pollTestInstallStatus as jest.Mock).mockResolvedValue({ ...DONE, status: 'failed', error_message: 'No module named requests' });
     const screen = renderScreen();
