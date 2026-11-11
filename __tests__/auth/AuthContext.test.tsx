@@ -3,6 +3,7 @@ import { renderHook, act, waitFor } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { AppState } from 'react-native';
 
 import { AuthProvider, useAuth } from '../../src/auth/AuthContext';
 import authApi from '../../src/api/authApi';
@@ -140,6 +141,41 @@ describe('AuthContext', () => {
       expect(result.current.state.user).toEqual(storedUser);
       expect(result.current.state.accessToken).toBe('stored-access-token');
       expect(result.current.state.activeHouseholdId).toBe('household-1');
+    });
+
+    it('retries the restore on open when a locked background launch could not read the keychain', async () => {
+      // iOS launched us in the background with the phone locked: the
+      // WHEN_UNLOCKED keychain read throws, so the first restore finds nothing.
+      const appState = AppState as unknown as { currentState: string };
+      const prevState = appState.currentState;
+      appState.currentState = 'background';
+      (SecureStore.getItemAsync as jest.Mock).mockRejectedValue(new Error('User interaction is not allowed.'));
+      (AsyncStorage.multiGet as jest.Mock).mockResolvedValue([
+        ['@jarvis/user', JSON.stringify({ id: 1, email: 'u@e.com' })],
+        ['@jarvis/active_household_id', null],
+      ]);
+      (authApi.get as jest.Mock).mockResolvedValue({ data: [] });
+
+      try {
+        const { result } = renderHook(() => useAuth(), { wrapper });
+        await waitFor(() => expect(result.current.state.isLoading).toBe(false));
+        expect(result.current.state.isAuthenticated).toBe(false);
+
+        // The user unlocks and opens the app: the keychain is readable now.
+        setSecureTokens('a1', 'r1');
+        appState.currentState = 'active';
+        const listeners = (AppState.addEventListener as jest.Mock).mock.calls
+          .filter(([type]) => type === 'change')
+          .map(([, fn]) => fn as (s: string) => Promise<void>);
+        await act(async () => {
+          await Promise.all(listeners.map((fn) => fn('active')));
+        });
+
+        await waitFor(() => expect(result.current.state.isAuthenticated).toBe(true));
+        expect(result.current.state.accessToken).toBe('a1');
+      } finally {
+        appState.currentState = prevState;
+      }
     });
 
     it('should remain unauthenticated when storage is empty', async () => {

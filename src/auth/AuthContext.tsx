@@ -359,6 +359,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Always the latest endSession, so the bridge below is wired exactly once:
   // re-running configureApiClient would reset its forced-logout dedupe.
+  // Set when cold-boot restore found no session while the app was not active.
+  // iOS can launch us in the background with the phone locked, where the
+  // WHEN_UNLOCKED keychain read fails: retry once the user actually opens the app.
+  const retryRestoreRef = React.useRef(false);
   const endSessionRef = React.useRef(endSession);
   endSessionRef.current = endSession;
 
@@ -528,6 +532,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else {
         // Unauthenticated (or biometric cancelled). Keep biometricEnabled so the
         // login screen offers an "Unlock" retry instead of only a password form.
+        retryRestoreRef.current = AppState.currentState !== 'active';
         setState({
           ...initialState,
           isLoading: false,
@@ -536,6 +541,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (error) {
       console.debug('[AuthContext] Bootstrap auth failed:', error instanceof Error ? error.message : error);
+      retryRestoreRef.current = AppState.currentState !== 'active';
       setState({
         ...initialState,
         isLoading: false,
@@ -567,6 +573,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // instead of lingering behind borked node/device screens.
   useEffect(() => {
     const sub = AppState.addEventListener('change', async (next) => {
+      if (next === 'active' && retryRestoreRef.current && !stateRef.current.isAuthenticated) {
+        retryRestoreRef.current = false;
+        await bootstrapAuth();
+        return;
+      }
       if (next !== 'active' || !stateRef.current.isAuthenticated) return;
       // Reconcile in-memory tokens from the keychain FIRST: the background
       // geofence task can rotate the durable token while we were backgrounded,
@@ -593,7 +604,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       refreshAuthToken().catch(() => {});
     });
     return () => sub.remove();
-  }, []);
+  }, [bootstrapAuth]);
 
   // Fetch households when authenticated
   useEffect(() => {
