@@ -252,13 +252,8 @@ const DeviceDiscoveryScreen = ({ navigation, route }: Props) => {
         setSnackbar(
           `Imported ${result.created} device${result.created !== 1 ? 's' : ''}`,
         );
-        // Back to DevicesList: below this screen, or in its place when this screen was opened alone
-        // from another tab (a Forge test), where going back would leave the tab and strand it here.
-        setTimeout(() => {
-          const nav = navigation as DevicesProps['navigation'];
-          if (nav.getState?.()?.routes?.some((r: { name: string }) => r.name === 'DevicesList')) nav.goBack();
-          else nav.replace('DevicesList');
-        }, 800);
+        // Back to wherever the scan was opened from (the Devices list, a node's settings, a Forge test).
+        setTimeout(() => navigation.goBack(), 800);
       } catch (e) {
         setSnackbar(
           e instanceof Error ? e.message : 'Failed to import devices',
