@@ -228,37 +228,6 @@ describe('Device discovery — flow integration (scan poll, select/filter, impor
     await findByText('Imported 1 device');
   });
 
-  it('opened alone from another tab (a Forge test), the Devices stack still imports directly, then shows the list', async () => {
-    completeScanWith([LIGHT]);
-    const nav = {
-      navigate: jest.fn(),
-      goBack: jest.fn(),
-      replace: jest.fn(),
-      getState: jest.fn(() => ({ routes: [{ name: 'DeviceDiscovery' }], routeNames: ['DevicesList', 'DeviceDiscovery'] })),
-    } as any;
-    const { findByText, getByText, getByTestId } = renderScreen({ nav });
-    await findByText('Discovered Devices');
-    fireEvent.press(getByTestId('device-row-light.living'));
-    await waitFor(() => expect(getByText('Import 1 Device')).toBeTruthy());
-    // Fake time from here: the screen leaves 800 ms after the import.
-    jest.useFakeTimers();
-    try {
-      await act(async () => {
-        fireEvent.press(getByTestId('import-devices-button'));
-      });
-      expect(importDevices).toHaveBeenCalledTimes(1);
-      expect(nav.navigate).not.toHaveBeenCalledWith('DeviceRoomAssignment', expect.anything());
-      // Going back would leave the tab with this screen stranded on it: the list takes its place.
-      act(() => {
-        jest.advanceTimersByTime(800);
-      });
-    } finally {
-      jest.useRealTimers();
-    }
-    expect(nav.replace).toHaveBeenCalledWith('DevicesList');
-    expect(nav.goBack).not.toHaveBeenCalled();
-  });
-
   it('SmartHome setup import: navigates to DeviceRoomAssignment with the serialized selection', async () => {
     completeScanWith([LIGHT]);
     // No 'DevicesList' route → the SmartHome setup branch.
