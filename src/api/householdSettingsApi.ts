@@ -22,6 +22,11 @@ export interface HouseholdSettings {
    */
   'pantry.enabled'?: boolean;
   /**
+   * The household's Pantry stores, `[{id, url, name}]`, first = default (jarvisd, several
+   * pantries). Read-only here: a superuser edits it in the admin. ABSENT on older servers.
+   */
+  'pantry.stores'?: unknown;
+  /**
    * Watches: household members may ask Jarvis to watch a web page, a search
    * or a signal and get told when it changes. Default off; household admin only to
    * write (members get a 403). ABSENT on a server that doesn't know it — the
@@ -121,6 +126,14 @@ export const settingErrorMessage = (error: unknown, fallback: string): string =>
   if (typeof obj.message === 'string' && obj.message.trim()) return obj.message;
   return fallback;
 };
+
+/**
+ * apiErrorMessage is a failed request's message for the user: the server's detail when it sent
+ * one (e.g. jarvisd's 409 "Weather is already installed from Workshop"), else the error's own
+ * message, else `fallback`.
+ */
+export const apiErrorMessage = (error: unknown, fallback: string): string =>
+  settingErrorMessage(error, error instanceof Error && error.message ? error.message : fallback);
 
 /**
  * Whether the Pantry is on for a household, from its settings. A server that

@@ -24,6 +24,12 @@ export const SERVICE_CONFIG_KEY = '@jarvis/service_config';
 /** Manual config service URL override */
 export const MANUAL_CONFIG_URL_KEY = '@jarvis/manual_config_url';
 
+/**
+ * Prefix for the Pantry store this device picked, per household (`${prefix}${householdId}`).
+ * A view choice, never sent to the server as a setting (several pantries, decision 3).
+ */
+export const PANTRY_STORE_PICK_PREFIX = '@jarvis/pantry_store/';
+
 /** Theme preference: 'light' | 'dark' | 'system' */
 export const THEME_KEY = '@jarvis/theme';
 

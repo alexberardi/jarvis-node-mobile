@@ -23,9 +23,11 @@ import { fetchNodeTools } from '../../api/chatApi';
 import { browsePackages, getCategories } from '../../api/pantryApi';
 import { useAuth } from '../../auth/AuthContext';
 import { FirstRunCard } from '../../components/FirstRunCard';
+import PantryStorePicker from '../../components/PantryStorePicker';
 import { getServiceConfig } from '../../config/serviceConfig';
 import { helpCopy } from '../../copy/help';
 import { useFirstRun } from '../../hooks/useFirstRun';
+import { usePantryStores } from '../../services/pantryStores';
 import type { PackageCategory, PackageSummary } from '../../types/Package';
 import { StoreStackParamList } from '../../navigation/types';
 
@@ -71,6 +73,10 @@ const StoreBrowseScreen = () => {
   const [nodeCount, setNodeCount] = useState(0);
 
   const firstRun = useFirstRun('pantry');
+  // The store picked: browsing talks to it directly, so a new pick reloads the list.
+  const { store } = usePantryStores();
+  const storeId = store?.id;
+  const storeName = store?.name;
 
   const loadPackages = useCallback(
     async (pageNum: number = 1, append: boolean = false) => {
@@ -88,12 +94,14 @@ const StoreBrowseScreen = () => {
         setTotal(res.total);
         setPage(pageNum);
       } catch {
-        setError('Could not load packages');
+        // One unreachable store fails alone: say which, and the picker still offers the others.
+        setError(storeName ? `Could not reach ${storeName}` : 'Could not load packages');
       } finally {
         setLoading(false);
       }
     },
-    [query, selectedCategory, sort],
+    // storeId: browsePackages reads the picked store's URL, so a new pick reloads.
+    [query, selectedCategory, sort, storeId, storeName],
   );
 
   const loadCategories = useCallback(async () => {
@@ -101,9 +109,10 @@ const StoreBrowseScreen = () => {
       const cats = await getCategories();
       setCategories(cats);
     } catch (err) {
+      setCategories([]);
       console.error('[StoreBrowseScreen] Failed to load categories', err);
     }
-  }, []);
+  }, [storeId]);
 
   const loadNodeTools = useCallback(async () => {
     const householdId = authState.activeHouseholdId;
@@ -294,6 +303,9 @@ const StoreBrowseScreen = () => {
         body={helpCopy.pantry.firstRun}
       />
 
+      {/* The store scopes the search, so it comes first. */}
+      <PantryStorePicker style={styles.storePicker} />
+
       <Searchbar
         placeholder="Search packages..."
         value={query}
@@ -383,6 +395,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   title: { fontWeight: 'bold', flex: 1 },
+  storePicker: { marginHorizontal: 16, marginBottom: 8, alignSelf: 'flex-start' },
   searchbar: { marginHorizontal: 16, marginBottom: 8 },
   categoryRow: { marginBottom: 6, flexGrow: 0, flexShrink: 0 },
   sortRow: { marginBottom: 8, flexGrow: 0, flexShrink: 0 },

@@ -29,6 +29,7 @@ import {
   settingErrorMessage,
 } from '../api/householdSettingsApi';
 import { useAuth } from '../auth/AuthContext';
+import { setPantryStores, storesFromSettings } from '../services/pantryStores';
 
 export const PANTRY_DISABLED_MESSAGE =
   'The Pantry is turned off for this household.';
@@ -36,6 +37,9 @@ export const PANTRY_PRIVACY_NOTE =
   'Turning it on means this app, your nodes and your server contact the Pantry ' +
   'to browse and install packages. The Pantry sees your IP address and what you ' +
   'browse and install.';
+/** jarvisd's 503 `pantry_no_store` says the same: the Pantry is on but lists no store. */
+export const PANTRY_NO_STORE_MESSAGE =
+  'No Pantry store is configured for this household. An admin can add one in Settings.';
 
 interface PantryGateContextValue {
   /** Show the disabled state (e.g. after a 403 `pantry_disabled`). */
@@ -48,7 +52,7 @@ const PantryGateContext = createContext<PantryGateContextValue>({
 
 export const usePantryGate = (): PantryGateContextValue => useContext(PantryGateContext);
 
-type GateState = 'checking' | 'enabled' | 'disabled' | 'no-household' | 'error';
+type GateState = 'checking' | 'enabled' | 'disabled' | 'no-store' | 'no-household' | 'error';
 
 const isNotFound = (error: unknown): boolean =>
   (error as { response?: { status?: number } })?.response?.status === 404;
@@ -68,6 +72,8 @@ const PantryGate = ({ children }: Props) => {
   const [enabling, setEnabling] = useState(false);
   // Ignore results for a household that is no longer active.
   const checkSeq = useRef(0);
+  // The household's own list is present and empty (an invalid config): enabling won't help.
+  const noStoreRef = useRef(false);
 
   const check = useCallback(
     async (quiet: boolean) => {
@@ -80,12 +86,22 @@ const PantryGate = ({ children }: Props) => {
       try {
         const settings = await getHouseholdSettings(householdId);
         if (seq !== checkSeq.current) return;
-        setGate(pantryEnabledFromSettings(settings) ? 'enabled' : 'disabled');
+        const stores = storesFromSettings(settings);
+        await setPantryStores(householdId, stores);
+        if (seq !== checkSeq.current) return;
+        // Only the household's own list, present and empty, is "no store": an older server
+        // without one behaves as before.
+        const noStore = 'pantry.stores' in settings && stores.length === 0;
+        noStoreRef.current = noStore;
+        if (!pantryEnabledFromSettings(settings)) setGate('disabled');
+        else setGate(noStore ? 'no-store' : 'enabled');
       } catch (error) {
         if (seq !== checkSeq.current) return;
         // A server with no household-settings endpoint at all predates the
         // gate entirely — keep its old behaviour.
         if (isNotFound(error)) {
+          await setPantryStores(householdId, storesFromSettings(null));
+          if (seq !== checkSeq.current) return;
           setGate('enabled');
           return;
         }
@@ -125,7 +141,8 @@ const PantryGate = ({ children }: Props) => {
     try {
       await setHouseholdSetting(householdId, 'pantry.enabled', true);
       checkSeq.current++;
-      setGate('enabled');
+      // The store list came with the settings the gate already read.
+      setGate(noStoreRef.current ? 'no-store' : 'enabled');
     } catch (error) {
       Alert.alert('Error', settingErrorMessage(error, 'Could not turn on the Pantry'));
     } finally {
@@ -181,6 +198,12 @@ const PantryGate = ({ children }: Props) => {
             Retry
           </Button>
         </>
+      )}
+
+      {gate === 'no-store' && (
+        <Text variant="bodyLarge" style={styles.body} testID="pantry-gate-no-store">
+          {PANTRY_NO_STORE_MESSAGE}
+        </Text>
       )}
 
       {gate === 'no-household' && (

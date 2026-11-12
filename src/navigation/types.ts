@@ -180,6 +180,7 @@ export type StoreStackParamList = {
     packageName: string;
     installedNodeIds: string; // JSON-serialized string[] of node IDs that already have this command
     installedVersions: string; // JSON-serialized Record<nodeId, installedVersion | "unknown">
+    storeLocks?: string; // JSON-serialized Record<nodeId, reason>: can't install from the picked store
   };
   InstallProgress: {
     installs: string;        // JSON-serialized InstallEntry[]

@@ -137,7 +137,7 @@ describe('Test Install — flow integration (load/auto-select, validation gates,
       fireEvent.press(utils.getByTestId('install-button'));
     });
 
-    expect(requestTestInstall).toHaveBeenCalledWith('node-aaaaaaaa-1111', 'AB3KM7');
+    expect(requestTestInstall).toHaveBeenCalledWith('node-aaaaaaaa-1111', 'AB3KM7', undefined);
     expect(mockNavigate).toHaveBeenCalledWith('InstallProgress', {
       installs: JSON.stringify([
         {
@@ -166,7 +166,7 @@ describe('Test Install — flow integration (load/auto-select, validation gates,
       fireEvent.press(utils.getByTestId('install-button'));
     });
 
-    expect(requestTestInstall).toHaveBeenCalledWith('node-bbbbbbbb-2222', 'XY9ZQ1');
+    expect(requestTestInstall).toHaveBeenCalledWith('node-bbbbbbbb-2222', 'XY9ZQ1', undefined);
     expect(mockNavigate).toHaveBeenCalledWith(
       'InstallProgress',
       expect.objectContaining({

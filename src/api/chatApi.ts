@@ -147,6 +147,12 @@ export interface InstalledPackage {
   previous_version?: string | null;
   /** 'failed' when any of the package's components failed to import at boot. */
   health?: 'ok' | 'failed';
+  /** The Pantry store it was installed from (jarvisd, several pantries); absent before. */
+  pantry_store_id?: string;
+  /** That store's name, while the household still lists it. */
+  pantry_store_name?: string;
+  /** Its store was removed from the list: it keeps running, without updates. */
+  pantry_store_removed?: boolean;
 }
 
 export interface NodeToolsResponse {

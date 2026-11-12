@@ -12,7 +12,7 @@ import {
   useTheme,
 } from 'react-native-paper';
 
-import { isPantryDisabledError } from '../../api/householdSettingsApi';
+import { apiErrorMessage, isPantryDisabledError } from '../../api/householdSettingsApi';
 import { pollCCInstallStatus, pollInstallStatus, requestInstall } from '../../api/packageInstallApi';
 import { pollTestInstallStatus } from '../../api/testInstallApi';
 import { useToolsVersion } from '../../contexts/ToolsContext';
@@ -168,7 +168,7 @@ const InstallProgressScreen = () => {
         markDisabled();
         return;
       }
-      const msg = e instanceof Error ? e.message : 'Retry failed';
+      const msg = apiErrorMessage(e, 'Retry failed');
       setStatuses((prev) => {
         const next = new Map(prev);
         next.set(entry.requestId, {

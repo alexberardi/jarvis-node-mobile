@@ -67,7 +67,7 @@ describe('NodeForgeTestScreen', () => {
     const screen = renderScreen();
     expect(await screen.findByText('Install on Office PC')).toBeTruthy();
     await install(screen);
-    expect(requestTestInstall).toHaveBeenCalledWith('node-1', 'AB3KM7');
+    expect(requestTestInstall).toHaveBeenCalledWith('node-1', 'AB3KM7', undefined);
     expect(await screen.findByText("Type what you'd say to Jarvis to use get_crypto_price.")).toBeTruthy();
     // The chat only starts after the install, pinned to this node, so its tools include the draft.
     expect(useChat).toHaveBeenLastCalledWith({ nodeId: 'node-1', householdId: 'hh-1', accessToken: 'tok' });
@@ -95,7 +95,7 @@ describe('NodeForgeTestScreen', () => {
     await act(async () => {
       fireEvent.press(await screen.findByTestId('forge-test-reinstall-sheet'));
     });
-    expect(requestTestInstall).toHaveBeenLastCalledWith('node-1', 'AB3KM7');
+    expect(requestTestInstall).toHaveBeenLastCalledWith('node-1', 'AB3KM7', undefined);
     await waitFor(() => expect(pollTestInstallStatus).toHaveBeenCalledWith('node-1', 'req-2'));
     expect(await screen.findByTestId('forge-test-chat')).toBeTruthy();
     expect((useChat as jest.Mock).mock.calls.length).toBeGreaterThan(chatsBefore);

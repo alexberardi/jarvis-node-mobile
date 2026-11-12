@@ -90,6 +90,19 @@ describe('NodePicker sheet — flow integration (select, lockout, install fan-ou
     expect(getByText('Installed v2.0.0 — up to date')).toBeTruthy();
   });
 
+  it("a node whose copy came from another Pantry store isn't offered, and says why", () => {
+    const why = 'Installed from Workshop. Pick that store to update it.';
+    const { queryByTestId, getByTestId, getByText } = renderScreen({
+      ...baseParams(),
+      storeLocks: JSON.stringify({ 'living-bbbbbbbb': why }),
+    });
+    expect(getByText(why)).toBeTruthy();
+    expect(queryByTestId('node-picker-checkbox-living-bbbbbbbb')).toBeNull();
+    fireEvent.press(getByTestId('node-picker-list-item-living-bbbbbbbb'));
+    // Only kitchen (a new install) is selected.
+    expect(getByText('Install on 1 node')).toBeTruthy();
+  });
+
   it('up-to-date node is locked: no checkbox, and tapping its row does not select it', () => {
     const { queryByTestId, getByTestId, getByText } = renderScreen();
 

@@ -215,3 +215,43 @@ describe('discoverConfigService — path-prefixed service URLs', () => {
     expect(result.config.authBaseUrl).toBe('http://10.0.0.5:7700/auth');
   });
 });
+
+describe('discoverConfigService — Pantry stores (several pantries)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    global.fetch = mockFetch as unknown as typeof global.fetch;
+    mockedSC.loadManualConfigUrl.mockResolvedValue('http://10.0.0.5:7700');
+  });
+
+  const services = [
+    { name: 'jarvis-auth', url: 'http://localhost:7701', host: 'localhost', port: 7701 },
+    { name: 'jarvis-command-center', url: 'http://localhost:7703', host: 'localhost', port: 7703 },
+    { name: 'jarvis-pantry', url: 'https://pantry-api.jarvisautomation.io', host: 'pantry-api.jarvisautomation.io', port: 443 },
+  ];
+
+  it('reads the pantries list beside services, with the same localhost rewrite', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        services,
+        pantries: [
+          { id: 'a1', url: 'https://pantry-api.jarvisautomation.io', name: 'Public Pantry' },
+          { id: 'b2', url: 'http://localhost:7721/', name: 'Workshop' },
+          { id: 7, url: 'x', name: 'not a store' },
+        ],
+      }),
+    });
+    const result = await discoverConfigService();
+    expect(result.config.pantries).toEqual([
+      { id: 'a1', url: 'https://pantry-api.jarvisautomation.io', name: 'Public Pantry' },
+      { id: 'b2', url: 'http://10.0.0.5:7721', name: 'Workshop' },
+    ]);
+    expect(result.config.pantryUrl).toBe('https://pantry-api.jarvisautomation.io');
+  });
+
+  it('leaves pantries unset for a server that sends none', async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ services }) });
+    const result = await discoverConfigService();
+    expect(result.config).not.toHaveProperty('pantries');
+  });
+});
