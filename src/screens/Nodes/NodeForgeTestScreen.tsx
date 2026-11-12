@@ -17,6 +17,8 @@ import {
 
 import type { ChatAction, ChatMessage } from '../../api/chatApi';
 import { sendNodeAction } from '../../api/commandCenterApi';
+import PantryStorePicker from '../../components/PantryStorePicker';
+import { activeStoreId, loadPantryStores, usePantryStores } from '../../services/pantryStores';
 import { getNode, type NodeInfo } from '../../api/nodeApi';
 import { fetchTestRuns, pollTestInstallStatus, requestTestInstall, runTestAgents } from '../../api/testInstallApi';
 import { useAuth } from '../../auth/AuthContext';
@@ -54,8 +56,10 @@ const NodeForgeTestScreen = () => {
   const theme = useTheme();
   const [node, setNode] = useState<NodeInfo | null>(null);
   const [requestId, setRequestId] = useState<string | null>(null);
-  // Kept for Reinstall: the Forge's Fix saves to the same draft, under the same code.
+  // Kept for Reinstall: the Forge's Fix saves to the same draft, under the same code, in the
+  // same Pantry store (several pantries).
   const [shareCode, setShareCode] = useState('');
+  const [testStoreId, setTestStoreId] = useState<string | undefined>(undefined);
   const [reinstalling, setReinstalling] = useState(false);
   const [reinstallError, setReinstallError] = useState<string | null>(null);
   const [install, setInstall] = useState<InstallStatus | null>(null);
@@ -126,13 +130,13 @@ const NodeForgeTestScreen = () => {
     setReinstalling(true);
     setReinstallError(null);
     try {
-      startTest((await requestTestInstall(nodeId, shareCode)).id);
+      startTest((await requestTestInstall(nodeId, shareCode, testStoreId)).id);
     } catch (err) {
       setReinstallError(errorDetail(err, "Couldn't reinstall."));
     } finally {
       setReinstalling(false);
     }
-  }, [nodeId, shareCode, startTest]);
+  }, [nodeId, shareCode, testStoreId, startTest]);
 
   const name = node ? nodeDisplayName(node, isDesktopAgent(node) ? 'this computer' : 'this node') : 'this node';
   const commands: string[] = Array.isArray(install?.details?.commands) ? install!.details!.commands : [];
@@ -184,8 +188,10 @@ const NodeForgeTestScreen = () => {
           nodeId={nodeId}
           name={name}
           offline={node !== null && !node.online}
-          onStarted={(rid, code) => {
+          householdId={node?.household_id ?? null}
+          onStarted={(rid, code, storeId) => {
             setShareCode(code);
+            setTestStoreId(storeId);
             startTest(rid);
           }}
         />
@@ -300,15 +306,22 @@ const ShareCodeForm = ({
   nodeId,
   name,
   offline,
+  householdId,
   onStarted,
 }: {
   nodeId: string;
   name: string;
   offline: boolean;
-  onStarted: (requestId: string, code: string) => void;
+  /** The node's household, whose Pantry stores the code can come from. */
+  householdId: string | null;
+  onStarted: (requestId: string, code: string, storeId: string | undefined) => void;
 }) => {
   const theme = useTheme();
   const [code, setCode] = useState('');
+  const { stores } = usePantryStores();
+  useEffect(() => {
+    if (householdId) void loadPantryStores(householdId);
+  }, [householdId]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -316,7 +329,8 @@ const ShareCodeForm = ({
     setBusy(true);
     setError(null);
     try {
-      onStarted((await requestTestInstall(nodeId, code)).id, code);
+      const storeId = activeStoreId();
+      onStarted((await requestTestInstall(nodeId, code, storeId)).id, code, storeId);
     } catch (err) {
       setError(errorDetail(err, "Couldn't start the test install."));
     } finally {
@@ -326,6 +340,15 @@ const ShareCodeForm = ({
 
   return (
     <ScrollView contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
+      {stores.length > 1 && (
+        <View style={styles.storeField}>
+          <Text variant="labelLarge">Pantry store</Text>
+          <PantryStorePicker />
+          <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+            The code is looked up in this store only.
+          </Text>
+        </View>
+      )}
       <TextInput
         testID="forge-test-code"
         mode="outlined"
@@ -472,6 +495,7 @@ const TestChat = ({
 };
 
 const styles = StyleSheet.create({
+  storeField: { gap: 6, marginBottom: 16, alignItems: 'flex-start' },
   container: { flex: 1, paddingTop: 48 },
   header: { flexDirection: 'row', alignItems: 'center', paddingRight: 8, borderBottomWidth: StyleSheet.hairlineWidth },
   badge: { position: 'absolute', top: 4, right: 4 },

@@ -7,6 +7,7 @@ import axios from 'axios';
 
 import { PANTRY_URL } from '../config/env';
 import { getServiceConfig } from '../config/serviceConfig';
+import { activeStore } from '../services/pantryStores';
 import type {
   PackageCategory,
   PackageDetail,
@@ -15,9 +16,10 @@ import type {
 } from '../types/Package';
 
 const getBaseUrl = (): string => {
-  // Prefer config-service discovery, fall back to EXPO_PUBLIC_PANTRY_URL env var
+  // The store this device picked (several pantries), else config-service discovery, else the
+  // EXPO_PUBLIC_PANTRY_URL env var.
   const { pantryUrl } = getServiceConfig();
-  const url = pantryUrl || PANTRY_URL;
+  const url = (activeStore()?.url || pantryUrl || PANTRY_URL).replace(/\/+$/, '');
   if (!url) {
     throw new Error('Pantry service URL not configured — set EXPO_PUBLIC_PANTRY_URL or register jarvis-pantry in config-service');
   }

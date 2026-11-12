@@ -20,7 +20,7 @@ import type { InstalledPackage } from '../../api/chatApi';
 import { useAuth } from '../../auth/AuthContext';
 import { HelpIcon } from '../../components/HelpIcon';
 import { getDownloadInfo, getPackageDetail } from '../../api/pantryApi';
-import { isPantryDisabledError } from '../../api/householdSettingsApi';
+import { apiErrorMessage, isPantryDisabledError } from '../../api/householdSettingsApi';
 import {
   pollRevertStatus,
   requestCCInstall,
@@ -34,6 +34,7 @@ import { StoreStackParamList } from '../../navigation/types';
 import type { PackageDetail } from '../../types/Package';
 import { anyHealthFailed, getRevertTarget, isTerminalInstallStatus } from '../../utils/packageStatus';
 import { computerCanRun, isDesktopAgent, nodeDisplayName } from '../../utils/nodeKind';
+import { storeLock } from '../../services/pantryStores';
 import { compareSemver, isUpdateAvailable } from '../../utils/semver';
 
 type Nav = NativeStackNavigationProp<StoreStackParamList>;
@@ -256,7 +257,7 @@ const StoreDetailScreen = () => {
               }
               setRefreshTick((t) => t + 1);
             } catch (e: unknown) {
-              Alert.alert('Error', e instanceof Error ? e.message : 'Failed to request revert');
+              Alert.alert('Error', apiErrorMessage(e, 'Failed to request revert'));
             } finally {
               setReverting(false);
             }
@@ -291,7 +292,7 @@ const StoreDetailScreen = () => {
             mode: 'cc-provider',
           });
         } catch (err: unknown) {
-          Alert.alert('Install Error', err instanceof Error ? err.message : 'Failed to start install');
+          Alert.alert('Install Error', apiErrorMessage(err, 'Failed to start install'));
         } finally {
           setInstalling(false);
         }
@@ -345,10 +346,24 @@ const StoreDetailScreen = () => {
           return v !== undefined && v !== null && v !== 'unknown' && compareSemver(v, detail.latest_version) >= 0;
         })
         .map((n) => n.node_id);
-      const actionableNodes = nodes.filter((n) => !upToDateNodeIds.includes(n.node_id));
+      // A node whose copy came from another store, or from a removed one, can't take this one.
+      const storeLocks = Object.fromEntries(
+        nodes.flatMap((n) => {
+          const why = storeLock(nodePackages[n.node_id]);
+          return why ? [[n.node_id, why] as const] : [];
+        }),
+      );
+      const actionableNodes = nodes.filter(
+        (n) => !upToDateNodeIds.includes(n.node_id) && !storeLocks[n.node_id],
+      );
 
       if (actionableNodes.length === 0) {
-        Alert.alert('Up to date', `All your nodes already have v${detail.latest_version}.`);
+        const locked = Object.values(storeLocks);
+        if (locked.length > 0 && nodes.length === 1) {
+          Alert.alert('Can\'t update here', locked[0]);
+        } else {
+          Alert.alert('Up to date', `All your nodes already have v${detail.latest_version}.`);
+        }
         return;
       }
 
@@ -391,6 +406,7 @@ const StoreDetailScreen = () => {
               .map(([id]) => id),
           ),
           installedVersions: JSON.stringify(nodeVersions),
+          storeLocks: JSON.stringify(storeLocks),
         });
       }
     } catch (e: unknown) {
@@ -398,7 +414,7 @@ const StoreDetailScreen = () => {
         markDisabled();
         return;
       }
-      Alert.alert('Install Error', e instanceof Error ? e.message : 'Failed to start install');
+      Alert.alert('Install Error', apiErrorMessage(e, 'Failed to start install'));
     } finally {
       setInstalling(false);
     }

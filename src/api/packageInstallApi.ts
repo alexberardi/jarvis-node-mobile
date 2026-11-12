@@ -5,6 +5,7 @@
  */
 import { getServiceConfig } from '../config/serviceConfig';
 import type { InstallRequest, InstallStatus } from '../types/Package';
+import { activeStoreId } from '../services/pantryStores';
 import apiClient from './apiClient';
 
 const getBaseUrl = (): string => {
@@ -20,6 +21,7 @@ export const requestInstall = async (
   commandName: string,
   githubRepoUrl: string,
   gitTag: string | null,
+  storeId: string | undefined = activeStoreId(),
 ): Promise<InstallRequest> => {
   const res = await apiClient.post<InstallRequest>(
     `${getBaseUrl()}/api/v0/nodes/${nodeId}/package-install`,
@@ -27,6 +29,9 @@ export const requestInstall = async (
       command_name: commandName,
       github_repo_url: githubRepoUrl,
       git_tag: gitTag,
+      // The store picked, only when there is a choice. jarvisd sends an update back to the store
+      // the package came from, and refuses another store with 409 `pantry_store_conflict`.
+      ...(storeId ? { pantry_store_id: storeId } : {}),
     },
   );
   return res.data;

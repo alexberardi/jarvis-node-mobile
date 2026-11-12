@@ -10,6 +10,18 @@ export interface ServiceConfig {
   configServiceUrl: string | null;
   notificationsUrl: string;
   pantryUrl: string;
+  /**
+   * The server's Pantry stores from `/services` (`pantries`, jarvisd), first = default. Absent on
+   * an older server or a config cached before it was read: the app then uses `pantryUrl` alone.
+   */
+  pantries?: PantryStore[];
+}
+
+/** One Pantry store: the server makes the id; the app shows the name and talks to the URL. */
+export interface PantryStore {
+  id: string;
+  url: string;
+  name: string;
 }
 
 let currentConfig: ServiceConfig = {

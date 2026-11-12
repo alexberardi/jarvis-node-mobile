@@ -22,6 +22,8 @@ import { useAuth } from '../../auth/AuthContext';
 import { InfoHelperText } from '../../components/HelpIcon';
 import { helpCopy } from '../../copy/help';
 import { usePantryGate } from '../../components/PantryGate';
+import PantryStorePicker from '../../components/PantryStorePicker';
+import { activeStoreId, usePantryStores } from '../../services/pantryStores';
 import { StoreStackParamList } from '../../navigation/types';
 import KeyboardSafeView from '../../components/KeyboardSafeView';
 
@@ -32,6 +34,7 @@ const TestInstallScreen = () => {
   const theme = useTheme();
   const { state: authState } = useAuth();
   const { markDisabled } = usePantryGate();
+  const { stores: pantryStores } = usePantryStores();
 
   const [shareCode, setShareCode] = useState('');
   const [nodes, setNodes] = useState<NodeInfo[]>([]);
@@ -70,7 +73,7 @@ const TestInstallScreen = () => {
 
     setInstalling(true);
     try {
-      const result = await requestTestInstall(selectedNodeId, code);
+      const result = await requestTestInstall(selectedNodeId, code, activeStoreId());
       const node = nodes.find((n) => n.node_id === selectedNodeId);
 
       navigation.navigate('InstallProgress', {
@@ -114,6 +117,19 @@ const TestInstallScreen = () => {
 
       <ScrollView contentContainerStyle={styles.scroll}>
         <InfoHelperText text={helpCopy.pantry.testInstallTab} />
+
+        {/* The store the code is looked up in (several pantries): shown only with a choice. */}
+        {pantryStores.length > 1 && (
+          <View style={styles.section}>
+            <Text variant="titleSmall" style={[styles.sectionTitle, { color: theme.colors.primary }]}>
+              Pantry Store
+            </Text>
+            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 8 }}>
+              The code is looked up in this store only.
+            </Text>
+            <PantryStorePicker />
+          </View>
+        )}
 
         {/* Share code input */}
         <View style={styles.section}>

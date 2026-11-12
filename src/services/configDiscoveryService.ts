@@ -7,6 +7,7 @@ import {
   setServiceConfig,
 } from '../config/serviceConfig';
 import { DEV_MODE, MANUAL_CONFIG_URL } from '../config/env';
+import { parsePantryStores } from './pantryStores';
 
 const FETCH_SERVICES_TIMEOUT_MS = 3000;
 
@@ -19,6 +20,8 @@ interface ServiceEntry {
 
 interface ServicesResponse {
   services: ServiceEntry[];
+  /** jarvisd's system list of Pantry stores (several pantries); absent on older servers. */
+  pantries?: unknown;
 }
 
 export interface DiscoveryResult {
@@ -82,6 +85,15 @@ const fetchServiceUrls = async (
       configServiceUrl: configBaseUrl,
       notificationsUrl,
       pantryUrl,
+      // Same localhost rewrite as the services: a store on the server's own box.
+      ...(data.pantries !== undefined
+        ? {
+            pantries: parsePantryStores(data.pantries).map((p) => ({
+              ...p,
+              url: p.url.replace(/\/+$/, '').replace(/localhost|127\.0\.0\.1/, configHost),
+            })),
+          }
+        : {}),
     };
   } catch {
     return null;

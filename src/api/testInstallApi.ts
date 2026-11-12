@@ -5,6 +5,7 @@
  */
 import { getServiceConfig } from '../config/serviceConfig';
 import type { InstallStatus } from '../types/Package';
+import { activeStoreId } from '../services/pantryStores';
 import apiClient from './apiClient';
 
 const getBaseUrl = (): string => {
@@ -22,13 +23,18 @@ export interface TestInstallResponse {
   created_at: string;
 }
 
+/**
+ * storeId is the Pantry store the code is looked up in (only that one); without it jarvisd uses
+ * the household's default. Reinstall passes the store the test came from.
+ */
 export const requestTestInstall = async (
   nodeId: string,
   shareCode: string,
+  storeId: string | undefined = activeStoreId(),
 ): Promise<TestInstallResponse> => {
   const res = await apiClient.post<TestInstallResponse>(
     `${getBaseUrl()}/api/v0/nodes/${nodeId}/test-install`,
-    { share_code: shareCode },
+    { share_code: shareCode, ...(storeId ? { pantry_store_id: storeId } : {}) },
   );
   return res.data;
 };

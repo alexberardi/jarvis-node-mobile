@@ -4,13 +4,14 @@ import React, { useMemo, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { Button, Checkbox, Icon, List, Text, useTheme } from 'react-native-paper';
 
-import { isPantryDisabledError } from '../../api/householdSettingsApi';
+import { apiErrorMessage, isPantryDisabledError } from '../../api/householdSettingsApi';
 import { requestInstall } from '../../api/packageInstallApi';
 import { usePantryGate } from '../../components/PantryGate';
 import { StoreStackParamList } from '../../navigation/types';
 import { compareSemver } from '../../utils/semver';
 import { safeJsonParse } from '../../utils/safeJson';
 import { NodeKindIcon } from '../../components/NodeKindIcon';
+import { activeStore, activeStoreId } from '../../services/pantryStores';
 import { nodeDisplayName } from '../../utils/nodeKind';
 
 type Nav = NativeStackNavigationProp<StoreStackParamList>;
@@ -24,7 +25,7 @@ interface NodeInfo {
   install_mode?: string | null;
 }
 
-type NodeState = 'not-installed' | 'outdated' | 'up-to-date';
+type NodeState = 'not-installed' | 'outdated' | 'up-to-date' | 'locked';
 
 const NodePickerSheet = () => {
   const navigation = useNavigation<Nav>();
@@ -38,8 +39,12 @@ const NodePickerSheet = () => {
     {},
   );
   const { commandName, githubRepoUrl, gitTag, latestVersion, packageName } = route.params;
+  // Nodes whose copy came from another Pantry store or a removed one (several pantries).
+  const storeLocks: Record<string, string> = safeJsonParse(route.params.storeLocks ?? '{}', {});
+  const store = activeStoreId() ? activeStore() : undefined;
 
   const stateFor = (nodeId: string): NodeState => {
+    if (storeLocks[nodeId]) return 'locked';
     const v = installedVersions[nodeId];
     if (!v) return 'not-installed';
     if (v === 'unknown') return 'outdated';
@@ -52,7 +57,8 @@ const NodePickerSheet = () => {
   const initialSelected = useMemo(() => {
     const s = new Set<string>();
     for (const n of nodes) {
-      if (stateFor(n.node_id) !== 'up-to-date') s.add(n.node_id);
+      const st = stateFor(n.node_id);
+      if (st === 'outdated' || st === 'not-installed') s.add(n.node_id);
     }
     return s;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -62,7 +68,8 @@ const NodePickerSheet = () => {
   const [installing, setInstalling] = useState(false);
 
   const toggle = (nodeId: string) => {
-    if (stateFor(nodeId) === 'up-to-date') return;
+    const st = stateFor(nodeId);
+    if (st === 'up-to-date' || st === 'locked') return;
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(nodeId)) {
@@ -124,7 +131,7 @@ const NodePickerSheet = () => {
         markDisabled();
         return;
       }
-      Alert.alert('Install Error', e instanceof Error ? e.message : 'Failed to start install');
+      Alert.alert('Install Error', apiErrorMessage(e, 'Failed to start install'));
     } finally {
       setInstalling(false);
     }
@@ -135,6 +142,9 @@ const NodePickerSheet = () => {
     const state = stateFor(nodeId);
     if (state === 'not-installed') {
       return { text: nodeId.slice(0, 12) + '...' };
+    }
+    if (state === 'locked') {
+      return { text: storeLocks[nodeId], color: theme.colors.onSurfaceVariant };
     }
     if (state === 'up-to-date') {
       return { text: `Installed v${v} — up to date`, color: '#4CAF50' };
@@ -168,7 +178,8 @@ const NodePickerSheet = () => {
         variant="bodyMedium"
         style={{ color: theme.colors.onSurfaceVariant, paddingHorizontal: 16, marginBottom: 16 }}
       >
-        Pick which nodes to install or update "{packageName}" v{latestVersion} on:
+        Pick which nodes to install or update "{packageName}" v{latestVersion}
+        {store ? ` from ${store.name}` : ''} on:
       </Text>
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 100 }}>
@@ -176,6 +187,7 @@ const NodePickerSheet = () => {
           const state = stateFor(node.node_id);
           const desc = renderDescription(node.node_id);
           const isUpToDate = state === 'up-to-date';
+          const isLocked = state === 'locked';
           return (
             <List.Item
               key={node.node_id}
@@ -192,11 +204,16 @@ const NodePickerSheet = () => {
                   style={[props.style, { justifyContent: 'center' }]}
                 />
               )}
-              style={isUpToDate ? { opacity: 0.6 } : undefined}
+              descriptionNumberOfLines={isLocked ? 3 : undefined}
+              style={isUpToDate || isLocked ? { opacity: 0.6 } : undefined}
               left={(props) =>
                 isUpToDate ? (
                   <View {...props} style={{ justifyContent: 'center', paddingLeft: 8 }}>
                     <Icon source="check-circle" size={24} color="#4CAF50" />
+                  </View>
+                ) : isLocked ? (
+                  <View {...props} style={{ justifyContent: 'center', paddingLeft: 8 }}>
+                    <Icon source="lock-outline" size={24} color={theme.colors.onSurfaceVariant} />
                   </View>
                 ) : (
                   <Checkbox
