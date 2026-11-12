@@ -12,9 +12,8 @@ import { useChat } from '../../src/hooks/useChat';
 // (the runs and a note) behind the header button.
 
 const mockNavigate = jest.fn();
-const mockParentNavigate = jest.fn();
 jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: mockNavigate, goBack: jest.fn(), getParent: () => ({ navigate: mockParentNavigate }) }),
+  useNavigation: () => ({ navigate: mockNavigate, goBack: jest.fn() }),
   useRoute: () => ({ params: { nodeId: 'node-1' } }),
 }));
 jest.mock('../../src/api/nodeApi', () => ({ getNode: jest.fn() }));
@@ -110,7 +109,7 @@ describe('NodeForgeTestScreen', () => {
     fireEvent.press(screen.getByTestId('forge-test-settings'));
     expect(mockNavigate).toHaveBeenCalledWith('NodeSettings', { nodeId: 'node-1', room: 'Office PC' });
     fireEvent.press(screen.getByTestId('forge-test-scan'));
-    expect(mockParentNavigate).toHaveBeenCalledWith('DevicesTab', { screen: 'DeviceDiscovery', params: { nodeId: 'node-1' }, initial: false });
+    expect(mockNavigate).toHaveBeenCalledWith('SmartHomeSetup', { screen: 'DeviceDiscovery', params: { nodeId: 'node-1' } });
   });
 
   it('says a background agent loaded and that Send to Forge carries its runs', async () => {

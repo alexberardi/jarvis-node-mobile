@@ -259,7 +259,7 @@ const NodeForgeTestScreen = () => {
                 mode="outlined"
                 compact
                 icon="radar"
-                onPress={() => navigation.getParent()?.navigate('DevicesTab', { screen: 'DeviceDiscovery', params: { nodeId }, initial: false })}
+                onPress={() => (navigation as any).navigate('SmartHomeSetup', { screen: 'DeviceDiscovery', params: { nodeId } })}
               >
                 Scan for devices
               </Button>
