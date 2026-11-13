@@ -22,6 +22,7 @@ reason is in its `properties.skip_reason`).
 | Settings/HouseholdEditScreen: name, admin sections | flow | household-edit.yaml |
 | Settings/HouseholdEditScreen: members, role change, invite codes | flow | household-members.yaml, household-member-view.yaml |
 | Settings/HouseholdEditScreen: watches and errand-autonomy switches | flow | household-watches-errands.yaml (admin toggles), household-member-view.yaml (read only) |
+| Settings/HouseholdEditScreen: Discord card (bot setup, member link refused while offline, remove) | flow | household-discord.yaml (a real bot connection and the link code are tried by hand) |
 | Settings/HouseholdEditScreen: pantry toggle | not tested | packages (user, 2026-10-17) |
 | Settings/HouseholdEditScreen: home presence (location) | not tested | needs a location fix; not in this piece |
 | Settings/SignalAutomationsScreen | flow | signal-automations.yaml |
