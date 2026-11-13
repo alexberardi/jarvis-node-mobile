@@ -8,6 +8,7 @@ import {
   resetPantryStores,
   setPantryStores,
   storeLock,
+  storeNote,
   storesFromSettings,
 } from '../../src/services/pantryStores';
 
@@ -83,5 +84,16 @@ describe('storeLock', () => {
     expect(storeLock({ name: 'weather', version: '1.0.0', pantry_store_id: 'b2', pantry_store_name: 'Workshop' })).toBeNull();
     expect(storeLock({ name: 'weather', version: '1.0.0' })).toBeNull();
     expect(storeLock(null)).toBeNull();
+  });
+});
+
+describe('storeNote', () => {
+  it('names the store only when there is a choice, and always says when it was removed', () => {
+    const shop = { name: 'get_sports', version: '1.1.0', pantry_store_id: 'b2', pantry_store_name: 'Workshop' };
+    expect(storeNote(shop, 2)).toBe('From Workshop');
+    expect(storeNote(shop, 1)).toBeNull();
+    expect(storeNote({ name: 'x', version: '1', pantry_store_id: 'z', pantry_store_removed: true }, 1)).toMatch(/removed/);
+    expect(storeNote({ name: 'x', version: '1' }, 2)).toBeNull();
+    expect(storeNote(undefined, 2)).toBeNull();
   });
 });

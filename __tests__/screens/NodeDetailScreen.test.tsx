@@ -7,6 +7,8 @@ import { lightTheme } from '../../src/theme';
 import { getNode } from '../../src/api/nodeApi';
 import { hasK2 } from '../../src/services/k2Service';
 import { listHouseholdMembers } from '../../src/api/householdApi';
+import { fetchNodeTools } from '../../src/api/chatApi';
+import { getHouseholdSettings } from '../../src/api/householdSettingsApi';
 
 // NodeDetailScreen's per-kind wiring: which icon, which tabs, and who sees the
 // Danger Zone. A Pi's delete is gated on holding its K2 on this phone (today's
@@ -34,6 +36,10 @@ jest.mock('../../src/screens/Nodes/HardwareTab', () => {
 });
 
 jest.mock('../../src/api/householdApi', () => ({ listHouseholdMembers: jest.fn() }));
+jest.mock('../../src/api/householdSettingsApi', () => ({
+  ...jest.requireActual('../../src/api/householdSettingsApi'),
+  getHouseholdSettings: jest.fn().mockRejectedValue(new Error('offline')),
+}));
 
 let mockAuth: any;
 jest.mock('../../src/auth/AuthContext', () => ({ useAuth: () => ({ state: mockAuth }) }));
@@ -173,5 +179,44 @@ describe('NodeDetailScreen — node kinds', () => {
       expect(queryByTestId('node-speaks-as')).toBeNull();
       expect(listHouseholdMembers).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe('NodeDetailScreen — Packages tab, the store each package came from', () => {
+  const STORES = [
+    { id: 'a1', url: 'https://pantry-api.jarvisautomation.io', name: 'Public Pantry' },
+    { id: 'b2', url: 'http://10.0.0.5:7721', name: 'Workshop' },
+  ];
+  const tools = {
+    client_tools: [
+      { function: { name: 'get_sports', description: 'Scores' } },
+      { function: { name: 'calculate', description: 'Arithmetic' } },
+    ],
+    installed_packages: [{ name: 'get_sports', version: '1.1.0', pantry_store_id: 'b2', pantry_store_name: 'Workshop' }],
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockAuth = { user: { id: 7 }, accessToken: 'tok', activeHouseholdId: 'hh-1', households: [{ id: 'hh-1', role: 'member' }] };
+    (hasK2 as jest.Mock).mockResolvedValue(true);
+    (getNode as jest.Mock).mockResolvedValue(PI);
+    (fetchNodeTools as jest.Mock).mockResolvedValue(tools);
+  });
+
+  it("names a package's store when the household has several", async () => {
+    (getHouseholdSettings as jest.Mock).mockResolvedValue({ 'pantry.stores': STORES });
+    const { findByText, queryByText } = renderScreen();
+    fireEvent.press(await findByText('Packages'));
+    expect(await findByText('From Workshop\nScores')).toBeTruthy();
+    expect(getHouseholdSettings).toHaveBeenCalledWith('hh-1');
+    expect(queryByText(/From .*\nArithmetic/)).toBeNull();
+  });
+
+  it('names none with a single store', async () => {
+    (getHouseholdSettings as jest.Mock).mockResolvedValue({ 'pantry.stores': STORES.slice(0, 1) });
+    const { findByText, queryByText } = renderScreen();
+    fireEvent.press(await findByText('Packages'));
+    expect(await findByText('Scores')).toBeTruthy();
+    expect(queryByText(/From /)).toBeNull();
   });
 });
