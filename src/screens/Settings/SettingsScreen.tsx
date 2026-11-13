@@ -40,7 +40,8 @@ import {
 } from '../../api/smartHomeApi';
 
 import type { RootStackParamList } from '../../navigation/types';
-import { AUTO_PLAY_TTS_KEY } from '../../config/storageKeys';
+import { AUTO_PLAY_TTS_KEY, CAR_PUBLIC_URL_KEY } from '../../config/storageKeys';
+import { postReply } from '../../../modules/jarvis-car';
 import {
   arePushNotificationsEnabled,
   setPushNotificationsEnabled,
@@ -100,6 +101,7 @@ const SettingsScreen = () => {
   const [urlInput, setUrlInput] = useState(manualUrl ?? '');
   const [saving, setSaving] = useState(false);
   const [autoPlayTTS, setAutoPlayTTS] = useState(false);
+  const [carPublicUrl, setCarPublicUrl] = useState('');
   const [pushEnabled, setPushEnabled] = useState(false);
 
   // Household join flow
@@ -214,6 +216,9 @@ const SettingsScreen = () => {
     AsyncStorage.getItem(AUTO_PLAY_TTS_KEY)
       .then((val) => setAutoPlayTTS(val === 'true'))
       .catch((err) => console.error('[SettingsScreen] Failed to load auto-play setting', err));
+    AsyncStorage.getItem(CAR_PUBLIC_URL_KEY)
+      .then((val) => setCarPublicUrl(val ?? ''))
+      .catch(() => {});
     arePushNotificationsEnabled()
       .then(setPushEnabled)
       .catch((err) => console.error('[SettingsScreen] Failed to load push setting', err));
@@ -236,6 +241,17 @@ const SettingsScreen = () => {
       console.error('[SettingsScreen] Failed to save auto-play setting', err);
     }
   }, []);
+
+  const saveCarPublicUrl = useCallback(async () => {
+    const url = carPublicUrl.trim().replace(/\/+$/, '');
+    setCarPublicUrl(url);
+    try {
+      if (url) await AsyncStorage.setItem(CAR_PUBLIC_URL_KEY, url);
+      else await AsyncStorage.removeItem(CAR_PUBLIC_URL_KEY);
+    } catch (err) {
+      console.error('[SettingsScreen] Failed to save car public URL', err);
+    }
+  }, [carPublicUrl]);
 
   const handlePushToggle = useCallback(async (value: boolean) => {
     setPushEnabled(value);
@@ -621,6 +637,40 @@ const SettingsScreen = () => {
           </View>
         </Card.Content>
       </Card>
+
+      {/* Android Auto: the car chat uses the server URL first, then this public URL */}
+      {Platform.OS === 'android' && (
+        <Card style={styles.card} testID="settings-section-car">
+          <Card.Content>
+            <Text variant="titleMedium" style={styles.sectionTitle}>
+              Android Auto
+            </Text>
+            <Text variant="bodySmall" style={styles.hint}>
+              Say "message Jarvis" in the car. Jarvis is reached through your server (Tailscale),
+              then the public URL below if you set one.
+            </Text>
+            <TextInput
+              mode="outlined"
+              label="Public URL (optional)"
+              placeholder="https://jarvis.example.com"
+              value={carPublicUrl}
+              onChangeText={setCarPublicUrl}
+              onEndEditing={saveCarPublicUrl}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+              testID="car-public-url-input"
+            />
+            <Button
+              mode="outlined"
+              onPress={() => postReply('Jarvis is ready. Say reply, then your command.')}
+              testID="car-test-button"
+            >
+              Send test message
+            </Button>
+          </Card.Content>
+        </Card>
+      )}
 
       {/* Security — biometric login (only on capable devices) */}
       {biometricAvailable && (

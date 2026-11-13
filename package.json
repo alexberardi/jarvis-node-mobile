@@ -50,6 +50,7 @@
     "expo-task-manager": "~14.0.9",
     "expo-video": "~3.0.16",
     "expo-web-browser": "~15.0.11",
+    "jarvis-car": "file:./modules/jarvis-car",
     "jarvis-crypto": "file:./modules/jarvis-crypto",
     "jarvis-wav-recorder": "file:./modules/jarvis-wav-recorder",
     "react": "19.1.0",

@@ -101,3 +101,10 @@ export const PRESENCE_NOTIFY_ENABLED_KEY = '@jarvis/presence_notify_enabled';
 export const PRESENCE_PENDING_QUEUE_KEY = '@jarvis/presence_pending_queue';
 
 // Routines are server-owned (command-center) — no local routine storage keys.
+
+/** Optional public HTTPS base URL, the last-resort Android Auto transport. */
+export const CAR_PUBLIC_URL_KEY = '@jarvis/car_public_url';
+/** Android Auto Discord fallback opt-in: 'true' | 'false'. */
+export const CAR_DISCORD_FALLBACK_KEY = '@jarvis/car_discord_fallback';
+/** `{ id, ts }` of the last Android Auto chat conversation, reused within the server's idle TTL. */
+export const CAR_CONVERSATION_KEY = '@jarvis/car_conversation';
