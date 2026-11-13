@@ -168,7 +168,7 @@ export interface NodeToolsResponse {
  * Parse SSE text into individual events.
  * Each SSE event is "data: {json}\n\n".
  */
-function parseSSEChunk(text: string): ChatStreamEvent[] {
+export function parseSSEChunk(text: string): ChatStreamEvent[] {
   const events: ChatStreamEvent[] = [];
   const lines = text.split('\n');
 
