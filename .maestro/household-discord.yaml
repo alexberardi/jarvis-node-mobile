@@ -1,0 +1,106 @@
+appId: com.jarvis.nodemobile
+name: Household settings, Discord bot set up and removed
+# The Discord card on Household Settings (src/components/DiscordSettingsCard.tsx) as the household
+# admin (the seeded superuser): an admin enters a bot token, server and channel, the bridge turns
+# on, a member's link attempt is refused while the bot is not connected, and Remove puts it all
+# back. The token here is not a real one, so the bot never connects: the card says so.
+#
+# State: sets and clears the household's discord.* settings. If the flow dies after Save, the
+# Discord bridge stays on with a fake token (harmless: the bot just fails to connect); a later
+# run's first assertion ("Not set up.") fails until Remove is done by hand.
+tags:
+  - settings
+  - household
+  - discord
+  - e2e
+env:
+  EMAIL: "test@jarvisautomation.io"
+  PASSWORD: "DevPass123!"
+  DISCORD_TOKEN: "MFAKE000000000000000000.GfakeX.fakefakefakefakefakefakefakefakefake"
+  DISCORD_GUILD_ID: "100000000000000001"
+  DISCORD_CHANNEL_ID: "100000000000000002"
+---
+- launchApp:
+    clearState: true
+- runFlow: subflows/login.yaml
+- runFlow: subflows/open-household.yaml
+
+# Not set up yet
+- scrollUntilVisible:
+    element:
+      id: "discord-card"
+    direction: DOWN
+- scrollUntilVisible:
+    element:
+      id: "discord-edit"
+    direction: DOWN
+    centerElement: true
+- assertVisible:
+    id: "discord-bot-status"
+    text: "Not set up."
+
+# Enter the bot
+- tapOn:
+    id: "discord-edit"
+- tapOn:
+    id: "discord-token-input"
+- inputText: ${DISCORD_TOKEN}
+- hideKeyboard
+- tapOn:
+    id: "discord-guild-input"
+- inputText: ${DISCORD_GUILD_ID}
+- hideKeyboard
+- tapOn:
+    id: "discord-channel-input"
+- inputText: ${DISCORD_CHANNEL_ID}
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: "discord-save"
+    direction: DOWN
+    centerElement: true
+- tapOn:
+    id: "discord-save"
+
+# The bridge is on, and the token is only ever shown as set
+- extendedWaitUntil:
+    visible:
+      id: "discord-bot-status"
+      text: "On, but not connected yet.*"
+    timeout: 20000
+- assertVisible: "Bot token: set"
+- assertNotVisible: ${DISCORD_TOKEN}
+- assertVisible: "Server ID: ${DISCORD_GUILD_ID}"
+
+# A member's link needs a connected bot: refused with the server's reason. The household has
+# more than one node, so the button waits until one is picked.
+- scrollUntilVisible:
+    element:
+      id: "discord-node-.*"
+    direction: DOWN
+    centerElement: true
+- tapOn:
+    id: "discord-node-.*"
+- tapOn:
+    id: "discord-link"
+- extendedWaitUntil:
+    visible:
+      id: "discord-me-error"
+      text: ".*not running.*"
+    timeout: 15000
+
+# Put it back
+- scrollUntilVisible:
+    element:
+      id: "discord-remove"
+    direction: UP
+    centerElement: true
+- tapOn:
+    id: "discord-remove"
+- tapOn:
+    id: "android:id/button1"
+- extendedWaitUntil:
+    visible:
+      id: "discord-bot-status"
+      text: "Not set up."
+    timeout: 20000

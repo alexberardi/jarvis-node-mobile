@@ -28,6 +28,10 @@ import {
   type PersonaPreset,
 } from '../../api/householdSettingsApi';
 import HouseholdTimezoneCard from '../../components/HouseholdTimezoneCard';
+import DiscordSettingsCard, {
+  discordStateFromSettings,
+  type DiscordBotState,
+} from '../../components/DiscordSettingsCard';
 import TwilioSettingsCard, {
   twilioStateFromSettings,
   type TwilioState,
@@ -137,6 +141,10 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
 
   // The household's own Twilio account (write-only: only whether it is set).
   const [twilio, setTwilio] = useState<TwilioState>({ sidSet: false, tokenSet: false, fromNumber: null });
+  // The household's Discord bot (write-only token; `supported` false on a server without the bridge).
+  const [discord, setDiscord] = useState<DiscordBotState>({
+    supported: false, enabled: false, tokenSet: false, guildId: null, channelId: null, voiceChannelId: null,
+  });
 
   // Home presence (device-local geofence — the precise coordinate never leaves
   // this phone; only home/away is ever reported). Opt-in: `enabled` defaults to
@@ -235,6 +243,7 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
       setPersona(voice);
       setSavedPersona(voice);
       setTwilio(twilioStateFromSettings(settings));
+      setDiscord(discordStateFromSettings(settings));
     } catch (error) {
       console.error('[HouseholdEditScreen] Failed to load household settings', error);
     } finally {
@@ -1121,6 +1130,15 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
         <TwilioSettingsCard
           householdId={householdId}
           state={twilio}
+          loading={webSearchLoading}
+          canEdit={isAdmin}
+          onChanged={loadHouseholdSettings}
+        />
+
+        {/* Discord: message Jarvis from anywhere (the bot is admin only; linking is per member) */}
+        <DiscordSettingsCard
+          householdId={householdId}
+          state={discord}
           loading={webSearchLoading}
           canEdit={isAdmin}
           onChanged={loadHouseholdSettings}

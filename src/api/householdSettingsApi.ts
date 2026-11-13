@@ -85,6 +85,17 @@ export interface HouseholdSettings {
   'phone.twilio_auth_token': string | null;
   /** The Twilio number calls are placed from, E.164 (`+15551234567`); not secret. */
   'phone.twilio_from_number': string | null;
+  /**
+   * The household's Discord bot (jarvisd 2026-11, docs/discord-bridge.md): lets
+   * people message Jarvis from Discord. ABSENT on a server without the bridge.
+   * The bot token is write-only (`"********"` once set, `null` when not); the
+   * server, channel and voice-channel IDs are not secret and are read back.
+   */
+  'discord.enabled'?: boolean;
+  'discord.bot_token'?: string | null;
+  'discord.guild_id'?: string | null;
+  'discord.channel_id'?: string | null;
+  'discord.voice_channel_id'?: string | null;
 }
 
 /** The three Twilio keys, which only work as a set (one account). */
@@ -92,6 +103,14 @@ export const TWILIO_KEYS = [
   'phone.twilio_account_sid',
   'phone.twilio_auth_token',
   'phone.twilio_from_number',
+] as const;
+
+/** The Discord keys an admin enters: the bot token and where the bot works. */
+export const DISCORD_KEYS = [
+  'discord.bot_token',
+  'discord.guild_id',
+  'discord.channel_id',
+  'discord.voice_channel_id',
 ] as const;
 
 /** What a secret household setting reads back as once it is set. */
