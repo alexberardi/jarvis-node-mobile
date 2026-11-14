@@ -18,7 +18,8 @@ import {
   useTheme,
 } from 'react-native-paper';
 
-import { fetchNodeTools } from '../../api/chatApi';
+import { fetchNodeTools, type InstalledPackage } from '../../api/chatApi';
+import { loadPantryStores, storeNote, usePantryStores } from '../../services/pantryStores';
 import {
   getNode,
   NodeInfo,
@@ -531,16 +532,21 @@ export const OverviewTab = ({
 // Packages Tab
 // =============================================================================
 
-const PackagesTab = ({ nodeId }: { nodeId: string }) => {
+const PackagesTab = ({ nodeId, householdId }: { nodeId: string; householdId?: string | null }) => {
   const theme = useTheme();
   const [commands, setCommands] = useState<CommandInfo[]>([]);
+  // Which Pantry store each installed package came from (several pantries), by package name.
+  const [installed, setInstalled] = useState<Record<string, InstalledPackage>>({});
+  const { stores } = usePantryStores();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
+    if (householdId) loadPantryStores(householdId);
     try {
       const tools = await fetchNodeTools(nodeId);
+      setInstalled(Object.fromEntries((tools.installed_packages ?? []).map((p) => [p.name, p])));
       const cmds: CommandInfo[] = tools.client_tools
         .map((t: Record<string, unknown>) => {
           const fn = t.function as Record<string, unknown> | undefined;
@@ -557,7 +563,7 @@ const PackagesTab = ({ nodeId }: { nodeId: string }) => {
     } finally {
       setLoading(false);
     }
-  }, [nodeId]);
+  }, [nodeId, householdId]);
 
   useEffect(() => {
     load();
@@ -595,14 +601,19 @@ const PackagesTab = ({ nodeId }: { nodeId: string }) => {
       data={commands}
       keyExtractor={(c) => c.name}
       contentContainerStyle={{ paddingVertical: 8 }}
-      renderItem={({ item }) => (
-        <List.Item
-          title={item.name}
-          description={item.description}
-          descriptionNumberOfLines={2}
-          left={(props) => <List.Icon {...props} icon="puzzle" />}
-        />
-      )}
+      renderItem={({ item }) => {
+        // shortcut: matched by name, so a bundle's tools named apart from the package show no
+        // store; upgrade when the node reports each tool's package.
+        const note = storeNote(installed[item.name], stores.length);
+        return (
+          <List.Item
+            title={item.name}
+            description={note ? `${note}\n${item.description}` : item.description}
+            descriptionNumberOfLines={note ? 3 : 2}
+            left={(props) => <List.Icon {...props} icon="puzzle" />}
+          />
+        );
+      }}
     />
   );
 };
@@ -752,7 +763,7 @@ const NodeDetailScreen = () => {
 
       {tab === 'hardware' && <HardwareTab nodeId={nodeId} node={node} />}
 
-      {tab === 'packages' && <PackagesTab nodeId={nodeId} />}
+      {tab === 'packages' && <PackagesTab nodeId={nodeId} householdId={node?.household_id ?? authState.activeHouseholdId} />}
 
       {tab === 'activity' && <ActivityTab nodeId={nodeId} />}
 

@@ -146,3 +146,14 @@ export const storeLock = (pkg: InstalledPackage | null | undefined): string | nu
   }
   return null;
 };
+
+/**
+ * storeNote says which store a node's package came from, for its row on the node's page: only
+ * when the household has several stores, or when its store was removed (no updates).
+ */
+export const storeNote = (pkg: InstalledPackage | undefined, storeCount: number): string | null => {
+  if (!pkg) return null;
+  if (pkg.pantry_store_removed) return 'From a removed Pantry store, so no updates';
+  if (storeCount > 1 && pkg.pantry_store_name) return `From ${pkg.pantry_store_name}`;
+  return null;
+};
