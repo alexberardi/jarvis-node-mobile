@@ -1245,7 +1245,9 @@ const NodeSettingsScreen: React.FC = () => {
                         variant="bodySmall"
                         style={{ color: theme.colors.onSurfaceVariant }}
                       >
-                        Agent · runs every {formatInterval(agent.schedule.interval_seconds)}
+                        {agent.daemon
+                          ? 'Daemon · always running'
+                          : `Agent · runs every ${formatInterval(agent.schedule.interval_seconds)}`}
                       </Text>
                     </View>
                     <Switch
@@ -1457,7 +1459,7 @@ const NodeSettingsScreen: React.FC = () => {
                 variant="bodySmall"
                 style={{ color: theme.colors.onSurfaceVariant, marginTop: 4, fontStyle: 'italic' }}
               >
-                Runs every {intervalLabel}
+                {agent.daemon ? 'Always running' : `Runs every ${intervalLabel}`}
               </Text>
               {renderConfigErrorBadge(agent._errors)}
               {agent.unconfigured ? (

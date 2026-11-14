@@ -71,6 +71,9 @@ export interface AgentEntry {
   description: string;
   enabled: boolean;
   schedule: AgentScheduleEntry;
+  /** A daemon, not a scheduled agent: the node starts it once and keeps it running, so
+   * `schedule` means nothing. */
+  daemon?: boolean;
   associated_service?: string;
   /** Optional for back-compat with older node snapshots; newer nodes always
    * include this (even if empty). When the agent declares preferences via
