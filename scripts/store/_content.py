@@ -200,6 +200,7 @@ AGE_RATING_ATTRS = {
     "ageAssurance": False,
     "sexualContentGraphicAndNudity": "NONE",
     "sexualContentOrNudity": "NONE",
+    "socialMedia": False,
     "horrorOrFearThemes": "NONE",
     "matureOrSuggestiveThemes": "NONE",
     "unrestrictedWebAccess": False,
