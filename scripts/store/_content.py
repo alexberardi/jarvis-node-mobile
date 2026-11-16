@@ -133,30 +133,35 @@ Local network: server auto-discovery.
 No analytics or tracking. Open source: https://docs.jarvisautomation.dev"""
 
 # ── Release notes (What's New) ───────────────────────────────────────────────
-# Customer-facing changes since the last notes (2026-07-24, v1.0.2) for v1.0.5.
+# Customer-facing changes from v1.0.4 to v1.0.5 (mobile main since 0b6b3a1, 2026-09-16).
 # ASC limit: 4000 chars. Pushed by push_release_notes.py.
-WHATS_NEW = """Jarvis now reaches you where you already chat, knows when you're home, and does more on its own.
+WHATS_NEW = """Jarvis now works from your computer and your chat apps, shows what's playing, and does more on its own.
 
 NEW
+• Computers as nodes: add a Mac, Windows or Linux computer to your household, approve it from the app, and talk to Jarvis there too.
 • Chat channels: link your account on Discord or Slack and talk to Jarvis there, including voice clips. Jarvis shows what it heard and answers in text.
-• Home and away: opt in and your phone tells Jarvis only whether you're home, so routines can run when you arrive or leave. Your home's location never leaves the phone.
+• Now playing: see what every node is playing, with cover art, a seek bar and controls, plus a mini-player above the tabs.
 • Photos in chat: attach a picture and ask Jarvis about it, when your server's model can see images.
-• Things Jarvis did on its own: Inbox cards show what ran in the background and its answer, watch alerts get their own layout, and household switches decide how much Jarvis may do without asking.
-• Scheduled tasks: see what Jarvis has lined up and cancel anything you don't want.
-• Suggestions you can tune: pick a date and time right on a card, and bring back suggestions you blocked.
-• Phone calls: let a command be used on phone calls, per command, and set up your Twilio number for the household.
+• Pictures and videos in your Inbox: view them, save them, or share them.
+• Things Jarvis did on its own: Inbox cards show what ran in the background and its answer, and watch alerts get their own layout. Household switches decide how much Jarvis may do without asking.
+• Simple routines: describe what Jarvis should do in plain words, or switch to the step-by-step editor.
+• Phone calls: choose which commands can be used on a call, and set up your household's Twilio number.
 • Several Pantry stores: choose which store each package comes from, and see where an installed package came from.
-• Household time zone and voice settings, from the Household screen.
+• Household time zone, from the Household screen.
 
 IMPROVED
-• Bluetooth pairing shows devices as they're found, and you can pair mid-scan.
+• Adding a node: the app finds nodes on your network that are ready to set up.
+• Bluetooth pairing shows devices as they're found, and you can pair mid-scan. Device scans let you pick the node and cancel.
 • A switch or light whose state can't be read now says Unknown instead of guessing.
 • Inbox buttons show whether their action worked.
+• Node updates compare versions correctly and fetch the node's own release.
+• Voice settings explain why they can't load, and show the automatic wake sensitivity.
 • Chat has a new look, with a waveform while Jarvis is thinking.
 • Setting up: one server address on the landing screen, and a node is never handed an address it can't reach.
 • Clearer dark mode, readable chips and consistent page titles throughout.
 
 FIXED
+• Voice from Android phones is transcribed correctly.
 • You're signed out cleanly after a password reset, and the app recovers its session if it opened while your phone was locked.
 • Times from your server always show in your time zone; an offline node never says "Just now".
 • The photo picker and the message box behave when the keyboard is open.
@@ -164,13 +169,12 @@ FIXED
 
 # Play limit: 500 chars per language.
 PLAY_RELEASE_NOTES = (
-    "New: talk to Jarvis from Discord or Slack, including voice clips; "
-    "photos in chat; see what Jarvis did on its own and what's scheduled; "
-    "phone-call settings; several Pantry stores; household time zone.\n"
-    "Improved: live Bluetooth pairing, Unknown for devices that can't be "
-    "read, clearer Inbox buttons, a new chat look, simpler setup.\n"
-    "Fixed: clean sign-out after a password reset, correct times, "
-    "keyboard and photo picker issues, stability."
+    "New: computers as nodes; talk to Jarvis from Discord or Slack; now "
+    "playing card; photos in chat and in your Inbox; see what Jarvis did on "
+    "its own; simple routines; phone-call settings; several Pantry stores.\n"
+    "Improved: find nodes on your network, live Bluetooth pairing, clearer "
+    "device states and Inbox buttons, a new chat look.\n"
+    "Fixed: Android voice, clean sign-out, correct times, keyboard issues."
 )
 assert len(PLAY_RELEASE_NOTES) <= 500, "Play release notes exceed 500 chars"
 
