@@ -134,7 +134,7 @@ No analytics or tracking. Open source: https://docs.jarvisautomation.dev"""
 
 # ── Release notes (What's New) ───────────────────────────────────────────────
 # Customer-facing changes since the last notes (2026-07-24, v1.0.2) for v1.0.5.
-# ASC limit: 4000 chars. Pushed by push_asc.py.
+# ASC limit: 4000 chars. Pushed by push_release_notes.py.
 WHATS_NEW = """Jarvis now reaches you where you already chat, knows when you're home, and does more on its own.
 
 NEW
