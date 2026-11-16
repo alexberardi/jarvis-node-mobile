@@ -27,7 +27,6 @@ import {
   settingErrorMessage,
   type PersonaPreset,
 } from '../../api/householdSettingsApi';
-import ChannelsCard from '../../components/ChannelsCard';
 import HouseholdTimezoneCard from '../../components/HouseholdTimezoneCard';
 import TwilioSettingsCard, {
   twilioStateFromSettings,
@@ -1126,9 +1125,6 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
           canEdit={isAdmin}
           onChanged={loadHouseholdSettings}
         />
-
-        {/* Chat channels: each member's own link (shown only when the household has one) */}
-        <ChannelsCard householdId={householdId} />
 
         {/* Home Presence (device-local, opt-in) */}
         <Card style={styles.card}>

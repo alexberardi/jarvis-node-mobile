@@ -93,6 +93,11 @@ jest.mock('../../src/api/smartHomeApi', () => ({
   }),
 }));
 
+jest.mock('../../src/api/channelsApi', () => ({
+  listChannels: jest.fn().mockResolvedValue([{ provider: 'discord', online: true, linked: false }]),
+}));
+jest.mock('../../src/api/nodeApi', () => ({ listNodes: jest.fn().mockResolvedValue([]) }));
+
 const wrapper = ({ children }: { children: React.ReactNode }) => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -119,6 +124,14 @@ describe('SettingsScreen', () => {
       activeHouseholdId: 'hh-1',
       refreshToken: null,
     };
+  });
+
+  // Every member links their own chat account, so the card is here and not on the
+  // household's edit screen, which a plain member cannot open.
+  it('shows a plain member the chat channels card', async () => {
+    mockAuthState.households = [{ id: 'hh-1', name: 'Home', role: 'member', created_at: '2026-01-01' }];
+    const { findByTestId } = render(<SettingsScreen />, { wrapper });
+    expect(await findByTestId('channels-card')).toBeTruthy();
   });
 
   it('should render user email/username', () => {

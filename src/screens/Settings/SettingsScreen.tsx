@@ -26,6 +26,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '../../auth/AuthContext';
 import authApi from '../../api/authApi';
+import ChannelsCard from '../../components/ChannelsCard';
 import SafeButton from '../../components/SafeButton';
 import { HelpIcon } from '../../components/HelpIcon';
 import { HelpProvider } from '../../components/HelpProvider';
@@ -504,6 +505,10 @@ const SettingsScreen = () => {
           </View>
         </Card.Content>
       </Card>
+
+      {/* Chat channels: my own link. Here, not on the household's edit screen, which only
+          admins and power users can open: every member links their own account. */}
+      {householdId && <ChannelsCard householdId={householdId} />}
 
       {/* Voice */}
       {householdId && (
