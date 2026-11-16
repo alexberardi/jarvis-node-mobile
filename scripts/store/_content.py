@@ -40,6 +40,7 @@ Pair a Raspberry Pi Zero (or any node) once with a QR code, connect your smart d
 WHAT YOU CAN DO
 
 • Chat with Jarvis from your phone — handy when speaking out loud isn't an option.
+• Link your Discord or Slack account and talk to Jarvis there too, including voice clips.
 • Provision Pi Zero voice nodes in minutes with QR-code pairing and guided Wi-Fi setup.
 • Control lights, locks, plugs, thermostats, cameras, and speakers across Home Assistant, Hue, LIFX, Govee, Kasa, Nest, Schlage, SimpliSafe, Z-Wave, and more.
 • Organize devices into rooms (rooms can nest — Upstairs > Bedroom) so Jarvis picks the right device when you say "the bedroom light".
@@ -132,43 +133,44 @@ Local network: server auto-discovery.
 No analytics or tracking. Open source: https://docs.jarvisautomation.dev"""
 
 # ── Release notes (What's New) ───────────────────────────────────────────────
-# Customer-facing changes since build 131 (v1.0.0 → v1.0.2).
-# ASC limit: 4000 chars. Pushed by push_release_notes.py.
-WHATS_NEW = """Talk to Jarvis faster, automate more, and keep even more under your control.
+# Customer-facing changes since the last notes (2026-07-24, v1.0.2) for v1.0.5.
+# ASC limit: 4000 chars. Pushed by push_asc.py.
+WHATS_NEW = """Jarvis now reaches you where you already chat, knows when you're home, and does more on its own.
 
 NEW
-• Instant voice access on iOS — launch straight into a listening Jarvis from the Action Button, Control Center, or a Shortcut.
-• Face ID / Touch ID login — opt-in biometric unlock for your account.
-• All-new routine builder — build automations step by step with smart dropdowns for your actual devices, rooms, and commands, plus schedules and a Run Now button.
-• Memories — review, edit, or delete what Jarvis remembers about you, right from Settings.
-• HomeKit pairing — pair locks, thermostats, and more directly from the Devices tab.
-• Interactive lists in your Inbox — turn a voice-made shopping list into an exported cart, with an item picker when there's more than one match.
-• Node updates are now consent-based — nodes never update until you explicitly enable it, and the consent travels end-to-end encrypted so only your phone can flip it.
-• Package health at a glance — "Needs setup" and "Failed" badges, plus one-tap revert to the previous version of any installed package.
-• More voice tuning — new node voice settings including wake acknowledgment and sensitivity controls.
+• Chat channels: link your account on Discord or Slack and talk to Jarvis there, including voice clips. Jarvis shows what it heard and answers in text.
+• Home and away: opt in and your phone tells Jarvis only whether you're home, so routines can run when you arrive or leave. Your home's location never leaves the phone.
+• Photos in chat: attach a picture and ask Jarvis about it, when your server's model can see images.
+• Things Jarvis did on its own: Inbox cards show what ran in the background and its answer, watch alerts get their own layout, and household switches decide how much Jarvis may do without asking.
+• Scheduled tasks: see what Jarvis has lined up and cancel anything you don't want.
+• Suggestions you can tune: pick a date and time right on a card, and bring back suggestions you blocked.
+• Phone calls: let a command be used on phone calls, per command, and set up your Twilio number for the household.
+• Several Pantry stores: choose which store each package comes from, and see where an installed package came from.
+• Household time zone and voice settings, from the Household screen.
 
 IMPROVED
-• Chat is ready the moment your node is — newly paired nodes appear without restarting the app, tools load automatically, and the message box waits until your node can actually hear you.
-• You stay signed in reliably, and signing out is instant and clean.
-• Push notifications are now off by default — enable them only if you want them; everything else stays on your network.
-• Your login tokens now live in the iOS Keychain.
-• Better server discovery on tricky networks, and a pinned server address is always respected.
+• Bluetooth pairing shows devices as they're found, and you can pair mid-scan.
+• A switch or light whose state can't be read now says Unknown instead of guessing.
+• Inbox buttons show whether their action worked.
+• Chat has a new look, with a waveform while Jarvis is thinking.
+• Setting up: one server address on the landing screen, and a node is never handed an address it can't reach.
+• Clearer dark mode, readable chips and consistent page titles throughout.
 
 FIXED
-• A crash when creating or importing password-protected key backups.
-• Long dropdowns in the routine editor now scroll.
-• General stability improvements throughout the app."""
+• You're signed out cleanly after a password reset, and the app recovers its session if it opened while your phone was locked.
+• Times from your server always show in your time zone; an offline node never says "Just now".
+• The photo picker and the message box behave when the keyboard is open.
+• General stability improvements."""
 
 # Play limit: 500 chars per language.
 PLAY_RELEASE_NOTES = (
-    "New: instant voice from Shortcuts, biometric login, all-new routine "
-    "builder with device-aware dropdowns, Memories you can review and delete, "
-    "HomeKit pairing, consent-based node updates, package health badges with "
-    "one-tap revert.\n"
-    "Improved: chat is ready as soon as your node is, reliable sign-in, push "
-    "notifications now off by default.\n"
-    "Fixed: crash in password-protected key backups, routine editor "
-    "scrolling, stability."
+    "New: talk to Jarvis from Discord or Slack, including voice clips; "
+    "photos in chat; see what Jarvis did on its own and what's scheduled; "
+    "phone-call settings; several Pantry stores; household time zone.\n"
+    "Improved: live Bluetooth pairing, Unknown for devices that can't be "
+    "read, clearer Inbox buttons, a new chat look, simpler setup.\n"
+    "Fixed: clean sign-out after a password reset, correct times, "
+    "keyboard and photo picker issues, stability."
 )
 assert len(PLAY_RELEASE_NOTES) <= 500, "Play release notes exceed 500 chars"
 
