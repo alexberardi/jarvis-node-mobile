@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <application>
+        <meta-data
+            android:name="com.google.android.gms.car.application"
+            android:resource="@xml/automotive_app_desc" />
+
+        <receiver android:name=".ReplyReceiver" android:exported="false" />
+        <receiver android:name=".MarkReadReceiver" android:exported="false" />
+        <service android:name=".CarReplyTaskService" android:exported="false" />
+    </application>
+</manifest>

@@ -1,0 +1,8 @@
+{
+  "name": "jarvis-car",
+  "version": "1.0.0",
+  "description": "Android Auto messaging notifications for Jarvis Node Mobile",
+  "main": "index.ts",
+  "types": "index.ts",
+  "license": "MIT"
+}

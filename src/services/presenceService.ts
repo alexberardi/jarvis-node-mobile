@@ -532,7 +532,7 @@ const decodeJwtExpSeconds = (token: string): number | null => {
   }
 };
 
-const accessTokenUsable = (token: string | null): boolean => {
+export const accessTokenUsable = (token: string | null): boolean => {
   if (!token) return false;
   const exp = decodeJwtExpSeconds(token);
   // Can't parse → optimistically try; a 401 on the POST handles a bad token.
@@ -543,7 +543,7 @@ const accessTokenUsable = (token: string | null): boolean => {
 /** Bare (interceptor-free) refresh — the headless context has no apiClient
  *  wiring and authApi's baseURL is empty. Returns null on any failure (the
  *  background NEVER forces a logout). */
-const bgRefresh = async (
+export const bgRefresh = async (
   authBaseUrl: string,
   refreshToken: string,
 ): Promise<{ access: string; refresh: string } | null> => {

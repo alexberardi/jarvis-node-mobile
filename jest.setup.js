@@ -118,6 +118,11 @@ jest.mock('./modules/jarvis-crypto', () => ({
   randomBytes: jest.fn().mockResolvedValue('mock-random-bytes-base64'),
 }));
 
+// Mock jarvis-car (Android Auto notifier); keep in sync with modules/jarvis-car/index.ts.
+jest.mock('./modules/jarvis-car', () => ({
+  postReply: jest.fn().mockResolvedValue(undefined),
+}));
+
 // Mock SafeAreaContext
 jest.mock('react-native-safe-area-context', () => {
   const React = require('react');
