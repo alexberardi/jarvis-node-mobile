@@ -127,7 +127,7 @@ const DevicesScreen = () => {
   const [isFocused, setIsFocused] = useState(false);
 
   // Smart home config (tells us whether to use external devices)
-  const { data: smartHomeConfig } = useQuery({
+  const { data: smartHomeConfig, refetch: refetchConfig } = useQuery({
     queryKey: ['smartHomeConfig', householdId],
     queryFn: () => getSmartHomeConfig(householdId!),
     enabled: !!householdId,
@@ -167,9 +167,13 @@ const DevicesScreen = () => {
     staleTime: 30_000,
   });
 
-  // Refresh DB devices when screen is focused (only when not external)
+  // Refresh the config when the screen is focused (Settings may have changed it), and the DB
+  // devices (only when not external)
   useFocusEffect(
     useCallback(() => {
+      if (householdId) {
+        queryClient.invalidateQueries({ queryKey: ['smartHomeConfig', householdId] });
+      }
       if (householdId && !useExternal) {
         queryClient.invalidateQueries({ queryKey: ['devices', householdId] });
         queryClient.invalidateQueries({ queryKey: ['rooms', householdId] });
@@ -284,13 +288,24 @@ const DevicesScreen = () => {
   // spins the pull indicator instead.
   const isLoading = useExternal ? externalLoading && externalDevices.length === 0 : devicesLoading;
   const refreshing = useExternal ? externalLoading : !!devicesRefetching;
-  const onRefresh = useCallback(() => {
+  // The config first: which list to show (external or not) and which node to ask can have
+  // changed since the screen loaded it (Settings, a package just installed). When it has, the
+  // queries and the external fetch follow it by themselves; when not, refetch the list shown.
+  const onRefresh = useCallback(async () => {
+    let next = smartHomeConfig;
+    try {
+      next = (await refetchConfig())?.data ?? smartHomeConfig;
+    } catch {
+      // keep what we had
+    }
+    const nextExternal = next?.use_external_devices ?? false;
+    if (nextExternal !== useExternal || next?.primary_node_id !== primaryNodeId) return;
     if (useExternal) {
       refetchExternal();
     } else {
       refetchDevices();
     }
-  }, [useExternal, refetchExternal, refetchDevices]);
+  }, [smartHomeConfig, refetchConfig, useExternal, primaryNodeId, refetchExternal, refetchDevices]);
   const isEmpty = useExternal
     ? externalDevices.length === 0 && !externalLoading
     : !devices || devices.length === 0;

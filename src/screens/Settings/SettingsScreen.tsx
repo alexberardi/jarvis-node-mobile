@@ -275,13 +275,15 @@ const SettingsScreen = () => {
       try {
         const updated = await updateSmartHomeConfig(householdId, { primary_node_id: newNodeId });
         setSmartHomeConfig((c) => c ? { ...c, ...updated } : c);
+        // The Devices screen reads the config through the query cache.
+        queryClient.invalidateQueries({ queryKey: ['smartHomeConfig', householdId] });
       } catch (err) {
         console.error('[SettingsScreen] Failed to update primary node', err);
         setSmartHomeConfig((c) => c ? { ...c, primary_node_id: prev } : c);
         Alert.alert('Error', 'Could not update primary node.');
       }
     },
-    [householdId, smartHomeConfig],
+    [householdId, smartHomeConfig, queryClient],
   );
 
   const handleExternalDevicesToggle = useCallback(
@@ -292,13 +294,14 @@ const SettingsScreen = () => {
       try {
         const updated = await updateSmartHomeConfig(householdId, { use_external_devices: value });
         setSmartHomeConfig((c) => c ? { ...c, ...updated } : c);
+        queryClient.invalidateQueries({ queryKey: ['smartHomeConfig', householdId] });
       } catch (err) {
         console.error('[SettingsScreen] Failed to toggle external devices', err);
         setSmartHomeConfig((c) => c ? { ...c, use_external_devices: prev } : c);
         Alert.alert('Error', 'Could not update device management setting.');
       }
     },
-    [householdId, smartHomeConfig],
+    [householdId, smartHomeConfig, queryClient],
   );
 
   const handleSaveUrl = async () => {

@@ -141,24 +141,45 @@ describe('DevicesScreen', () => {
 
   // With no devices there was no list to pull, so a demo stuck at "No devices yet" couldn't
   // refresh (2026-11-16). The empty state pulls to refresh too.
-  it('pulls to refresh when there are no devices', () => {
+  it('pulls to refresh when there are no devices', async () => {
     const refetch = jest.fn();
     mockDevicesQuery = { data: [], isLoading: false, isRefetching: false, refetch };
 
     const { getByTestId } = render(<DevicesScreen />, { wrapper });
     const { refreshControl } = getByTestId('devices-empty').props;
-    refreshControl.props.onRefresh();
+    await refreshControl.props.onRefresh();
 
     expect(refetch).toHaveBeenCalled();
   });
 
-  it('pulls to refresh when the list failed to load', () => {
+  // A pull read the config the screen loaded at start, so with external devices turned on
+  // (or a primary node set) since, it refreshed the wrong list until the app restarted
+  // (2026-11-16). It reloads the config first and, when it changed, leaves the fetch to it.
+  it('reloads the smart home config on a pull before choosing the list', async () => {
+    const refetch = jest.fn();
+    const refetchConfig = jest.fn().mockResolvedValue({ data: { use_external_devices: true, primary_node_id: 'n1' } });
+    mockConfigQuery = { data: { use_external_devices: false, primary_node_id: '' }, refetch: refetchConfig };
+    mockDevicesQuery = { data: [], isLoading: false, isRefetching: false, refetch };
+
+    const { getByTestId } = render(<DevicesScreen />, { wrapper });
+    await getByTestId('devices-empty').props.refreshControl.props.onRefresh();
+
+    expect(refetchConfig).toHaveBeenCalled();
+    expect(refetch).not.toHaveBeenCalled(); // the config changed: the external list takes over
+  });
+
+  it('refreshes the config when the tab is focused', () => {
+    render(<DevicesScreen />, { wrapper });
+    expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ['smartHomeConfig', 'hh-1'] });
+  });
+
+  it('pulls to refresh when the list failed to load', async () => {
     const refetch = jest.fn();
     mockDevicesQuery = { data: undefined, isLoading: false, isError: true, error: new Error('Network down'), refetch };
 
     const { getByTestId, getByText } = render(<DevicesScreen />, { wrapper });
     expect(getByText('Network down')).toBeTruthy();
-    getByTestId('devices-error').props.refreshControl.props.onRefresh();
+    await getByTestId('devices-error').props.refreshControl.props.onRefresh();
 
     expect(refetch).toHaveBeenCalled();
   });
