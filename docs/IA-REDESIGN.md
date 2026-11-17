@@ -362,3 +362,57 @@ Every row in this table was found on `origin/main` (b7e409e). A row marked "drop
 3. Should Phonebook live under Phone calls (household businesses), or in You next to Call details?
 4. Should the updates banner stay in Pantry, or should updates show only as node badges?
 5. Should "When things happen" automations be admin-only?
+
+## Appendix A: every screen file → stack and entry after the change
+
+This lists every file under `src/screens` on main (b7e409e). "Same" means the stack and entry points are unchanged.
+
+| Screen file | Stack after | Reached from (after) |
+|---|---|---|
+| Auth/LandingScreen, LoginScreen, RegisterScreen | Auth (same) | signed out |
+| Auth/ForcePasswordChangeScreen | root gate (same) | `mustChangePassword` |
+| Home/HomeScreen | Chat tab | tab; deep links `stt`/`chat` |
+| NowPlaying/NowPlayingScreen | root modal (same) | MiniPlayer |
+| Settings/SettingsScreen | **deleted**, becomes `You` + Household screens | — |
+| *(new)* YouScreen | root modal | avatar on Chat and Household headers |
+| *(new)* ConnectionScreen | You stack | You › Connection |
+| Settings/HouseholdEditScreen | **deleted**, split into HouseholdHome / Members / Jarvis / Knowledge / HomeDetails / Presence / SmartHome / PhoneCalls | — |
+| *(new)* HouseholdHomeScreen + switcher sheet | Household tab | tab |
+| *(new)* MembersScreen, JarvisScreen, KnowledgeScreen, HomeDetailsScreen, PresenceScreen, SmartHomeScreen, PhoneCallsScreen | Household tab | Household home |
+| Settings/SignalAutomationsScreen | Routines tab (segment "When things happen") | Routines segment |
+| Settings/VoiceProfileScreen | root push (same) | You › My voice; Node › Hardware & maintenance |
+| Settings/IntegrationAuthScreen | Household stack (one route; the SmartHomeSetup copy is removed) | Credential detail › Authenticate |
+| RecentCommands/RecentCommandsListScreen, RecentCommandDetailScreen | root push (same) + **add an Appbar back** | You › My voice › Command feedback |
+| Memories/MemoriesListScreen, MemoriesEditScreen | root modal (same) | Household › Knowledge |
+| Phonebook/PhonebookListScreen, PhonebookEditScreen | root modal (same) | Household › Phone calls |
+| CallContext/CallContextListScreen, CallContextEditScreen | root modal (same) | You › My voice › Call details |
+| ImportKey/ImportKeyScreen | Household stack | Nodes header; Credentials "Import key to manage" |
+| Nodes/NodeListScreen | Household stack | Household › Nodes tile |
+| Nodes/NodeDetailScreen + NodeSettingsScreen | **merged** into NodeScreen (cards) + sub-screens NodePackages, NodeTasks, NodeVoice, NodeSpeaker, NodeHardware | Nodes list; push `bluetooth_scan` → NodeSpeaker |
+| Nodes/HardwareTab | split: Device info + Maintenance + Voice recognition → NodeHardware; Bluetooth + HAT → NodeSpeaker; Voice settings → NodeVoice | Node cards |
+| Nodes/AddComputerScreen | Household stack | Nodes list button |
+| Nodes/FastPathInspectScreen | Household stack | Node › Packages ⋮ |
+| Nodes/NodeForgeTestScreen | Household stack | Node ⋮ |
+| Provisioning/ScanForNodes, NodeInfo, SelectNetwork, EnterPassword, ProvisioningProgress, Success | AddNode in Household stack | Nodes list › Add node; Chat empty state "Add Your First Node". Success "Done" returns to Chat (same); "Set Up Smart Home" (same) |
+| CommandData/DataBrowserHomeScreen | root push | Node › Stored data (pinned `nodeId`); unreachable today |
+| CommandData/RecordsListScreen, RecordDetailScreen, RecordEditScreen | root push (same) | from DataBrowserHome |
+| Store/StoreBrowseScreen, StoreDetailScreen, NodePickerSheet, InstallProgressScreen, TestInstallScreen (+ SendToForgeCard) | Pantry tab (same) | tab; node Packages ⋮ "Open in Pantry"; the updates banner |
+| Devices/DevicesScreen, DeviceEditScreen, ExternalDeviceDetailScreen, CameraViewScreen, RoomManagementScreen | Devices tab (same) | same |
+| SmartHome/DeviceDiscoveryScreen | Devices stack + SmartHomeSetup (same) | Devices +; Node ⋮ Scan for devices; Forge test |
+| SmartHome/SmartHomeSetupScreen, HADiscoveryScreen, HAAuthScreen, HADeviceImportScreen, DeviceRoomAssignmentScreen | SmartHomeSetup modal (same) | **new:** Household › Smart home › Connect Home Assistant; provisioning Success (same) |
+| SmartHome/DeviceListScreen | **deleted** (unreachable, unwired toggle) | — |
+| Routines/RoutineListScreen, RoutineEditScreen | Routines tab (same) | tab |
+| Schedules/ScheduleListScreen | Routines tab (segment "Scheduled") | Routines segment; the header icon is removed |
+| Inbox/InboxListScreen, InboxDetailScreen, InboxCallbackResultScreen, InteractiveListScreen, WebViewPickerScreen, SuppressedSuggestionsScreen, AdapterProposalScreen, AdapterProposalDetailScreen, AdapterDeployedScreen | Inbox modal (same) | Chat bell; push taps (same routing) |
+
+Shared components are reused unchanged by whichever screen hosts them:
+
+- **Chat:** ChatBubble, QuickActions, NodeSelector, ThinkingWave
+- **Help and first run:** FirstRunCard, HelpIcon, HelpProvider
+- **Inbox:** the inbox cards, ActionButtons, InteractiveElementsSection
+- **Devices:** DeviceControlPanel
+- **Routines:** ParameterArgRow
+- **Stored data:** FieldEditor
+- **Pantry:** PantryStorePicker
+- **Node key backup:** K2QRCode / K2BackupCard
+- **You › Profile:** DisplayNameEditor
