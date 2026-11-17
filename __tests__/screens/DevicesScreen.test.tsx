@@ -139,6 +139,30 @@ describe('DevicesScreen', () => {
     expect(getByText(/No devices yet/)).toBeTruthy();
   });
 
+  // With no devices there was no list to pull, so a demo stuck at "No devices yet" couldn't
+  // refresh (2026-11-16). The empty state pulls to refresh too.
+  it('pulls to refresh when there are no devices', () => {
+    const refetch = jest.fn();
+    mockDevicesQuery = { data: [], isLoading: false, isRefetching: false, refetch };
+
+    const { getByTestId } = render(<DevicesScreen />, { wrapper });
+    const { refreshControl } = getByTestId('devices-empty').props;
+    refreshControl.props.onRefresh();
+
+    expect(refetch).toHaveBeenCalled();
+  });
+
+  it('pulls to refresh when the list failed to load', () => {
+    const refetch = jest.fn();
+    mockDevicesQuery = { data: undefined, isLoading: false, isError: true, error: new Error('Network down'), refetch };
+
+    const { getByTestId, getByText } = render(<DevicesScreen />, { wrapper });
+    expect(getByText('Network down')).toBeTruthy();
+    getByTestId('devices-error').props.refreshControl.props.onRefresh();
+
+    expect(refetch).toHaveBeenCalled();
+  });
+
   it('should render device items grouped by room', () => {
     mockRoomsQuery = {
       data: [

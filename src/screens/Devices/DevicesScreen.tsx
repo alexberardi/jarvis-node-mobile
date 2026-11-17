@@ -1,7 +1,7 @@
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { FlatList, StyleSheet, View } from 'react-native';
+import { FlatList, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import {
   ActivityIndicator,
   Appbar,
@@ -149,6 +149,7 @@ const DevicesScreen = () => {
   const {
     data: devices,
     isLoading: devicesLoading,
+    isRefetching: devicesRefetching,
     isError: devicesError,
     error: devicesQueryError,
     refetch: refetchDevices,
@@ -279,10 +280,30 @@ const DevicesScreen = () => {
     );
   }
 
-  const isLoading = useExternal ? externalLoading : devicesLoading;
+  // The full-screen spinner is for the first load only; a refresh keeps what is shown and
+  // spins the pull indicator instead.
+  const isLoading = useExternal ? externalLoading && externalDevices.length === 0 : devicesLoading;
+  const refreshing = useExternal ? externalLoading : !!devicesRefetching;
+  const onRefresh = useCallback(() => {
+    if (useExternal) {
+      refetchExternal();
+    } else {
+      refetchDevices();
+    }
+  }, [useExternal, refetchExternal, refetchDevices]);
   const isEmpty = useExternal
     ? externalDevices.length === 0 && !externalLoading
     : !devices || devices.length === 0;
+  // The empty and error states can be pulled too (with no list there was nothing to pull).
+  const pullable = (children: React.ReactNode, testID: string) => (
+    <ScrollView
+      testID={testID}
+      contentContainerStyle={styles.centeredScroll}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+    >
+      {children}
+    </ScrollView>
+  );
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
@@ -306,38 +327,45 @@ const DevicesScreen = () => {
           </Text>
         </View>
       ) : externalError && useExternal ? (
-        <View style={styles.centered}>
-          <Text variant="bodyLarge" style={{ opacity: 0.6, textAlign: 'center' }}>
-            {externalError}
-          </Text>
-          <Button mode="outlined" onPress={refetchExternal} style={{ marginTop: 16 }}>
-            Retry
-          </Button>
-        </View>
+        pullable(
+          <>
+            <Text variant="bodyLarge" style={{ opacity: 0.6, textAlign: 'center' }}>
+              {externalError}
+            </Text>
+            <Button mode="outlined" onPress={refetchExternal} style={{ marginTop: 16 }}>
+              Retry
+            </Button>
+          </>,
+          'devices-error',
+        )
       ) : devicesError && !useExternal ? (
-        <View style={styles.centered}>
-          <Text variant="bodyLarge" style={{ opacity: 0.6, textAlign: 'center', marginBottom: 12 }}>
-            {devicesQueryError instanceof Error ? devicesQueryError.message : 'Failed to load devices.'}
-          </Text>
-          <Button mode="outlined" onPress={() => refetchDevices()}>
-            Retry
-          </Button>
-        </View>
+        pullable(
+          <>
+            <Text variant="bodyLarge" style={{ opacity: 0.6, textAlign: 'center', marginBottom: 12 }}>
+              {devicesQueryError instanceof Error ? devicesQueryError.message : 'Failed to load devices.'}
+            </Text>
+            <Button mode="outlined" onPress={() => refetchDevices()}>
+              Retry
+            </Button>
+          </>,
+          'devices-error',
+        )
       ) : isEmpty ? (
-        <View style={styles.centered}>
+        pullable(
           <Text variant="bodyLarge" style={{ opacity: 0.6, textAlign: 'center' }}>
             {useExternal
               ? 'No external devices found.\nCheck your device manager and primary node settings.'
               : `No devices yet.\nTap + to scan for devices.`}
-          </Text>
-        </View>
+          </Text>,
+          'devices-empty',
+        )
       ) : useExternal ? (
         /* ---------- External device list ---------- */
         <FlatList
           data={extGroups}
           keyExtractor={(g) => g.key}
-          refreshing={externalLoading}
-          onRefresh={refetchExternal}
+          refreshing={refreshing}
+          onRefresh={onRefresh}
           renderItem={({ item: group }) => (
             <List.Section>
               <List.Subheader>{group.title.toUpperCase()}</List.Subheader>
@@ -376,8 +404,8 @@ const DevicesScreen = () => {
         <FlatList
           data={dbGroups}
           keyExtractor={(g) => g.key}
-          refreshing={devicesLoading}
-          onRefresh={() => refetchDevices()}
+          refreshing={refreshing}
+          onRefresh={onRefresh}
           renderItem={({ item: group }) => (
             <List.Section>
               <List.Subheader>{group.title.toUpperCase()}</List.Subheader>
@@ -441,6 +469,12 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   centered: {
     flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+  },
+  centeredScroll: {
+    flexGrow: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 32,
