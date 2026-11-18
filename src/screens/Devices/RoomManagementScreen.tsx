@@ -180,7 +180,7 @@ const RoomManagementScreen = () => {
     (room: Room) => {
       Alert.alert(
         'Delete Room',
-        `Delete "${room.name}"? Devices will become unassigned, child rooms move to root.`,
+        `Delete "${room.name}"? Rooms inside it are deleted too; their devices stay, without a room.`,
         [
           { text: 'Cancel', style: 'cancel' },
           {
