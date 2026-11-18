@@ -71,46 +71,51 @@ env:
       id: "devices-rooms-button"
     timeout: 10000
 
-# Rooms: add
+# Rooms: the floors view, then Arrange to add a room to the unnamed group (the seeded
+# rooms are not on a floor), rename it from its menu and remove it.
 - tapOn:
     id: "devices-rooms-button"
 - extendedWaitUntil:
     visible:
-      id: "room-add-input"
-    timeout: 10000
-- extendedWaitUntil:
-    visible:
       id: "room-item-[0-9a-f-]+"
     timeout: 15000
-- evalScript: ${output.room = 'E2E room ' + Date.now()}
 - tapOn:
-    id: "room-add-input"
+    id: "rooms-arrange"
+- tapOn:
+    id: "rooms-add-room-none"
+- evalScript: ${output.room = 'E2E room ' + Date.now()}
+- extendedWaitUntil:
+    visible:
+      id: "room-edit-name-input"
+    timeout: 10000
+- tapOn:
+    id: "room-edit-name-input"
 - inputText: ${output.room}
 - assertVisible:
-    id: "room-add-input"
+    id: "room-edit-name-input"
     text: ${output.room}
-- hideKeyboard
 - tapOn:
-    id: "room-add-button"
+    id: "room-edit-save"
+- extendedWaitUntil:
+    notVisible:
+      id: "room-edit-dialog"
+    timeout: 10000
 - scrollUntilVisible:
     element:
       text: ${output.room}
     direction: DOWN
 
-# Rename. The dialog keeps sliding up while its autofocused input raises the keyboard,
-# so clear-field's corner tap, computed from the bounds of a moving input, can land off
-# it — the erase then leaves the old name under the typed one (run 20261022-231530). Let
-# the animations settle first, and retry the clear-and-type if the field still ends up
-# mangled: clear-field's 200-character erase also swallows a botched earlier attempt.
+# Rename, from the room's menu in Arrange. The dialog keeps sliding up while its
+# autofocused input raises the keyboard, so retry the clear-and-type if the field ends up
+# mangled (clear-field's 200-character erase swallows a botched earlier attempt).
 - tapOn:
     text: ${output.room}
+- tapOn:
+    id: "room-rename-[0-9a-f-]+"
 - extendedWaitUntil:
     visible:
       id: "room-edit-dialog"
     timeout: 10000
-- assertVisible:
-    id: "room-edit-name-input"
-    text: ${output.room}
 - waitForAnimationToEnd:
     timeout: 5000
 # One whole value: Maestro drops the space in `"${output.room} edited"`.
@@ -132,29 +137,31 @@ env:
     notVisible:
       id: "room-edit-dialog"
     timeout: 10000
-# No hideKeyboard here: it is a bare BACK key on Android, and whether the keyboard
-# outlives the dialog varies — on a closed keyboard BACK pops the Rooms screen itself.
-# The E2E rooms sort to the top of the list, so the scroll needs no keyboard room anyway.
 - scrollUntilVisible:
     element:
       text: ${output.edited}
     direction: DOWN
 
-# Delete: the delete button in the renamed room's row.
+# Remove, from the same menu.
+- tapOn:
+    text: ${output.edited}
 - tapOn:
     id: "room-delete-[0-9a-f-]+"
-    childOf:
-      id: "room-item-[0-9a-f-]+"
-      containsDescendants:
-        - text: ${output.edited}
 - assertVisible:
-    text: "Delete Room"
+    text: "Remove room"
 # The alert's destructive button (RN puts the last button in the positive slot).
 - tapOn:
     id: "android:id/button1"
 - extendedWaitUntil:
     notVisible:
       text: ${output.edited}
+    timeout: 10000
+- tapOn:
+    id: "rooms-done"
+- back
+- extendedWaitUntil:
+    visible:
+      id: "devices-rooms-button"
     timeout: 10000
 
 # Add device: the scan goes to an online node and ends within its 30 s limit;

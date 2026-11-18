@@ -57,6 +57,7 @@ export type DevicesStackParamList = {
   DeviceEdit: { deviceId: string; householdId: string };
   ExternalDeviceDetail: { device: string; householdId: string };
   RoomManagement: undefined;
+  RoomDetail: { roomId: string };
   DeviceDiscovery: { nodeId: string };
   CameraView: { deviceId: string; householdId: string; deviceName: string };
 };

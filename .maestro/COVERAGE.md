@@ -52,7 +52,8 @@ reason is in its `properties.skip_reason`).
 | Devices/DevicesScreen: add a device, discovery | flow | devices.yaml (the scan ends: results, an error with Retry, or "No node is online"; importing needs a device to discover, no item filed yet) |
 | Devices/DeviceEditScreen: name and details, save and delete buttons | flow | devices.yaml (opens a seeded device and goes back; nothing saved) |
 | Devices/DeviceEditScreen: light on/off (LightControl) | skip | devices-light-toggle.yaml: needs the fake Home Assistant (#154) |
-| Devices/RoomManagementScreen: add, rename, delete a room | flow | devices.yaml |
+| Devices/RoomManagementScreen: floors, Arrange (add, rename, remove a room) | flow | devices.yaml |
+| Devices/RoomDetailScreen | not tested | needs live device state for All on / off; jest covers it |
 | Devices/ExternalDeviceDetailScreen | later | needs the fake Home Assistant (#154) |
 | Routines/RoutineEditScreen: create, add a trigger phrase, delete | flow | routines.yaml, simple-routines.yaml (Simple instructions, mode switching and inactive-content persistence; free-text step: the command catalog needs the node's key) |
 | Routines/RoutineEditScreen: command catalog, schedule | later | needs a node with its key (piece 7) |
