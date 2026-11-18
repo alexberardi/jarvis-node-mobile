@@ -709,7 +709,17 @@ const NodeDetailScreen = () => {
       subtitle: 'Installed from the Pantry',
       onPress: () => navigation.navigate('NodePackages', { nodeId }),
     },
-    { key: 'credentials', icon: 'key-chain-variant', title: 'Credentials', subtitle: settingsOpen ? 'Sign-ins and API keys' : noKeyNote, onPress: openSettings('integrations') },
+    {
+      key: 'credentials',
+      icon: 'key-chain-variant',
+      title: 'Credentials',
+      subtitle: settingsOpen ? 'Sign-ins and API keys' : noKeyNote,
+      // The node's view of the household Credentials list; a node without a key yet goes to
+      // its settings, which offer to make one.
+      onPress: hasSettingsAccess
+        ? () => navigation.navigate('Credentials', { nodeId })
+        : openSettings('integrations'),
+    },
     { key: 'tasks', icon: 'timer-sync-outline', title: 'Background tasks', subtitle: settingsOpen ? 'Daemons and schedules' : noKeyNote, onPress: openSettings('agents') },
     {
       key: 'data',

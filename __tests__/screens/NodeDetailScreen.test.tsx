@@ -101,7 +101,7 @@ describe('NodeDetailScreen — node kinds', () => {
     const second = renderScreen();
     await second.findByTestId('node-card-export-key');
     fireEvent.press(second.getByTestId('node-card-credentials'));
-    expect(mockNavigate).toHaveBeenCalledWith('NodeSettings', { nodeId: 'node-1', room: 'Kitchen', tab: 'integrations' });
+    expect(mockNavigate).toHaveBeenCalledWith('Credentials', { nodeId: 'node-1' });
     fireEvent.press(second.getByTestId('node-card-tasks'));
     expect(mockNavigate).toHaveBeenCalledWith('NodeSettings', { nodeId: 'node-1', room: 'Kitchen', tab: 'agents' });
     // Stored data is gated on the key like the other settings-backed cards.

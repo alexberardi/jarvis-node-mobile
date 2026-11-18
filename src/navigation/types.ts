@@ -32,6 +32,9 @@ export type NodesStackParamList = {
   NodeSettings: { nodeId: string; room: string | null; tab?: NodeSettingsTab };
   NodeHardware: { nodeId: string; part: NodeHardwarePart };
   NodePackages: { nodeId: string };
+  /** Every credential across the household's nodes, or one node's. */
+  Credentials: { nodeId?: string } | undefined;
+  CredentialDetail: { id: string; nodeId?: string };
   NodeForgeTest: { nodeId: string };
   ImportKey: undefined;
   IntegrationAuth: {

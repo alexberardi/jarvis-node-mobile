@@ -75,6 +75,7 @@ const HouseholdHomeScreen = () => {
       subtitle: nodes ? (nodes.total ? `${nodes.online} of ${nodes.total} online` : 'None yet') : 'Speakers and computers',
       onPress: () => navigation.navigate('NodeList'),
     },
+    { key: 'credentials', icon: 'key-chain-variant', title: 'Credentials', subtitle: 'Sign-ins and API keys', onPress: () => navigation.navigate('Credentials') },
     { key: 'knowledge', icon: 'book-open-variant', title: 'Knowledge', subtitle: 'Memories', onPress: () => openSection('knowledge') },
     { key: 'members', icon: 'account-group-outline', title: 'Members', subtitle: memberCount != null ? `${memberCount} in this home` : 'Roles and invites', onPress: () => openSection('members') },
   ];
