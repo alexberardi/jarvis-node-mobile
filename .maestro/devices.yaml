@@ -29,28 +29,42 @@ env:
       text: ${DEVICE_NAME}
     timeout: 20000
 
-# Device edit: opens with the device's name and details, and back without saving.
-# The row's own node reads "<name>, <manufacturer>" (title and description merged),
+# Device screen: titled with the device's name; Technical details fold open; Name & room
+# opens the sheet with the name, Save and Remove; back without saving.
+# The row's own node reads "<name>, <state>" (title and description merged),
 # so tap the title Text, which is exactly the name.
 - tapOn:
     text: ${DEVICE_NAME}
 - extendedWaitUntil:
     visible:
-      text: "Edit Device"
+      id: "device-name-room-row"
     timeout: 10000
-- assertVisible:
-    id: "device-name-input"
-    text: ${DEVICE_NAME}
+- scrollUntilVisible:
+    element:
+      text: "Technical details"
+    direction: DOWN
+- tapOn:
+    text: "Technical details"
 - scrollUntilVisible:
     element:
       text: "Entity ID"
     direction: DOWN
 - scrollUntilVisible:
     element:
-      id: "device-save-button"
-    direction: DOWN
+      id: "device-name-room-row"
+    direction: UP
+- tapOn:
+    id: "device-name-room-row"
+- extendedWaitUntil:
+    visible:
+      id: "device-name-input"
+      text: ${DEVICE_NAME}
+    timeout: 10000
+- assertVisible:
+    id: "device-save-button"
 - assertVisible:
     id: "device-delete-button"
+- back
 - back
 - extendedWaitUntil:
     visible:
