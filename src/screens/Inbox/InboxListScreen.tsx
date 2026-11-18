@@ -1,7 +1,7 @@
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useCallback, useMemo, useState } from 'react';
-import { Alert, FlatList, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Alert, ScrollView, SectionList, StyleSheet, TouchableOpacity, View } from 'react-native';
 import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import type { SharedValue } from 'react-native-reanimated';
 import {
@@ -9,7 +9,9 @@ import {
   Card,
   Checkbox,
   Chip,
+  Icon,
   IconButton,
+  Menu,
   Text,
   useTheme,
 } from 'react-native-paper';
@@ -28,7 +30,7 @@ import { helpCopy } from '../../copy/help';
 import { useFirstRun } from '../../hooks/useFirstRun';
 import { InboxStackParamList } from '../../navigation/types';
 import { parseInboxAttachments } from '../../services/inboxMediaService';
-import { categoryChipColors, CHIP_FILLS } from '../../theme/categoryChip';
+import { CHIP_FILLS } from '../../theme/categoryChip';
 import { parseServerDate } from '../../utils/serverTime';
 
 type Nav = NativeStackNavigationProp<InboxStackParamList>;
@@ -43,6 +45,42 @@ const CATEGORY_COLORS: Record<string, string> = {
   adapter_reverted: CHIP_FILLS.slate,
   interactive_list: CHIP_FILLS.violet,
 };
+
+const CATEGORY_ICONS: Record<string, string> = {
+  deep_research: 'magnify',
+  alert: 'alert-outline',
+  reminder: 'bell-ring-outline',
+  confirmation: 'check-decagram-outline',
+  adapter_proposal: 'lightbulb-on-outline',
+  adapter_deployed: 'arrow-up-circle-outline',
+  adapter_reverted: 'undo-variant',
+  interactive_list: 'format-list-checks',
+};
+
+const categoryLabel = (category: string) => {
+  const s = category.replace(/_/g, ' ');
+  return s.charAt(0).toUpperCase() + s.slice(1);
+};
+
+/**
+ * Whether an item still asks for an answer: unread, carrying buttons or a list, and not
+ * expired. A guess: the server doesn't record that an action was taken, so opening the
+ * item (which marks it read) is what clears it.
+ */
+export const wantsResponse = (item: InboxItem): boolean => {
+  if (item.is_read) return false;
+  const m = item.metadata ?? {};
+  const expires = m.expires_at ? parseServerDate(m.expires_at) : null;
+  if (expires && expires.getTime() <= Date.now()) return false;
+  return (
+    (Array.isArray(m.actions) && m.actions.length > 0) ||
+    (Array.isArray(m.interactive_elements) && m.interactive_elements.length > 0) ||
+    item.category === 'adapter_proposal' ||
+    item.category === 'interactive_list'
+  );
+};
+
+type Filter = 'all' | 'unread' | string;
 
 const routeForCategory = (category: string): keyof InboxStackParamList => {
   switch (category) {
@@ -73,6 +111,8 @@ const InboxListScreen = () => {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [filter, setFilter] = useState<Filter>('all');
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const firstRun = useFirstRun('inbox');
 
@@ -227,14 +267,13 @@ const InboxListScreen = () => {
 
   const renderCard = (item: InboxItem) => {
     const isSelected = selectedIds.has(item.id);
-    const categoryColors = categoryChipColors(item.category, CATEGORY_COLORS, theme);
+    const kindColor = CATEGORY_COLORS[item.category] ?? theme.colors.primary;
     const firstAttachment = parseInboxAttachments(item)[0];
     return (
       <Card
         testID={`inbox-item-${item.id}`}
         style={[
           styles.card,
-          !item.is_read && styles.unreadCard,
           selectMode && isSelected && {
             backgroundColor: theme.colors.secondaryContainer,
           },
@@ -268,36 +307,41 @@ const InboxListScreen = () => {
                 onPress={() => toggleSelected(item.id)}
               />
             )}
+            {!selectMode && (
+              <View style={[styles.kindIcon, { backgroundColor: `${kindColor}26` }]}>
+                <Icon source={CATEGORY_ICONS[item.category] ?? 'email-outline'} size={20} color={kindColor} />
+              </View>
+            )}
             <View style={{ flex: 1 }}>
               <View style={styles.cardHeader}>
-                <Chip
-                  compact
-                  textStyle={[styles.chipText, { color: categoryColors.color }]}
-                  style={[styles.chip, { backgroundColor: categoryColors.backgroundColor }]}
-                >
-                  {item.category.replace(/_/g, ' ')}
-                </Chip>
-                <Text
-                  variant="labelSmall"
-                  style={{ color: theme.colors.onSurfaceVariant }}
-                >
+                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, gap: 6 }}>
+                  {!item.is_read && (
+                    <View testID={`inbox-unread-${item.id}`} style={[styles.unreadDot, { backgroundColor: theme.colors.primary }]} />
+                  )}
+                  <Text
+                    variant="titleMedium"
+                    style={[{ flex: 1 }, !item.is_read && styles.unreadTitle]}
+                    numberOfLines={2}
+                  >
+                    {item.title}
+                  </Text>
+                </View>
+                <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, marginLeft: 8 }}>
                   {formatDate(item.created_at)}
                 </Text>
               </View>
               <Text
-                variant="titleMedium"
-                style={[!item.is_read && styles.unreadTitle]}
-                numberOfLines={2}
-              >
-                {item.title}
-              </Text>
-              <Text
                 variant="bodySmall"
-                style={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}
+                style={{ color: theme.colors.onSurfaceVariant, marginTop: 2 }}
                 numberOfLines={2}
               >
                 {stripThinkTags(item.summary)}
               </Text>
+              {!selectMode && wantsResponse(item) && (
+                <Text testID={`inbox-respond-${item.id}`} variant="labelLarge" style={{ color: theme.colors.primary, marginTop: 6 }}>
+                  Respond ›
+                </Text>
+              )}
             </View>
             {firstAttachment && (
               <View style={styles.thumb}>
@@ -326,6 +370,29 @@ const InboxListScreen = () => {
       </ReanimatedSwipeable>
     );
 
+  const categories = useMemo(
+    () => Array.from(new Set(items.map((i) => i.category))).sort(),
+    [items],
+  );
+  const unreadCount = items.filter((i) => !i.is_read).length;
+  const sections = useMemo(() => {
+    const shown = items.filter((i) =>
+      filter === 'all' ? true : filter === 'unread' ? !i.is_read : i.category === filter,
+    );
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const isToday = (i: InboxItem) => (parseServerDate(i.created_at) ?? new Date(i.created_at)) >= startOfToday;
+    return [
+      { title: 'Today', data: shown.filter(isToday) },
+      { title: 'Earlier', data: shown.filter((i) => !isToday(i)) },
+    ].filter((sec) => sec.data.length > 0);
+  }, [items, filter]);
+  const filters: { key: Filter; label: string }[] = [
+    { key: 'all', label: 'All' },
+    { key: 'unread', label: unreadCount ? `Unread ${unreadCount}` : 'Unread' },
+    ...categories.map((c) => ({ key: c, label: categoryLabel(c) })),
+  ];
+
   const emptyComponent = (
     <View style={styles.center}>
       <Text
@@ -334,7 +401,7 @@ const InboxListScreen = () => {
           color: error ? theme.colors.error : theme.colors.onSurfaceVariant,
         }}
       >
-        {error || 'No messages yet'}
+        {error || (filter === 'all' ? 'No messages yet' : 'Nothing here')}
       </Text>
       {error && (
         <Button mode="text" onPress={loadItems} style={{ marginTop: 8 }}>
@@ -347,6 +414,9 @@ const InboxListScreen = () => {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
+        {!selectMode && (
+          <IconButton testID="inbox-close" icon="close" onPress={() => navigation.getParent()?.goBack()} accessibilityLabel="Close" />
+        )}
         <View style={styles.titleGroup}>
           <Text
             variant="headlineMedium"
@@ -384,21 +454,31 @@ const InboxListScreen = () => {
             </Button>
           </View>
         ) : (
-          <View style={styles.headerActions}>
-            <IconButton
-              testID="open-suppressed-suggestions"
-              icon="bell-off-outline"
-              onPress={() => navigation.navigate('SuppressedSuggestions')}
-              accessibilityLabel="Suppressed suggestions"
-            />
-            <IconButton
-              icon="checkbox-multiple-outline"
-              onPress={() => setSelectMode(true)}
-              accessibilityLabel="Select messages"
+          <Menu
+            visible={menuOpen}
+            onDismiss={() => setMenuOpen(false)}
+            anchor={<IconButton testID="inbox-menu" icon="dots-vertical" onPress={() => setMenuOpen(true)} accessibilityLabel="More" />}
+          >
+            <Menu.Item
+              testID="inbox-select"
+              leadingIcon="checkbox-multiple-outline"
+              title="Select messages"
               disabled={items.length === 0}
+              onPress={() => {
+                setMenuOpen(false);
+                setSelectMode(true);
+              }}
             />
-            <IconButton icon="close" onPress={() => navigation.getParent()?.goBack()} />
-          </View>
+            <Menu.Item
+              testID="open-suppressed-suggestions"
+              leadingIcon="bell-off-outline"
+              title="Suppressed suggestions"
+              onPress={() => {
+                setMenuOpen(false);
+                navigation.navigate('SuppressedSuggestions');
+              }}
+            />
+          </Menu>
         )}
       </View>
 
@@ -409,13 +489,33 @@ const InboxListScreen = () => {
         body={helpCopy.inbox.firstRun}
       />
 
-      <FlatList
-        data={items}
+      {items.length > 0 && !selectMode && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filters} contentContainerStyle={styles.filterRow}>
+          {filters.map((f) => (
+            <Chip
+              key={f.key}
+              testID={`inbox-filter-${f.key}`}
+              selected={filter === f.key}
+              showSelectedOverlay
+              onPress={() => setFilter(f.key)}
+            >
+              {f.label}
+            </Chip>
+          ))}
+        </ScrollView>
+      )}
+
+      <SectionList
+        sections={sections}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
-        contentContainerStyle={
-          items.length === 0 ? styles.emptyList : styles.list
-        }
+        renderSectionHeader={({ section }) => (
+          <Text variant="labelLarge" style={[styles.sectionHeader, { color: theme.colors.onSurfaceVariant }]}>
+            {section.title}
+          </Text>
+        )}
+        stickySectionHeadersEnabled={false}
+        contentContainerStyle={sections.length === 0 ? styles.emptyList : styles.list}
         refreshing={refreshing}
         onRefresh={onRefresh}
         ListEmptyComponent={emptyComponent}
@@ -464,8 +564,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 4,
-    paddingLeft: 16,
+    paddingLeft: 4,
   },
+  filters: { flexGrow: 0 },
+  filterRow: { gap: 8, paddingHorizontal: 16, paddingVertical: 6 },
+  sectionHeader: { marginTop: 8, marginBottom: -4, marginLeft: 4 },
+  kindIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginRight: 8 },
+  unreadDot: { width: 8, height: 8, borderRadius: 4 },
   headerActions: { flexDirection: 'row', alignItems: 'center' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   title: { fontWeight: 'bold', flex: 1 },
@@ -475,7 +580,6 @@ const styles = StyleSheet.create({
   card: {},
   cardRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 4 },
   thumb: { marginLeft: 8, alignSelf: 'center' },
-  unreadCard: { borderLeftWidth: 3, borderLeftColor: '#6366f1' },
   unreadTitle: { fontWeight: '700' },
   cardHeader: {
     flexDirection: 'row',
@@ -483,8 +587,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 6,
   },
-  chip: {},
-  chipText: { fontSize: 10, lineHeight: 14, color: '#fff' },
   deleteAction: {
     backgroundColor: '#ef4444',
     justifyContent: 'center',
