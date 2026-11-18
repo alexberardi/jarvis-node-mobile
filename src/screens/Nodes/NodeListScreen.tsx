@@ -6,6 +6,7 @@ import {
   Button,
   Card,
   FAB,
+  IconButton,
   Text,
   useTheme,
 } from 'react-native-paper';
@@ -109,12 +110,15 @@ const NodeListScreen = () => {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text
-          variant="headlineMedium"
-          style={[styles.title, { color: theme.colors.onBackground }]}
-        >
-          Nodes
-        </Text>
+        <View style={styles.titleRow}>
+          <IconButton icon="arrow-left" onPress={() => navigation.goBack()} accessibilityLabel="Back" testID="node-list-back" />
+          <Text
+            variant="headlineMedium"
+            style={[styles.title, { color: theme.colors.onBackground }]}
+          >
+            Nodes
+          </Text>
+        </View>
         <Button
           testID="node-import-key-button"
           icon="key-plus"
@@ -172,6 +176,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingRight: 8,
   },
+  titleRow: { flexDirection: 'row', alignItems: 'center' },
   title: { fontWeight: 'bold', paddingHorizontal: 16, marginBottom: 12 },
   // Room for the two FABs even when a large font wraps them onto two rows.
   list: { padding: 16, gap: 12, paddingBottom: fabListPaddingBottom + FAB_SIZE + FAB_ROW_GAP },

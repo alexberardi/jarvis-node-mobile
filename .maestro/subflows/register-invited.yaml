@@ -2,7 +2,7 @@ appId: com.jarvis.nodemobile
 name: register-invited
 # Creates a throwaway account that joins Avery Household through an invite code, the way a
 # new household member does it in the app:
-#   1. as the logged-in admin: Household Settings → Invite Codes → create (role INVITE_ROLE,
+#   1. as the logged-in admin: Household › Members → Invite Codes → create (role INVITE_ROLE,
 #      1 day, 1 use) → copy the new code;
 #   2. clear the app → Create Account with that code, a fresh email (output.newEmail) and
 #      PASSWORD → Home.
@@ -11,7 +11,11 @@ name: register-invited
 # End: logged in as the new account, on Home. Delete it again with delete-account.yaml.
 ---
 - runFlow: reset-household-name.yaml
-- runFlow: open-household.yaml
+- runFlow:
+    file: open-household-section.yaml
+    env:
+      ENTRY: "household-tile-members"
+      WAIT_ID: "member-row-.*"
 - scrollUntilVisible:
     element:
       id: "invite-create-open"

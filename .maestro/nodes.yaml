@@ -20,7 +20,9 @@ env:
     clearState: true
 - runFlow: subflows/login.yaml
 - tapOn:
-    id: "tab-nodes"
+    id: "tab-household"
+- tapOn:
+    id: "household-tile-nodes"
 - extendedWaitUntil:
     visible:
       id: "node-card-${NODE_ID}"

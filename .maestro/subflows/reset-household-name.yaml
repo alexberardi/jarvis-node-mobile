@@ -5,7 +5,7 @@ name: reset-household-name
 # back, so a flow that looks for "Avery Household" doesn't fail on another flow's leftover.
 # Ends on the main tabs again. Does nothing when the name is already right.
 ---
-- runFlow: open-settings.yaml
+- runFlow: open-households.yaml
 - extendedWaitUntil:
     visible:
       id: "household-name-.*"
@@ -17,11 +17,12 @@ name: reset-household-name
         text: "Avery Household"
     commands:
       - tapOn:
-          id: "household-edit-.*"
-      - extendedWaitUntil:
-          visible:
-            id: "household-name-input"
-          timeout: 15000
+          id: "settings-close"
+      - runFlow:
+          file: open-household-section.yaml
+          env:
+            ENTRY: "household-home-row-home"
+            WAIT_ID: "household-name-input"
       - runFlow:
           file: clear-field.yaml
           env:
@@ -36,6 +37,7 @@ name: reset-household-name
       - waitForAnimationToEnd:
           timeout: 3000
       - back
+      - runFlow: open-households.yaml
       - extendedWaitUntil:
           visible:
             id: "household-name-.*"

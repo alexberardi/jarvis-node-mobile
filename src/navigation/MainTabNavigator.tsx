@@ -5,7 +5,7 @@ import React from 'react';
 
 import MiniPlayer from '../components/NowPlaying/MiniPlayer';
 import DevicesStackNavigator from './DevicesStackNavigator';
-import NodesStackNavigator from './NodesStackNavigator';
+import HouseholdStackNavigator from './NodesStackNavigator';
 import RoutinesStackNavigator from './RoutinesStackNavigator';
 import StoreStackNavigator from './StoreStackNavigator';
 import HomeScreen from '../screens/Home/HomeScreen';
@@ -44,10 +44,10 @@ const MainTabNavigator = () => {
         name="HomeTab"
         component={HomeScreen}
         options={{
-          tabBarLabel: 'Home',
+          tabBarLabel: 'Chat',
           tabBarButtonTestID: 'tab-home',
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="home" color={color} size={size} />
+            <MaterialCommunityIcons name="chat-outline" color={color} size={size} />
           ),
         }}
       />
@@ -85,35 +85,35 @@ const MainTabNavigator = () => {
         }}
       />
       <Tab.Screen
-        name="NodesTab"
-        component={NodesStackNavigator}
+        name="HouseholdTab"
+        component={HouseholdStackNavigator}
         options={{
-          tabBarLabel: 'Nodes',
-          tabBarButtonTestID: 'tab-nodes',
+          tabBarLabel: 'Household',
+          tabBarButtonTestID: 'tab-household',
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="raspberry-pi" color={color} size={size} />
+            <MaterialCommunityIcons name="home-account" color={color} size={size} />
           ),
         }}
         listeners={({ navigation }) => ({
-          // Tapping the Nodes tab icon while already on this tab should
-          // pop back to NodeList. React Navigation's default popToTop
+          // Tapping the Household tab icon while already on this tab should
+          // pop back to its home. React Navigation's default popToTop
           // doesn't traverse into nested navigators, so when the user
           // ends up inside AddNode's ProvisioningNavigator (e.g. on the
           // post-provisioning Success screen) the tab tap stays put.
-          // Navigating to ``NodeList`` directly pops both AddNode and
+          // Navigating to ``HouseholdHome`` directly pops both AddNode and
           // its nested ProvisioningNavigator off in one go.
           tabPress: (e) => {
             const state = navigation.getState();
-            const tabRoute = state.routes.find((r) => r.name === 'NodesTab');
-            const isFocused = state.routes[state.index]?.name === 'NodesTab';
+            const tabRoute = state.routes.find((r) => r.name === 'HouseholdTab');
+            const isFocused = state.routes[state.index]?.name === 'HouseholdTab';
             const drilledIn =
               !!tabRoute?.state && (tabRoute.state.index ?? 0) > 0;
             if (isFocused && drilledIn) {
               e.preventDefault();
               navigation.dispatch(
                 CommonActions.navigate({
-                  name: 'NodesTab',
-                  params: { screen: 'NodeList' },
+                  name: 'HouseholdTab',
+                  params: { screen: 'HouseholdHome' },
                 }),
               );
             }

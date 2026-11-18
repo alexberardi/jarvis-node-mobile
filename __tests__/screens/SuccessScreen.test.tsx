@@ -130,7 +130,9 @@ describe('SuccessScreen', () => {
     expect(mockResetContext).toHaveBeenCalled();
     expect(mockParentDispatch).toHaveBeenCalled();
     const action = mockParentDispatch.mock.calls[0][0];
-    expect(action.payload?.routes?.[0]?.name).toBe('NodeList');
+    // The node list sits on the Household home, so the reset keeps both.
+    expect(action.payload?.routes?.map((r: { name: string }) => r.name)).toEqual(['HouseholdHome', 'NodeList']);
+    expect(action.payload?.index).toBe(1);
     // Fallback navigation.reset must NOT fire when parent handled it
     expect(mockReset).not.toHaveBeenCalled();
   });

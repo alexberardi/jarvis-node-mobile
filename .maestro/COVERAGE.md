@@ -14,12 +14,13 @@ reason is in its `properties.skip_reason`).
 | Auth/LoginScreen | flow | every flow (subflows/login-as.yaml); bad login: register.yaml |
 | Auth/RegisterScreen | flow | register.yaml (form checks, invite), household-members.yaml |
 | Auth/ForcePasswordChangeScreen | skip | force-password-change.yaml: needs AUTH_URL from the runner |
-| Settings/SettingsScreen: Account, Household, Voice, Appearance, Chat, Privacy, Connection, Smart Home, Config Service URL | flow | settings.yaml |
+| Settings/SettingsScreen: You (Account, Voice, Appearance, Chat, Privacy, Connection, Config Service URL), Households, Smart home | flow | settings.yaml |
+| Household/HouseholdHomeScreen: switcher, tiles, This home rows | flow | settings.yaml, household-edit.yaml, household-members.yaml, signal-automations.yaml, nodes.yaml |
 | Settings/SettingsScreen: Security (biometric login) | not tested | biometrics stay manual (user, 2026-10-17); biometric-login.yaml is skipped |
 | Settings/SettingsScreen: Log Out (and staying logged out after a relaunch) | flow | auth-logout.yaml |
 | Settings/SettingsScreen: each seeded role's household and role | flow | auth-roles.yaml |
 | Settings/SettingsScreen: Delete Account | flow | subflows/delete-account.yaml (throwaway accounts only) |
-| Settings/HouseholdEditScreen: name, admin sections | flow | household-edit.yaml |
+| Settings/HouseholdEditScreen (one section per Household tile/row): name, admin sections | flow | household-edit.yaml |
 | Settings/HouseholdEditScreen: members, role change, invite codes | flow | household-members.yaml, household-member-view.yaml |
 | Settings/HouseholdEditScreen: watches and errand-autonomy switches | flow | household-watches-errands.yaml (admin toggles), household-member-view.yaml (read only) |
 | Settings/HouseholdEditScreen: pantry toggle | not tested | packages (user, 2026-10-17) |

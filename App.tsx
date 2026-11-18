@@ -53,7 +53,7 @@ const PushNotificationManager: React.FC<{ children: React.ReactNode }> = ({ chil
     if (data.type === 'bluetooth_scan' && data.node_id) {
       // Deep link to Hardware tab on the specific node
       (navigationRef as any).navigate('Main', {
-        screen: 'NodesTab',
+        screen: 'HouseholdTab',
         params: {
           screen: 'NodeDetail',
           params: { nodeId: data.node_id, initialTab: 'hardware' },

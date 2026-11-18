@@ -8,12 +8,14 @@ import { lightTheme } from '../../src/theme';
 
 const mockNavigate = jest.fn();
 const mockGoBack = jest.fn();
+let mockRouteParams: { view?: 'you' | 'households' | 'smart_home' } | undefined;
 
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({
     navigate: mockNavigate,
     goBack: mockGoBack,
   }),
+  useRoute: () => ({ params: mockRouteParams }),
 }));
 
 const mockLogout = jest.fn();
@@ -112,6 +114,7 @@ const wrapper = ({ children }: { children: React.ReactNode }) => {
 describe('SettingsScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockRouteParams = undefined;
     mockAuthState = {
       user: { id: 1, email: 'alex@example.com', username: 'alex' },
       accessToken: 'mock-token',
@@ -176,12 +179,14 @@ describe('SettingsScreen', () => {
   });
 
   it('should render Household section', () => {
+    mockRouteParams = { view: 'households' };
     const { getByText } = render(<SettingsScreen />, { wrapper });
 
     expect(getByText('Household')).toBeTruthy();
   });
 
   it('should render household names', () => {
+    mockRouteParams = { view: 'households' };
     const { getByTestId } = render(<SettingsScreen />, { wrapper });
 
     expect(getByTestId('household-name-hh-1')).toBeTruthy();
@@ -268,10 +273,38 @@ describe('SettingsScreen', () => {
     expect(getByTestId('settings-call-context-row')).toBeTruthy();
   });
 
-  it('should render Settings header', () => {
-    const { getByText } = render(<SettingsScreen />, { wrapper });
+  it('opens as You: my own cards, not the household list, smart home or moved rows', () => {
+    const { getByText, getByTestId, queryByTestId } = render(<SettingsScreen />, { wrapper });
 
-    expect(getByText('Settings')).toBeTruthy();
+    expect(getByText('You')).toBeTruthy();
+    expect(getByTestId('settings-section-account')).toBeTruthy();
+    expect(queryByTestId('settings-section-household')).toBeNull();
+    expect(queryByTestId('settings-section-smart-home')).toBeNull();
+    // Memories moved to Household › Knowledge, Phonebook to Household › Phone calls.
+    expect(queryByTestId('settings-memories-row')).toBeNull();
+    expect(queryByTestId('settings-phonebook-row')).toBeNull();
+  });
+
+  it('opens as Households: only the household list with join and create', () => {
+    mockRouteParams = { view: 'households' };
+    const { getByText, getByTestId, queryByTestId } = render(<SettingsScreen />, { wrapper });
+
+    expect(getByText('Households')).toBeTruthy();
+    expect(getByTestId('create-household-name')).toBeTruthy();
+    expect(queryByTestId('settings-section-account')).toBeNull();
+    expect(queryByTestId('settings-section-connection')).toBeNull();
+    // Editing is the Household tab now, so the list has no edit pencil.
+    expect(queryByTestId('household-edit-hh-1')).toBeNull();
+  });
+
+  it('opens as Smart home with a way into Home Assistant setup', () => {
+    mockRouteParams = { view: 'smart_home' };
+    const { getByText, getByTestId, queryByTestId } = render(<SettingsScreen />, { wrapper });
+
+    expect(getByText('Smart home')).toBeTruthy();
+    expect(queryByTestId('settings-section-account')).toBeNull();
+    fireEvent.press(getByTestId('smart-home-connect-ha'));
+    expect(mockNavigate).toHaveBeenCalledWith('SmartHomeSetup', { screen: 'SmartHomeSetup' });
   });
 
   it('should show close button', () => {
@@ -291,6 +324,7 @@ describe('SettingsScreen', () => {
   });
 
   it('should show Join Another Household section', () => {
+    mockRouteParams = { view: 'households' };
     const { getByText, getByTestId } = render(<SettingsScreen />, { wrapper });
 
     expect(getByText('Join Another Household')).toBeTruthy();

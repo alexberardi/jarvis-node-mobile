@@ -58,7 +58,7 @@ env:
     file: subflows/register-invited.yaml
     env:
       INVITE_ROLE: member
-- runFlow: subflows/open-settings.yaml
+- runFlow: subflows/open-households.yaml
 - scrollUntilVisible:
     element:
       id: "household-role-.*"

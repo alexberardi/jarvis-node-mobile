@@ -15,7 +15,11 @@ export type AuthStackParamList = {
   Register: undefined;
 };
 
+/** One section of the household editor, opened from the Household tab. */
+export type HouseholdSection = 'home' | 'jarvis' | 'knowledge' | 'presence' | 'calls' | 'members';
+
 export type NodesStackParamList = {
+  HouseholdHome: undefined;
   NodeList: undefined;
   AddNode: undefined;
   AddComputer: undefined;
@@ -197,7 +201,7 @@ export type MainTabParamList = {
   DevicesTab: NavigatorScreenParams<DevicesStackParamList> | undefined;
   StoreTab: NavigatorScreenParams<StoreStackParamList> | undefined;
   RoutinesTab: NavigatorScreenParams<RoutinesStackParamList> | undefined;
-  NodesTab: NavigatorScreenParams<NodesStackParamList> | undefined;
+  HouseholdTab: NavigatorScreenParams<NodesStackParamList> | undefined;
 };
 
 export type RootStackParamList = {
@@ -205,8 +209,9 @@ export type RootStackParamList = {
   Main: NavigatorScreenParams<MainTabParamList>;
   Inbox: NavigatorScreenParams<InboxStackParamList>;
   RecentCommands: NavigatorScreenParams<RecentCommandsStackParamList> | undefined;
-  Settings: undefined;
-  HouseholdEdit: { householdId: string; householdName: string };
+  /** You (default), the household list with join/create, or Household › Smart home. */
+  Settings: { view?: 'you' | 'households' | 'smart_home' } | undefined;
+  HouseholdEdit: { householdId: string; householdName: string; section?: HouseholdSection };
   SignalAutomations: { householdId: string };
   SmartHomeSetup: NavigatorScreenParams<SmartHomeSetupParamList>;
   VoiceProfile: undefined;

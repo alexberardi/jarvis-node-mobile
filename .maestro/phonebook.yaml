@@ -1,6 +1,6 @@
 appId: com.jarvis.nodemobile
 name: Phonebook, add, edit, delete
-# Phonebook (src/screens/Phonebook/) from Settings → Voice → Phonebook, as the seeded
+# Phonebook (src/screens/Phonebook/) from Household › Phone calls › Phonebook, as the seeded
 # superuser: the seeded businesses are listed; a new one is added (555-01xx, the fictional
 # range, like the seed, with an area code: the server takes only 10-digit US numbers),
 # edited and removed again. Its name is unique per run.
@@ -15,13 +15,17 @@ env:
 - launchApp:
     clearState: true
 - runFlow: subflows/login.yaml
-- runFlow: subflows/open-settings.yaml
+- runFlow:
+    file: subflows/open-household-section.yaml
+    env:
+      ENTRY: "household-home-row-calls"
+      WAIT_ID: "household-phonebook-row"
 - scrollUntilVisible:
     element:
-      id: "settings-phonebook-row"
+      id: "household-phonebook-row"
     direction: DOWN
 - tapOn:
-    id: "settings-phonebook-row"
+    id: "household-phonebook-row"
 - extendedWaitUntil:
     visible:
       id: "phone-contact-card-.*"

@@ -1,7 +1,7 @@
 appId: com.jarvis.nodemobile
 name: Signal automations, write and clear a rule
-# Automations (src/screens/Settings/SignalAutomationsScreen.tsx), opened from Household
-# Settings as the admin: the catalog lists "I leave home" (presence.left); a rule is
+# Automations (src/screens/Settings/SignalAutomationsScreen.tsx), opened from the
+# Household tab (This home › Automations) as the admin: the catalog lists "I leave home" (presence.left); a rule is
 # written, set to run automatically, enabled and saved; it is there when the screen is
 # reopened; then it is cleared again (an empty instruction saves as "Clear").
 # State: sets the household's presence.left rule and clears it. If the flow dies in
@@ -19,33 +19,14 @@ env:
     clearState: true
 - runFlow: subflows/login.yaml
 - runFlow: subflows/open-household.yaml
-# The Automations card sits below every other admin card (persona, web search, pantry,
-# watches & errands, memory, calls, K2, presence), and PR #121 made the screen longer: one
-# scrollUntilVisible from the top gives up before reaching it. Stage the scroll through the
-# same anchors household-edit.yaml uses on this screen, and center the button for the tap.
+# Automations is a row in the Household tab's "This home" list.
 - scrollUntilVisible:
     element:
-      id: "household-persona-input"
-    direction: DOWN
-- scrollUntilVisible:
-    element:
-      id: "household-web-search-toggle"
-    direction: DOWN
-- scrollUntilVisible:
-    element:
-      id: "household-memory-toggle"
-    direction: DOWN
-- scrollUntilVisible:
-    element:
-      id: "household-location-input"
-    direction: DOWN
-- scrollUntilVisible:
-    element:
-      id: "open-signal-automations"
+      id: "household-home-row-automations"
     direction: DOWN
     centerElement: true
 - tapOn:
-    id: "open-signal-automations"
+    id: "household-home-row-automations"
 - extendedWaitUntil:
     visible:
       id: "automation-presence.left"
@@ -82,15 +63,14 @@ env:
 
 # Reopen: it was saved
 - back
-# Back keeps HouseholdEdit mounted, so the scroll position usually survives — but don't
-# trust where it landed: scroll the button back into view before tapping.
+# Back lands on the Household home; scroll the row back into view before tapping.
 - scrollUntilVisible:
     element:
-      id: "open-signal-automations"
+      id: "household-home-row-automations"
     direction: DOWN
     centerElement: true
 - tapOn:
-    id: "open-signal-automations"
+    id: "household-home-row-automations"
 - extendedWaitUntil:
     visible:
       text: ${RULE}
@@ -121,14 +101,14 @@ env:
       enabled: false
     timeout: 10000
 - back
-# Same as the first reopen: scroll to the button instead of tapping where it last was.
+# Same as the first reopen: scroll to the row instead of tapping where it last was.
 - scrollUntilVisible:
     element:
-      id: "open-signal-automations"
+      id: "household-home-row-automations"
     direction: DOWN
     centerElement: true
 - tapOn:
-    id: "open-signal-automations"
+    id: "household-home-row-automations"
 - extendedWaitUntil:
     visible:
       id: "automation-presence.left"

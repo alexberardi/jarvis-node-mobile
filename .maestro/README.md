@@ -17,7 +17,7 @@ tool can automate.
 | `schedules.yaml` | the Scheduled errands screen renders |
 | `auth-roles.yaml` | every seeded role (superuser, admin, power user, member) logs in, and Settings shows the seeded household with that role; a member gets no household edit button |
 | `auth-logout.yaml` | Log Out lands on Landing, and a relaunch stays logged out |
-| `nav-tabs.yaml` | the five tabs open (pick them by `tab-home`, `tab-devices`, `tab-pantry`, `tab-routines`, `tab-nodes`), and Devices, Routines and Nodes show seeded data; Pantry shows its gate (the rich sandbox has Pantry off) or, with Pantry on, the pantry |
+| `nav-tabs.yaml` | the five tabs open (pick them by `tab-home`, `tab-devices`, `tab-pantry`, `tab-routines`, `tab-household`), and Devices, Routines and Nodes show seeded data; Pantry shows its gate (the rich sandbox has Pantry off) or, with Pantry on, the pantry |
 | `home-chat.yaml` | a chat message gets the scripted model's exact reply (`CHAT_MESSAGE` → `CHAT_REPLY`) |
 | `home-chat-tools.yaml` | the scripted model's tool turns (`DEVICE_`, `TIMER_`, `LIST_MESSAGE`: control_device, set_timer, a shopping-list add) reach the node's dispatch: the sandbox's node is not running, so each gets its `*_REPLY_OFFLINE` |
 | `inbox.yaml` | the seeded inbox opens from Home; the deep-research item shows its markdown and sources (InboxDetail), the interactive list its rows and live "Add {n}" count (InteractiveList), the deployed adapter its details (AdapterDeployed) |
@@ -28,7 +28,8 @@ E2E piece 5 (#145): its layout and seed contract are in
 [`../docs/decisions/2026-10-18-e2e-mobile-flows.md`](../docs/decisions/2026-10-18-e2e-mobile-flows.md).
 
 Shared steps live in `subflows/` (never run on their own): `login.yaml` (the superuser),
-`login-as.yaml` (any `LOGIN_EMAIL`), `logout.yaml` (Home → Settings → Log Out → Landing), `open-settings.yaml`, `open-household.yaml`,
+`login-as.yaml` (any `LOGIN_EMAIL`), `logout.yaml` (Chat → You → Log Out → Landing), `open-settings.yaml` (You), `open-households.yaml` (the household list),
+`open-household.yaml` (the Household tab), `open-household-section.yaml` (one of its sections by `ENTRY`/`WAIT_ID`),
 `register-invited.yaml` (a throwaway account joined through an invite code),
 `delete-account.yaml` (removes that account again) and `reset-household-name.yaml` (as the
 admin, renames Avery Household back if a dead `household-edit` run left it renamed; the
