@@ -75,10 +75,18 @@ describe('DeviceRow', () => {
     alert.mockRestore();
   });
 
-  it('says Not responding, with no switch, when the node does not answer', async () => {
+  it('says Not responding and greys out the switch when the node does not answer', async () => {
     (getDeviceState as jest.Mock).mockRejectedValue(new Error('timeout'));
     const utils = renderRow();
+    expect(utils.getByTestId('device-switch-d1').props.disabled).toBe(true); // still checking
     expect(await utils.findByText('Not responding')).toBeTruthy();
+    expect(utils.getByTestId('device-switch-d1').props.disabled).toBe(true);
+  });
+
+  it('gives a thermostat no switch, only its screen', async () => {
+    (getDeviceState as jest.Mock).mockResolvedValue(state('climate', { mode: 'heat', target_temperature: 21 }));
+    const utils = renderRow(device({ domain: 'climate' }));
+    await utils.findByText('Heat to 21\u00b0');
     expect(utils.queryByTestId('device-switch-d1')).toBeNull();
   });
 

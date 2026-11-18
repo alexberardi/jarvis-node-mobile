@@ -77,7 +77,10 @@ const DeviceRow = ({ device, icon, onPress }: Props) => {
         ? 'Not responding'
         : described.label;
   const on = described?.on ?? null;
-  const showSwitch = SWITCHABLE.has(device.domain) && on !== null;
+  // Lights, plugs and locks always show their switch, so the list reads the same whether or
+  // not the node answers; it only works once the device reports on/off (or locked/unlocked).
+  const showSwitch = device.is_controllable && SWITCHABLE.has(device.domain);
+  const switchLive = on !== null;
 
   const send = async (action: string) => {
     setBusy(true);
@@ -124,7 +127,7 @@ const DeviceRow = ({ device, icon, onPress }: Props) => {
           <Switch
             testID={`device-switch-${device.id}`}
             value={active}
-            disabled={busy}
+            disabled={busy || !switchLive}
             onValueChange={toggle}
             accessibilityLabel={`${device.name} ${device.domain === 'lock' ? 'locked' : 'on'}`}
           />
