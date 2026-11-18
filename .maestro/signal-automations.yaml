@@ -1,7 +1,7 @@
 appId: com.jarvis.nodemobile
 name: Signal automations, write and clear a rule
-# Automations (src/screens/Settings/SignalAutomationsScreen.tsx), opened from the
-# Household tab (This home › Automations) as the admin: the catalog lists "I leave home" (presence.left); a rule is
+# Automations (src/screens/Settings/SignalAutomationsScreen.tsx), opened as the Routines
+# tab's Triggers segment, as the admin: the catalog lists "I leave home" (presence.left); a rule is
 # written, set to run automatically, enabled and saved; it is there when the screen is
 # reopened; then it is cleared again (an empty instruction saves as "Clear").
 # State: sets the household's presence.left rule and clears it. If the flow dies in
@@ -18,15 +18,11 @@ env:
 - launchApp:
     clearState: true
 - runFlow: subflows/login.yaml
-- runFlow: subflows/open-household.yaml
-# Automations is a row in the Household tab's "This home" list.
-- scrollUntilVisible:
-    element:
-      id: "household-home-row-automations"
-    direction: DOWN
-    centerElement: true
+# Triggers is a segment of the Routines tab.
 - tapOn:
-    id: "household-home-row-automations"
+    id: "tab-routines"
+- tapOn:
+    id: "routines-tab-triggers"
 - extendedWaitUntil:
     visible:
       id: "automation-presence.left"
@@ -62,15 +58,11 @@ env:
     timeout: 10000
 
 # Reopen: it was saved
-- back
-# Back lands on the Household home; scroll the row back into view before tapping.
-- scrollUntilVisible:
-    element:
-      id: "household-home-row-automations"
-    direction: DOWN
-    centerElement: true
+# Switching segments away and back remounts the screen, which reloads from the server.
 - tapOn:
-    id: "household-home-row-automations"
+    id: "routines-tab-routines"
+- tapOn:
+    id: "routines-tab-triggers"
 - extendedWaitUntil:
     visible:
       text: ${RULE}
@@ -100,15 +92,10 @@ env:
       id: "save-presence.left"
       enabled: false
     timeout: 10000
-- back
-# Same as the first reopen: scroll to the row instead of tapping where it last was.
-- scrollUntilVisible:
-    element:
-      id: "household-home-row-automations"
-    direction: DOWN
-    centerElement: true
 - tapOn:
-    id: "household-home-row-automations"
+    id: "routines-tab-routines"
+- tapOn:
+    id: "routines-tab-triggers"
 - extendedWaitUntil:
     visible:
       id: "automation-presence.left"

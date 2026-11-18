@@ -1372,7 +1372,7 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
         {/* Signal automations — free-text "when X happens, do Y" rules */}
         <Card style={styles.card}>
           <Card.Content>
-            <Text variant="titleMedium" style={styles.sectionTitle}>Automations</Text>
+            <Text variant="titleMedium" style={styles.sectionTitle}>Triggers</Text>
             <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 8 }}>
               Tell Jarvis what to do when something happens — like locking the door
               when you leave.

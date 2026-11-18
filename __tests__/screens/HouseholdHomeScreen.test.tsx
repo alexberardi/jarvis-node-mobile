@@ -77,14 +77,13 @@ describe('HouseholdHomeScreen', () => {
     }
   });
 
-  it('routes the other entries: nodes, smart home, automations', () => {
+  it('routes the other entries: nodes, smart home (triggers live in Routines now)', () => {
     const utils = renderScreen();
     fireEvent.press(utils.getByTestId('household-tile-nodes'));
     expect(mockNavigate).toHaveBeenLastCalledWith('NodeList');
     fireEvent.press(utils.getByTestId('household-home-row-smart-home'));
     expect(mockNavigate).toHaveBeenLastCalledWith('Settings', { view: 'smart_home' });
-    fireEvent.press(utils.getByTestId('household-home-row-automations'));
-    expect(mockNavigate).toHaveBeenLastCalledWith('SignalAutomations', { householdId: 'hh-1' });
+    expect(utils.queryByTestId('household-home-row-automations')).toBeNull();
   });
 
   it('switches household from the title menu, and offers join/create', async () => {

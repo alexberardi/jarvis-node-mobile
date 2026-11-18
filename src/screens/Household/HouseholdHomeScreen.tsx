@@ -84,13 +84,6 @@ const HouseholdHomeScreen = () => {
     { key: 'presence', title: 'Presence', description: 'Home/away, on this phone', icon: 'map-marker-radius-outline', onPress: () => openSection('presence') },
     { key: 'smart-home', title: 'Smart home', description: 'Primary node, Home Assistant', icon: 'home-automation', onPress: () => navigation.navigate('Settings', { view: 'smart_home' }) },
     { key: 'calls', title: 'Phone calls', description: 'Twilio, phonebook', icon: 'phone-outline', onPress: () => openSection('calls') },
-    {
-      key: 'automations',
-      title: 'Automations',
-      description: 'What Jarvis does when something happens',
-      icon: 'flash-outline',
-      onPress: () => householdId && navigation.navigate('SignalAutomations', { householdId }),
-    },
   ];
 
   return (

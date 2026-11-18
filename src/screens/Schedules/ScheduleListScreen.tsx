@@ -24,7 +24,8 @@ import type { ScheduleView } from '../../types/Schedule';
  * (its time-triggered-automation neighbor). Cancel confirms first, then
  * refetches; a recurring errand's cancel note says it will stop repeating.
  */
-const ScheduleListScreen = () => {
+/** `embedded`: shown inside the Routines tab's Scheduled segment, under its header. */
+const ScheduleListScreen = ({ embedded = false }: { embedded?: boolean }) => {
   const theme = useTheme();
   const { state: authState } = useAuth();
   const householdId = authState.activeHouseholdId;
@@ -143,10 +144,12 @@ const ScheduleListScreen = () => {
 
   if (isLoading) {
     return (
-      <View style={styles.container}>
-        <Text variant="headlineMedium" style={[styles.title, { color: theme.colors.onBackground }]}>
-          Scheduled errands
-        </Text>
+      <View style={embedded ? styles.embedded : styles.container}>
+        {!embedded && (
+          <Text variant="headlineMedium" style={[styles.title, { color: theme.colors.onBackground }]}>
+            Scheduled errands
+          </Text>
+        )}
         <View style={styles.center}>
           <ActivityIndicator size="large" />
         </View>
@@ -155,10 +158,12 @@ const ScheduleListScreen = () => {
   }
 
   return (
-    <View style={styles.container}>
-      <Text variant="headlineMedium" style={[styles.title, { color: theme.colors.onBackground }]}>
-        Scheduled errands
-      </Text>
+    <View style={embedded ? styles.embedded : styles.container}>
+      {!embedded && (
+        <Text variant="headlineMedium" style={[styles.title, { color: theme.colors.onBackground }]}>
+          Scheduled errands
+        </Text>
+      )}
       <FlatList
         testID="schedule-list"
         data={schedules}
@@ -175,6 +180,7 @@ const ScheduleListScreen = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, paddingTop: 64 },
+  embedded: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 },
   title: { fontWeight: 'bold', paddingHorizontal: 16, marginBottom: 12 },
   list: { padding: 16, gap: 12, paddingBottom: 96 },

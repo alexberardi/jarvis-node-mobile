@@ -34,7 +34,10 @@ import {
 import type { RootStackParamList } from '../../navigation/types';
 import KeyboardSafeView from '../../components/KeyboardSafeView';
 
-type Props = NativeStackScreenProps<RootStackParamList, 'SignalAutomations'>;
+type Props =
+  | (NativeStackScreenProps<RootStackParamList, 'SignalAutomations'> & { embedded?: false; householdId?: undefined })
+  /** Inside the Routines tab's Triggers segment: no Appbar of its own. */
+  | { embedded: true; householdId: string; navigation?: undefined; route?: undefined };
 
 interface Draft {
   instruction: string;
@@ -42,8 +45,8 @@ interface Draft {
   delivery: DeliveryMode;
 }
 
-const SignalAutomationsScreen = ({ navigation, route }: Props) => {
-  const { householdId } = route.params;
+const SignalAutomationsScreen = (props: Props) => {
+  const householdId = props.embedded ? props.householdId : props.route.params.householdId;
   const theme = useTheme();
 
   // `items` is the server baseline; `drafts` is the editable copy. A card is
@@ -69,7 +72,7 @@ const SignalAutomationsScreen = ({ navigation, route }: Props) => {
       );
       setError(null);
     } catch {
-      setError('Could not load automations.');
+      setError('Could not load triggers.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -268,10 +271,12 @@ const SignalAutomationsScreen = ({ navigation, route }: Props) => {
 
   return (
     <KeyboardSafeView style={[styles.screen, { backgroundColor: theme.colors.background }]}>
-      <Appbar.Header>
-        <Appbar.BackAction onPress={() => navigation.goBack()} />
-        <Appbar.Content title="Automations" />
-      </Appbar.Header>
+      {!props.embedded && (
+        <Appbar.Header>
+          <Appbar.BackAction onPress={() => props.navigation.goBack()} />
+          <Appbar.Content title="Triggers" />
+        </Appbar.Header>
+      )}
       {renderBody()}
     </KeyboardSafeView>
   );
