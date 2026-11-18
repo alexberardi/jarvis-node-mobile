@@ -50,6 +50,8 @@ env:
     id: "routine-step-command-0"
 - inputText: "get_weather"
 - hideKeyboard
+- tapOn:
+    id: "routine-step-done"
 - scrollUntilVisible:
     element:
       id: "routine-mode-simple"
@@ -84,12 +86,18 @@ env:
     id: "routine-mode-advanced"
 - scrollUntilVisible:
     element:
-      id: "routine-step-command-0"
+      id: "routine-step-row-0"
     direction: DOWN
+- tapOn:
+    id: "routine-step-row-0"
 - assertVisible:
     id: "routine-step-command-0"
     text: "get_weather"
+- tapOn:
+    id: "routine-step-done"
 - takeScreenshot: advanced-routine-editor
+- tapOn:
+    id: "routine-menu"
 - tapOn:
     id: "routine-delete-button"
 - tapOn:

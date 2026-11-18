@@ -15,9 +15,15 @@ import DraggableFlatList, {
 } from 'react-native-draggable-flatlist';
 import {
   Button,
+  Card,
   Chip,
+  Icon,
   IconButton,
   Menu,
+  Modal,
+  Portal,
+  Surface,
+  TouchableRipple,
   SegmentedButtons,
   Switch,
   Text,
@@ -137,6 +143,36 @@ const dayPresetFor = (days: DayOfWeek[]): DayPreset => {
   return 'custom';
 };
 
+/** A command's name for people: get_weather → "Get weather". */
+export const friendlyCommand = (command: string): string =>
+  command ? command.charAt(0).toUpperCase() + command.slice(1).replace(/_/g, ' ') : 'Choose a command';
+
+/** The routine in one plain sentence, built from what the editor holds. */
+export const routineSummary = (r: {
+  mode: RoutineMode;
+  triggerPhrases: string[];
+  utterance: string;
+  steps: RoutineStep[];
+  responseInstruction: string;
+  responseLength: ResponseLength;
+  scheduled: boolean;
+}): string => {
+  const quoted = r.triggerPhrases.slice(0, 2).map((p) => `\u201c${p}\u201d`);
+  const when = quoted.length
+    ? `When you say ${quoted.join(' or ')}${r.triggerPhrases.length > 2 ? ' (or another phrase)' : ''}`
+    : r.scheduled ? 'On its schedule' : 'When it runs';
+  let what: string;
+  if (r.mode === 'simple') {
+    what = r.utterance.trim() ? `Jarvis does: ${r.utterance.trim()}` : 'Jarvis does what you describe below';
+  } else {
+    const named = r.steps.filter((st) => st.command || st.label).map((st) => (st.label || friendlyCommand(st.command)).toLowerCase());
+    what = named.length ? `Jarvis will ${named.join(', then ')}` : 'Jarvis runs the steps you add below';
+    if (r.responseInstruction.trim()) what += `, then gives a ${r.responseLength} reply: ${r.responseInstruction.trim()}`;
+  }
+  const sentence = `${when}, ${what}`.replace(/([^.!?])$/, '$1.');
+  return r.scheduled && quoted.length ? `${sentence} It also runs on a schedule.` : sentence;
+};
+
 const RoutineEditScreen = () => {
   const navigation = useNavigation<Nav>();
   const route = useRoute<Route>();
@@ -251,6 +287,9 @@ const RoutineEditScreen = () => {
   const availableCommands = Object.keys(commandMap);
   const [commandMenuStep, setCommandMenuStep] = useState<number | null>(null);
   const [paramMenuStep, setParamMenuStep] = useState<number | null>(null);
+  // The step open in the bottom sheet; the list itself shows one line per step.
+  const [editingStep, setEditingStep] = useState<number | null>(null);
+  const [headerMenu, setHeaderMenu] = useState(false);
 
   // Load existing routine when editing
   useEffect(() => {
@@ -308,8 +347,9 @@ const RoutineEditScreen = () => {
 
   // --- Steps ---
   const addStep = useCallback(() => {
+    setEditingStep(steps.length);
     setSteps((prev) => [...prev, { command: '', args: [], label: '' }]);
-  }, []);
+  }, [steps.length]);
 
   const updateStep = useCallback((index: number, updates: Partial<RoutineStep>) => {
     setSteps((prev) => {
@@ -332,6 +372,7 @@ const RoutineEditScreen = () => {
   }, [commandMap]);
 
   const removeStep = useCallback((index: number) => {
+    setEditingStep(null);
     setSteps((prev) => prev.filter((_, i) => i !== index));
   }, []);
 
@@ -471,93 +512,120 @@ const RoutineEditScreen = () => {
     }
   };
 
-  // --- Step card ---
-  const cardBg = theme.dark ? `${theme.colors.primary}14` : `${theme.colors.primary}08`;
-  const cardBorder = theme.dark ? `${theme.colors.primary}30` : `${theme.colors.outline}40`;
+  // --- Steps ---
 
   const renderStep = ({ item, drag, getIndex }: RenderItemParams<RoutineStep>) => {
     const index = getIndex() ?? 0;
+    return (
+      <ScaleDecorator>
+        <TouchableRipple
+          testID={`routine-step-row-${index}`}
+          onPress={() => setEditingStep(index)}
+          onLongPress={drag}
+          style={[styles.stepRow, { borderTopColor: theme.colors.outlineVariant, borderTopWidth: index === 0 ? 0 : StyleSheet.hairlineWidth }]}
+        >
+          <View style={styles.stepRowInner}>
+            <IconButton icon="drag-vertical" onLongPress={drag} size={18} style={styles.dragHandle} accessibilityLabel="Drag to reorder" />
+            <View style={{ flex: 1 }}>
+              <Text variant="bodyLarge">{item.label || friendlyCommand(item.command)}</Text>
+              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }} numberOfLines={1}>
+                {item.args.length > 0
+                  ? item.args.filter((a) => a.key).map((a) => `${a.key}: ${a.value}`).join(' · ')
+                  : item.command || 'Tap to choose a command'}
+              </Text>
+            </View>
+            <Icon source="chevron-right" size={20} color={theme.colors.onSurfaceVariant} />
+          </View>
+        </TouchableRipple>
+      </ScaleDecorator>
+    );
+  };
+
+  /** One step's editor, in the bottom sheet. */
+  const renderStepEditor = (index: number) => {
+    const item = steps[index];
+    if (!item) return null;
     const meta = commandMap[item.command];
     const existingKeys = new Set(item.args.map((a) => a.key));
     const optionalParams = meta?.parameters?.filter((p) => !existingKeys.has(p.name)) ?? [];
     return (
-      <ScaleDecorator>
-        <View style={[styles.stepCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-          <View style={styles.stepHeader}>
-            <IconButton icon="menu" onLongPress={drag} size={18} style={styles.dragHandle} />
-            <Text variant="labelLarge" style={[styles.stepLabel, { color: theme.colors.primary }]}>
-              Step {index + 1}
-            </Text>
-            <IconButton icon="close" size={16} onPress={() => removeStep(index)} style={styles.removeBtn} />
-          </View>
-          <View style={styles.stepFields}>
-            {availableCommands.length > 0 ? (
-              <Menu
-                visible={commandMenuStep === index}
-                onDismiss={() => setCommandMenuStep(null)}
-                anchor={
-                  <Button mode="outlined" onPress={() => setCommandMenuStep(index)} compact
-                    style={styles.commandButton} labelStyle={styles.commandButtonLabel}
-                    contentStyle={{ justifyContent: 'flex-start' }}>
-                    {item.command || 'Select command…'}
-                  </Button>
-                }>
-                <ScrollView style={{ maxHeight: MENU_MAX_HEIGHT }} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
-                  {availableCommands.map((cmd) => (
-                    <Menu.Item key={cmd} title={cmd}
-                      onPress={() => { updateStep(index, { command: cmd, label: item.label || cmd }); setCommandMenuStep(null); }} />
-                  ))}
-                </ScrollView>
-              </Menu>
-            ) : (
-              <TextInput mode="flat" label={commandsLoading ? 'Command (loading…)' : 'Command'} testID={`routine-step-command-${index}`}
-                value={item.command} onChangeText={(v) => updateStep(index, { command: v, label: item.label || v })}
-                dense style={styles.stepInput} placeholder="e.g. get_weather" />
-            )}
-            <TextInput mode="flat" label="Label" value={item.label}
-              onChangeText={(v) => updateStep(index, { label: v })} dense style={[styles.stepInput, { flex: 1 }]} />
-          </View>
-          {item.args.length > 0 && (
-            <View style={styles.argsContainer}>
-              {item.args.map((arg, ai) => {
-                const paramMeta = meta?.parameters?.find((p) => p.name === arg.key) ?? null;
-                return (
-                  <ParameterArgRow
-                    key={ai}
-                    arg={arg}
-                    paramMeta={paramMeta}
-                    onUpdate={(u) => updateArg(index, ai, u)}
-                    onRemove={() => removeArg(index, ai)}
-                  />
-                );
-              })}
-            </View>
-          )}
-          <View style={{ flexDirection: 'row', gap: 4 }}>
-            {optionalParams.length > 0 && (
-              <Menu
-                visible={paramMenuStep === index}
-                onDismiss={() => setParamMenuStep(null)}
-                anchor={
-                  <Button mode="text" icon="plus" compact onPress={() => setParamMenuStep(index)} labelStyle={{ fontSize: 12 }}>
-                    Parameter
-                  </Button>
-                }>
-                <ScrollView style={{ maxHeight: MENU_MAX_HEIGHT }} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
-                  {optionalParams.map((p) => (
-                    <Menu.Item key={p.name}
-                      title={p.description ? `${p.name} — ${p.description}` : p.name}
-                      onPress={() => { addNamedArg(index, p); setParamMenuStep(null); }} />
-                  ))}
-                </ScrollView>
-              </Menu>
-            )}
-            <Button mode="text" icon="plus" compact onPress={() => addArg(index)} labelStyle={{ fontSize: 12 }}>
-              Custom
-            </Button>
-          </View>
+      <View testID="routine-step-sheet">
+        <View style={styles.stepHeader}>
+          <Text variant="titleMedium" style={{ flex: 1, fontWeight: '600' }}>Step {index + 1}</Text>
+          <Button compact textColor={theme.colors.error} onPress={() => removeStep(index)} testID={`routine-step-remove-${index}`}>
+            Remove
+          </Button>
         </View>
-      </ScaleDecorator>
+      <View style={styles.stepFields}>
+        {availableCommands.length > 0 ? (
+          <Menu
+            visible={commandMenuStep === index}
+            onDismiss={() => setCommandMenuStep(null)}
+            anchor={
+              <Button mode="outlined" onPress={() => setCommandMenuStep(index)} compact
+                style={styles.commandButton} labelStyle={styles.commandButtonLabel}
+                contentStyle={{ justifyContent: 'flex-start' }}>
+                {item.command || 'Select command…'}
+              </Button>
+            }>
+            <ScrollView style={{ maxHeight: MENU_MAX_HEIGHT }} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
+              {availableCommands.map((cmd) => (
+                <Menu.Item key={cmd} title={cmd}
+                  onPress={() => { updateStep(index, { command: cmd, label: item.label || cmd }); setCommandMenuStep(null); }} />
+              ))}
+            </ScrollView>
+          </Menu>
+        ) : (
+          <TextInput mode="flat" label={commandsLoading ? 'Command (loading…)' : 'Command'} testID={`routine-step-command-${index}`}
+            value={item.command} onChangeText={(v) => updateStep(index, { command: v, label: item.label || v })}
+            dense style={styles.stepInput} placeholder="e.g. get_weather" />
+        )}
+        <TextInput mode="flat" label="Label" value={item.label}
+          onChangeText={(v) => updateStep(index, { label: v })} dense style={[styles.stepInput, { flex: 1 }]} />
+      </View>
+      {item.args.length > 0 && (
+        <View style={styles.argsContainer}>
+          {item.args.map((arg, ai) => {
+            const paramMeta = meta?.parameters?.find((p) => p.name === arg.key) ?? null;
+            return (
+              <ParameterArgRow
+                key={ai}
+                arg={arg}
+                paramMeta={paramMeta}
+                onUpdate={(u) => updateArg(index, ai, u)}
+                onRemove={() => removeArg(index, ai)}
+              />
+            );
+          })}
+        </View>
+      )}
+      <View style={{ flexDirection: 'row', gap: 4 }}>
+        {optionalParams.length > 0 && (
+          <Menu
+            visible={paramMenuStep === index}
+            onDismiss={() => setParamMenuStep(null)}
+            anchor={
+              <Button mode="text" icon="plus" compact onPress={() => setParamMenuStep(index)} labelStyle={{ fontSize: 12 }}>
+                Parameter
+              </Button>
+            }>
+            <ScrollView style={{ maxHeight: MENU_MAX_HEIGHT }} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
+              {optionalParams.map((p) => (
+                <Menu.Item key={p.name}
+                  title={p.description ? `${p.name} — ${p.description}` : p.name}
+                  onPress={() => { addNamedArg(index, p); setParamMenuStep(null); }} />
+              ))}
+            </ScrollView>
+          </Menu>
+        )}
+        <Button mode="text" icon="plus" compact onPress={() => addArg(index)} labelStyle={{ fontSize: 12 }}>
+          Custom
+        </Button>
+      </View>
+        <Button mode="contained" onPress={() => setEditingStep(null)} style={{ marginTop: 12 }} testID="routine-step-done">
+          Done
+        </Button>
+      </View>
     );
   };
 
@@ -572,6 +640,16 @@ const RoutineEditScreen = () => {
       : targetNodeId || 'Select node…';
   const dayPreset = dayPresetFor(cronDays);
 
+  const summary = routineSummary({
+    mode,
+    triggerPhrases,
+    utterance,
+    steps,
+    responseInstruction,
+    responseLength,
+    scheduled: schedEnabled,
+  });
+
   if (!loaded) {
     return (
       <View style={[styles.container, { alignItems: 'center', justifyContent: 'center' }]}>
@@ -581,14 +659,34 @@ const RoutineEditScreen = () => {
   }
 
   return (
+    // A local Portal.Host: the app-level portal sits outside the auth provider, and the
+    // step sheet's parameter rows read it.
+    <Portal.Host>
     <KeyboardSafeView style={styles.container} iosBehavior="padding">
       <View style={[styles.fixedHeader, { backgroundColor: theme.colors.background, borderBottomColor: theme.colors.outlineVariant }]}>
-        <IconButton icon="arrow-left" onPress={() => navigation.goBack()} />
-        <Text variant="headlineSmall" style={{ fontWeight: 'bold', flex: 1 }}>
-          {isEditing ? 'Edit Routine' : 'New Routine'}
+        <IconButton icon="arrow-left" onPress={() => navigation.goBack()} accessibilityLabel="Back" />
+        <Text variant="titleLarge" style={{ fontWeight: 'bold', flex: 1 }} numberOfLines={1}>
+          {isEditing ? name || 'Routine' : 'New routine'}
         </Text>
+        <Button mode="contained" compact testID="routine-save-button" onPress={handleSave} disabled={!!validationError || saving} loading={saving}>
+          {isEditing ? 'Save' : 'Create'}
+        </Button>
         {isEditing && (
-          <IconButton icon="delete-outline" testID="routine-delete-button" onPress={handleDelete} iconColor={theme.colors.onSurfaceVariant} />
+          <Menu
+            visible={headerMenu}
+            onDismiss={() => setHeaderMenu(false)}
+            anchor={<IconButton icon="dots-vertical" testID="routine-menu" onPress={() => setHeaderMenu(true)} accessibilityLabel="More" />}
+          >
+            <Menu.Item
+              testID="routine-delete-button"
+              leadingIcon="delete-outline"
+              title="Delete routine"
+              onPress={() => {
+                setHeaderMenu(false);
+                handleDelete();
+              }}
+            />
+          </Menu>
         )}
       </View>
 
@@ -596,31 +694,25 @@ const RoutineEditScreen = () => {
           only dismisses the keyboard, so Add / Add Step need two taps. */}
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" testID="routine-edit-scroll">
         <View style={styles.section}>
-          <SegmentedButtons value={mode} onValueChange={(value) => {
-            modeChosen.current = true;
-            setMode(value as RoutineMode);
-          }} buttons={[
-            { value: 'simple', label: 'Simple', testID: 'routine-mode-simple', disabled: !!modesQuery.data && !supportsSimple },
-            { value: 'advanced', label: 'Advanced', testID: 'routine-mode-advanced' },
-          ]} />
-          {modesQuery.isPending && <Text variant="bodySmall" style={{ marginTop: 8 }}>Checking routine support…</Text>}
-          {modesQuery.data && !supportsSimple && <Text variant="bodySmall" style={{ marginTop: 8 }}>Update the server to use Simple routines.</Text>}
-          {modesQuery.isError && <View style={{ marginTop: 8 }}>
-            <Text variant="bodySmall">Could not check Simple routine support. Advanced is still available.</Text>
-            <Button compact onPress={() => modesQuery.refetch()}>Retry</Button>
-          </View>}
-        </View>
-        {/* Name */}
-        <View style={styles.section}>
-          <TextInput mode="flat" label="Routine Name" testID="routine-name-input" value={name} onChangeText={setName} style={styles.topInput} />
+          <TextInput mode="flat" label="Routine name" testID="routine-name-input" value={name} onChangeText={setName} style={styles.topInput} />
         </View>
 
-        {/* Trigger Phrases */}
-        <View style={styles.section}>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Text variant="titleSmall" style={[styles.sectionTitle, { color: theme.colors.primary }]}>Trigger Phrases</Text>
-            <HelpIcon text={helpCopy.routines.triggerPhrases} size={16} />
-          </View>
+        <Surface style={[styles.summary, { backgroundColor: theme.colors.secondaryContainer }]} elevation={0} testID="routine-summary">
+          <Text variant="bodyLarge" style={{ color: theme.colors.onSecondaryContainer }}>{summary}</Text>
+        </Surface>
+        {validationError && (
+          <Text variant="bodySmall" accessibilityLiveRegion="polite" style={[styles.validation, { color: theme.colors.onSurfaceVariant }]}>
+            {validationError}
+          </Text>
+        )}
+
+        {/* When */}
+        <Card style={styles.card} mode="outlined">
+          <Card.Content>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Text variant="labelLarge" style={[styles.cardTitle, { color: theme.colors.primary }]}>WHEN YOU SAY</Text>
+              <HelpIcon text={helpCopy.routines.triggerPhrases} size={16} />
+            </View>
           <View style={styles.triggerRow}>
             <TextInput mode="flat" label="Add phrase" testID="routine-trigger-input" value={triggerInput} onChangeText={setTriggerInput}
               onSubmitEditing={addTriggerPhrase} dense style={[styles.topInput, { flex: 1 }]} />
@@ -633,102 +725,13 @@ const RoutineEditScreen = () => {
               ))}
             </View>
           )}
-        </View>
-
-        {mode === 'simple' ? (
-          <View style={styles.section}>
-            <TextInput mode="flat" label="What should Jarvis do?" testID="routine-utterance-input"
-              value={utterance} onChangeText={setUtterance} multiline numberOfLines={5}
-              placeholder="Turn on the living room lights and play Room Lights."
-              style={[styles.topInput, { minHeight: 128 }]} contentStyle={{ textAlignVertical: 'top' }} />
-            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-              Write what you'd normally ask Jarvis. It will interpret this each time.
-            </Text>
-          </View>
-        ) : (<>
-        {/* Steps */}
-        <View style={styles.section}>
-          <Text variant="titleSmall" style={[styles.sectionTitle, { color: theme.colors.primary }]}>Steps</Text>
-          {nodes.length > 0 && (
-            <View style={styles.catalogRow}>
-              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Commands from</Text>
-              <Menu
-                visible={catalogMenuVisible}
-                onDismiss={() => setCatalogMenuVisible(false)}
-                anchor={
-                  <Button mode="outlined" compact icon="cellphone-link" onPress={() => setCatalogMenuVisible(true)} labelStyle={{ fontSize: 12 }}>
-                    {commandsLoading
-                      ? 'Loading…'
-                      : (catalogNode && nodeLabel(catalogNode)) || 'Select node'}
-                  </Button>
-                }>
-                {nodes.map((n) => (
-                  <Menu.Item key={n.node_id}
-                    leadingIcon={({ size, color }) => (
-                      <NodeKindIcon node={nodeKinds[n.node_id]} size={size} color={color} />
-                    )}
-                    title={`${nodeLabel(n) || n.node_id}${n.online ? '' : ' (offline)'}`}
-                    onPress={() => { setCatalogNodeId(n.node_id); setCatalogMenuVisible(false); }} />
-                ))}
-              </Menu>
+            <View style={[styles.bgToggleRow, { marginTop: 12 }]}>
+              <View style={{ flex: 1 }}>
+                <Text variant="bodyLarge">On a schedule</Text>
+                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Also run it at set times</Text>
+              </View>
+              <Switch value={schedEnabled} onValueChange={setSchedEnabled} testID="routine-schedule-switch" />
             </View>
-          )}
-          {commandsError && cmdState === 'needs_k2' && (
-            <View style={{ marginBottom: 8 }} testID="routine-catalog-needs-k2">
-              <Text variant="bodySmall" style={{ color: theme.colors.error }}>
-                {commandsError} Set one up to list its commands, or pick a different node with “Commands from” above.
-              </Text>
-              <Button mode="outlined" icon="key-variant" compact onPress={provisionCatalogKey}
-                style={{ alignSelf: 'flex-start', marginTop: 6 }}>
-                Set up encryption key
-              </Button>
-            </View>
-          )}
-          {commandsError && cmdState !== 'needs_k2' && (
-            <View style={{ marginBottom: 8 }}>
-              <Text variant="bodySmall" style={{ color: theme.colors.error }}>
-                {commandsError} Pick a different node with “Commands from” above.
-              </Text>
-            </View>
-          )}
-          <DraggableFlatList data={steps} keyExtractor={(_, i) => `step-${i}`} renderItem={renderStep}
-            onDragEnd={({ data }) => setSteps(data)} scrollEnabled={false} />
-          <Button mode="outlined" icon="plus" testID="routine-add-step" onPress={addStep} compact style={{ alignSelf: 'flex-start' }}>Add Step</Button>
-        </View>
-
-        {/* Response Instruction */}
-        <View style={styles.section}>
-          <Text variant="titleSmall" style={[styles.sectionTitle, { color: theme.colors.primary }]}>Response Instruction</Text>
-          <TextInput mode="flat" label="How should the assistant respond?" value={responseInstruction}
-            onChangeText={setResponseInstruction} multiline numberOfLines={2}
-            placeholder="e.g. Give a cheerful morning briefing." style={styles.topInput} />
-        </View>
-
-        {/* Response Length */}
-        <View style={styles.section}>
-          <Text variant="titleSmall" style={[styles.sectionTitle, { color: theme.colors.primary }]}>Response Length</Text>
-          <SegmentedButtons
-            value={responseLength}
-            onValueChange={(v) => setResponseLength(v as ResponseLength)}
-            density="small"
-            buttons={[
-              { value: 'short', label: 'Short' },
-              { value: 'medium', label: 'Medium' },
-              { value: 'long', label: 'Long' },
-            ]}
-          />
-        </View>
-
-        </>)}
-
-        {/* Schedule */}
-        <View style={styles.section}>
-          <View style={styles.bgToggleRow}>
-            <Text variant="titleSmall" style={[styles.sectionTitle, { color: theme.colors.primary, marginBottom: 0 }]}>Schedule</Text>
-            <View style={{ flex: 1 }} />
-            <Switch value={schedEnabled} onValueChange={setSchedEnabled} />
-          </View>
-
           {schedEnabled && (
             <View style={styles.bgContent}>
               <SegmentedButtons
@@ -807,21 +810,126 @@ const RoutineEditScreen = () => {
               </View>
             </View>
           )}
-        </View>
+          </Card.Content>
+        </Card>
 
-        {/* Save */}
-        <View style={styles.section}>
-          {validationError && (
-            <Text variant="bodySmall" accessibilityLiveRegion="polite" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 6 }}>
-              {validationError}
+        {/* Do */}
+        <Card style={styles.card} mode="outlined">
+          <Card.Content>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+              <Text variant="labelLarge" style={[styles.cardTitle, { color: theme.colors.primary, flex: 1, marginBottom: 0 }]}>JARVIS WILL</Text>
+              <SegmentedButtons value={mode} onValueChange={(value) => {
+                modeChosen.current = true;
+                setMode(value as RoutineMode);
+              }} density="small" style={{ width: 190 }} buttons={[
+                { value: 'simple', label: 'Describe', testID: 'routine-mode-simple', disabled: !!modesQuery.data && !supportsSimple },
+                { value: 'advanced', label: 'Steps', testID: 'routine-mode-advanced' },
+              ]} />
+            </View>
+          {modesQuery.isPending && <Text variant="bodySmall" style={{ marginTop: 8 }}>Checking routine support…</Text>}
+          {modesQuery.data && !supportsSimple && <Text variant="bodySmall" style={{ marginTop: 8 }}>Update the server to use Simple routines.</Text>}
+          {modesQuery.isError && <View style={{ marginTop: 8 }}>
+            <Text variant="bodySmall">Could not check Simple routine support. Advanced is still available.</Text>
+            <Button compact onPress={() => modesQuery.refetch()}>Retry</Button>
+          </View>}
+            {mode === 'simple' ? (
+              <>
+            <TextInput mode="flat" label="What should Jarvis do?" testID="routine-utterance-input"
+              value={utterance} onChangeText={setUtterance} multiline numberOfLines={5}
+              placeholder="Turn on the living room lights and play Room Lights."
+              style={[styles.topInput, { minHeight: 128 }]} contentStyle={{ textAlignVertical: 'top' }} />
+            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+              Write what you'd normally ask Jarvis. It will interpret this each time.
             </Text>
+              </>
+            ) : (
+              <>
+          {nodes.length > 0 && (
+            <View style={styles.catalogRow}>
+              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Commands from</Text>
+              <Menu
+                visible={catalogMenuVisible}
+                onDismiss={() => setCatalogMenuVisible(false)}
+                anchor={
+                  <Button mode="outlined" compact icon="cellphone-link" onPress={() => setCatalogMenuVisible(true)} labelStyle={{ fontSize: 12 }}>
+                    {commandsLoading
+                      ? 'Loading…'
+                      : (catalogNode && nodeLabel(catalogNode)) || 'Select node'}
+                  </Button>
+                }>
+                {nodes.map((n) => (
+                  <Menu.Item key={n.node_id}
+                    leadingIcon={({ size, color }) => (
+                      <NodeKindIcon node={nodeKinds[n.node_id]} size={size} color={color} />
+                    )}
+                    title={`${nodeLabel(n) || n.node_id}${n.online ? '' : ' (offline)'}`}
+                    onPress={() => { setCatalogNodeId(n.node_id); setCatalogMenuVisible(false); }} />
+                ))}
+              </Menu>
+            </View>
           )}
-          <Button mode="contained" testID="routine-save-button" onPress={handleSave} disabled={!!validationError || saving} loading={saving}>
-            {isEditing ? 'Save Changes' : 'Create Routine'}
-          </Button>
-        </View>
+          {commandsError && cmdState === 'needs_k2' && (
+            <View style={{ marginBottom: 8 }} testID="routine-catalog-needs-k2">
+              <Text variant="bodySmall" style={{ color: theme.colors.error }}>
+                This phone has no key for that node, so its commands can’t be listed. Set one up, or pick another node.
+              </Text>
+              <Button mode="outlined" icon="key-variant" compact onPress={provisionCatalogKey}
+                style={{ alignSelf: 'flex-start', marginTop: 6 }}>
+                Set up encryption key
+              </Button>
+            </View>
+          )}
+          {commandsError && cmdState !== 'needs_k2' && (
+            <View style={{ marginBottom: 8 }}>
+              <Text variant="bodySmall" style={{ color: theme.colors.error }}>
+                {commandsError} Pick a different node with “Commands from” above.
+              </Text>
+            </View>
+          )}
+                <DraggableFlatList data={steps} keyExtractor={(_, i) => `step-${i}`} renderItem={renderStep}
+                  onDragEnd={({ data }) => setSteps(data)} scrollEnabled={false} />
+                <Button mode="text" icon="plus" testID="routine-add-step" onPress={addStep} compact style={{ alignSelf: 'flex-start' }}>Add step</Button>
+              </>
+            )}
+          </Card.Content>
+        </Card>
+
+        {/* Then say */}
+        {mode !== 'simple' && (
+          <Card style={styles.card} mode="outlined">
+            <Card.Content>
+              <Text variant="labelLarge" style={[styles.cardTitle, { color: theme.colors.primary }]}>THEN SAY</Text>
+          <TextInput mode="flat" label="How should the assistant respond?" value={responseInstruction}
+            onChangeText={setResponseInstruction} multiline numberOfLines={2}
+            placeholder="e.g. Give a cheerful morning briefing." style={styles.topInput} />
+          <SegmentedButtons
+            value={responseLength}
+            onValueChange={(v) => setResponseLength(v as ResponseLength)}
+            density="small"
+            buttons={[
+              { value: 'short', label: 'Short' },
+              { value: 'medium', label: 'Medium' },
+              { value: 'long', label: 'Long' },
+            ]}
+          />
+            </Card.Content>
+          </Card>
+        )}
       </ScrollView>
+
+      <Portal>
+        <Modal
+          visible={editingStep !== null}
+          onDismiss={() => setEditingStep(null)}
+          contentContainerStyle={[styles.sheet, { backgroundColor: theme.colors.surface }]}
+        >
+          <ScrollView keyboardShouldPersistTaps="handled">
+            {editingStep !== null && renderStepEditor(editingStep)}
+          </ScrollView>
+        </Modal>
+      </Portal>
     </KeyboardSafeView>
+    </Portal.Host>
   );
 };
 
@@ -832,13 +940,19 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth, zIndex: 1,
   },
   scroll: { paddingBottom: 48, paddingTop: 8 },
+  summary: { marginHorizontal: 16, marginBottom: 12, padding: 14, borderRadius: 14 },
+  validation: { marginHorizontal: 20, marginTop: -4, marginBottom: 10 },
+  card: { marginHorizontal: 16, marginBottom: 12 },
+  cardTitle: { fontWeight: '700', letterSpacing: 0.6, marginBottom: 8 },
+  stepRow: { paddingVertical: 4 },
+  stepRowInner: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  sheet: { marginTop: 'auto', padding: 16, paddingBottom: 28, borderTopLeftRadius: 22, borderTopRightRadius: 22, maxHeight: '85%' },
   section: { paddingHorizontal: 16, marginBottom: 20 },
   sectionTitle: { fontWeight: '600', marginBottom: 8 },
   topInput: { marginBottom: 4 },
   triggerRow: { flexDirection: 'row', alignItems: 'flex-end' },
   catalogRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
-  stepCard: { borderRadius: 10, borderWidth: 1, padding: 10, marginBottom: 10 },
   stepHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
   dragHandle: { margin: 0, marginRight: 4 },
   stepLabel: { flex: 1, fontWeight: '600', fontSize: 13 },
