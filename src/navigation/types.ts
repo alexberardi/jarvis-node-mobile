@@ -18,13 +18,20 @@ export type AuthStackParamList = {
 /** One section of the household editor, opened from the Household tab. */
 export type HouseholdSection = 'home' | 'jarvis' | 'knowledge' | 'presence' | 'calls' | 'members';
 
+/** A node settings tab; set when a node card opens one tab on its own. */
+export type NodeSettingsTab = 'commands' | 'agents' | 'integrations' | 'stored_data';
+/** Which part of a node's hardware screen a node card opens. */
+export type NodeHardwarePart = 'voice' | 'speaker' | 'hardware';
+
 export type NodesStackParamList = {
   HouseholdHome: undefined;
   NodeList: undefined;
   AddNode: undefined;
   AddComputer: undefined;
-  NodeDetail: { nodeId: string; initialTab?: 'overview' | 'hardware' | 'packages' | 'activity' };
-  NodeSettings: { nodeId: string; room: string | null };
+  NodeDetail: { nodeId: string };
+  NodeSettings: { nodeId: string; room: string | null; tab?: NodeSettingsTab };
+  NodeHardware: { nodeId: string; part: NodeHardwarePart };
+  NodePackages: { nodeId: string };
   NodeForgeTest: { nodeId: string };
   ImportKey: undefined;
   IntegrationAuth: {
@@ -140,11 +147,6 @@ export type InboxStackParamList = {
   };
 };
 
-export type RecentCommandsStackParamList = {
-  RecentCommandsList: undefined;
-  RecentCommandDetail: { transcriptId: number };
-};
-
 export type MemoriesStackParamList = {
   MemoriesList: undefined;
   MemoryEdit: { memoryId?: number };
@@ -208,7 +210,6 @@ export type RootStackParamList = {
   Auth: NavigatorScreenParams<AuthStackParamList>;
   Main: NavigatorScreenParams<MainTabParamList>;
   Inbox: NavigatorScreenParams<InboxStackParamList>;
-  RecentCommands: NavigatorScreenParams<RecentCommandsStackParamList> | undefined;
   /** You (default), the household list with join/create, or Household › Smart home. */
   Settings: { view?: 'you' | 'households' | 'smart_home' } | undefined;
   HouseholdEdit: { householdId: string; householdName: string; section?: HouseholdSection };

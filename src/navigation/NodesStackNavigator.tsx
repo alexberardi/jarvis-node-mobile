@@ -11,6 +11,7 @@ import NodeDetailScreen from '../screens/Nodes/NodeDetailScreen';
 import NodeForgeTestScreen from '../screens/Nodes/NodeForgeTestScreen';
 import NodeListScreen from '../screens/Nodes/NodeListScreen';
 import NodeSettingsScreen from '../screens/Nodes/NodeSettingsScreen';
+import { NodeHardwareScreen, NodePackagesScreen } from '../screens/Nodes/NodeSubScreens';
 import IntegrationAuthScreen from '../screens/Settings/IntegrationAuthScreen';
 import ProvisioningNavigator from './ProvisioningNavigator';
 import { NodesStackParamList } from './types';
@@ -33,6 +34,8 @@ const NodesStackNavigator = () => {
       <Stack.Screen name="AddComputer" component={AddComputerScreen} />
       <Stack.Screen name="NodeDetail" component={NodeDetailScreen} />
       <Stack.Screen name="NodeSettings" component={NodeSettingsScreen} />
+      <Stack.Screen name="NodeHardware" component={NodeHardwareScreen} />
+      <Stack.Screen name="NodePackages" component={NodePackagesScreen} />
       <Stack.Screen name="NodeForgeTest" component={NodeForgeTestScreen} />
       <Stack.Screen name="ImportKey" component={ImportKeyWrapper} />
       <Stack.Screen name="IntegrationAuth" component={IntegrationAuthScreen} />

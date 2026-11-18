@@ -11,7 +11,6 @@ import MainTabNavigator from './MainTabNavigator';
 import MemoriesStackNavigator from './MemoriesStackNavigator';
 import CallContextStackNavigator from './CallContextStackNavigator';
 import PhonebookStackNavigator from './PhonebookStackNavigator';
-import RecentCommandsStackNavigator from './RecentCommandsStackNavigator';
 import SmartHomeSetupNavigator from './SmartHomeSetupNavigator';
 import NowPlayingScreen from '../screens/NowPlaying/NowPlayingScreen';
 import HouseholdEditScreen from '../screens/Settings/HouseholdEditScreen';
@@ -62,7 +61,6 @@ const RootNavigator = () => {
       <Stack.Screen name="HouseholdEdit" component={HouseholdEditScreen} />
       <Stack.Screen name="SignalAutomations" component={SignalAutomationsScreen} />
       <Stack.Screen name="VoiceProfile" component={VoiceProfileScreen} />
-      <Stack.Screen name="RecentCommands" component={RecentCommandsStackNavigator} />
       <Stack.Screen
         name="SmartHomeSetup"
         component={SmartHomeSetupNavigator}

@@ -39,18 +39,13 @@ env:
     direction: DOWN
 - assertVisible:
     id: "settings-voice-profile-row"
-- assertVisible:
-    id: "settings-command-feedback-row"
-# Command Feedback has no flow of its own: open it and come back.
+# Preferences: appearance, chat and privacy
+- scrollUntilVisible:
+    element:
+      id: "you-tab-preferences"
+    direction: UP
 - tapOn:
-    id: "settings-command-feedback-row"
-- waitForAnimationToEnd:
-    timeout: 3000
-- back
-- extendedWaitUntil:
-    visible:
-      id: "settings-section-voice"
-    timeout: 10000
+    id: "you-tab-preferences"
 
 # Appearance: dark, then light, then back to system (no assertion on the colours:
 # visual polish stays manual)
@@ -98,11 +93,14 @@ env:
 - assertVisible:
     text: "Push notifications"
 
-# Connection: the resolved service URLs, and a re-check that keeps them
+# Settings again: the Server card (its address, the resolved URLs and a re-check that
+# keeps them)
 - scrollUntilVisible:
     element:
-      id: "settings-section-connection"
-    direction: DOWN
+      id: "you-tab-settings"
+    direction: UP
+- tapOn:
+    id: "you-tab-settings"
 - scrollUntilVisible:
     element:
       id: "settings-recheck-connection"
@@ -120,12 +118,6 @@ env:
     visible:
       text: "Config: .*"
     timeout: 15000
-
-# The config URL override
-- scrollUntilVisible:
-    element:
-      id: "settings-section-config-url"
-    direction: DOWN
 
 # Close: back on Home
 - scrollUntilVisible:

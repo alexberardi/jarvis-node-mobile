@@ -2,7 +2,7 @@ import React from 'react';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { PaperProvider } from 'react-native-paper';
 
-import NodeDetailScreen from '../../src/screens/Nodes/NodeDetailScreen';
+import NodeDetailScreen, { PackagesTab } from '../../src/screens/Nodes/NodeDetailScreen';
 import { lightTheme } from '../../src/theme';
 import { getNode } from '../../src/api/nodeApi';
 import { hasK2 } from '../../src/services/k2Service';
@@ -15,8 +15,9 @@ import { getHouseholdSettings } from '../../src/api/householdSettingsApi';
 // rule); a desktop agent's sign-out on cc's rule (owner or household admin).
 
 const mockNavigate = jest.fn();
+const mockRootNavigate = jest.fn();
 jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: mockNavigate, goBack: jest.fn() }),
+  useNavigation: () => ({ navigate: mockNavigate, goBack: jest.fn(), getParent: () => ({ navigate: mockRootNavigate }) }),
   useRoute: () => ({ params: { nodeId: 'node-1' } }),
 }));
 jest.mock('../../src/api/nodeApi', () => ({
@@ -28,7 +29,7 @@ jest.mock('../../src/api/nodeApi', () => ({
   nodeErrorMessage: (_e: unknown, fb: string) => fb,
 }));
 jest.mock('../../src/api/chatApi', () => ({ fetchNodeTools: jest.fn().mockResolvedValue({ client_tools: [] }) }));
-jest.mock('../../src/services/k2Service', () => ({ deleteK2: jest.fn(), hasK2: jest.fn() }));
+jest.mock('../../src/services/k2Service', () => ({ deleteK2: jest.fn(), hasK2: jest.fn(), getK2: jest.fn() }));
 jest.mock('../../src/components/NodeUpdateSection', () => ({ NodeUpdateSection: () => null }));
 jest.mock('../../src/screens/Nodes/HardwareTab', () => {
   const { Text } = require('react-native');
@@ -77,11 +78,45 @@ describe('NodeDetailScreen — node kinds', () => {
     ]);
   });
 
-  it("opens the node's Forge test from the overview", async () => {
+  it("opens the node's Forge test and device scan from their cards", async () => {
     (getNode as jest.Mock).mockResolvedValue(DESKTOP);
-    const { findByTestId } = renderScreen();
-    fireEvent.press(await findByTestId('node-forge-test-button'));
+    const { findByTestId, getByTestId } = renderScreen();
+    fireEvent.press(await findByTestId('node-card-forge-test'));
     expect(mockNavigate).toHaveBeenCalledWith('NodeForgeTest', { nodeId: 'node-1' });
+    fireEvent.press(getByTestId('node-card-scan-devices'));
+    expect(mockRootNavigate).toHaveBeenCalledWith('SmartHomeSetup', { screen: 'DeviceDiscovery', params: { nodeId: 'node-1' } });
+  });
+
+  it('opens a Pi’s settings cards only with its key on this phone', async () => {
+    (getNode as jest.Mock).mockResolvedValue(PI);
+    const first = renderScreen();
+    await first.findByTestId('node-card-credentials');
+    await waitFor(() => expect(hasK2).toHaveBeenCalled());
+    fireEvent.press(first.getByTestId('node-card-credentials'));
+    expect(mockNavigate).not.toHaveBeenCalledWith('NodeSettings', expect.anything());
+    expect(first.queryByTestId('node-card-export-key')).toBeNull();
+    first.unmount();
+
+    (hasK2 as jest.Mock).mockResolvedValue(true);
+    const second = renderScreen();
+    await second.findByTestId('node-card-export-key');
+    fireEvent.press(second.getByTestId('node-card-credentials'));
+    expect(mockNavigate).toHaveBeenCalledWith('NodeSettings', { nodeId: 'node-1', room: 'Kitchen', tab: 'integrations' });
+    fireEvent.press(second.getByTestId('node-card-tasks'));
+    expect(mockNavigate).toHaveBeenCalledWith('NodeSettings', { nodeId: 'node-1', room: 'Kitchen', tab: 'agents' });
+  });
+
+  it('gives a Pi its device cards, a voice profile card, and no stats row', async () => {
+    (getNode as jest.Mock).mockResolvedValue(PI);
+    const { findByTestId, getByTestId, queryByText } = renderScreen();
+    fireEvent.press(await findByTestId('node-card-speaker'));
+    expect(mockNavigate).toHaveBeenCalledWith('NodeHardware', { nodeId: 'node-1', part: 'speaker' });
+    fireEvent.press(getByTestId('node-card-voice-profile'));
+    expect(mockRootNavigate).toHaveBeenCalledWith('VoiceProfile');
+    fireEvent.press(getByTestId('node-card-data'));
+    expect(mockRootNavigate).toHaveBeenCalledWith('CommandData', { screen: 'DataBrowserHome', params: { nodeId: 'node-1' } });
+    // The server never sent uptime or counts, so the row is gone.
+    expect(queryByText('Uptime')).toBeNull();
   });
 
   it('shows the Raspberry Pi icon and keeps the K2 gate for a Pi', async () => {
@@ -128,11 +163,20 @@ describe('NodeDetailScreen — node kinds', () => {
     expect(queryByTestId('node-delete-button')).toBeNull();
   });
 
-  it('keeps the Hardware tab for a desktop agent', async () => {
+  it('gives a desktop agent one Hardware card and no Pi device cards', async () => {
     (getNode as jest.Mock).mockResolvedValue(DESKTOP);
-    const { findByText } = renderScreen();
-    fireEvent.press(await findByText('Hardware'));
-    expect(await findByText('hardware-tab-body')).toBeTruthy();
+    const { findByTestId, queryByTestId } = renderScreen();
+    fireEvent.press(await findByTestId('node-card-hardware'));
+    expect(mockNavigate).toHaveBeenCalledWith('NodeHardware', { nodeId: 'node-1', part: 'hardware' });
+    expect(queryByTestId('node-card-voice')).toBeNull();
+    expect(queryByTestId('node-card-voice-profile')).toBeNull();
+  });
+
+  it('has no device cards for a docker install', async () => {
+    (getNode as jest.Mock).mockResolvedValue({ ...PI, install_mode: 'docker' });
+    const { findByTestId, queryByTestId } = renderScreen();
+    await findByTestId('node-card-packages');
+    expect(queryByTestId('node-card-hardware')).toBeNull();
   });
 
   describe('Speaks as (a desktop agent\'s signed-in member)', () => {
@@ -182,7 +226,13 @@ describe('NodeDetailScreen — node kinds', () => {
   });
 });
 
-describe('NodeDetailScreen — Packages tab, the store each package came from', () => {
+describe('Node packages list, the store each package came from', () => {
+  const renderPackages = () =>
+    render(
+      <PaperProvider theme={lightTheme}>
+        <PackagesTab nodeId="node-1" householdId="hh-1" />
+      </PaperProvider>,
+    );
   const STORES = [
     { id: 'a1', url: 'https://pantry-api.jarvisautomation.io', name: 'Public Pantry' },
     { id: 'b2', url: 'http://10.0.0.5:7721', name: 'Workshop' },
@@ -205,8 +255,7 @@ describe('NodeDetailScreen — Packages tab, the store each package came from', 
 
   it("names a package's store when the household has several", async () => {
     (getHouseholdSettings as jest.Mock).mockResolvedValue({ 'pantry.stores': STORES });
-    const { findByText, queryByText } = renderScreen();
-    fireEvent.press(await findByText('Packages'));
+    const { findByText, queryByText } = renderPackages();
     expect(await findByText('From Workshop\nScores')).toBeTruthy();
     expect(getHouseholdSettings).toHaveBeenCalledWith('hh-1');
     expect(queryByText(/From .*\nArithmetic/)).toBeNull();
@@ -214,8 +263,7 @@ describe('NodeDetailScreen — Packages tab, the store each package came from', 
 
   it('names none with a single store', async () => {
     (getHouseholdSettings as jest.Mock).mockResolvedValue({ 'pantry.stores': STORES.slice(0, 1) });
-    const { findByText, queryByText } = renderScreen();
-    fireEvent.press(await findByText('Packages'));
+    const { findByText, queryByText } = renderPackages();
     expect(await findByText('Scores')).toBeTruthy();
     expect(queryByText(/From /)).toBeNull();
   });

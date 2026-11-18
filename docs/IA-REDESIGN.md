@@ -13,7 +13,7 @@ Today most of the app's configuration sits behind two gears:
 
 Goal: every screen and control that exists today keeps a home. Each one is reachable in at most two taps from a tab, and grouped by *whose* it is: me, this home, a node, or the Pantry.
 
-Decisions already made (in review of the mockups):
+Decisions already made (in review of the mockups and the first build):
 
 - Use tabs B's Household tab, not A's "split the gear" alone.
 - Pantry stays a top-level tab and sits in the center (the package hub).
@@ -22,6 +22,12 @@ Decisions already made (in review of the mockups):
 - Household has a **Jarvis** area for personality and capabilities.
 - The node screen is one screen of icon cards, in the same style as Household.
 - Credentials stay stored per node. The hub only aggregates them in the app, so no server change is needed.
+- Ship as one big-bang merge: every phase lands on one branch, so testers never see a half-built UI.
+- You is split into **Settings** (account, voice, channels, security, server) and **Preferences** (appearance, auto-play, notifications).
+- Connection and the config service URL are one **Server** card.
+- **Command feedback is removed.** The server stored the ratings, but nothing read them.
+- The node stats row (uptime, command and routine counts) is removed: the server never sent those fields.
+- The node screen has no ⋮ menu. Forge test, Scan for devices and Export key are cards under **Tools**, and **Voice profile** is a Device card. Delete / sign out stays as the danger zone at the bottom.
 
 ## Navigation map
 

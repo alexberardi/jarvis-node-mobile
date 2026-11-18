@@ -1,9 +1,9 @@
 appId: com.jarvis.nodemobile
-name: Nodes, list, detail, hardware and settings
-# The Nodes tab (src/screens/Nodes/): both seeded nodes are listed; dev-kitchen's detail
-# opens on Overview; Activity and (when the node is not a docker install) Hardware render;
-# its settings open and, on a phone without the node's K2 key (clearState wipes it), ask
-# for one instead of loading. The key is not generated: that needs a live node to take it.
+name: Nodes, list, node cards, hardware and settings
+# Household › Nodes (src/screens/Nodes/): both seeded nodes are listed; dev-kitchen's
+# screen shows its cards; (when the node is not a docker install) Hardware & upkeep opens;
+# on a phone without the node's K2 key (clearState wipes it), the key banner opens settings,
+# which ask for one instead of loading. The key is not generated: that needs a live node to take it.
 # Packages is not opened: packages are not tested (user, 2026-10-17).
 # Rename is not covered: the app has no rename for a node.
 tags:
@@ -32,30 +32,28 @@ env:
 - assertVisible:
     id: "node-add-fab"
 
-# Detail
+# Node screen
 - tapOn:
     id: "node-card-${NODE_ID}"
 - extendedWaitUntil:
     visible:
-      id: "node-tab-overview"
+      id: "node-card-packages"
     timeout: 15000
 - assertVisible:
     id: "node-kind-icon"
-- assertVisible:
-    id: "node-tab-activity"
-- tapOn:
-    id: "node-tab-activity"
-- waitForAnimationToEnd:
-    timeout: 3000
+- scrollUntilVisible:
+    element:
+      id: "node-card-forge-test"
+    direction: DOWN
 
-# Hardware (every install but docker)
+# Hardware & upkeep (every install but docker)
 - runFlow:
     when:
       visible:
-        id: "node-tab-hardware"
+        id: "node-card-hardware"
     commands:
       - tapOn:
-          id: "node-tab-hardware"
+          id: "node-card-hardware"
       - extendedWaitUntil:
           visible:
             id: "hardware-tab"
@@ -68,18 +66,24 @@ env:
           element:
             id: "node-id-copy-btn"
           direction: DOWN
+      - back
+      - extendedWaitUntil:
+          visible:
+            id: "node-card-hardware"
+          timeout: 10000
 
-- tapOn:
-    id: "node-tab-overview"
-
-# Settings: the cog shows when the phone has the node's key or the node wants one.
+# Settings: the key banner shows when the node wants a key this phone doesn't hold.
+- scrollUntilVisible:
+    element:
+      id: "node-card-packages"
+    direction: UP
 - runFlow:
     when:
       visible:
-        id: "node-settings-button"
+        id: "node-key-banner"
     commands:
       - tapOn:
-          id: "node-settings-button"
+          id: "node-key-banner"
       - extendedWaitUntil:
           visible:
             id: "node-settings-needs-k2"
@@ -89,7 +93,7 @@ env:
       - back
       - extendedWaitUntil:
           visible:
-            id: "node-tab-overview"
+            id: "node-card-packages"
           timeout: 10000
 
 # Back to the list

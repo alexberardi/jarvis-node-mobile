@@ -29,8 +29,9 @@ reason is in its `properties.skip_reason`).
 | Settings/VoiceProfileScreen (no recording) | flow | voice-profile.yaml; recording is the voice lane's |
 | Settings/IntegrationAuthScreen | later | not in piece 6 |
 | Nodes/NodeListScreen | flow | nodes.yaml |
-| Nodes/NodeDetailScreen: Overview, Activity | flow | nodes.yaml |
-| Nodes/NodeDetailScreen: Packages tab | not tested | packages (user, 2026-10-17) |
+| Nodes/NodeDetailScreen: status, cards, key banner | flow | nodes.yaml |
+| Nodes/NodeSubScreens: NodeHardware (Hardware & upkeep) | flow | nodes.yaml |
+| Nodes/NodeSubScreens: NodePackages | not tested | packages (user, 2026-10-17) |
 | Nodes/NodeDetailScreen: rename | not tested | the app has no node rename |
 | Nodes/HardwareTab | flow | nodes.yaml (when the node is not a docker install) |
 | Nodes/NodeSettingsScreen | flow | nodes.yaml (the "key required" state; loaded settings need a live node) |
@@ -38,8 +39,6 @@ reason is in its `properties.skip_reason`).
 | Memories/MemoriesListScreen, MemoriesEditScreen | flow | memories.yaml |
 | Phonebook/PhonebookListScreen, PhonebookEditScreen | flow | phonebook.yaml |
 | CallContext/CallContextListScreen, CallContextEditScreen | flow | call-context.yaml |
-| RecentCommands/RecentCommandsListScreen | flow | settings.yaml (opens and closes) |
-| RecentCommands/RecentCommandDetailScreen | later | not in piece 6 |
 | Store/StoreBrowseScreen | not tested | packages (user, 2026-10-17) |
 | Store/StoreDetailScreen | not tested | packages (user, 2026-10-17) |
 | Store/NodePickerSheet | not tested | packages (user, 2026-10-17) |

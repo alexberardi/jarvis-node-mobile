@@ -175,6 +175,7 @@ const HouseholdHomeScreen = () => {
               This home
             </Text>
             <Card style={styles.card}>
+              <View>
               {homeRows.map((r, i) => (
                 <React.Fragment key={r.key}>
                   {i > 0 && <Divider />}
@@ -188,6 +189,7 @@ const HouseholdHomeScreen = () => {
                   />
                 </React.Fragment>
               ))}
+              </View>
             </Card>
           </>
         )}

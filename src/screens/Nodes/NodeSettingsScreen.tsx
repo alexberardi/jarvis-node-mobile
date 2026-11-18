@@ -34,7 +34,7 @@ import { useNodeKinds } from '../../hooks/useNodeKinds';
 import { isDesktopAgent, nodeDisplayName } from '../../utils/nodeKind';
 import { storedDataErrorMessage } from '../../utils/storedDataError';
 import { buildSyncPushes } from '../../services/syncPushes';
-import { NodesStackParamList, RootStackParamList } from '../../navigation/types';
+import { NodeSettingsTab, NodesStackParamList, RootStackParamList } from '../../navigation/types';
 import {
   requestSettingsSnapshot,
   pollSettingsResult,
@@ -66,7 +66,13 @@ import KeyboardSafeView from '../../components/KeyboardSafeView';
 type ScreenRoute = RouteProp<NodesStackParamList, 'NodeSettings'>;
 
 type LoadState = 'loading' | 'loaded' | 'error' | 'timeout' | 'needs_k2';
-type Tab = 'commands' | 'agents' | 'integrations' | 'stored_data';
+type Tab = NodeSettingsTab;
+const TAB_TITLES: Record<Tab, string> = {
+  commands: 'Packages',
+  agents: 'Background tasks',
+  integrations: 'Credentials',
+  stored_data: 'Stored data',
+};
 
 function formatInterval(seconds: number): string {
   if (seconds < 60) return `${seconds} sec`;
@@ -108,9 +114,10 @@ const NodeSettingsScreen: React.FC = () => {
   const route = useRoute<ScreenRoute>();
   const theme = useTheme();
   const { state: authState } = useAuth();
-  const { nodeId, room } = route.params;
+  // `tab` = opened from one of the node screen's cards: just that tab, no tab bar.
+  const { nodeId, room, tab: onlyTab } = route.params;
 
-  const [tab, setTab] = useState<Tab>('commands');
+  const [tab, setTab] = useState<Tab>(onlyTab ?? 'commands');
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [commands, setCommands] = useState<CommandSettingsEntry[]>([]);
   const [agents, setAgents] = useState<AgentEntry[]>([]);
@@ -1709,7 +1716,9 @@ const NodeSettingsScreen: React.FC = () => {
     );
   };
 
-  const headerTitle = room ? `${room} Settings` : 'Node Settings';
+  const headerTitle = onlyTab
+    ? `${TAB_TITLES[onlyTab]}${room ? ` · ${room}` : ''}`
+    : room ? `${room} Settings` : 'Node Settings';
 
   const renderContent = () => {
     if (loadState === 'needs_k2') {
@@ -1766,6 +1775,7 @@ const NodeSettingsScreen: React.FC = () => {
 
     return (
       <View style={{ flex: 1 }}>
+        {!onlyTab && (
         <View style={styles.tabSelectorContainer} testID="node-settings-tabs">
           <SegmentedButtons
             value={tab}
@@ -1779,6 +1789,7 @@ const NodeSettingsScreen: React.FC = () => {
             ]}
           />
         </View>
+        )}
 
         {tab === 'commands' && (
           <ScrollView contentContainerStyle={styles.list}>

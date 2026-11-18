@@ -193,8 +193,9 @@ describe('SettingsScreen', () => {
     expect(getByTestId('household-name-hh-2')).toBeTruthy();
   });
 
-  it('should show theme buttons (Light/Dark/System)', () => {
-    const { getByText } = render(<SettingsScreen />, { wrapper });
+  it('should show theme buttons (Light/Dark/System) under Preferences', () => {
+    const { getByText, getByTestId } = render(<SettingsScreen />, { wrapper });
+    fireEvent.press(getByTestId('you-tab-preferences'));
 
     expect(getByText('Appearance')).toBeTruthy();
     expect(getByText('Light')).toBeTruthy();
@@ -202,8 +203,9 @@ describe('SettingsScreen', () => {
     expect(getByText('System')).toBeTruthy();
   });
 
-  it('should show auto-play TTS switch', () => {
-    const { getByText } = render(<SettingsScreen />, { wrapper });
+  it('should show auto-play TTS switch under Preferences', () => {
+    const { getByText, getByTestId } = render(<SettingsScreen />, { wrapper });
+    fireEvent.press(getByTestId('you-tab-preferences'));
 
     expect(getByText('Chat')).toBeTruthy();
     expect(getByText('Auto-play responses')).toBeTruthy();
@@ -212,10 +214,11 @@ describe('SettingsScreen', () => {
     ).toBeTruthy();
   });
 
-  it('should show Connection section with status', () => {
-    const { getByText } = render(<SettingsScreen />, { wrapper });
+  it('shows the server status in the one Server card', () => {
+    const { getByText, queryByText } = render(<SettingsScreen />, { wrapper });
 
-    expect(getByText('Connection')).toBeTruthy();
+    expect(getByText('Server')).toBeTruthy();
+    expect(queryByText('Connection')).toBeNull();
     expect(getByText('Status:')).toBeTruthy();
     expect(getByText('Local')).toBeTruthy();
   });
@@ -255,7 +258,7 @@ describe('SettingsScreen', () => {
   it('should show a Re-check Connection button that re-resolves the server URL', () => {
     const { getByText, queryByText } = render(<SettingsScreen />, { wrapper });
 
-    fireEvent.press(getByText('Re-check Connection'));
+    fireEvent.press(getByText('Re-check connection'));
     expect(mockRecheck).toHaveBeenCalled();
     expect(queryByText('Re-discover Services')).toBeNull();
   });
@@ -271,6 +274,22 @@ describe('SettingsScreen', () => {
     const { getByTestId } = render(<SettingsScreen />, { wrapper });
     expect(getByTestId('settings-call-context-divider')).toBeTruthy();
     expect(getByTestId('settings-call-context-row')).toBeTruthy();
+  });
+
+  it('splits You into Settings (account, server) and Preferences (this phone)', () => {
+    const { getByTestId, queryByTestId } = render(<SettingsScreen />, { wrapper });
+    expect(getByTestId('settings-section-account')).toBeTruthy();
+    expect(getByTestId('settings-section-config-url')).toBeTruthy();
+    expect(queryByTestId('settings-section-appearance')).toBeNull();
+    // Command feedback is gone: nothing on the server read the ratings.
+    expect(queryByTestId('settings-command-feedback-row')).toBeNull();
+
+    fireEvent.press(getByTestId('you-tab-preferences'));
+    expect(getByTestId('settings-section-appearance')).toBeTruthy();
+    expect(getByTestId('settings-section-chat')).toBeTruthy();
+    expect(getByTestId('settings-section-privacy')).toBeTruthy();
+    expect(queryByTestId('settings-section-account')).toBeNull();
+    expect(queryByTestId('settings-section-config-url')).toBeNull();
   });
 
   it('opens as You: my own cards, not the household list, smart home or moved rows', () => {

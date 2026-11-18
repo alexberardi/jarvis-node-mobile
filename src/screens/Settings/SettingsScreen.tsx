@@ -89,6 +89,10 @@ const SettingsScreen = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const view = useRoute<RouteProp<RootStackParamList, 'Settings'>>().params?.view ?? 'you';
   const isYou = view === 'you';
+  // You is split in two: account and server settings, and how the app behaves on this phone.
+  const [youTab, setYouTab] = useState<'settings' | 'preferences'>('settings');
+  const isSettings = isYou && youTab === 'settings';
+  const isPrefs = isYou && youTab === 'preferences';
   const theme = useTheme();
   // Android shows this modal full-screen under a transparent (edge-to-edge)
   // status bar, so keep the scroll area below it — otherwise content scrolls
@@ -367,8 +371,20 @@ const SettingsScreen = () => {
         </TouchableOpacity>
       </View>
 
-      {/* Account */}
       {isYou && (
+        <SegmentedButtons
+          value={youTab}
+          onValueChange={(v) => setYouTab(v as 'settings' | 'preferences')}
+          style={styles.card}
+          buttons={[
+            { value: 'settings', label: 'Settings', icon: 'account-cog-outline', testID: 'you-tab-settings' },
+            { value: 'preferences', label: 'Preferences', icon: 'tune-variant', testID: 'you-tab-preferences' },
+          ]}
+        />
+      )}
+
+      {/* Account */}
+      {isSettings && (
       <Card style={styles.card} testID="settings-section-account">
         <Card.Content>
           <Text variant="titleMedium" style={styles.sectionTitle}>
@@ -516,10 +532,10 @@ const SettingsScreen = () => {
       )}
 
       {/* Chat channels: my own link, so it lives with me, not with the household. */}
-      {isYou && householdId && <ChannelsCard householdId={householdId} />}
+      {isSettings && householdId && <ChannelsCard householdId={householdId} />}
 
       {/* Voice */}
-      {isYou && householdId && (
+      {isSettings && householdId && (
         <Card style={styles.card} testID="settings-section-voice">
           <Card.Content>
             <Text variant="titleMedium" style={styles.sectionTitle}>
@@ -535,18 +551,6 @@ const SettingsScreen = () => {
                       : hasVoiceProfile
                         ? 'Enrolled — Jarvis recognizes your voice'
                         : 'Not set up — tap to enroll'}
-                  </Text>
-                </View>
-                <Icon source="chevron-right" size={24} />
-              </View>
-            </TouchableRipple>
-            <Divider style={{ marginVertical: 4 }} />
-            <TouchableRipple testID="settings-command-feedback-row" onPress={() => navigation.navigate('RecentCommands')}>
-              <View style={styles.switchRow}>
-                <View style={{ flex: 1 }}>
-                  <Text variant="bodyMedium">Command Feedback</Text>
-                  <Text variant="bodySmall" style={styles.hint}>
-                    Rate recent voice commands — helps Jarvis learn your patterns
                   </Text>
                 </View>
                 <Icon source="chevron-right" size={24} />
@@ -575,6 +579,7 @@ const SettingsScreen = () => {
       {isYou && (
       <>
       {/* Appearance */}
+      {isPrefs && (
       <Card style={styles.card} testID="settings-section-appearance">
         <Card.Content>
           <Text variant="titleMedium" style={styles.sectionTitle}>
@@ -588,7 +593,10 @@ const SettingsScreen = () => {
         </Card.Content>
       </Card>
 
+      )}
+
       {/* Chat */}
+      {isPrefs && (
       <Card style={styles.card} testID="settings-section-chat">
         <Card.Content>
           <Text variant="titleMedium" style={styles.sectionTitle}>
@@ -610,8 +618,10 @@ const SettingsScreen = () => {
         </Card.Content>
       </Card>
 
+      )}
+
       {/* Security — biometric login (only on capable devices) */}
-      {biometricAvailable && (
+      {isSettings && biometricAvailable && (
         <Card style={styles.card} testID="settings-section-security">
           <Card.Content>
             <Text variant="titleMedium" style={styles.sectionTitle}>
@@ -636,6 +646,7 @@ const SettingsScreen = () => {
       )}
 
       {/* Privacy */}
+      {isPrefs && (
       <Card style={styles.card} testID="settings-section-privacy">
         <Card.Content>
           <Text variant="titleMedium" style={styles.sectionTitle}>
@@ -655,52 +666,7 @@ const SettingsScreen = () => {
           </View>
         </Card.Content>
       </Card>
-
-      {/* Connection Status */}
-      <Card style={styles.card} testID="settings-section-connection">
-        <Card.Content>
-          <Text variant="titleMedium" style={styles.sectionTitle}>
-            Connection
-          </Text>
-          <View style={styles.statusRow}>
-            <Text variant="bodyMedium">Status:</Text>
-            <Chip
-              compact
-              icon={isUsingCloud ? 'cloud-outline' : 'lan'}
-              style={styles.statusChip}
-            >
-              {isUsingCloud ? 'Cloud' : 'Local'}
-            </Chip>
-            <HelpIcon text={helpCopy.settings.statusChip} size={16} />
-          </View>
-          {config.configServiceUrl && (
-            <Text variant="bodySmall" style={styles.urlText}>
-              Config: {config.configServiceUrl}
-            </Text>
-          )}
-          {config.authBaseUrl && (
-            <Text variant="bodySmall" style={styles.urlText}>
-              Auth: {config.authBaseUrl}
-            </Text>
-          )}
-          {config.commandCenterUrl && (
-            <Text variant="bodySmall" style={styles.urlText}>
-              Command Center: {config.commandCenterUrl}
-            </Text>
-          )}
-          <View style={styles.rediscoverRow}>
-            <Button
-              testID="settings-recheck-connection"
-              mode="outlined"
-              onPress={recheck}
-              icon="refresh"
-            >
-              Re-check Connection
-            </Button>
-            <HelpIcon text={helpCopy.settings.recheckConnection} size={16} />
-          </View>
-        </Card.Content>
-      </Card>
+      )}
 
       </>
       )}
@@ -824,12 +790,13 @@ const SettingsScreen = () => {
 
       {isYou && (
       <>
-      {/* Manual Config URL */}
+      {/* Server: its address, and whether the app reaches it */}
+      {isSettings && (
       <Card style={styles.card} testID="settings-section-config-url">
         <Card.Content>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <Text variant="titleMedium" style={styles.sectionTitle}>
-              Config Service URL
+              Server
             </Text>
             <HelpIcon text={helpCopy.settings.configServiceUrl} size={16} />
           </View>
@@ -840,7 +807,7 @@ const SettingsScreen = () => {
           </Text>
           <TextInput
             mode="outlined"
-            label="Config Service URL"
+            label="Server URL"
             placeholder="http://192.168.1.100:7700"
             value={urlInput}
             onChangeText={setUrlInput}
@@ -869,8 +836,47 @@ const SettingsScreen = () => {
               </Button>
             )}
           </View>
+          <Divider style={{ marginVertical: 12 }} />
+          <View style={styles.statusRow}>
+            <Text variant="bodyMedium">Status:</Text>
+            <Chip
+              compact
+              icon={isUsingCloud ? 'cloud-outline' : 'lan'}
+              style={styles.statusChip}
+            >
+              {isUsingCloud ? 'Cloud' : 'Local'}
+            </Chip>
+            <HelpIcon text={helpCopy.settings.statusChip} size={16} />
+          </View>
+          {config.configServiceUrl && (
+            <Text variant="bodySmall" style={styles.urlText}>
+              Config: {config.configServiceUrl}
+            </Text>
+          )}
+          {config.authBaseUrl && (
+            <Text variant="bodySmall" style={styles.urlText}>
+              Auth: {config.authBaseUrl}
+            </Text>
+          )}
+          {config.commandCenterUrl && (
+            <Text variant="bodySmall" style={styles.urlText}>
+              Command Center: {config.commandCenterUrl}
+            </Text>
+          )}
+          <View style={styles.rediscoverRow}>
+            <Button
+              testID="settings-recheck-connection"
+              mode="outlined"
+              onPress={recheck}
+              icon="refresh"
+            >
+              Re-check connection
+            </Button>
+            <HelpIcon text={helpCopy.settings.recheckConnection} size={16} />
+          </View>
         </Card.Content>
       </Card>
+      )}
 
       <Divider style={styles.divider} />
       <Text variant="bodySmall" style={styles.version}>

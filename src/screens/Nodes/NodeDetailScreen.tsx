@@ -12,7 +12,6 @@ import {
   List,
   Modal,
   Portal,
-  SegmentedButtons,
   Surface,
   Text,
   useTheme,
@@ -32,9 +31,9 @@ import {
 import type { NodeTaskState } from '../../api/nodeUpdateApi';
 import { NodeUpdateSection } from '../../components/NodeUpdateSection';
 import { helpCopy } from '../../copy/help';
-import { HardwareTab } from './HardwareTab';
-import { NodesStackParamList } from '../../navigation/types';
-import { deleteK2, hasK2 } from '../../services/k2Service';
+import { NodeHardwarePart, NodeSettingsTab, NodesStackParamList } from '../../navigation/types';
+import { deleteK2, getK2, hasK2, type K2KeyPair } from '../../services/k2Service';
+import { K2BackupCard } from '../../components/K2QRCode';
 import { formatLastSeen } from '../../utils/serverTime';
 import { canSignOutDesktopAgent, isDesktopAgent, nodeDisplayName } from '../../utils/nodeKind';
 import { NodeKindIcon } from '../../components/NodeKindIcon';
@@ -45,23 +44,10 @@ import KeyboardSafeView from '../../components/KeyboardSafeView';
 
 type Nav = NativeStackNavigationProp<NodesStackParamList>;
 type Route = RouteProp<NodesStackParamList, 'NodeDetail'>;
-type Tab = 'overview' | 'hardware' | 'packages' | 'activity';
 
 // =============================================================================
 // Helpers
 // =============================================================================
-
-const formatUptime = (seconds: number | null): string => {
-  if (seconds == null) return 'N/A';
-  const days = Math.floor(seconds / 86400);
-  const hours = Math.floor((seconds % 86400) / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const parts: string[] = [];
-  if (days > 0) parts.push(`${days}d`);
-  if (hours > 0) parts.push(`${hours}h`);
-  parts.push(`${minutes}m`);
-  return parts.join(' ');
-};
 
 interface CommandInfo {
   name: string;
@@ -109,11 +95,14 @@ export const OverviewTab = ({
   node,
   canDelete,
   speaksAs,
+  children,
 }: {
   node: NodeInfo;
   canDelete: boolean;
   /** A desktop agent's signed-in member (useSpeaksAs); left out for a Pi. */
   speaksAs?: SpeaksAs;
+  /** The node's cards, between the status and the danger zone. */
+  children?: React.ReactNode;
 }) => {
   const theme = useTheme();
   const navigation = useNavigation<Nav>();
@@ -247,41 +236,9 @@ export const OverviewTab = ({
         )}
       </View>
 
-      {/* Stats row */}
-      <View style={styles.statsRow}>
-        <View style={styles.statBox}>
-          <Text variant="headlineSmall" style={{ fontWeight: 'bold', color: theme.colors.primary }}>
-            {formatUptime(node.uptime_seconds)}
-          </Text>
-          <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Uptime</Text>
-        </View>
-        <View style={styles.statBox}>
-          <Text variant="headlineSmall" style={{ fontWeight: 'bold', color: theme.colors.primary }}>
-            {node.command_count ?? '--'}
-          </Text>
-          <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Commands</Text>
-        </View>
-        <View style={styles.statBox}>
-          <Text variant="headlineSmall" style={{ fontWeight: 'bold', color: theme.colors.primary }}>
-            {node.routine_count ?? '--'}
-          </Text>
-          <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Routines</Text>
-        </View>
-      </View>
-
-      <Divider style={{ marginVertical: 8 }} />
-
       <NodeUpdateSection node={node} />
 
-      <Button
-        testID="node-forge-test-button"
-        mode="outlined"
-        icon="flask-outline"
-        style={styles.forgeTestButton}
-        onPress={() => navigation.navigate('NodeForgeTest', { nodeId: node.node_id })}
-      >
-        Test a Forge command
-      </Button>
+      {children}
 
       {canDelete && (
         <>
@@ -532,7 +489,7 @@ export const OverviewTab = ({
 // Packages Tab
 // =============================================================================
 
-const PackagesTab = ({ nodeId, householdId }: { nodeId: string; householdId?: string | null }) => {
+export const PackagesTab = ({ nodeId, householdId }: { nodeId: string; householdId?: string | null }) => {
   const theme = useTheme();
   const [commands, setCommands] = useState<CommandInfo[]>([]);
   // Which Pantry store each installed package came from (several pantries), by package name.
@@ -619,41 +576,62 @@ const PackagesTab = ({ nodeId, householdId }: { nodeId: string; householdId?: st
 };
 
 // =============================================================================
-// Activity Tab
-// =============================================================================
-
-const ActivityTab = (_props: { nodeId: string }) => {
-  const theme = useTheme();
-  return (
-    <View style={styles.tabCenter}>
-      <Icon source="history" size={48} color={theme.colors.outlineVariant} />
-      <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant, marginTop: 12, textAlign: 'center' }}>
-        No activity yet
-      </Text>
-      <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 4, textAlign: 'center', paddingHorizontal: 24 }}>
-        {helpCopy.nodeDetail.activityTab}
-      </Text>
-    </View>
-  );
-};
-// =============================================================================
 // Main Screen
 // =============================================================================
+
+interface NodeCard {
+  key: string;
+  icon: string;
+  title: string;
+  subtitle: string;
+  onPress?: () => void;
+}
+
+/** A 2×2 grid of icon cards, the same look as the Household tab's tiles. */
+const CardGrid = ({ label, cards }: { label: string; cards: NodeCard[] }) => {
+  const theme = useTheme();
+  return (
+    <>
+      <Text variant="labelLarge" style={[styles.cardLabel, { color: theme.colors.onSurfaceVariant }]}>
+        {label}
+      </Text>
+      <View style={styles.cardGrid}>
+        {cards.map((c) => (
+          <Card
+            key={c.key}
+            style={[styles.gridCard, !c.onPress && { opacity: 0.5 }]}
+            onPress={c.onPress}
+            disabled={!c.onPress}
+            testID={`node-card-${c.key}`}
+          >
+            <Card.Content style={{ gap: 6 }}>
+              <Icon source={c.icon} size={24} color={theme.colors.primary} />
+              <Text variant="titleSmall">{c.title}</Text>
+              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }} numberOfLines={2}>
+                {c.subtitle}
+              </Text>
+            </Card.Content>
+          </Card>
+        ))}
+      </View>
+    </>
+  );
+};
 
 const NodeDetailScreen = () => {
   const navigation = useNavigation<Nav>();
   const route = useRoute<Route>();
   const theme = useTheme();
   const { state: authState } = useAuth();
-  const { nodeId, initialTab } = route.params;
+  const { nodeId } = route.params;
 
   const [node, setNode] = useState<NodeInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>(initialTab || 'overview');
+  const [exportKeyPair, setExportKeyPair] = useState<K2KeyPair | null>(null);
   // null = checking, true = key on this device, false = no key
-  // (node was set up on another device — hide the settings gear).
+  // (node was set up on another device: the settings-backed cards are off).
   const [hasSettingsAccess, setHasSettingsAccess] = useState<boolean | null>(null);
   const speaksAs = useSpeaksAs(node);
 
@@ -715,6 +693,69 @@ const NodeDetailScreen = () => {
   const canDelete = desktop
     ? canSignOutDesktopAgent(node, authState.user?.id, authState.households ?? [])
     : hasSettingsAccess === true;
+  const room = nodeDisplayName(node, '') || null;
+  // The settings-backed cards need this phone to hold the node's key; a node that
+  // has none yet (needs_k2) opens the settings screen, which offers to make one.
+  const settingsOpen = !!(hasSettingsAccess || node.needs_k2);
+  const noKeyNote = 'Set up on another phone: import its key';
+  const openSettings = (tab: NodeSettingsTab) =>
+    settingsOpen ? () => navigation.navigate('NodeSettings', { nodeId, room, tab }) : undefined;
+
+  const capabilities: NodeCard[] = [
+    {
+      key: 'packages',
+      icon: 'package-variant',
+      title: 'Packages',
+      subtitle: 'Installed from the Pantry',
+      onPress: () => navigation.navigate('NodePackages', { nodeId }),
+    },
+    { key: 'credentials', icon: 'key-chain-variant', title: 'Credentials', subtitle: settingsOpen ? 'Sign-ins and API keys' : noKeyNote, onPress: openSettings('integrations') },
+    { key: 'tasks', icon: 'timer-sync-outline', title: 'Background tasks', subtitle: settingsOpen ? 'Daemons and schedules' : noKeyNote, onPress: openSettings('agents') },
+    {
+      key: 'data',
+      icon: 'database-outline',
+      title: 'Stored data',
+      subtitle: 'Records packages keep',
+      onPress: () => navigation.getParent()?.navigate('CommandData', { screen: 'DataBrowserHome', params: { nodeId } }),
+    },
+  ];
+  const hardware = (part: NodeHardwarePart) => () => navigation.navigate('NodeHardware', { nodeId, part });
+  const device: NodeCard[] =
+    node.install_mode === 'docker'
+      ? []
+      : desktop
+        ? [{ key: 'hardware', icon: 'chip', title: 'Hardware', subtitle: 'Info, voice identity', onPress: hardware('hardware') }]
+        : [
+            { key: 'voice', icon: 'microphone-settings', title: 'Wake word & mic', subtitle: 'Sensitivity, volume, follow-ups', onPress: hardware('voice') },
+            { key: 'speaker', icon: 'speaker-wireless', title: 'Speaker & Bluetooth', subtitle: 'Pairing, HAT LEDs', onPress: hardware('speaker') },
+            { key: 'hardware', icon: 'chip', title: 'Hardware & upkeep', subtitle: 'Info, daily restart', onPress: hardware('hardware') },
+            {
+              key: 'voice-profile',
+              icon: 'account-voice',
+              title: 'Voice profile',
+              subtitle: 'So Jarvis knows who is talking',
+              onPress: () => navigation.getParent()?.navigate('VoiceProfile'),
+            },
+          ];
+  const tools: NodeCard[] = [
+    { key: 'forge-test', icon: 'flask-outline', title: 'Test a Forge command', subtitle: 'Install by share code', onPress: () => navigation.navigate('NodeForgeTest', { nodeId }) },
+    {
+      key: 'scan-devices',
+      icon: 'radar',
+      title: 'Scan for devices',
+      subtitle: 'Find smart devices near it',
+      onPress: () => navigation.getParent()?.navigate('SmartHomeSetup', { screen: 'DeviceDiscovery', params: { nodeId } }),
+    },
+    ...(hasSettingsAccess
+      ? [{
+          key: 'export-key',
+          icon: 'key-variant',
+          title: 'Export encryption key',
+          subtitle: 'Back it up, or use another phone',
+          onPress: async () => setExportKeyPair(await getK2(nodeId)),
+        }]
+      : []),
+  ];
 
   return (
     <KeyboardSafeView style={styles.container}>
@@ -725,48 +766,41 @@ const NodeDetailScreen = () => {
         <Text variant="headlineSmall" style={{ fontWeight: 'bold', flex: 1 }}>
           {nodeDisplayName(node, desktop ? 'This computer' : 'Node')}
         </Text>
-        {(hasSettingsAccess || node.needs_k2) && (
-          <IconButton
-            testID="node-settings-button"
-            icon="cog-outline"
-            onPress={() => navigation.navigate('NodeSettings', { nodeId, room: nodeDisplayName(node, '') || null })}
-          />
-        )}
       </View>
 
-      {/* Tab selector */}
-      <View style={styles.tabBar}>
-        <SegmentedButtons
-          value={tab}
-          onValueChange={(v) => setTab(v as Tab)}
-          density="small"
-          buttons={[
-            { value: 'overview', label: 'Overview', testID: 'node-tab-overview' },
-            ...(node.install_mode !== 'docker'
-              ? [{ value: 'hardware', label: 'Hardware', testID: 'node-tab-hardware' }]
-              : []),
-            { value: 'packages', label: 'Packages', testID: 'node-tab-packages' },
-            { value: 'activity', label: 'Activity', testID: 'node-tab-activity' },
-          ]}
-        />
-      </View>
+      <ScrollView
+        testID="node-detail-scroll"
+        contentContainerStyle={styles.scroll}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
+        <OverviewTab node={node} canDelete={canDelete} speaksAs={speaksAs}>
+          {node.needs_k2 && !hasSettingsAccess && (
+            <Surface style={[styles.keyBanner, { backgroundColor: theme.colors.secondaryContainer }]} elevation={0}>
+              <Text variant="bodyMedium" style={{ flex: 1 }}>
+                This phone needs an encryption key for this node before it can change its settings.
+              </Text>
+              <Button testID="node-key-banner" mode="contained-tonal" onPress={() => navigation.navigate('NodeSettings', { nodeId, room })}>
+                Set up
+              </Button>
+            </Surface>
+          )}
+          <CardGrid label="What it can do" cards={capabilities} />
+          {device.length > 0 && <CardGrid label="Device" cards={device} />}
+          <CardGrid label="Tools" cards={tools} />
+        </OverviewTab>
+      </ScrollView>
 
-      {/* Tab content */}
-      {tab === 'overview' && (
-        <ScrollView
-          contentContainerStyle={styles.scroll}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      <Portal>
+        <Modal
+          visible={exportKeyPair !== null}
+          onDismiss={() => setExportKeyPair(null)}
+          contentContainerStyle={[styles.modalCard, { backgroundColor: theme.colors.surface }]}
         >
-          <OverviewTab node={node} canDelete={canDelete} speaksAs={speaksAs} />
-        </ScrollView>
-      )}
-
-      {tab === 'hardware' && <HardwareTab nodeId={nodeId} node={node} />}
-
-      {tab === 'packages' && <PackagesTab nodeId={nodeId} householdId={node?.household_id ?? authState.activeHouseholdId} />}
-
-      {tab === 'activity' && <ActivityTab nodeId={nodeId} />}
-
+          <ScrollView>
+            {exportKeyPair && <K2BackupCard keyPair={exportKeyPair} onDone={() => setExportKeyPair(null)} />}
+          </ScrollView>
+        </Modal>
+      </Portal>
     </KeyboardSafeView>
   );
 };
@@ -779,10 +813,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingRight: 4,
     borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  tabBar: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
   },
   tabCenter: {
     flex: 1,
@@ -806,24 +836,17 @@ const styles = StyleSheet.create({
     height: 12,
     borderRadius: 6,
   },
-  statsRow: {
+  cardLabel: { marginTop: 20, marginBottom: 8, marginHorizontal: 20 },
+  cardGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, paddingHorizontal: 16 },
+  gridCard: { flexBasis: '46%', flexGrow: 1 },
+  keyBanner: {
     flexDirection: 'row',
-    paddingHorizontal: 16,
+    alignItems: 'center',
     gap: 12,
-  },
-  statBox: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 12,
-  },
-  activityCard: {},
-  activityRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  forgeTestButton: {
-    marginTop: 16,
     marginHorizontal: 16,
+    marginTop: 16,
+    padding: 12,
+    borderRadius: 12,
   },
   dangerHeader: {
     marginTop: 32,
