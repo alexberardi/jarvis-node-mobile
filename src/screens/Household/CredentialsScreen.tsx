@@ -5,7 +5,7 @@ import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Appbar, Card, Divider, Icon, List, Text, useTheme } from 'react-native-paper';
 
 import type { NodesStackParamList } from '../../navigation/types';
-import { isPersonal, needsSetup, type Credential } from '../../utils/credentials';
+import { anySet, isPersonal, needsSetup, type Credential } from '../../utils/credentials';
 import { joinNames, useCredentials } from './useCredentials';
 
 type Nav = NativeStackNavigationProp<NodesStackParamList>;
@@ -41,6 +41,7 @@ const CredentialsScreen = () => {
     const nodes = joinNames(c.nodes.map((n) => nameOf(n.nodeId)));
     const need = needsSetup(c);
     const personal = isPersonal(c);
+    const set = anySet(c) || !!c.auth;
     return (
       <List.Item
         key={c.id}
@@ -57,8 +58,8 @@ const CredentialsScreen = () => {
         right={() => (
           <View style={styles.right}>
             <StatusTag
-              label={need ? (c.auth ? 'Sign in' : 'Needs setup') : personal ? 'Personal' : 'Set'}
-              tone={need ? 'need' : personal ? 'me' : 'ok'}
+              label={need ? (c.auth ? 'Sign in' : 'Needs setup') : !set ? 'Optional' : personal ? 'Personal' : 'Set'}
+              tone={need ? 'need' : !set ? 'off' : personal ? 'me' : 'ok'}
             />
             <Icon source="chevron-right" size={20} color={theme.colors.onSurfaceVariant} />
           </View>

@@ -30,6 +30,13 @@ export interface NodeSnapshot {
   snapshot: SettingsSnapshot;
 }
 
+/** A command name for people (export_shopping_list → Export shopping list); service names stay. */
+const readable = (name: string): string =>
+  /^[a-z0-9_]+$/.test(name) ? `${name.charAt(0).toUpperCase()}${name.slice(1).replace(/_/g, ' ')}` : name;
+
+/** Whether anything is set: a credential with only empty optional fields is not "Set". */
+export const anySet = (c: Credential): boolean => c.nodes.some((n) => Object.values(n.set).some(Boolean));
+
 /**
  * Every credential across the nodes this phone can read, merged by service: the same
  * service on two nodes is one credential with two nodes. A service with no secrets and no
@@ -71,11 +78,11 @@ export function collectCredentials(snapshots: NodeSnapshot[]): Credential[] {
   for (const { nodeId, snapshot } of snapshots) {
     for (const cmd of snapshot.commands ?? []) {
       const name = cmd.associated_service || cmd.command_name;
-      add(`service:${name}`, name, 'service', nodeId, cmd.secrets ?? [], cmd.authentication, cmd.setup_guide);
+      add(`service:${name}`, readable(name), 'service', nodeId, cmd.secrets ?? [], cmd.authentication, cmd.setup_guide);
     }
     for (const agent of snapshot.agents ?? []) {
       const name = agent.associated_service || agent.agent_name;
-      add(`service:${name}`, name, 'service', nodeId, agent.secrets ?? []);
+      add(`service:${name}`, readable(name), 'service', nodeId, agent.secrets ?? []);
     }
     for (const fam of snapshot.device_families ?? []) {
       add(`device:${fam.family_name}`, fam.friendly_name || fam.family_name, 'device', nodeId, fam.secrets ?? [], fam.authentication, fam.setup_guide);

@@ -1,4 +1,4 @@
-import { collectCredentials, fieldStatus, isPersonal, missingOn, needsSetup } from '../../src/utils/credentials';
+import { anySet, collectCredentials, fieldStatus, isPersonal, missingOn, needsSetup } from '../../src/utils/credentials';
 
 const secret = (key: string, over: Record<string, unknown> = {}) => ({
   key, scope: 'integration', description: '', value_type: 'str', required: true, is_sensitive: true, is_set: true, ...over,
@@ -41,5 +41,15 @@ describe('collectCredentials', () => {
     expect(fieldStatus(gmail, clientId, ['k'])).toBe('set');
     expect(fieldStatus(gmail, clientId, ['o'])).toBe('required');
     expect(needsSetup(creds[1])).toBe(false);
+  });
+
+  it('names a bare command for people and knows when nothing is set', () => {
+    const only = collectCredentials([{
+      nodeId: 'k',
+      snapshot: snap([{ command_name: 'export_shopping_list', description: '', secrets: [secret('STORE', { required: false, is_set: false })] }]),
+    }]);
+    expect(only[0].name).toBe('Export shopping list');
+    expect(anySet(only[0])).toBe(false);
+    expect(anySet(creds[0])).toBe(true);
   });
 });

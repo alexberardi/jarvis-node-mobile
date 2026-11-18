@@ -19,6 +19,10 @@ const mockRootNavigate = jest.fn();
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: mockNavigate, goBack: jest.fn(), getParent: () => ({ navigate: mockRootNavigate }) }),
   useRoute: () => ({ params: { nodeId: 'node-1' } }),
+  useFocusEffect: (cb: () => void) => {
+    const { useEffect } = jest.requireActual('react');
+    useEffect(cb, [cb]);
+  },
 }));
 jest.mock('../../src/api/nodeApi', () => ({
   getNode: jest.fn(),

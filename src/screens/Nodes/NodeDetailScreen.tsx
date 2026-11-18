@@ -1,4 +1,4 @@
-import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
+import { RouteProp, useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { FlatList, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
@@ -635,15 +635,19 @@ const NodeDetailScreen = () => {
   const [hasSettingsAccess, setHasSettingsAccess] = useState<boolean | null>(null);
   const speaksAs = useSpeaksAs(node);
 
-  useEffect(() => {
-    let mounted = true;
-    hasK2(nodeId).then((result) => {
-      if (mounted) setHasSettingsAccess(result);
-    });
-    return () => {
-      mounted = false;
-    };
-  }, [nodeId]);
+  // Re-checked on every focus: a key made or imported on another screen changes what the
+  // cards open.
+  useFocusEffect(
+    useCallback(() => {
+      let mounted = true;
+      hasK2(nodeId).then((result) => {
+        if (mounted) setHasSettingsAccess(result);
+      });
+      return () => {
+        mounted = false;
+      };
+    }, [nodeId]),
+  );
 
   const loadNode = useCallback(async () => {
     try {
