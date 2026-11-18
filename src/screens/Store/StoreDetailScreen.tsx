@@ -4,12 +4,15 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import {
   ActivityIndicator,
+  Appbar,
   Button,
   Card,
+  Checkbox,
   Chip,
   Divider,
   Icon,
   List,
+  Menu,
   Text,
   useTheme,
 } from 'react-native-paper';
@@ -35,7 +38,9 @@ import type { PackageDetail } from '../../types/Package';
 import { anyHealthFailed, getRevertTarget, isTerminalInstallStatus } from '../../utils/packageStatus';
 import { computerCanRun, isDesktopAgent, nodeDisplayName } from '../../utils/nodeKind';
 import { storeLock } from '../../services/pantryStores';
-import { compareSemver, isUpdateAvailable } from '../../utils/semver';
+import { categoryIcon, categoryLabel, COMPONENT_LABELS, friendlyCommand } from '../../utils/labels';
+import { installLabel, manifestNeedsSetup, nodePackageState } from '../../utils/packageNodes';
+import StatusTag from '../../components/StatusTag';
 
 type Nav = NativeStackNavigationProp<StoreStackParamList>;
 type Route = RouteProp<StoreStackParamList, 'StoreDetail'>;
@@ -49,6 +54,7 @@ interface NodeInfo {
   node_kind?: string | null;
   install_mode?: string | null;
   name?: string | null;
+  online?: boolean;
 }
 
 const DANGER_LABELS: Record<number, string> = {
@@ -96,6 +102,10 @@ const StoreDetailScreen = () => {
   const [reverting, setReverting] = useState(false);
   // Bumped after a revert completes so the version-discovery effect re-runs.
   const [refreshTick, setRefreshTick] = useState(0);
+  const [nodes, setNodes] = useState<NodeInfo[]>([]);
+  // Ticked nodes on "On your nodes": what the install button acts on.
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const { markDisabled } = usePantryGate();
   const activeHousehold = authState.households.find(
@@ -165,7 +175,23 @@ const StoreDetailScreen = () => {
           }),
         );
         if (cancelled) return;
-        setNodeVersions(Object.fromEntries(entries.map(([id, version]) => [id, version])));
+        setNodes(nodes);
+        const versions = Object.fromEntries(entries.map(([id, version]) => [id, version]));
+        setNodeVersions(versions);
+        const pkgs = Object.fromEntries(entries.flatMap(([id, , pkg]) => (pkg ? [[id, pkg] as const] : [])));
+        // Tick every node that can take this: updates and fresh installs.
+        setSelected(
+          new Set(
+            nodes
+              .filter((n) => {
+                // Offline nodes start unticked: the install would wait for them.
+                if (n.online === false) return false;
+                const st = nodePackageState(versions[n.node_id], detail.latest_version, storeLock(pkgs[n.node_id]));
+                return st === 'update' || st === 'install';
+              })
+              .map((n) => n.node_id),
+          ),
+        );
         setNodePackages(
           Object.fromEntries(
             entries.flatMap(([id, , pkg]) => (pkg ? [[id, pkg] as const] : [])),
@@ -181,30 +207,6 @@ const StoreDetailScreen = () => {
   }, [detail, hasPromptProvider, commandName, fetchHouseholdNodes, refreshTick]);
 
   // Aggregate install state across all nodes. Drives the bottom button.
-  const installSummary = (() => {
-    if (!detail || hasPromptProvider) {
-      return { state: 'install' as const, label: hasPromptProvider ? 'Install to Command Center' : 'Install' };
-    }
-    const entries = Object.values(nodeVersions);
-    if (entries.length === 0) {
-      return { state: 'install' as const, label: 'Install' };
-    }
-    const latest = detail.latest_version;
-    const installed = entries.filter((v): v is string => v !== null);
-    if (installed.length === 0) {
-      return { state: 'install' as const, label: 'Install' };
-    }
-    const anyOutdated = installed.some((v) => isUpdateAvailable(v, latest));
-    const allUpToDate = installed.length === entries.length && !anyOutdated;
-    if (allUpToDate) {
-      return { state: 'up-to-date' as const, label: `Up to date (v${latest})` };
-    }
-    if (anyOutdated && installed.length === entries.length) {
-      return { state: 'update' as const, label: `Update to v${latest}` };
-    }
-    // Mixed: some nodes have it, some don't.
-    return { state: 'install-or-update' as const, label: `Install / Update to v${latest}` };
-  })();
 
   // Nodes that kept a `.previous` rollback snapshot from the last update,
   // and whether any node reports the package's components failed to load.
@@ -267,16 +269,37 @@ const StoreDetailScreen = () => {
     );
   };
 
+  const stateOf = (n: NodeInfo) =>
+    nodePackageState(nodeVersions[n.node_id], detail?.latest_version ?? '0.0.0', storeLock(nodePackages[n.node_id]));
+  const ticked = nodes.filter((n) => selected.has(n.node_id));
+  const toInstall = ticked.filter((n) => stateOf(n) === 'install');
+  const toUpdate = ticked.filter((n) => stateOf(n) === 'update');
+
+  const startInstall = async (targets: NodeInfo[], downloadInfo: Awaited<ReturnType<typeof getDownloadInfo>>) => {
+    const installs = await Promise.all(
+      targets.map(async (node) => {
+        const result = await requestInstall(node.node_id, downloadInfo.command_name, downloadInfo.github_repo_url, downloadInfo.git_tag);
+        return { requestId: result.id, nodeId: node.node_id, nodeName: nodeDisplayName(node) };
+      }),
+    );
+    navigation.navigate('InstallProgress', {
+      installs: JSON.stringify(installs),
+      packageName: detail!.display_name || detail!.command_name,
+      commandName: downloadInfo.command_name,
+      githubRepoUrl: downloadInfo.github_repo_url,
+      gitTag: downloadInfo.git_tag,
+      needsSetup: manifestNeedsSetup(downloadInfo.manifest),
+    });
+  };
+
   const handleInstall = async () => {
     if (!detail) return;
 
     try {
       setInstalling(true);
 
-      // Get download info (repo URL + exact git tag)
       const downloadInfo = await getDownloadInfo(commandName);
 
-      // Prompt providers install to CC directly (async with polling)
       if (hasPromptProvider) {
         try {
           const result = await requestCCInstall(
@@ -299,24 +322,19 @@ const StoreDetailScreen = () => {
         return;
       }
 
-      // Get household nodes (we already fetched versions, but refresh node
-      // list in case any joined/left since screen mount). A computer is left
-      // out for a package it can't run (Pi-only targets or system setup); the
-      // server refuses that install too.
-      const allNodes = await fetchHouseholdNodes();
+      // Computers can run only packages without system installs (the manifest says so).
       const runsOnComputers = computerCanRun(downloadInfo.manifest);
-      const nodes = allNodes.filter((n) => runsOnComputers || !isDesktopAgent(n));
-
-      if (allNodes.length === 0) {
-        Alert.alert('No Nodes', 'No registered nodes found to install this package on.');
-        return;
-      }
-      if (nodes.length === 0) {
+      const skipped = runsOnComputers ? [] : ticked.filter((n) => isDesktopAgent(n));
+      const targets = ticked.filter((n) => !skipped.includes(n));
+      if (targets.length === 0) {
         Alert.alert(
           'Not for computers',
           `${detail.display_name || commandName} is made for Raspberry Pi nodes and can't run on a computer.`,
         );
         return;
+      }
+      if (skipped.length > 0) {
+        Alert.alert('Skipping computers', `${skipped.map((n) => nodeDisplayName(n)).join(', ')} can't run it; installing on the rest.`);
       }
 
       const aptPackages: string[] =
@@ -333,82 +351,10 @@ const StoreDetailScreen = () => {
             { cancelable: true, onDismiss: () => resolve(false) },
           );
         });
-        if (!userConsented) {
-          setInstalling(false);
-          return;
-        }
+        if (!userConsented) return;
       }
 
-      // Classify nodes by install state using the version map.
-      const upToDateNodeIds = nodes
-        .filter((n) => {
-          const v = nodeVersions[n.node_id];
-          return v !== undefined && v !== null && v !== 'unknown' && compareSemver(v, detail.latest_version) >= 0;
-        })
-        .map((n) => n.node_id);
-      // A node whose copy came from another store, or from a removed one, can't take this one.
-      const storeLocks = Object.fromEntries(
-        nodes.flatMap((n) => {
-          const why = storeLock(nodePackages[n.node_id]);
-          return why ? [[n.node_id, why] as const] : [];
-        }),
-      );
-      const actionableNodes = nodes.filter(
-        (n) => !upToDateNodeIds.includes(n.node_id) && !storeLocks[n.node_id],
-      );
-
-      if (actionableNodes.length === 0) {
-        const locked = Object.values(storeLocks);
-        if (locked.length > 0 && nodes.length === 1) {
-          Alert.alert('Can\'t update here', locked[0]);
-        } else {
-          Alert.alert('Up to date', `All your nodes already have v${detail.latest_version}.`);
-        }
-        return;
-      }
-
-      if (actionableNodes.length === 1 && nodes.length === 1) {
-        // Single node — install/update directly
-        const node = actionableNodes[0];
-        const result = await requestInstall(
-          node.node_id,
-          downloadInfo.command_name,
-          downloadInfo.github_repo_url,
-          downloadInfo.git_tag,
-        );
-
-        navigation.navigate('InstallProgress', {
-          installs: JSON.stringify([
-            {
-              requestId: result.id,
-              nodeId: node.node_id,
-              nodeName: nodeDisplayName(node),
-            },
-          ]),
-          packageName: detail.display_name || detail.command_name,
-          commandName: downloadInfo.command_name,
-          githubRepoUrl: downloadInfo.github_repo_url,
-          gitTag: downloadInfo.git_tag,
-        });
-      } else {
-        // Multiple nodes — show picker (lets user pick which outdated nodes
-        // to update, or install on new ones).
-        navigation.navigate('NodePickerSheet', {
-          nodes: JSON.stringify(nodes),
-          commandName: downloadInfo.command_name,
-          githubRepoUrl: downloadInfo.github_repo_url,
-          gitTag: downloadInfo.git_tag,
-          latestVersion: detail.latest_version,
-          packageName: detail.display_name || detail.command_name,
-          installedNodeIds: JSON.stringify(
-            Object.entries(nodeVersions)
-              .filter(([, v]) => v !== null)
-              .map(([id]) => id),
-          ),
-          installedVersions: JSON.stringify(nodeVersions),
-          storeLocks: JSON.stringify(storeLocks),
-        });
-      }
+      await startInstall(targets, downloadInfo);
     } catch (e: unknown) {
       if (isPantryDisabledError(e)) {
         markDisabled();
@@ -442,214 +388,201 @@ const StoreDetailScreen = () => {
   }
 
   const dangerColor = DANGER_COLORS[detail.danger_rating] || '#6b7280';
+  const category = detail.categories[0];
+  const stateTag = (n: NodeInfo) => {
+    const st = stateOf(n);
+    const v = nodeVersions[n.node_id];
+    if (st === 'installed') return { label: 'Installed', sub: `v${v}`, tone: 'ok' as const };
+    if (st === 'update') return { label: 'Update', sub: v && v !== 'unknown' ? `v${v} \u2192 v${detail.latest_version}` : 'Older version', tone: 'need' as const };
+    if (st === 'locked') return { label: 'Can\u2019t', sub: storeLock(nodePackages[n.node_id]) ?? '', tone: 'off' as const };
+    return { label: 'Install', sub: '', tone: 'off' as const };
+  };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <Appbar.Header>
+        <Appbar.BackAction onPress={() => navigation.goBack()} />
+        <Appbar.Content title="" />
+        {canInstall && revertTarget && (
+          <Menu
+            visible={menuOpen}
+            onDismiss={() => setMenuOpen(false)}
+            anchor={<Appbar.Action icon="dots-vertical" testID="package-menu" accessibilityLabel="More" onPress={() => setMenuOpen(true)} />}
+          >
+            <Menu.Item
+              testID="package-revert"
+              leadingIcon="backup-restore"
+              title={`Revert to v${revertTarget.previousVersion}`}
+              disabled={reverting || installing}
+              onPress={() => {
+                setMenuOpen(false);
+                handleRevert();
+              }}
+            />
+          </Menu>
+        )}
+      </Appbar.Header>
+
       <ScrollView contentContainerStyle={styles.scroll}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Button icon="arrow-left" onPress={() => navigation.goBack()}>
-            Back
-          </Button>
-        </View>
-
-        <View style={styles.titleRow}>
+        <View style={styles.hero}>
+          <View style={[styles.heroIcon, { backgroundColor: theme.colors.secondaryContainer }]}>
+            <Icon source={categoryIcon(category)} size={30} color={theme.colors.primary} />
+          </View>
           <View style={{ flex: 1 }}>
-            <Text variant="headlineSmall" style={{ fontWeight: 'bold' }}>
-              {detail.display_name || detail.command_name}
-            </Text>
-            {detail.author && (
-              <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
-                by {detail.author.display_name || detail.author.github}
+            <View style={styles.titleLine}>
+              <Text variant="titleLarge" style={{ fontWeight: 'bold', flexShrink: 1 }}>
+                {detail.display_name || detail.command_name}
               </Text>
-            )}
-          </View>
-          <View style={styles.badges}>
-            {healthFailed && (
-              <View
-                accessibilityLabel="Package failed to load on a node"
-                testID="package-health-dot"
-              >
-                <Icon source="circle" size={12} color="#ef4444" />
-              </View>
-            )}
-            {detail.verified && (
-              <>
-                <Icon source="check-decagram" size={24} color={theme.colors.primary} />
-                <HelpIcon text={helpCopy.pantry.verifiedBadge} size={16} />
-              </>
-            )}
-            {detail.package_type === 'bundle' && (
-              <>
-                <Chip compact style={{ backgroundColor: theme.colors.secondaryContainer }}>
-                  Bundle
-                </Chip>
-                <HelpIcon text={helpCopy.pantry.bundleChip} size={16} />
-              </>
-            )}
-          </View>
-        </View>
-
-        {/* Stats row */}
-        <View style={styles.statsRow}>
-          <View style={styles.stat}>
-            <Text variant="titleMedium">{detail.install_count}</Text>
-            <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>
-              Installs
-            </Text>
-          </View>
-          <View style={styles.stat}>
-            <Text variant="titleMedium">v{detail.latest_version}</Text>
-            <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>
-              Version
-            </Text>
-          </View>
-          {detail.avg_rating && (
-            <View style={styles.stat}>
-              <Text variant="titleMedium">{detail.avg_rating.toFixed(1)}</Text>
-              <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                Rating ({detail.review_count})
-              </Text>
+              {detail.verified && (
+                <>
+                  <Icon source="check-decagram" size={18} color={theme.colors.primary} />
+                  <HelpIcon text={helpCopy.pantry.verifiedBadge} size={14} />
+                </>
+              )}
+              {healthFailed && (
+                <View accessibilityLabel="Package failed to load on a node" testID="package-health-dot">
+                  <Icon source="circle" size={10} color="#ef4444" />
+                </View>
+              )}
             </View>
-          )}
+            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+              {[detail.author ? detail.author.display_name || detail.author.github : null, `v${detail.latest_version}`, `${detail.install_count} installs`, detail.avg_rating ? `\u2605 ${detail.avg_rating.toFixed(1)} (${detail.review_count})` : null]
+                .filter(Boolean)
+                .join(' \u00b7 ')}
+            </Text>
+          </View>
         </View>
 
-        <Divider style={{ marginVertical: 12 }} />
-
-        {/* Description */}
-        <Text variant="bodyMedium" style={{ marginBottom: 16 }}>
+        <Text variant="bodyMedium" style={{ marginBottom: 12 }}>
           {detail.description}
         </Text>
-
-        {/* Categories */}
         {detail.categories.length > 0 && (
           <View style={styles.chipRow}>
             {detail.categories.map((cat) => (
-              <Chip key={cat} compact>
-                {cat}
-              </Chip>
+              <Chip key={cat} compact>{categoryLabel(cat)}</Chip>
             ))}
           </View>
         )}
 
-        {/* Components (bundles) */}
-        {detail.components.length > 1 && (
-          <Card style={styles.section}>
-            <Card.Title title="Components" />
-            <Card.Content>
-              {detail.components.map((comp) => (
-                <List.Item
-                  key={`${comp.type}-${comp.name}`}
-                  title={comp.name}
-                  description={comp.description || comp.type}
-                  left={(props) => (
-                    <List.Icon
-                      {...props}
-                      icon={COMPONENT_ICONS[comp.type] || 'puzzle'}
-                    />
-                  )}
-                />
-              ))}
-            </Card.Content>
-          </Card>
+        {!hasPromptProvider && (
+          <>
+            <Text variant="labelLarge" style={[styles.label, { color: theme.colors.onSurfaceVariant }]}>On your nodes</Text>
+            <Card mode="outlined" style={styles.section}>
+              <View>
+                {nodesLoading && <ActivityIndicator style={{ margin: 16 }} />}
+                {!nodesLoading && nodes.length === 0 && (
+                  <Text variant="bodySmall" style={{ margin: 16, color: theme.colors.onSurfaceVariant }}>No nodes in this household yet.</Text>
+                )}
+                {!nodesLoading && nodes.map((n, i) => {
+                  const st = stateOf(n);
+                  const tag = stateTag(n);
+                  const actionable = canInstall && (st === 'update' || st === 'install');
+                  const failed = nodePackages[n.node_id]?.health === 'failed';
+                  return (
+                    <React.Fragment key={n.node_id}>
+                      {i > 0 && <Divider />}
+                      <List.Item
+                        testID={`package-node-${n.node_id}`}
+                        title={nodeDisplayName(n)}
+                        description={failed ? 'Failed to load on this node' : [n.online === false ? 'Offline' : null, tag.sub || null].filter(Boolean).join(' \u00b7 ') || undefined}
+                        descriptionStyle={failed ? { color: theme.colors.error } : undefined}
+                        onPress={
+                          actionable
+                            ? () =>
+                                setSelected((prev) => {
+                                  const next = new Set(prev);
+                                  if (next.has(n.node_id)) next.delete(n.node_id);
+                                  else next.add(n.node_id);
+                                  return next;
+                                })
+                            : undefined
+                        }
+                        left={() =>
+                          canInstall ? (
+                            <View style={styles.check}>
+                              <Checkbox.Android
+                                status={selected.has(n.node_id) ? 'checked' : 'unchecked'}
+                                disabled={!actionable}
+                              />
+                            </View>
+                          ) : null
+                        }
+                        right={() => (
+                          <View style={styles.check}>
+                            <StatusTag label={tag.label} tone={tag.tone} />
+                          </View>
+                        )}
+                      />
+                    </React.Fragment>
+                  );
+                })}
+              </View>
+            </Card>
+          </>
         )}
 
-        {/* Security Report */}
-        {detail.security_report && (
-          <Card style={styles.section}>
-            <Card.Title
-              title="Security Report"
-              right={() => (
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 8 }}>
-                  <Chip
-                    compact
-                    textStyle={{ color: '#fff', fontSize: 11 }}
-                    style={{ backgroundColor: dangerColor }}
-                  >
-                    {DANGER_LABELS[detail.danger_rating] || 'Unknown'}
-                  </Chip>
+        {detail.components.length > 0 && (
+          <>
+            <Text variant="labelLarge" style={[styles.label, { color: theme.colors.onSurfaceVariant }]}>What it adds</Text>
+            <Card mode="outlined" style={styles.section}>
+              <View>
+                {detail.components.map((comp, i) => (
+                  <React.Fragment key={`${comp.type}-${comp.name}`}>
+                    {i > 0 && <Divider />}
+                    <List.Item
+                      title={friendlyCommand(comp.name)}
+                      description={COMPONENT_LABELS[comp.type] ?? comp.type}
+                      left={(props) => <List.Icon {...props} icon={COMPONENT_ICONS[comp.type] || 'puzzle'} />}
+                    />
+                  </React.Fragment>
+                ))}
+              </View>
+            </Card>
+          </>
+        )}
+
+        <Card mode="outlined" style={styles.section}>
+          <List.Accordion
+            testID="package-safety"
+            title={detail.security_report ? DANGER_LABELS[detail.danger_rating] || 'Unknown' : 'Details'}
+            description={[detail.security_report ? 'Security report' : null, detail.license, detail.platforms.join(', ')].filter(Boolean).join(' \u00b7 ')}
+            left={(props) => <List.Icon {...props} icon="shield-check-outline" color={detail.security_report ? dangerColor : props.color} />}
+          >
+            {detail.security_report && (
+              <View style={styles.safety}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text variant="bodySmall" style={{ flex: 1 }}>{detail.security_report.summary}</Text>
                   <HelpIcon text={helpCopy.pantry.riskChip} size={16} />
                 </View>
-              )}
-            />
-            <Card.Content>
-              <Text variant="bodySmall" style={{ marginBottom: 8 }}>
-                {detail.security_report.summary}
-              </Text>
-              {detail.security_report.concerns.length > 0 && (
-                <View style={{ gap: 4 }}>
-                  {detail.security_report.concerns.map((concern, i) => (
-                    <View key={i} style={styles.concernRow}>
-                      <Icon
-                        source="alert-circle-outline"
-                        size={14}
-                        color={dangerColor}
-                      />
-                      <Text variant="bodySmall" style={{ flex: 1 }}>
-                        {concern}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-              )}
-            </Card.Content>
-          </Card>
-        )}
-
-        {/* Info */}
-        <Card style={styles.section}>
-          <Card.Content>
-            {detail.license && (
-              <List.Item
-                title="License"
-                description={detail.license}
-                left={(props) => <List.Icon {...props} icon="scale-balance" />}
-              />
+                {detail.security_report.concerns.map((concern, i) => (
+                  <View key={i} style={styles.concernRow}>
+                    <Icon source="alert-circle-outline" size={14} color={dangerColor} />
+                    <Text variant="bodySmall" style={{ flex: 1 }}>{concern}</Text>
+                  </View>
+                ))}
+              </View>
             )}
-            {detail.platforms.length > 0 && (
-              <List.Item
-                title="Platforms"
-                description={detail.platforms.join(', ')}
-                left={(props) => <List.Icon {...props} icon="laptop" />}
-              />
-            )}
-          </Card.Content>
+            {detail.license ? <List.Item title="License" description={detail.license} /> : null}
+            {detail.platforms.length > 0 ? <List.Item title="Platforms" description={detail.platforms.join(', ')} /> : null}
+          </List.Accordion>
         </Card>
       </ScrollView>
 
-      {/* Install button */}
       {canInstall && (
-        <View style={styles.installBar}>
-          {revertTarget && (
-            <Button
-              mode="outlined"
-              icon="backup-restore"
-              onPress={handleRevert}
-              loading={reverting}
-              disabled={reverting || installing || nodesLoading}
-              textColor={theme.colors.error}
-              style={{ marginBottom: 8 }}
-            >
-              Revert to v{revertTarget.previousVersion}
-            </Button>
-          )}
+        <View style={[styles.installBar, { backgroundColor: theme.colors.background }]}>
           <Button
             mode="contained"
+            testID="package-install"
             onPress={handleInstall}
-            loading={installing || nodesLoading}
-            disabled={installing || reverting || nodesLoading || installSummary.state === 'up-to-date'}
-            icon={
-              hasPromptProvider
-                ? 'brain'
-                : installSummary.state === 'update'
-                  ? 'update'
-                  : installSummary.state === 'up-to-date'
-                    ? 'check'
-                    : 'download'
-            }
-            style={{ flex: 1 }}
+            loading={installing || nodesLoading || reverting}
+            disabled={installing || reverting || nodesLoading || (!hasPromptProvider && ticked.length === 0)}
+            icon={hasPromptProvider ? 'brain' : toInstall.length ? 'download' : 'update'}
           >
-            {installSummary.label}
+            {hasPromptProvider
+              ? 'Install to Command Center'
+              : nodes.length > 0 && nodes.every((n) => stateOf(n) === 'installed')
+                ? `Up to date (v${detail.latest_version})`
+                : installLabel(toInstall.map((n) => nodeDisplayName(n)), toUpdate.map((n) => nodeDisplayName(n)))}
           </Button>
         </View>
       )}
@@ -658,21 +591,17 @@ const StoreDetailScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingTop: 48 },
+  container: { flex: 1 },
   center: { justifyContent: 'center', alignItems: 'center' },
   scroll: { padding: 16, paddingBottom: 100 },
-  header: { flexDirection: 'row', marginBottom: 8 },
-  titleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-  },
-  badges: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-  statsRow: { flexDirection: 'row', gap: 24 },
-  stat: { alignItems: 'center' },
+  hero: { flexDirection: 'row', gap: 14, alignItems: 'center', marginBottom: 12 },
+  heroIcon: { width: 56, height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  titleLine: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  label: { marginTop: 4, marginBottom: 6, marginLeft: 4 },
+  check: { justifyContent: 'center' },
+  safety: { paddingHorizontal: 16, paddingBottom: 8, gap: 6 },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
-  section: { marginBottom: 12 },
+  section: { marginBottom: 12, overflow: 'hidden' },
   concernRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
   installBar: {
     position: 'absolute',

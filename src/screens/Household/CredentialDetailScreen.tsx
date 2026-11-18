@@ -27,7 +27,7 @@ import type { NodesStackParamList } from '../../navigation/types';
 import { encryptAndPushConfig } from '../../services/configPushService';
 import { buildSyncPushes } from '../../services/syncPushes';
 import { fieldStatus, missingOn, type CredentialField } from '../../utils/credentials';
-import { StatusTag } from './CredentialsScreen';
+import StatusTag from '../../components/StatusTag';
 import { joinNames, snapshotQueryKey, useCredentials } from './useCredentials';
 
 type Nav = NativeStackNavigationProp<NodesStackParamList>;

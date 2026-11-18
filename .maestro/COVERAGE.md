@@ -41,7 +41,6 @@ reason is in its `properties.skip_reason`).
 | CallContext/CallContextListScreen, CallContextEditScreen | flow | call-context.yaml |
 | Store/StoreBrowseScreen | not tested | packages (user, 2026-10-17) |
 | Store/StoreDetailScreen | not tested | packages (user, 2026-10-17) |
-| Store/NodePickerSheet | not tested | packages (user, 2026-10-17) |
 | Store/InstallProgressScreen | not tested | packages (user, 2026-10-17) |
 | Store/TestInstallScreen | not tested | packages (user, 2026-10-17) |
 | Home/HomeScreen: quick-open deep links (deepLinks.ts) | flow | deep-links.yaml (com.jarvis.app://chat, open, stt) |

@@ -5,26 +5,11 @@ import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Appbar, Card, Divider, Icon, List, Text, useTheme } from 'react-native-paper';
 
 import type { NodesStackParamList } from '../../navigation/types';
+import StatusTag from '../../components/StatusTag';
 import { anySet, isPersonal, needsSetup, type Credential } from '../../utils/credentials';
 import { joinNames, useCredentials } from './useCredentials';
 
 type Nav = NativeStackNavigationProp<NodesStackParamList>;
-
-/** A small status pill: green set, amber needs you, blue personal, grey can't check. */
-export const StatusTag = ({ label, tone }: { label: string; tone: 'ok' | 'need' | 'me' | 'off' }) => {
-  const theme = useTheme();
-  const colors = {
-    ok: { bg: theme.dark ? '#14532d' : '#dcfce7', fg: theme.dark ? '#bbf7d0' : '#166534' },
-    need: { bg: theme.dark ? '#7c2d12' : '#ffedd5', fg: theme.dark ? '#fed7aa' : '#9a3412' },
-    me: { bg: theme.dark ? '#0c4a6e' : '#e0f2fe', fg: theme.dark ? '#bae6fd' : '#075985' },
-    off: { bg: theme.colors.surfaceVariant, fg: theme.colors.onSurfaceVariant },
-  }[tone];
-  return (
-    <View style={[styles.tag, { backgroundColor: colors.bg }]}>
-      <Text style={[styles.tagText, { color: colors.fg }]}>{label}</Text>
-    </View>
-  );
-};
 
 /** Every API key and sign-in across the household's nodes (or one node's). */
 const CredentialsScreen = () => {
@@ -144,8 +129,6 @@ const styles = StyleSheet.create({
   card: { marginBottom: 12, overflow: 'hidden' },
   icon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginLeft: 12 },
   right: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  tag: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
-  tagText: { fontSize: 11, fontWeight: '600' },
   empty: { textAlign: 'center', marginTop: 32 },
 });
 

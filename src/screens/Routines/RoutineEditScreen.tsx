@@ -43,6 +43,7 @@ import {
 import { listNodes } from '../../api/nodeApi';
 import { useAuth } from '../../auth/AuthContext';
 import { HelpIcon } from '../../components/HelpIcon';
+import { friendlyCommand } from '../../utils/labels';
 import ParameterArgRow from '../../components/ParameterArgRow';
 import { helpCopy } from '../../copy/help';
 import { useSettingsSnapshot } from '../../hooks/useSettingsSnapshot';
@@ -143,9 +144,7 @@ const dayPresetFor = (days: DayOfWeek[]): DayPreset => {
   return 'custom';
 };
 
-/** A command's name for people: get_weather → "Get weather". */
-export const friendlyCommand = (command: string): string =>
-  command ? command.charAt(0).toUpperCase() + command.slice(1).replace(/_/g, ' ') : 'Choose a command';
+export { friendlyCommand };
 
 /** The routine in one plain sentence, built from what the editor holds. */
 export const routineSummary = (r: {
