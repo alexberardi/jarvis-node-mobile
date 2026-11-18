@@ -715,8 +715,8 @@ const NodeDetailScreen = () => {
       key: 'data',
       icon: 'database-outline',
       title: 'Stored data',
-      subtitle: 'Records packages keep',
-      onPress: () => navigation.getParent()?.navigate('CommandData', { screen: 'DataBrowserHome', params: { nodeId } }),
+      subtitle: settingsOpen ? 'Records packages keep' : noKeyNote,
+      onPress: openSettings('stored_data'),
     },
   ];
   const hardware = (part: NodeHardwarePart) => () => navigation.navigate('NodeHardware', { nodeId, part });

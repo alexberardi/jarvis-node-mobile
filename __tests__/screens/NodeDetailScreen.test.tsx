@@ -104,6 +104,9 @@ describe('NodeDetailScreen — node kinds', () => {
     expect(mockNavigate).toHaveBeenCalledWith('NodeSettings', { nodeId: 'node-1', room: 'Kitchen', tab: 'integrations' });
     fireEvent.press(second.getByTestId('node-card-tasks'));
     expect(mockNavigate).toHaveBeenCalledWith('NodeSettings', { nodeId: 'node-1', room: 'Kitchen', tab: 'agents' });
+    // Stored data is gated on the key like the other settings-backed cards.
+    fireEvent.press(second.getByTestId('node-card-data'));
+    expect(mockNavigate).toHaveBeenCalledWith('NodeSettings', { nodeId: 'node-1', room: 'Kitchen', tab: 'stored_data' });
   });
 
   it('gives a Pi its device cards, a voice profile card, and no stats row', async () => {
@@ -113,8 +116,6 @@ describe('NodeDetailScreen — node kinds', () => {
     expect(mockNavigate).toHaveBeenCalledWith('NodeHardware', { nodeId: 'node-1', part: 'speaker' });
     fireEvent.press(getByTestId('node-card-voice-profile'));
     expect(mockRootNavigate).toHaveBeenCalledWith('VoiceProfile');
-    fireEvent.press(getByTestId('node-card-data'));
-    expect(mockRootNavigate).toHaveBeenCalledWith('CommandData', { screen: 'DataBrowserHome', params: { nodeId: 'node-1' } });
     // The server never sent uptime or counts, so the row is gone.
     expect(queryByText('Uptime')).toBeNull();
   });
