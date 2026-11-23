@@ -152,7 +152,10 @@ const HouseholdHomeScreen = () => {
         ) : (
           <>
             <View style={styles.tiles}>
-              {tiles.map((t) => (
+              {/* Rows of two, each tile flex: 1, so widths are equal whatever the text. */}
+              {Array.from({ length: Math.ceil(tiles.length / 2) }, (_, r) => (
+              <View key={r} style={styles.tileRow}>
+              {tiles.slice(r * 2, r * 2 + 2).map((t) => (
                 <Card key={t.key} style={styles.tile} onPress={t.onPress} testID={`household-tile-${t.key}`}>
                   <Card.Content style={{ gap: 6 }}>
                     <Icon source={t.icon} size={26} color={theme.colors.primary} />
@@ -162,6 +165,8 @@ const HouseholdHomeScreen = () => {
                     </Text>
                   </Card.Content>
                 </Card>
+              ))}
+              </View>
               ))}
             </View>
 
@@ -205,8 +210,9 @@ const styles = StyleSheet.create({
   switcher: { flexDirection: 'row', alignItems: 'center', flexShrink: 1, gap: 4 },
   title: { fontWeight: 'bold', flexShrink: 1 },
   content: { padding: 16, paddingBottom: 32 },
-  tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  tile: { flexBasis: '47%', flexGrow: 1 },
+  tiles: { gap: 12 },
+  tileRow: { flexDirection: 'row', gap: 12 },
+  tile: { flex: 1 },
   label: { marginTop: 24, marginBottom: 8, marginLeft: 4 },
   card: { marginBottom: 12 },
 });
