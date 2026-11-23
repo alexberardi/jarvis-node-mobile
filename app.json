@@ -142,7 +142,6 @@
         }
       ],
       "./plugins/withJarvisAppIntents.js",
-      "./plugins/withPodDeploymentTargetFloor.js",
       "@bacons/apple-targets",
       "@react-native-community/datetimepicker",
       "expo-font",

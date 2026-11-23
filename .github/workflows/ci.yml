@@ -58,10 +58,8 @@ jobs:
   build-and-submit:
     name: Build iOS & Submit to TestFlight
     needs: [lint-and-typecheck, test]
-    # A manual run on any branch builds iOS without submitting (to try toolchain changes).
-    if: (github.ref == 'refs/heads/main' && github.event_name == 'push') || github.event_name == 'workflow_dispatch'
-    # App Store uploads need the iOS 27 SDK from April 2027 (ITMS-90725).
-    runs-on: xcode-27
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: macos-15
 
     steps:
       - uses: actions/checkout@v7
@@ -80,8 +78,18 @@ jobs:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
 
-      - name: Show Xcode version
-        run: xcodebuild -version
+      - name: Select Xcode 26
+        run: |
+          XCODE26=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | head -1)
+          if [ -n "$XCODE26" ]; then
+            sudo xcode-select -s "$XCODE26"
+            echo "Selected $XCODE26"
+          else
+            echo "Available Xcode versions:"
+            ls -d /Applications/Xcode*.app
+            echo "::warning::Xcode 26 not available on this runner — build may fail App Store upload"
+          fi
+          xcodebuild -version
 
       - name: Write Apple API key
         run: echo "$APPLE_API_KEY_P8" > ${{ github.workspace }}/apple-api-key.p8
@@ -112,25 +120,11 @@ jobs:
       - name: Build iOS locally
         run: eas build --platform ios --profile production --local --non-interactive --output ${{ github.workspace }}/build.ipa
         env:
-          EAS_LOCAL_BUILD_WORKINGDIR: ${{ runner.temp }}/eas-build
-          EAS_LOCAL_BUILD_SKIP_CLEANUP: "1"
           EXPO_ASC_API_KEY_PATH: ${{ github.workspace }}/apple-api-key.p8
           EXPO_ASC_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           EXPO_ASC_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
 
-      # eas --local hides xcodebuild output; keep its full log when the build fails.
-      - name: Collect Xcode build logs
-        if: failure()
-        run: mkdir -p xcode-logs && cp -R "$RUNNER_TEMP"/eas-build/logs/. xcode-logs/ || ls -R "$RUNNER_TEMP"/eas-build | head -50
-
-      - uses: actions/upload-artifact@v7
-        if: failure()
-        with:
-          name: ios-build-logs
-          path: xcode-logs
-
       - name: Submit to TestFlight
-        if: github.ref == 'refs/heads/main'
         run: eas submit --platform ios --profile production --path ${{ github.workspace }}/build.ipa --non-interactive
         env:
           EXPO_ASC_API_KEY_PATH: ${{ github.workspace }}/apple-api-key.p8
