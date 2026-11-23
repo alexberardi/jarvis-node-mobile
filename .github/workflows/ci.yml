@@ -121,7 +121,7 @@ jobs:
         if: failure()
         run: mkdir -p xcode-logs && cp -R "$TMPDIR"/eas-build-local-nodejs/*/logs/. xcode-logs/ || true
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: ios-build-logs
