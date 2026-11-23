@@ -566,7 +566,8 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     paddingLeft: 4,
   },
-  filters: { flexGrow: 0 },
+  // A horizontal ScrollView may shrink by default: a long list squeezed the chips.
+  filters: { flexGrow: 0, flexShrink: 0 },
   filterRow: { gap: 8, paddingHorizontal: 16, paddingVertical: 6 },
   sectionHeader: { marginTop: 8, marginBottom: -4, marginLeft: 4 },
   kindIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginRight: 8 },
