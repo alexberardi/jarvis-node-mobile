@@ -1,8 +1,9 @@
 appId: com.jarvis.nodemobile
 name: Login per seeded role
 # Every seeded login gets into the app, and the app knows its role: after login,
-# Settings lists the seeded household with that user's role in it
-# (household-role-<id>, src/screens/Settings/SettingsScreen.tsx). Then Log Out
+# the household list (Household tab › switcher › Join or create) shows the seeded
+# household with that user's role in it (household-role-<id>,
+# src/screens/Settings/SettingsScreen.tsx). Then Log Out
 # and the next role. scripts/e2e mobile passes EMAIL (the superuser, an admin),
 # EMAIL_ADMIN, EMAIL_POWER, EMAIL_MEMBER and PASSWORD; the env defaults are the
 # rich seed's people (jarvis-server scripts/seed-dev.py).
@@ -21,8 +22,7 @@ env:
 # Superuser (household admin).
 - runFlow: subflows/login.yaml
 - runFlow: subflows/reset-household-name.yaml
-- tapOn:
-    id: "settings-button"
+- runFlow: subflows/open-households.yaml
 - assertVisible:
     id: "household-name-.*"
     text: "Avery Household"
@@ -38,8 +38,7 @@ env:
     file: subflows/login-as.yaml
     env:
       LOGIN_EMAIL: ${EMAIL_ADMIN}
-- tapOn:
-    id: "settings-button"
+- runFlow: subflows/open-households.yaml
 - assertVisible:
     id: "household-role-.*"
     text: "admin"
@@ -52,8 +51,7 @@ env:
     file: subflows/login-as.yaml
     env:
       LOGIN_EMAIL: ${EMAIL_POWER}
-- tapOn:
-    id: "settings-button"
+- runFlow: subflows/open-households.yaml
 - assertVisible:
     id: "household-role-.*"
     text: "power user"
@@ -61,18 +59,15 @@ env:
     id: "settings-close"
 - runFlow: subflows/logout.yaml
 
-# Member: a member can't edit the household, so no pencil next to it.
+# Member (what a member may change is household-member-view.yaml's job).
 - runFlow:
     file: subflows/login-as.yaml
     env:
       LOGIN_EMAIL: ${EMAIL_MEMBER}
-- tapOn:
-    id: "settings-button"
+- runFlow: subflows/open-households.yaml
 - assertVisible:
     id: "household-role-.*"
     text: "member"
-- assertNotVisible:
-    id: "household-edit-.*"
 - tapOn:
     id: "settings-close"
 - runFlow: subflows/logout.yaml

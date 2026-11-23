@@ -51,12 +51,12 @@ const PushNotificationManager: React.FC<{ children: React.ReactNode }> = ({ chil
     if (!navigationRef.isReady()) return;
 
     if (data.type === 'bluetooth_scan' && data.node_id) {
-      // Deep link to Hardware tab on the specific node
+      // Deep link to the node's Speaker & Bluetooth screen
       (navigationRef as any).navigate('Main', {
-        screen: 'NodesTab',
+        screen: 'HouseholdTab',
         params: {
-          screen: 'NodeDetail',
-          params: { nodeId: data.node_id, initialTab: 'hardware' },
+          screen: 'NodeHardware',
+          params: { nodeId: data.node_id, part: 'speaker' },
         },
       });
     } else if (data.type === 'open_url' && typeof data.url === 'string') {

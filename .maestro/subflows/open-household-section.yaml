@@ -1,0 +1,17 @@
+appId: com.jarvis.nodemobile
+name: open-household-section
+# From the main tabs: the Household tab, then one of its tiles or rows (ENTRY, e.g.
+# household-tile-members or household-home-row-home), waiting for WAIT_ID on the
+# section it opens (src/screens/Settings/HouseholdEditScreen.tsx, one section per entry).
+---
+- runFlow: open-household.yaml
+- scrollUntilVisible:
+    element:
+      id: ${ENTRY}
+    direction: DOWN
+- tapOn:
+    id: ${ENTRY}
+- extendedWaitUntil:
+    visible:
+      id: ${WAIT_ID}
+    timeout: 15000

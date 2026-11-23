@@ -170,8 +170,8 @@ describe('DeviceEditScreen', () => {
     expect(mockGoBack).toHaveBeenCalled();
   });
 
-  it('should render device name input with device name', () => {
-    const { getAllByText, getByDisplayValue } = render(
+  it('is titled with the device name and opens Name & room in a sheet', () => {
+    const utils = render(
       <DeviceEditScreen
         navigation={mockNavigation}
         route={makeRoute({ deviceId: 'dev-1', householdId: 'hh-1' })}
@@ -179,14 +179,16 @@ describe('DeviceEditScreen', () => {
       { wrapper },
     );
 
-    // TextInput label "Device Name" is rendered by Paper
-    expect(getAllByText('Device Name').length).toBeGreaterThanOrEqual(1);
-    // The input should be populated with the device name
-    expect(getByDisplayValue('Ceiling Light')).toBeTruthy();
+    expect(utils.getAllByText('Ceiling Light').length).toBeGreaterThanOrEqual(1);
+    expect(utils.queryByTestId('device-name-input')).toBeNull();
+    fireEvent.press(utils.getByTestId('device-name-room-row'));
+    expect(utils.getAllByText('Device Name').length).toBeGreaterThanOrEqual(1);
+    expect(utils.getByDisplayValue('Ceiling Light')).toBeTruthy();
+    expect(utils.getByText('Room')).toBeTruthy();
   });
 
-  it('should render room picker showing current room', () => {
-    const { getByText } = render(
+  it('shows the room on the Name & room row', () => {
+    const utils = render(
       <DeviceEditScreen
         navigation={mockNavigation}
         route={makeRoute({ deviceId: 'dev-1', householdId: 'hh-1' })}
@@ -194,12 +196,11 @@ describe('DeviceEditScreen', () => {
       { wrapper },
     );
 
-    expect(getByText('Room')).toBeTruthy();
-    expect(getByText('Living Room')).toBeTruthy();
+    expect(utils.getByText('Ceiling Light \u00b7 Living Room')).toBeTruthy();
   });
 
-  it('should show Details section with Entity ID and Source', () => {
-    const { getByText } = render(
+  it('folds technical details (entity ID, protocol, source) until opened', () => {
+    const utils = render(
       <DeviceEditScreen
         navigation={mockNavigation}
         route={makeRoute({ deviceId: 'dev-1', householdId: 'hh-1' })}
@@ -207,15 +208,17 @@ describe('DeviceEditScreen', () => {
       { wrapper },
     );
 
-    expect(getByText('Details')).toBeTruthy();
-    expect(getByText('Entity ID')).toBeTruthy();
-    expect(getByText('light.living_room')).toBeTruthy();
-    expect(getByText('Source')).toBeTruthy();
-    expect(getByText('direct')).toBeTruthy();
+    expect(utils.queryByText('Entity ID')).toBeNull();
+    fireEvent.press(utils.getByText('Technical details'));
+    expect(utils.getByText('Entity ID')).toBeTruthy();
+    expect(utils.getByText('light.living_room')).toBeTruthy();
+    expect(utils.getByText('Protocol')).toBeTruthy();
+    expect(utils.getByText('Source')).toBeTruthy();
+    expect(utils.getByText('direct')).toBeTruthy();
   });
 
-  it('should show Protocol when present', () => {
-    const { getByText } = render(
+  it('has Save and Remove in the sheet; Save needs a name', () => {
+    const utils = render(
       <DeviceEditScreen
         navigation={mockNavigation}
         route={makeRoute({ deviceId: 'dev-1', householdId: 'hh-1' })}
@@ -223,76 +226,13 @@ describe('DeviceEditScreen', () => {
       { wrapper },
     );
 
-    expect(getByText('Protocol')).toBeTruthy();
-    expect(getByText('lifx')).toBeTruthy();
-  });
-
-  it('should have Save button', () => {
-    const { getByText } = render(
-      <DeviceEditScreen
-        navigation={mockNavigation}
-        route={makeRoute({ deviceId: 'dev-1', householdId: 'hh-1' })}
-      />,
-      { wrapper },
-    );
-
-    expect(getByText('Save')).toBeTruthy();
-  });
-
-  it('should disable Save button when name is empty', () => {
-    const { getByDisplayValue, getByText } = render(
-      <DeviceEditScreen
-        navigation={mockNavigation}
-        route={makeRoute({ deviceId: 'dev-1', householdId: 'hh-1' })}
-      />,
-      { wrapper },
-    );
-
-    // Clear the name input
-    const nameInput = getByDisplayValue('Ceiling Light');
-    fireEvent.changeText(nameInput, '');
-
-    // Save button should still render but be disabled
-    const saveButton = getByText('Save');
-    expect(saveButton).toBeTruthy();
-  });
-
-  it('should have Delete Device button', () => {
-    const { getByText } = render(
-      <DeviceEditScreen
-        navigation={mockNavigation}
-        route={makeRoute({ deviceId: 'dev-1', householdId: 'hh-1' })}
-      />,
-      { wrapper },
-    );
-
-    expect(getByText('Delete Device')).toBeTruthy();
-  });
-
-  it('has the name input, save and delete buttons by testID', () => {
-    const { getByTestId } = render(
-      <DeviceEditScreen
-        navigation={mockNavigation}
-        route={makeRoute({ deviceId: 'dev-1', householdId: 'hh-1' })}
-      />,
-      { wrapper },
-    );
-
-    expect(getByTestId('device-name-input').props.value).toBe('Ceiling Light');
-    expect(getByTestId('device-save-button')).toBeTruthy();
-    expect(getByTestId('device-delete-button')).toBeTruthy();
-  });
-
-  it('should render Edit Device appbar title', () => {
-    const { getByText } = render(
-      <DeviceEditScreen
-        navigation={mockNavigation}
-        route={makeRoute({ deviceId: 'dev-1', householdId: 'hh-1' })}
-      />,
-      { wrapper },
-    );
-
-    expect(getByText('Edit Device')).toBeTruthy();
+    fireEvent.press(utils.getByTestId('device-name-room-row'));
+    expect(utils.getByTestId('device-name-input').props.value).toBe('Ceiling Light');
+    expect(utils.getByTestId('device-save-button')).toBeTruthy();
+    expect(utils.getByText('Remove from household')).toBeTruthy();
+    expect(utils.getByTestId('device-delete-button')).toBeTruthy();
+    fireEvent.changeText(utils.getByTestId('device-name-input'), '');
+    expect(utils.getByTestId('device-save-button')).toBeDisabled();
   });
 
   it('should show back action in appbar', () => {
@@ -319,14 +259,13 @@ describe('DeviceEditScreen', () => {
     );
 
     expect(queryByTestId('device-control-panel')).toBeNull();
-    expect(queryByText('Controls')).toBeNull();
   });
 
   it('should show control panel when device is controllable', () => {
     const controllableDevice = { ...mockDevice, is_controllable: true };
     mockDevicesData = [controllableDevice];
 
-    const { getByTestId, getByText } = render(
+    const { getByTestId } = render(
       <DeviceEditScreen
         navigation={mockNavigation}
         route={makeRoute({ deviceId: 'dev-1', householdId: 'hh-1' })}
@@ -334,7 +273,7 @@ describe('DeviceEditScreen', () => {
       { wrapper },
     );
 
-    expect(getByText('Controls')).toBeTruthy();
+    // Controls come first, with no section heading above them.
     expect(getByTestId('device-control-panel')).toBeTruthy();
   });
 });

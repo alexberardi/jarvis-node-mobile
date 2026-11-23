@@ -169,8 +169,10 @@ describe('Store browse — flow integration (load, search, filter, sort, badge, 
     await utils.findByText('MPV Play');
     (browsePackages as jest.Mock).mockClear();
 
+    // Sort is one chip that opens a menu now.
+    fireEvent.press(utils.getByTestId('sort-chip'));
     await act(async () => {
-      fireEvent.press(utils.getByTestId('sort-chip-newest'));
+      fireEvent.press(await utils.findByTestId('sort-chip-newest'));
     });
 
     await waitFor(() =>
@@ -203,8 +205,21 @@ describe('Store browse — flow integration (load, search, filter, sort, badge, 
       'https://cc.test/api/v0/admin/nodes?household_id=hh-1',
     );
     await waitFor(() => expect(fetchNodeTools).toHaveBeenCalledWith('n1'));
-    // badge text is "installed/nodeCount"
-    await utils.findByText('1/1');
+    // A one-node home just says Installed.
+    await utils.findByText('Installed');
+  });
+
+  it('says where a package stands: on N of M nodes, an update, and the updates banner', async () => {
+    get.mockResolvedValue({ data: [{ node_id: 'n1', room: 'Kitchen' }, { node_id: 'n2', room: 'Office' }] });
+    (fetchNodeTools as jest.Mock).mockImplementation(async (id: string) => ({
+      client_tools: [],
+      installed_packages: id === 'n1' ? [{ name: 'mpv-play', version: '0.0.1' }] : [],
+    }));
+    const utils = renderScreen();
+    expect(await utils.findByText('Update')).toBeTruthy();
+    expect(await utils.findByText('1 update ready')).toBeTruthy();
+    fireEvent.press(utils.getByTestId('pantry-updates'));
+    expect(await utils.findByText('Show all')).toBeTruthy();
   });
 
   it('shows the error banner + Retry when the package load fails', async () => {

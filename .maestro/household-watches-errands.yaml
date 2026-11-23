@@ -1,7 +1,7 @@
 appId: com.jarvis.nodemobile
 name: Household watches and errand autonomy switches
-# Household Settings (src/screens/Settings/HouseholdEditScreen.tsx) as the household
-# admin (the seeded superuser): the "Watches & errands" card's two switches
+# Household › Jarvis (src/screens/Settings/HouseholdEditScreen.tsx, section "jarvis") as
+# the household admin (the seeded superuser): the "Watches & errands" card's two switches
 # (watches.enabled, errands.autonomous_enabled) each turn on, then back off.
 #
 # State: both settings default off. If an earlier run died with one left on, the
@@ -19,7 +19,11 @@ env:
 - launchApp:
     clearState: true
 - runFlow: subflows/login.yaml
-- runFlow: subflows/open-household.yaml
+- runFlow:
+    file: subflows/open-household-section.yaml
+    env:
+      ENTRY: "household-tile-jarvis"
+      WAIT_ID: "household-persona-input"
 
 # Watches
 - scrollUntilVisible:
@@ -98,10 +102,10 @@ env:
 # Reopened, the saved (off) state comes back from the server
 - back
 - tapOn:
-    id: "household-edit-.*"
+    id: "household-tile-jarvis"
 - extendedWaitUntil:
     visible:
-      id: "household-name-input"
+      id: "household-persona-input"
     timeout: 15000
 - scrollUntilVisible:
     element:

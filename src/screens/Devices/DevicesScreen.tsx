@@ -6,6 +6,7 @@ import {
   ActivityIndicator,
   Appbar,
   Button,
+  Chip,
   Divider,
   FAB,
   List,
@@ -27,6 +28,7 @@ import { useAuth } from '../../auth/AuthContext';
 import type { DeviceListItem, ExternalDeviceItem, Room } from '../../types/SmartHome';
 import type { DevicesStackParamList } from '../../navigation/types';
 import { pageTitleStyle } from '../../theme';
+import DeviceRow from '../../components/DeviceRow';
 import { nodeDisplayName } from '../../utils/nodeKind';
 
 type Nav = NativeStackNavigationProp<DevicesStackParamList>;
@@ -124,6 +126,7 @@ const DevicesScreen = () => {
   const queryClient = useQueryClient();
   const householdId = authState.activeHouseholdId;
   const [snackbar, setSnackbar] = useState('');
+  const [roomFilter, setRoomFilter] = useState<string>('all');
   const [isFocused, setIsFocused] = useState(false);
 
   // Smart home config (tells us whether to use external devices)
@@ -325,12 +328,15 @@ const DevicesScreen = () => {
       <Appbar.Header>
         <Appbar.Content title="Devices" titleStyle={pageTitleStyle(theme)} />
         {!useExternal && (
-          <Appbar.Action
+          <Button
             icon="door"
-            accessibilityLabel="Rooms"
+            mode="text"
             testID="devices-rooms-button"
             onPress={() => navigation.navigate('RoomManagement')}
-          />
+            style={{ marginRight: 8 }}
+          >
+            Rooms
+          </Button>
         )}
       </Appbar.Header>
 
@@ -417,41 +423,45 @@ const DevicesScreen = () => {
       ) : (
         /* ---------- DB-backed device list ---------- */
         <FlatList
-          data={dbGroups}
+          ListHeaderComponent={
+            dbGroups.length > 1 ? (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.roomChips}>
+                {[{ key: 'all', title: 'All' }, ...dbGroups].map((g) => (
+                  <Chip
+                    key={g.key}
+                    testID={`devices-room-${g.key}`}
+                    selected={roomFilter === g.key}
+                    showSelectedOverlay
+                    onPress={() => setRoomFilter(g.key)}
+                  >
+                    {g.title}
+                  </Chip>
+                ))}
+              </ScrollView>
+            ) : null
+          }
+          data={roomFilter === 'all' ? dbGroups : dbGroups.filter((g) => g.key === roomFilter)}
           keyExtractor={(g) => g.key}
           refreshing={refreshing}
           onRefresh={onRefresh}
           renderItem={({ item: group }) => (
             <List.Section>
               <List.Subheader>{group.title.toUpperCase()}</List.Subheader>
-              {group.devices.map((device) => {
-                const icon = DOMAIN_ICONS[device.domain] || 'devices';
-                const subtitle = [
-                  device.manufacturer,
-                  device.protocol || (device.source === 'home_assistant' ? 'HA' : null),
-                  device.local_ip,
-                ]
-                  .filter(Boolean)
-                  .join(' \u00B7 ');
-
-                return (
-                  <React.Fragment key={device.id}>
-                    <List.Item
-                      testID={`device-row-${device.id}`}
-                      title={device.name}
-                      description={subtitle || device.entity_id}
-                      left={(props) => <List.Icon {...props} icon={icon} />}
-                      onPress={() =>
-                        navigation.navigate('DeviceEdit', {
-                          deviceId: device.id,
-                          householdId: device.household_id,
-                        })
-                      }
-                    />
-                    <Divider />
-                  </React.Fragment>
-                );
-              })}
+              {group.devices.map((device) => (
+                <React.Fragment key={device.id}>
+                  <DeviceRow
+                    device={device}
+                    icon={DOMAIN_ICONS[device.domain] || 'devices'}
+                    onPress={() =>
+                      navigation.navigate('DeviceEdit', {
+                        deviceId: device.id,
+                        householdId: device.household_id,
+                      })
+                    }
+                  />
+                  <Divider />
+                </React.Fragment>
+              ))}
             </List.Section>
           )}
         />
@@ -482,6 +492,7 @@ const DevicesScreen = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  roomChips: { gap: 8, paddingHorizontal: 16, paddingTop: 8 },
   centered: {
     flex: 1,
     justifyContent: 'center',

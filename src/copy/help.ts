@@ -155,7 +155,6 @@ export const helpCopy = {
     applyAdapter:
       'Apply: switch to this fine-tune household-wide. Preview: see which commands changed. Dismiss: keep current model.',
     categoryChips: 'Type of message. Alerts are time-sensitive; confirmations expect a yes/no; reminders are FYI.',
-    thumbsRating: 'Helps Jarvis learn which command interpretations worked. Used to suggest model fine-tunes you can apply.',
     toolCallLine: 'Shows which command Jarvis ran for your request, and the arguments it picked.',
   },
 } as const;

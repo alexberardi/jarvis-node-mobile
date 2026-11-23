@@ -17,14 +17,9 @@ const wrapper = ({ children }: { children: React.ReactNode }) => (
   <PaperProvider theme={lightTheme}>{children}</PaperProvider>
 );
 
-const navigation = { goBack: jest.fn(), navigate: jest.fn() } as any;
-
 const renderScreen = () =>
   render(
-    <SignalAutomationsScreen
-      navigation={navigation}
-      route={{ params: { householdId: 'hh-1' } } as any}
-    />,
+    <SignalAutomationsScreen householdId="hh-1" />,
     { wrapper },
   );
 
@@ -140,5 +135,5 @@ it('changing Delivery to Automatic makes the card dirty and saves that choice', 
 it('shows an error + retry when loading fails', async () => {
   mockGet.mockRejectedValueOnce(new Error('boom'));
   const { getByText } = renderScreen();
-  await waitFor(() => expect(getByText('Could not load automations.')).toBeTruthy());
+  await waitFor(() => expect(getByText('Could not load triggers.')).toBeTruthy());
 });

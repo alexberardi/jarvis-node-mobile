@@ -149,7 +149,11 @@ describe('StoreDetailScreen — apt consent UI', () => {
   const pressInstall = async (label: string) => {
     mockGetPackageDetail.mockResolvedValue(baseDetail);
     const result = render(<StoreDetailScreen />, { wrapper });
-    const button = await waitFor(() => result.getByText(label));
+    // The button now says what it will do ("Install on Kitchen"); press it once the
+    // node states have loaded and it's enabled.
+    await waitFor(() => expect(result.getByTestId('package-install')).toBeEnabled());
+    const button = result.getByTestId('package-install');
+    void label;
     // The on-mount version-discovery effect (added in a83b975) toggles
     // nodesLoading true → false, and the Install button is disabled while
     // it's true. Under CI parallel load the effect occasionally hadn't
@@ -337,7 +341,8 @@ describe('StoreDetailScreen — Pi-only packages and computers', () => {
     mockApiClientGet.mockResolvedValue({ data: nodes });
     mockGetDownloadInfo.mockResolvedValue(makeDownloadInfo(manifest));
     const result = render(<StoreDetailScreen />, { wrapper });
-    const button = await waitFor(() => result.getByText('Install'));
+    await waitFor(() => expect(result.getByTestId('package-install')).toBeEnabled());
+    const button = result.getByTestId('package-install');
     await act(async () => {
       await Promise.resolve();
     });
@@ -350,8 +355,8 @@ describe('StoreDetailScreen — Pi-only packages and computers', () => {
 
     await waitFor(() => expect(mockRequestInstall).toHaveBeenCalledTimes(1), CI_WAIT);
     expect(mockRequestInstall).toHaveBeenCalledWith('pi1', 'mpv-play', expect.any(String), 'v1.0.0');
-    const picker = mockNavigate.mock.calls.find((c) => c[0] === 'NodePickerSheet');
-    expect(picker).toBeUndefined();
+    // The computers were ticked too; they're left out with a word why.
+    expect(alertSpy.mock.calls.filter((c) => c[0] === 'Skipping computers')).toHaveLength(1);
   });
 
   it('says so instead of installing when only computers are left', async () => {
@@ -393,14 +398,30 @@ describe('StoreDetailScreen — Pi-only packages and computers', () => {
     }, CI_WAIT);
   });
 
-  it('offers both kinds in the picker when the package targets the desktop too', async () => {
+  it('installs on both kinds when the package targets the desktop too', async () => {
     await pressInstall([pi, desk], { targets: ['node', 'desktop'] });
 
     await waitFor(() => {
-      const picker = mockNavigate.mock.calls.find((c) => c[0] === 'NodePickerSheet');
-      expect(picker).toBeDefined();
-      const ids = JSON.parse(picker![1].nodes).map((n: { node_id: string }) => n.node_id);
+      const nav = mockNavigate.mock.calls.find((c) => c[0] === 'InstallProgress');
+      expect(nav).toBeDefined();
+      const ids = JSON.parse(nav![1].installs).map((n: { nodeId: string }) => n.nodeId);
       expect(ids).toEqual(['pi1', 'desk1']);
     }, CI_WAIT);
+  });
+
+  it('lists each node with its state, unticks offline nodes, and names the action', async () => {
+    mockApiClientGet.mockResolvedValue({ data: [pi, { ...desk, online: false }] });
+    mockFetchNodeTools.mockImplementation(async (id: string) =>
+      id === 'pi1'
+        ? { client_tools: [], installed_packages: [{ name: 'mpv-play', version: '0.9.0' }] }
+        : { client_tools: [] },
+    );
+    const result = render(<StoreDetailScreen />, { wrapper });
+    await waitFor(() => expect(result.getByText('Update Kitchen')).toBeTruthy(), CI_WAIT);
+    expect(result.getByText('v0.9.0 \u2192 v1.0.0')).toBeTruthy();
+    expect(result.getByText('Offline')).toBeTruthy();
+    // Ticking the offline computer adds it to the action.
+    fireEvent.press(result.getByTestId('package-node-desk1'));
+    expect(result.getByText('Install on Laptop \u00b7 Update Kitchen')).toBeTruthy();
   });
 });

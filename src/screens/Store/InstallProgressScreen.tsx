@@ -219,6 +219,27 @@ const InstallProgressScreen = () => {
       )}
 
       <ScrollView contentContainerStyle={styles.scroll}>
+        {route.params.needsSetup && !isTestInstall && installs.some((e) => statuses.get(e.requestId)?.status === 'completed') && (
+          <Card style={[styles.card, { backgroundColor: theme.dark ? '#431407' : '#fff7ed' }]} testID="install-next-setup">
+            <Card.Content style={{ gap: 8 }}>
+              <Text variant="titleSmall" style={{ fontWeight: '700', color: theme.dark ? '#fed7aa' : '#9a3412' }}>
+                Next: set it up
+              </Text>
+              <Text variant="bodyMedium">
+                {packageName || commandName} needs an account or a key before it can work.
+              </Text>
+              <Button
+                mode="contained"
+                icon="key-chain-variant"
+                style={{ alignSelf: 'flex-start' }}
+                testID="install-open-credentials"
+                onPress={() => navigation.getParent()?.navigate('HouseholdTab', { screen: 'Credentials' })}
+              >
+                Set up credentials
+              </Button>
+            </Card.Content>
+          </Card>
+        )}
         {installs.map((entry) => {
           const status = statuses.get(entry.requestId);
           const statusValue: InstallStatusValue = status?.status || 'pending';

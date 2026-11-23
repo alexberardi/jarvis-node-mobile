@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { PaperProvider } from 'react-native-paper';
 
 import InboxListScreen from '../../src/screens/Inbox/InboxListScreen';
@@ -138,15 +138,42 @@ describe('InboxListScreen', () => {
     });
   });
 
-  it('should show category chips', async () => {
+  it('offers a filter chip per kind, and filters to it', async () => {
     mockListInboxItems.mockResolvedValue(sampleItems);
 
-    const { getByText } = render(<InboxListScreen />, { wrapper });
+    const { getByTestId, findByTestId, queryByTestId } = render(<InboxListScreen />, { wrapper });
 
-    await waitFor(() => {
-      expect(getByText('deep research')).toBeTruthy();
-      expect(getByText('reminder')).toBeTruthy();
-    });
+    await findByTestId('inbox-filter-deep_research');
+    expect(getByTestId('inbox-filter-reminder')).toBeTruthy();
+    fireEvent.press(getByTestId('inbox-filter-reminder'));
+    await waitFor(() => expect(queryByTestId('inbox-item-item-1')).toBeNull());
+    expect(getByTestId('inbox-item-item-2')).toBeTruthy();
+    fireEvent.press(getByTestId('inbox-filter-all'));
+    expect(await findByTestId('inbox-item-item-1')).toBeTruthy();
+  });
+
+  it('filters to unread, marks unread items with a dot, and groups by day', async () => {
+    mockListInboxItems.mockResolvedValue(sampleItems);
+
+    const { getByTestId, findByTestId, queryByTestId, getByText } = render(<InboxListScreen />, { wrapper });
+
+    expect(await findByTestId('inbox-unread-item-1')).toBeTruthy();
+    expect(getByText('Today')).toBeTruthy();
+    fireEvent.press(getByTestId('inbox-filter-unread'));
+    const read = sampleItems.filter((i) => i.is_read).map((i) => i.id);
+    for (const id of read) await waitFor(() => expect(queryByTestId(`inbox-item-${id}`)).toBeNull());
+  });
+
+  it('cues a response for an unread item that carries buttons, until it is read', async () => {
+    mockListInboxItems.mockResolvedValue([
+      { ...sampleItems[0], id: 'ask', metadata: { actions: [{ button_text: 'Yes', button_action: 'yes' }] } },
+      { ...sampleItems[0], id: 'done', is_read: true, metadata: { actions: [{ button_text: 'Yes', button_action: 'yes' }] } },
+    ]);
+
+    const { findByTestId, queryByTestId } = render(<InboxListScreen />, { wrapper });
+
+    expect(await findByTestId('inbox-respond-ask')).toBeTruthy();
+    expect(queryByTestId('inbox-respond-done')).toBeNull();
   });
 
   it('should show error message on load failure', async () => {

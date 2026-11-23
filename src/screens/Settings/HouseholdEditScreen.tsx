@@ -10,6 +10,7 @@ import {
   Chip,
   Dialog,
   IconButton,
+  List,
   Menu,
   Portal,
   SegmentedButtons,
@@ -33,7 +34,7 @@ import TwilioSettingsCard, {
   type TwilioState,
 } from '../../components/TwilioSettingsCard';
 import { useAuth } from '../../auth/AuthContext';
-import type { RootStackParamList } from '../../navigation/types';
+import type { HouseholdSection, RootStackParamList } from '../../navigation/types';
 import {
   ensureBackgroundPermission,
   startHomeGeofence,
@@ -88,6 +89,15 @@ interface InviteCode {
   created_at: string;
 }
 
+const SECTION_TITLES: Record<HouseholdSection, string> = {
+  home: 'Home details',
+  jarvis: 'Jarvis',
+  knowledge: 'Knowledge',
+  presence: 'Presence',
+  calls: 'Phone calls',
+  members: 'Members',
+};
+
 const ROLE_LABELS: Record<string, string> = {
   admin: 'Admin',
   power_user: 'Power User',
@@ -95,7 +105,9 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 const HouseholdEditScreen = ({ navigation, route }: Props) => {
-  const { householdId, householdName } = route.params;
+  const { householdId, householdName, section } = route.params;
+  // No section = every card (the whole editor); the Household tab opens one section at a time.
+  const show = (s: HouseholdSection) => !section || section === s;
   const theme = useTheme();
   const { state: authState, fetchHouseholds, setBackgroundPresence } = useAuth();
 
@@ -776,7 +788,7 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
     <KeyboardSafeView style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <Appbar.Header>
         <Appbar.BackAction onPress={() => navigation.goBack()} />
-        <Appbar.Content title="Household Settings" />
+        <Appbar.Content title={section ? SECTION_TITLES[section] : 'Household Settings'} />
       </Appbar.Header>
 
       <Portal.Host>
@@ -784,6 +796,8 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={membersLoading} onRefresh={loadMembersAndInvites} />}
       >
+        {show('home') && (
+        <>
         {/* Name */}
         <Card style={styles.card}>
           <Card.Content>
@@ -814,11 +828,15 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
             </View>
           </Card.Content>
         </Card>
+        </>
+        )}
 
+        {show('jarvis') && (
+        <>
         {/* Voice / personality */}
         <Card style={styles.card}>
           <Card.Content>
-            <Text variant="titleMedium" style={styles.sectionTitle}>Voice</Text>
+            <Text variant="titleMedium" style={styles.sectionTitle}>Personality</Text>
             <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 12 }}>
               How Jarvis talks — its tone and personality. This shapes the way it
               speaks, not what it can do. Tap a starter to try it on, then tweak
@@ -893,7 +911,11 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
             )}
           </Card.Content>
         </Card>
+        </>
+        )}
 
+        {show('jarvis') && (
+        <>
         {/* Web Search */}
         <Card style={styles.card}>
           <Card.Content>
@@ -925,7 +947,11 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
             )}
           </Card.Content>
         </Card>
+        </>
+        )}
 
+        {show('jarvis') && (
+        <>
         {/* Pantry (jarvisd only — hidden when the server doesn't gate it) */}
         {pantryEnabled !== undefined && (
           <Card style={styles.card}>
@@ -955,7 +981,11 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
             </Card.Content>
           </Card>
         )}
+        </>
+        )}
 
+        {show('jarvis') && (
+        <>
         {/* Watches & errands (hidden when the server has neither key) */}
         {(watchesEnabled !== undefined || errandsAutonomous !== undefined) && (
           <Card style={styles.card}>
@@ -1007,7 +1037,11 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
             </Card.Content>
           </Card>
         )}
+        </>
+        )}
 
+        {show('knowledge') && (
+        <>
         {/* Memory (D19) */}
         <Card style={styles.card}>
           <Card.Content>
@@ -1059,7 +1093,23 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
             )}
           </Card.Content>
         </Card>
+        <Card style={styles.card}>
+          <Card.Content>
+            <List.Item
+              testID="household-memories-row"
+              title="Memories"
+              description="What Jarvis remembers about you and this household"
+              right={(props) => <List.Icon {...props} icon="chevron-right" />}
+              onPress={() => navigation.navigate('Memories')}
+              style={{ paddingHorizontal: 0 }}
+            />
+          </Card.Content>
+        </Card>
+        </>
+        )}
 
+        {show('home') && (
+        <>
         <Card style={styles.card}>
           <Card.Content>
             <Text variant="titleMedium" style={styles.sectionTitle}>Location</Text>
@@ -1107,7 +1157,11 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
             )}
           </Card.Content>
         </Card>
+        </>
+        )}
 
+        {show('home') && (
+        <>
         {/* Time zone (jarvisd only; hidden against the legacy server) */}
         <HouseholdTimezoneCard
           householdId={householdId}
@@ -1116,7 +1170,11 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
           canEdit={isAdmin}
           onChanged={loadHouseholdSettings}
         />
+        </>
+        )}
 
+        {show('calls') && (
+        <>
         {/* Phone calls — the household's own Twilio account (write-only) */}
         <TwilioSettingsCard
           householdId={householdId}
@@ -1125,7 +1183,23 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
           canEdit={isAdmin}
           onChanged={loadHouseholdSettings}
         />
+        <Card style={styles.card}>
+          <Card.Content>
+            <List.Item
+              testID="household-phonebook-row"
+              title="Phonebook"
+              description="Businesses Jarvis can call — numbers, notes, and do-not-call"
+              right={(props) => <List.Icon {...props} icon="chevron-right" />}
+              onPress={() => navigation.navigate('Phonebook')}
+              style={{ paddingHorizontal: 0 }}
+            />
+          </Card.Content>
+        </Card>
+        </>
+        )}
 
+        {show('presence') && (
+        <>
         {/* Home Presence (device-local, opt-in) */}
         <Card style={styles.card}>
           <Card.Content>
@@ -1290,26 +1364,11 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
             )}
           </Card.Content>
         </Card>
+        </>
+        )}
 
-        {/* Signal automations — free-text "when X happens, do Y" rules */}
-        <Card style={styles.card}>
-          <Card.Content>
-            <Text variant="titleMedium" style={styles.sectionTitle}>Automations</Text>
-            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 8 }}>
-              Tell Jarvis what to do when something happens — like locking the door
-              when you leave.
-            </Text>
-            <Button
-              testID="open-signal-automations"
-              mode="outlined"
-              icon="flash-outline"
-              onPress={() => navigation.navigate('SignalAutomations', { householdId })}
-            >
-              Manage automations
-            </Button>
-          </Card.Content>
-        </Card>
-
+        {show('members') && (
+        <>
         {/* Members */}
         <Card style={styles.card}>
           <Card.Content>
@@ -1367,7 +1426,11 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
             ))}
           </Card.Content>
         </Card>
+        </>
+        )}
 
+        {show('members') && (
+        <>
         {/* Invite Codes */}
         {canInvite && (
           <Card style={styles.card}>
@@ -1424,7 +1487,11 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
             </Card.Content>
           </Card>
         )}
+        </>
+        )}
 
+        {show('members') && (
+        <>
         {/* Leave Household */}
         {canLeave && (
           <Card style={[styles.card, { borderColor: theme.colors.error, borderWidth: 1 }]}>
@@ -1449,6 +1516,8 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
               </Button>
             </Card.Content>
           </Card>
+        )}
+        </>
         )}
       </ScrollView>
 

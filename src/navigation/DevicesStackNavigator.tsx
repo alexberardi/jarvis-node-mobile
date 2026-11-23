@@ -5,6 +5,7 @@ import DevicesScreen from '../screens/Devices/DevicesScreen';
 import DeviceEditScreen from '../screens/Devices/DeviceEditScreen';
 import ExternalDeviceDetailScreen from '../screens/Devices/ExternalDeviceDetailScreen';
 import CameraViewScreen from '../screens/Devices/CameraViewScreen';
+import RoomDetailScreen from '../screens/Devices/RoomDetailScreen';
 import RoomManagementScreen from '../screens/Devices/RoomManagementScreen';
 import DeviceDiscoveryScreen from '../screens/SmartHome/DeviceDiscoveryScreen';
 import { DevicesStackParamList } from './types';
@@ -19,6 +20,7 @@ const DevicesStackNavigator = () => {
       <Stack.Screen name="ExternalDeviceDetail" component={ExternalDeviceDetailScreen} />
       <Stack.Screen name="CameraView" component={CameraViewScreen} />
       <Stack.Screen name="RoomManagement" component={RoomManagementScreen} />
+      <Stack.Screen name="RoomDetail" component={RoomDetailScreen} />
       <Stack.Screen name="DeviceDiscovery" component={DeviceDiscoveryScreen} />
     </Stack.Navigator>
   );

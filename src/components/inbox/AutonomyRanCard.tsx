@@ -23,7 +23,7 @@ const SCOPE_LABELS: Record<string, string> = {
   household: 'Household rule',
   watch: 'Watch rule',
   goal: 'Goal rule',
-  automation: 'Set on the automation',
+  automation: 'Set as a trigger',
   tool: "The tool says it's safe to run without asking",
 };
 

@@ -1,8 +1,8 @@
 appId: com.jarvis.nodemobile
 name: Household settings, rename and back
-# Household Settings (src/screens/Settings/HouseholdEditScreen.tsx) as the household
-# admin (the seeded superuser): every admin section renders, and a rename saves, shows in
-# Settings' household list, and is undone. The screen keeps the name it was opened with
+# The Household tab's sections (src/screens/Settings/HouseholdEditScreen.tsx, one section
+# per tile or row) as the household admin (the seeded superuser): every admin section
+# renders, and a rename saves, shows in the Household tab's title, and is undone. The screen keeps the name it was opened with
 # as "saved", so the rename back needs the screen reopened.
 #
 # State: renames Avery Household and renames it back. If the flow dies between the two
@@ -24,38 +24,48 @@ env:
     clearState: true
 - runFlow: subflows/login.yaml
 - runFlow: subflows/reset-household-name.yaml
-- runFlow: subflows/open-household.yaml
-
-# The admin sections
-- assertVisible:
-    id: "household-save-name"
-- scrollUntilVisible:
-    element:
-      id: "household-persona-input"
-    direction: DOWN
+- runFlow:
+    file: subflows/open-household-section.yaml
+    env:
+      ENTRY: "household-tile-jarvis"
+      WAIT_ID: "household-persona-input"
 - scrollUntilVisible:
     element:
       id: "household-web-search-toggle"
     direction: DOWN
-- scrollUntilVisible:
-    element:
-      id: "household-memory-toggle"
-    direction: DOWN
-- scrollUntilVisible:
-    element:
-      id: "household-location-input"
-    direction: DOWN
-- scrollUntilVisible:
-    element:
-      id: "open-signal-automations"
-    direction: DOWN
-- scrollUntilVisible:
-    element:
-      id: "member-row-${EMAIL}"
-    direction: DOWN
+- back
+- runFlow:
+    file: subflows/open-household-section.yaml
+    env:
+      ENTRY: "household-tile-knowledge"
+      WAIT_ID: "household-memory-toggle"
+- assertVisible:
+    id: "household-memories-row"
+- back
+- runFlow:
+    file: subflows/open-household-section.yaml
+    env:
+      ENTRY: "household-tile-members"
+      WAIT_ID: "member-row-${EMAIL}"
 - scrollUntilVisible:
     element:
       id: "invite-create-open"
+    direction: DOWN
+- back
+- scrollUntilVisible:
+    element:
+      id: "household-home-row-automations"
+    direction: DOWN
+- runFlow:
+    file: subflows/open-household-section.yaml
+    env:
+      ENTRY: "household-home-row-home"
+      WAIT_ID: "household-name-input"
+- assertVisible:
+    id: "household-save-name"
+- scrollUntilVisible:
+    element:
+      id: "household-location-input"
     direction: DOWN
 
 # Rename
@@ -85,7 +95,7 @@ env:
 
 # And back
 - tapOn:
-    id: "household-edit-.*"
+    id: "household-home-row-home"
 - extendedWaitUntil:
     visible:
       id: "household-name-input"

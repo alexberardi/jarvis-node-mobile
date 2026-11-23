@@ -10,9 +10,9 @@ import {
   ActivityIndicator,
   Button,
   Card,
-  Chip,
   FAB,
   IconButton,
+  SegmentedButtons,
   Menu,
   Text,
   useTheme,
@@ -26,6 +26,8 @@ import { RoutinesStackParamList } from '../../navigation/types';
 import { fabListPaddingBottom, fabStyle } from '../../theme/fab';
 import type { Routine, RoutineSchedule } from '../../types/Routine';
 import { NodeKindIcon } from '../../components/NodeKindIcon';
+import ScheduleListScreen from '../Schedules/ScheduleListScreen';
+import SignalAutomationsScreen from '../Settings/SignalAutomationsScreen';
 import { useNodeKinds } from '../../hooks/useNodeKinds';
 import { nodeDisplayName, withKnownKind } from '../../utils/nodeKind';
 
@@ -64,7 +66,11 @@ const formatSchedule = (s: RoutineSchedule | null | undefined): string | null =>
   return `${dlabel} · ${tlabel}`;
 };
 
+type Section = 'routines' | 'scheduled' | 'triggers';
+
 const RoutineListScreen = () => {
+  // Routines you start, errands on a schedule, and triggers ("when I leave, lock the door").
+  const [section, setSection] = useState<Section>('routines');
   const navigation = useNavigation<Nav>();
   const theme = useTheme();
   const { state: authState } = useAuth();
@@ -99,7 +105,6 @@ const RoutineListScreen = () => {
   const refreshNodeSupport = nodeSupport.refetch;
   const supportsSimpleOn = (id: string) => nodeSupport.data?.some((n) => n.node_id === id && n.capabilities?.simple_routines === true) === true;
 
-  const [menuOpen, setMenuOpen] = useState<string | null>(null);
   const [runMenuOpen, setRunMenuOpen] = useState<string | null>(null);
   const [running, setRunning] = useState<string | null>(null);
 
@@ -168,7 +173,6 @@ const RoutineListScreen = () => {
 
   const handleRun = useCallback(
     (routine: Routine) => {
-      setMenuOpen(null);
       if (routine.mode === 'simple' && !nodeSupport.data) {
         Alert.alert('Node support unavailable', 'Could not check node support. Refresh the routines list and try again.');
         return;
@@ -207,13 +211,26 @@ const RoutineListScreen = () => {
         <Card testID={`routine-card-${item.id}`} style={styles.card} onPress={() => navigation.navigate('RoutineEdit', { routineId: item.id })}>
           <Card.Content>
             <View style={styles.cardHeader}>
-              <MaterialCommunityIcons
-                name={scheduleIcon(item.schedule)}
-                size={20}
-                color={theme.colors.primary}
-                style={{ marginRight: 8 }}
-              />
-              <Text variant="titleMedium" style={{ flex: 1 }}>{item.name}</Text>
+              <View style={[styles.rowIcon, { backgroundColor: theme.colors.secondaryContainer }]}>
+                <MaterialCommunityIcons name={scheduleIcon(item.schedule)} size={20} color={theme.colors.primary} />
+              </View>
+              <View style={{ flex: 1, gap: 3 }}>
+                <Text variant="titleMedium">{item.name}</Text>
+                {item.trigger_phrases.length > 0 && (
+                  <Text variant="bodyMedium" numberOfLines={1} style={{ color: theme.colors.onSurfaceVariant }}>
+                    {item.trigger_phrases.slice(0, 2).map((p) => `\u201c${p}\u201d`).join(', ')}
+                    {item.trigger_phrases.length > 2 ? ` +${item.trigger_phrases.length - 2}` : ''}
+                  </Text>
+                )}
+                <Text variant="bodySmall" numberOfLines={2} style={{ color: theme.colors.onSurfaceVariant, opacity: 0.8 }}>
+                  {[
+                    item.mode === 'simple'
+                      ? item.utterance
+                      : `${item.steps.length} step${item.steps.length !== 1 ? 's' : ''}`,
+                    schedule,
+                  ].filter(Boolean).join(' \u00b7 ')}
+                </Text>
+              </View>
               {running === item.id ? (
                 <View testID={`routine-running-${item.id}`} style={styles.running}>
                   <ActivityIndicator size={16} />
@@ -246,36 +263,7 @@ const RoutineListScreen = () => {
                   ))}
                 </Menu>
               )}
-              <Menu
-                visible={menuOpen === item.id}
-                onDismiss={() => setMenuOpen(null)}
-                anchor={<IconButton icon="dots-vertical" size={20} onPress={() => setMenuOpen(item.id)} style={{ margin: -4 }} />}
-              >
-                <Menu.Item leadingIcon="pencil-outline" title="Edit"
-                  onPress={() => { setMenuOpen(null); navigation.navigate('RoutineEdit', { routineId: item.id }); }} />
-                <Menu.Item leadingIcon="delete-outline" title="Delete"
-                  onPress={() => { setMenuOpen(null); handleDelete(item); }} />
-              </Menu>
             </View>
-            <View style={styles.chips}>
-              {item.trigger_phrases.slice(0, 3).map((phrase) => (
-                <Chip key={phrase} compact style={styles.chip} textStyle={styles.chipText}>{phrase}</Chip>
-              ))}
-            </View>
-            <View style={styles.metaRow}>
-              <Text variant="labelSmall" style={{ color: theme.colors.primary }}>{item.mode === 'simple' ? 'Simple' : 'Advanced'}</Text>
-              {item.mode !== 'simple' && (
-              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                {item.steps.length} step{item.steps.length !== 1 ? 's' : ''}
-              </Text>
-              )}
-              {schedule && (
-                <Chip compact style={styles.scheduleBadge} textStyle={[styles.chipText, { color: theme.colors.primary }]}>
-                  {schedule}
-                </Chip>
-              )}
-            </View>
-            {item.mode === 'simple' && <Text variant="bodySmall" numberOfLines={2} style={{ color: theme.colors.onSurfaceVariant, marginTop: 6 }}>{item.utterance}</Text>}
           </Card.Content>
         </Card>
       </ReanimatedSwipeable>
@@ -295,10 +283,38 @@ const RoutineListScreen = () => {
     </View>
   );
 
+  const header = (
+    <>
+      <Text variant="headlineMedium" style={[styles.title, { color: theme.colors.onBackground }]}>Routines</Text>
+      <SegmentedButtons
+        value={section}
+        onValueChange={(v) => setSection(v as Section)}
+        style={styles.segments}
+        buttons={[
+          { value: 'routines', label: 'Routines', testID: 'routines-tab-routines' },
+          { value: 'scheduled', label: 'Scheduled', testID: 'open-schedules' },
+          { value: 'triggers', label: 'Triggers', testID: 'routines-tab-triggers' },
+        ]}
+      />
+    </>
+  );
+
+  if (section === 'scheduled') {
+    return <View style={styles.container}>{header}<ScheduleListScreen /></View>;
+  }
+  if (section === 'triggers') {
+    return (
+      <View style={styles.container}>
+        {header}
+        {householdId ? <SignalAutomationsScreen householdId={householdId} /> : null}
+      </View>
+    );
+  }
+
   if (isLoading) {
     return (
       <View style={styles.container}>
-        <Text variant="headlineMedium" style={[styles.title, { color: theme.colors.onBackground }]}>Routines</Text>
+        {header}
         <View style={styles.center}><ActivityIndicator size="large" /></View>
       </View>
     );
@@ -306,16 +322,7 @@ const RoutineListScreen = () => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text variant="headlineMedium" style={[styles.title, styles.titleFlex, { color: theme.colors.onBackground }]}>Routines</Text>
-        <IconButton
-          testID="open-schedules"
-          icon="calendar-clock"
-          size={24}
-          onPress={() => navigation.navigate('ScheduleList')}
-          accessibilityLabel="Scheduled errands"
-        />
-      </View>
+      {header}
       <FlatList
         data={routines}
         keyExtractor={(r) => r.id}
@@ -341,18 +348,13 @@ const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 },
   header: { flexDirection: 'row', alignItems: 'center', paddingRight: 8 },
   title: { fontWeight: 'bold', paddingHorizontal: 16, marginBottom: 12 },
-  titleFlex: { flex: 1, marginBottom: 0 },
+  segments: { marginHorizontal: 16, marginBottom: 4 },
   list: { padding: 16, gap: 12, paddingBottom: fabListPaddingBottom },
   running: { flexDirection: 'row', alignItems: 'center', gap: 6, marginRight: 8 },
   emptyList: { flexGrow: 1, justifyContent: 'center', alignItems: 'center' },
   card: {},
-  cardHeader: { flexDirection: 'row', alignItems: 'center' },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8, marginBottom: 6 },
-  // minHeight, not height: a fixed height clips descenders at a large font scale.
-  chip: { minHeight: 30, paddingHorizontal: 2 },
-  chipText: { fontSize: 11 },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
-  scheduleBadge: { minHeight: 26 },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 6 },
+  rowIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   fab: fabStyle,
   deleteAction: {
     backgroundColor: '#ef4444', justifyContent: 'center', alignItems: 'center',

@@ -9,12 +9,10 @@
  *
  * Reached from Household Settings. Storage + auth live in signalAutomationsApi.
  */
-import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import {
   ActivityIndicator,
-  Appbar,
   Button,
   Card,
   Chip,
@@ -31,10 +29,10 @@ import {
   type DeliveryMode,
   type SignalAutomation,
 } from '../../api/signalAutomationsApi';
-import type { RootStackParamList } from '../../navigation/types';
 import KeyboardSafeView from '../../components/KeyboardSafeView';
 
-type Props = NativeStackScreenProps<RootStackParamList, 'SignalAutomations'>;
+/** Shown inside the Routines tab's Triggers segment, under its header. */
+type Props = { householdId: string };
 
 interface Draft {
   instruction: string;
@@ -42,8 +40,7 @@ interface Draft {
   delivery: DeliveryMode;
 }
 
-const SignalAutomationsScreen = ({ navigation, route }: Props) => {
-  const { householdId } = route.params;
+const SignalAutomationsScreen = ({ householdId }: Props) => {
   const theme = useTheme();
 
   // `items` is the server baseline; `drafts` is the editable copy. A card is
@@ -69,7 +66,7 @@ const SignalAutomationsScreen = ({ navigation, route }: Props) => {
       );
       setError(null);
     } catch {
-      setError('Could not load automations.');
+      setError('Could not load triggers.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -268,10 +265,6 @@ const SignalAutomationsScreen = ({ navigation, route }: Props) => {
 
   return (
     <KeyboardSafeView style={[styles.screen, { backgroundColor: theme.colors.background }]}>
-      <Appbar.Header>
-        <Appbar.BackAction onPress={() => navigation.goBack()} />
-        <Appbar.Content title="Automations" />
-      </Appbar.Header>
       {renderBody()}
     </KeyboardSafeView>
   );
