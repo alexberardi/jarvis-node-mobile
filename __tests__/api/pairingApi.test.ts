@@ -1,6 +1,6 @@
 /**
  * pairingApi — device-code pairing for a computer (jarvis-server cc pairing.go,
- * install plan 3.4). The member's side only: list what's waiting, approve a code
+ * install plan 3.4). The member's side only: count what's waiting, approve a code
  * into one of their own households, or deny it. All three are user-JWT routes.
  */
 import apiClient from '../../src/api/apiClient';
@@ -33,24 +33,18 @@ const axiosError = (status: number, data: unknown) =>
 beforeEach(() => jest.clearAllMocks());
 
 describe('listPairings', () => {
-  it('GETs /api/v0/nodes/pairings and returns pairings and the caller\'s households', async () => {
+  it('GETs /api/v0/nodes/pairings and returns the waiting count and the caller\'s households', async () => {
     mockGet.mockResolvedValue({
-      data: {
-        pairings: [
-          { code: 'ABCD-EFGH', name: 'Office-PC', platform: 'linux', requested_from: '10.0.0.5', created_at: '2026-10-14T10:00:00Z', expires_in: 540 },
-        ],
-        households: [{ id: 'hh-1', name: 'Home', role: 'member' }],
-      },
+      data: { pairings: [], waiting: 2, households: [{ id: 'hh-1', name: 'Home', role: 'member' }] },
     });
     const res = await listPairings();
     expect(mockGet).toHaveBeenCalledWith('http://cc.test/api/v0/nodes/pairings', { timeout: 10000 });
-    expect(res.pairings[0].code).toBe('ABCD-EFGH');
-    expect(res.households).toEqual([{ id: 'hh-1', name: 'Home', role: 'member' }]);
+    expect(res).toEqual({ waiting: 2, households: [{ id: 'hh-1', name: 'Home', role: 'member' }] });
   });
 
-  it('treats missing arrays as empty', async () => {
+  it('treats missing fields as none', async () => {
     mockGet.mockResolvedValue({ data: {} });
-    expect(await listPairings()).toEqual({ pairings: [], households: [] });
+    expect(await listPairings()).toEqual({ waiting: 0, households: [] });
   });
 });
 
