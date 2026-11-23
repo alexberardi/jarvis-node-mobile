@@ -43,10 +43,10 @@ HEADLINES: dict[str, str] = {
     "devices": "Every device,\norganized by room",
     "routines": "Routines that\nrun your day",
     "routine-edit": "Build automations,\nstep by step",
-    "rooms": "Rooms that\nmirror your home",
+    "rooms": "Your home,\nfloor by floor",
     "inbox": "Alerts and reminders,\ndelivered quietly",
     "nav-pantry": "Add skills\nfrom the Pantry",
-    "nodes": "Voice nodes and\ncomputers, together",
+    "household": "Your whole household,\nin one place",
     "settings-household": "Choose how\nJarvis talks",
     "auth-landing": "Self-hosted.\nPrivate by design.",
 }

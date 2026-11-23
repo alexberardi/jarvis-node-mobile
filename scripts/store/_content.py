@@ -90,7 +90,7 @@ Sign-in for review:
 4. Tap "Log In" and sign in with:
    Email: {DEMO_ACCOUNT_EMAIL}
    Password: {DEMO_ACCOUNT_PASSWORD}
-5. The Home tab opens an in-app chat with Jarvis. The Devices, Routines, Nodes, and Pantry tabs show data from this hosted demo backend.
+5. The Chat tab opens an in-app chat with Jarvis. The Devices, Pantry, Routines, and Household tabs show data from this hosted demo backend.
 
 Setting the server URL points the app at our hosted demo Jarvis backend so the rest of the app can be exercised without a physical Pi node. The full provisioning flow requires a physical Pi Zero voice node and is not testable in the simulator, but the rest of the app (chat, browsing routines, browsing devices, browsing the Pantry package store, settings, household management) is fully exercisable with the demo account above.
 
@@ -124,7 +124,7 @@ PLAY_APP_ACCESS_INSTRUCTIONS = f"""Sign-in is required. To reach the hosted demo
 3. In the "Server URL" dialog, enter {DEMO_CONFIG_URL} and tap Save.
 4. Tap "Log In" and sign in with the username and password provided above.
 
-This points the app at our hosted demo backend. The Home, Devices, Routines, Nodes, Pantry, and Settings tabs are all exercisable without a physical Pi node. The Provisioning flow requires a real Pi Zero and is not testable on an emulator.
+This points the app at our hosted demo backend. The Chat, Devices, Pantry, Routines, and Household tabs, and Settings (from the avatar), are all exercisable without a physical Pi node. The Provisioning flow requires a real Pi Zero and is not testable on an emulator.
 
 Camera: QR scanning during node pairing.
 Microphone: speech capture for the in-app voice chat; audio is sent to the user's own Jarvis server for Whisper transcription.
@@ -211,17 +211,18 @@ AGE_RATING_ATTRS = {
 }
 
 # ── Screenshot ordering (used by every store push) ───────────────────────────
-# Captured 2026-07-07 (dark mode, iPhone 17 Pro Max sim — see screenshots/flows/store/).
-# nodes.png is a 10th, App-Store-only shot (Play caps at 8 — see PLAY_SHOTS).
+# Captured 2026-11-23 after the IA redesign (dark mode, iPhone 17 Pro Max sim, a
+# `sandbox --profile rich --llm scripted --lan` household). Play takes the first 8 (PLAY_SHOTS);
+# the last two are App Store only.
 SHOTS = [
     "home.png",
+    "household.png",
     "devices.png",
+    "rooms.png",
     "routines.png",
     "routine-edit.png",
-    "rooms.png",
     "inbox.png",
     "nav-pantry.png",
     "settings-household.png",
     "auth-landing.png",
-    "nodes.png",
 ]
