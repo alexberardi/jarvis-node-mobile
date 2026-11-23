@@ -7,11 +7,11 @@ import AddComputerScreen, { PAIRING_POLL_MS } from '../../src/screens/Nodes/AddC
 import { lightTheme } from '../../src/theme';
 import { approvePairing, denyPairing, listPairings } from '../../src/api/pairingApi';
 
-// L1 FLOW INTEGRATION — "Add a computer" (install plan item 3.4). The real screen inside a
-// real PaperProvider; only the pairing API, navigation and the clipboard are mocked. Any
-// household member approves a computer's code into one of THEIR households (the list's
-// `households`, which cc scopes to the caller) and a room, or denies it. The list polls while
-// the screen is focused and stops when it isn't.
+// L1 FLOW INTEGRATION — "Add a computer". The real screen inside a real PaperProvider; only
+// the pairing API, navigation and the clipboard are mocked. The server never lists codes, so a
+// household member TYPES the code the computer shows and approves it into one of THEIR
+// households (the list's `households`, which cc scopes to the caller) and a room, or denies it.
+// The waiting count polls while the screen is focused and stops when it isn't.
 
 const mockGoBack = jest.fn();
 jest.mock('@react-navigation/native', () => {
@@ -37,14 +37,6 @@ const HOUSEHOLDS = [
   { id: 'hh-1', name: 'Home', role: 'member' },
   { id: 'hh-2', name: 'Cabin', role: 'admin' },
 ];
-const PAIRING = {
-  code: 'ABCD-EFGH',
-  name: 'Office-PC',
-  platform: 'linux',
-  requested_from: '10.0.0.5',
-  created_at: '2026-10-14T10:00:00Z',
-  expires_in: 540,
-};
 
 const renderScreen = () =>
   render(
@@ -63,7 +55,7 @@ describe('Add a computer — flow integration', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockAuth = { user: { id: 7 }, activeHouseholdId: 'hh-2', households: HOUSEHOLDS };
-    (listPairings as jest.Mock).mockResolvedValue({ pairings: [PAIRING], households: HOUSEHOLDS });
+    (listPairings as jest.Mock).mockResolvedValue({ waiting: 1, households: HOUSEHOLDS });
   });
 
   afterEach(() => {
@@ -71,71 +63,71 @@ describe('Add a computer — flow integration', () => {
   });
 
   it('shows where to get the agent and copies the link', async () => {
-    const { getByTestId, getByText, findByText } = renderScreen();
+    const { getByTestId, getByText, findByTestId } = renderScreen();
     expect(getByText('https://github.com/alexberardi/jarvis-server/releases')).toBeTruthy();
     expect(getByText(/Jarvis Automation agent/)).toBeTruthy();
     fireEvent.press(getByTestId('add-computer-copy-link'));
     await waitFor(() =>
       expect(Clipboard.setStringAsync).toHaveBeenCalledWith('https://github.com/alexberardi/jarvis-server/releases'),
     );
-    await findByText('Office-PC');
+    await findByTestId('pairing-code-input');
   });
 
-  it('lists a waiting computer with its code, and approves it into the chosen household and room', async () => {
+  it('approves a typed code into the chosen household and room', async () => {
     (approvePairing as jest.Mock).mockResolvedValue({ status: 'approved', name: 'Office-PC' });
-    const { findByText, getByTestId, getByText } = renderScreen();
+    const { findByTestId, getByTestId, findByText } = renderScreen();
 
-    expect(await findByText('ABCD-EFGH')).toBeTruthy();
-    expect(getByText('Office-PC')).toBeTruthy();
-    expect(getByText(/Approve only if the computer shows this same code/)).toBeTruthy();
-    expect(getByText(/9 min/)).toBeTruthy();
+    expect(await findByTestId('pairings-waiting')).toHaveTextContent(/1 computer is waiting/);
+    // Nothing typed yet → nothing to approve or deny.
+    expect(getByTestId('pairing-approve').props.accessibilityState.disabled).toBe(true);
+    expect(getByTestId('pairing-deny').props.accessibilityState.disabled).toBe(true);
 
     // Defaults to the active household; the member picks another of their own.
-    expect(getByTestId('pairing-household-ABCD-EFGH-hh-2').props.accessibilityState.selected).toBe(true);
-    fireEvent.press(getByTestId('pairing-household-ABCD-EFGH-hh-1'));
-    fireEvent.changeText(getByTestId('pairing-room-ABCD-EFGH'), 'office');
-
-    (listPairings as jest.Mock).mockResolvedValue({ pairings: [], households: HOUSEHOLDS });
-    fireEvent.press(getByTestId('pairing-approve-ABCD-EFGH'));
+    expect(getByTestId('pairing-household-hh-2').props.accessibilityState.selected).toBe(true);
+    fireEvent.press(getByTestId('pairing-household-hh-1'));
+    fireEvent.changeText(getByTestId('pairing-code-input'), 'abcd-efgh ');
+    fireEvent.changeText(getByTestId('pairing-room'), 'office');
+    fireEvent.press(getByTestId('pairing-approve'));
 
     await waitFor(() =>
       expect(approvePairing).toHaveBeenCalledWith({ code: 'ABCD-EFGH', householdId: 'hh-1', room: 'office' }),
     );
-    expect(await findByText(/Office-PC approved\. It finishes pairing in a few seconds/)).toBeTruthy();
+    expect(await findByText(/Approved\. The computer asks to confirm Home before it joins/)).toBeTruthy();
+    expect(getByTestId('pairing-code-input').props.value).toBe('');
     expect(denyPairing).not.toHaveBeenCalled();
   });
 
   it('offers only the households the server listed for the caller', async () => {
-    (listPairings as jest.Mock).mockResolvedValue({ pairings: [PAIRING], households: [HOUSEHOLDS[0]] });
-    const { findByText, queryByTestId, getByTestId } = renderScreen();
-    await findByText('ABCD-EFGH');
-    expect(queryByTestId('pairing-household-ABCD-EFGH-hh-2')).toBeNull();
+    (listPairings as jest.Mock).mockResolvedValue({ waiting: 1, households: [HOUSEHOLDS[0]] });
+    const { findByTestId, queryByTestId } = renderScreen();
     // The active household isn't one of them → the first listed one.
-    expect(getByTestId('pairing-household-ABCD-EFGH-hh-1').props.accessibilityState.selected).toBe(true);
+    expect((await findByTestId('pairing-household-hh-1')).props.accessibilityState.selected).toBe(true);
+    expect(queryByTestId('pairing-household-hh-2')).toBeNull();
   });
 
-  it('denies a code', async () => {
+  it('denies a typed code', async () => {
     (denyPairing as jest.Mock).mockResolvedValue(undefined);
-    const { findByText, getByTestId } = renderScreen();
-    await findByText('ABCD-EFGH');
-    fireEvent.press(getByTestId('pairing-deny-ABCD-EFGH'));
+    const { findByTestId, getByTestId, findByText } = renderScreen();
+    fireEvent.changeText(await findByTestId('pairing-code-input'), 'ABCD-EFGH');
+    fireEvent.press(getByTestId('pairing-deny'));
     await waitFor(() => expect(denyPairing).toHaveBeenCalledWith('ABCD-EFGH'));
-    expect(await findByText('Office-PC denied.')).toBeTruthy();
+    expect(await findByText('Pairing denied.')).toBeTruthy();
     expect(approvePairing).not.toHaveBeenCalled();
   });
 
-  it("shows the server's refusal and keeps the request", async () => {
+  it("shows the server's refusal and keeps the code", async () => {
     (approvePairing as jest.Mock).mockRejectedValue(axiosError(404, 'Pairing code not found or expired'));
-    const { findByText, getByTestId } = renderScreen();
-    await findByText('ABCD-EFGH');
-    fireEvent.press(getByTestId('pairing-approve-ABCD-EFGH'));
+    const { findByTestId, getByTestId, findByText } = renderScreen();
+    fireEvent.changeText(await findByTestId('pairing-code-input'), 'WRONG-CODE');
+    fireEvent.press(getByTestId('pairing-approve'));
     expect(await findByText('Pairing code not found or expired')).toBeTruthy();
+    expect(getByTestId('pairing-code-input').props.value).toBe('WRONG-CODE');
   });
 
   it('says how to start when nothing is waiting', async () => {
-    (listPairings as jest.Mock).mockResolvedValue({ pairings: [], households: HOUSEHOLDS });
+    (listPairings as jest.Mock).mockResolvedValue({ waiting: 0, households: HOUSEHOLDS });
     const { findByTestId } = renderScreen();
-    expect(await findByTestId('pairings-empty')).toHaveTextContent(/its code appears here/);
+    expect(await findByTestId('pairings-waiting')).toHaveTextContent(/type the code below/);
   });
 
   it('explains when the user belongs to no household', async () => {
@@ -146,8 +138,8 @@ describe('Add a computer — flow integration', () => {
 
   it('polls while open and stops when closed', async () => {
     jest.useFakeTimers();
-    const { findByText, unmount } = renderScreen();
-    await findByText('ABCD-EFGH');
+    const { findByTestId, unmount } = renderScreen();
+    await findByTestId('pairings-waiting');
     expect(listPairings).toHaveBeenCalledTimes(1);
 
     await act(async () => {
