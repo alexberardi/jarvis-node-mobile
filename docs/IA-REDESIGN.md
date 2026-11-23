@@ -27,6 +27,7 @@ Decisions already made (in review of the mockups and the first build):
 - Connection and the config service URL are one **Server** card.
 - **Command feedback is removed.** The server stored the ratings, but nothing read them.
 - The node stats row (uptime, command and routine counts) is removed: the server never sent those fields.
+- A ⋮ menu only holds two or more actions; a lone action (delete a routine, remove a room, revert a package) is its own toolbar icon. A form's Save is a full-width button at the bottom, not a header pill. This overrides any single-item ⋮ named below.
 - The node screen has no ⋮ menu. Forge test, Scan for devices and Export key are cards under **Tools**, and **Voice profile** is a Device card. Delete / sign out stays as the danger zone at the bottom.
 
 ## Navigation map

@@ -43,7 +43,7 @@ env:
       text: "New routine"
     timeout: 10000
 - assertNotVisible:
-    id: "routine-menu"
+    id: "routine-delete-button"
 - tapOn:
     id: "routine-mode-advanced"
 - tapOn:
@@ -135,8 +135,6 @@ env:
     timeout: 10000
 - assertVisible:
     id: "routine-trigger-${output.phrase}"
-- tapOn:
-    id: "routine-menu"
 - tapOn:
     id: "routine-delete-button"
 - assertVisible:

@@ -50,7 +50,6 @@ const RoomDetailScreen = () => {
   const rooms = useQuery({ queryKey: ['rooms', householdId], queryFn: () => listRooms(householdId) }).data ?? [];
   const devices = useQuery({ queryKey: ['devices', householdId], queryFn: () => listDevices(householdId) }).data ?? [];
   const room = rooms.find((r) => r.id === roomId);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState('');
@@ -131,13 +130,7 @@ const RoomDetailScreen = () => {
         <Appbar.Header>
           <Appbar.BackAction onPress={() => navigation.goBack()} />
           <Appbar.Content title={room.name} />
-          <Menu
-            visible={menuOpen}
-            onDismiss={() => setMenuOpen(false)}
-            anchor={<Appbar.Action icon="dots-vertical" accessibilityLabel="More" testID="room-menu" onPress={() => setMenuOpen(true)} />}
-          >
-            <Menu.Item leadingIcon="delete-outline" title="Remove room" testID="room-remove" onPress={() => { setMenuOpen(false); remove(); }} />
-          </Menu>
+          <Appbar.Action icon="delete-outline" accessibilityLabel="Remove room" testID="room-remove" onPress={remove} />
         </Appbar.Header>
         <ScrollView contentContainerStyle={styles.content}>
           {switchable.length > 0 && (

@@ -164,9 +164,10 @@ export const routineSummary = (r: {
   if (r.mode === 'simple') {
     what = r.utterance.trim() ? `Jarvis does: ${r.utterance.trim()}` : 'Jarvis does what you describe below';
   } else {
-    const named = r.steps.filter((st) => st.command || st.label).map((st) => (st.label || friendlyCommand(st.command)).toLowerCase());
-    what = named.length ? `Jarvis will ${named.join(', then ')}` : 'Jarvis runs the steps you add below';
-    if (r.responseInstruction.trim()) what += `, then gives a ${r.responseLength} reply: ${r.responseInstruction.trim()}`;
+    // Labels are often raw command names (tomorrow_weather), so they get the same cleanup.
+    const named = r.steps.filter((st) => st.command || st.label).map((st) => friendlyCommand(st.label || st.command).toLowerCase());
+    what = named.length ? `Jarvis will: ${named.join(', then ')}` : 'Jarvis runs the steps you add below';
+    if (r.responseInstruction.trim()) what += `, then give a ${r.responseLength} reply: ${r.responseInstruction.trim()}`;
   }
   const sentence = `${when}, ${what}`.replace(/([^.!?])$/, '$1.');
   return r.scheduled && quoted.length ? `${sentence} It also runs on a schedule.` : sentence;
@@ -288,7 +289,6 @@ const RoutineEditScreen = () => {
   const [paramMenuStep, setParamMenuStep] = useState<number | null>(null);
   // The step open in the bottom sheet; the list itself shows one line per step.
   const [editingStep, setEditingStep] = useState<number | null>(null);
-  const [headerMenu, setHeaderMenu] = useState(false);
 
   // Load existing routine when editing
   useEffect(() => {
@@ -667,25 +667,8 @@ const RoutineEditScreen = () => {
         <Text variant="titleLarge" style={{ fontWeight: 'bold', flex: 1 }} numberOfLines={1}>
           {isEditing ? name || 'Routine' : 'New routine'}
         </Text>
-        <Button mode="contained" compact testID="routine-save-button" onPress={handleSave} disabled={!!validationError || saving} loading={saving}>
-          {isEditing ? 'Save' : 'Create'}
-        </Button>
         {isEditing && (
-          <Menu
-            visible={headerMenu}
-            onDismiss={() => setHeaderMenu(false)}
-            anchor={<IconButton icon="dots-vertical" testID="routine-menu" onPress={() => setHeaderMenu(true)} accessibilityLabel="More" />}
-          >
-            <Menu.Item
-              testID="routine-delete-button"
-              leadingIcon="delete-outline"
-              title="Delete routine"
-              onPress={() => {
-                setHeaderMenu(false);
-                handleDelete();
-              }}
-            />
-          </Menu>
+          <IconButton icon="delete-outline" testID="routine-delete-button" onPress={handleDelete} accessibilityLabel="Delete routine" />
         )}
       </View>
 
@@ -916,6 +899,12 @@ const RoutineEditScreen = () => {
         )}
       </ScrollView>
 
+      <View style={[styles.footer, { backgroundColor: theme.colors.background, borderTopColor: theme.colors.outlineVariant }]}>
+        <Button mode="contained" testID="routine-save-button" onPress={handleSave} disabled={!!validationError || saving} loading={saving}>
+          {isEditing ? 'Save' : 'Create routine'}
+        </Button>
+      </View>
+
       <Portal>
         <Modal
           visible={editingStep !== null}
@@ -938,7 +927,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', paddingBottom: 4,
     borderBottomWidth: StyleSheet.hairlineWidth, zIndex: 1,
   },
-  scroll: { paddingBottom: 48, paddingTop: 8 },
+  scroll: { paddingBottom: 24, paddingTop: 8 },
+  footer: { paddingHorizontal: 16, paddingVertical: 10, borderTopWidth: StyleSheet.hairlineWidth },
   summary: { marginHorizontal: 16, marginBottom: 12, padding: 14, borderRadius: 14 },
   validation: { marginHorizontal: 20, marginTop: -4, marginBottom: 10 },
   card: { marginHorizontal: 16, marginBottom: 12 },

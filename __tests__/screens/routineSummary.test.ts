@@ -21,7 +21,7 @@ describe('routine summary', () => {
 
   it('reads an advanced routine as one sentence, labels before command names', () => {
     expect(routineSummary(base)).toBe(
-      'When you say “good morning” or “start the day”, Jarvis will get weather, then check my calendar, then gives a short reply: Give a warm short briefing.',
+      'When you say “good morning” or “start the day”, Jarvis will: get weather, then check my calendar, then give a short reply: Give a warm short briefing.',
     );
   });
 

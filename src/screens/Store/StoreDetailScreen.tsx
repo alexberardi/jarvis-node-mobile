@@ -12,7 +12,6 @@ import {
   Divider,
   Icon,
   List,
-  Menu,
   Text,
   useTheme,
 } from 'react-native-paper';
@@ -105,7 +104,6 @@ const StoreDetailScreen = () => {
   const [nodes, setNodes] = useState<NodeInfo[]>([]);
   // Ticked nodes on "On your nodes": what the install button acts on.
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [menuOpen, setMenuOpen] = useState(false);
 
   const { markDisabled } = usePantryGate();
   const activeHousehold = authState.households.find(
@@ -404,22 +402,13 @@ const StoreDetailScreen = () => {
         <Appbar.BackAction onPress={() => navigation.goBack()} />
         <Appbar.Content title="" />
         {canInstall && revertTarget && (
-          <Menu
-            visible={menuOpen}
-            onDismiss={() => setMenuOpen(false)}
-            anchor={<Appbar.Action icon="dots-vertical" testID="package-menu" accessibilityLabel="More" onPress={() => setMenuOpen(true)} />}
-          >
-            <Menu.Item
-              testID="package-revert"
-              leadingIcon="backup-restore"
-              title={`Revert to v${revertTarget.previousVersion}`}
-              disabled={reverting || installing}
-              onPress={() => {
-                setMenuOpen(false);
-                handleRevert();
-              }}
-            />
-          </Menu>
+          <Appbar.Action
+            icon="backup-restore"
+            testID="package-revert"
+            accessibilityLabel={`Revert to v${revertTarget.previousVersion}`}
+            disabled={reverting || installing}
+            onPress={handleRevert}
+          />
         )}
       </Appbar.Header>
 

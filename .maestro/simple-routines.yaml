@@ -97,8 +97,6 @@ env:
     id: "routine-step-done"
 - takeScreenshot: advanced-routine-editor
 - tapOn:
-    id: "routine-menu"
-- tapOn:
     id: "routine-delete-button"
 - tapOn:
     id: "android:id/button1"
