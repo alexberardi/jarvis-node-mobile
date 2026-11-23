@@ -1,0 +1,16 @@
+appId: com.jarvis.nodemobile
+name: open-households
+# From the main tabs: the Household tab's switcher, then "Join or create a household",
+# which lists every household with this user's role (src/screens/Settings/SettingsScreen.tsx,
+# view "households"). Close it with settings-close.
+---
+- tapOn:
+    id: "tab-household"
+- tapOn:
+    id: "household-switcher"
+- tapOn:
+    id: "household-join-create"
+- extendedWaitUntil:
+    visible:
+      id: "settings-section-household"
+    timeout: 15000

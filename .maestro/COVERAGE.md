@@ -14,12 +14,13 @@ reason is in its `properties.skip_reason`).
 | Auth/LoginScreen | flow | every flow (subflows/login-as.yaml); bad login: register.yaml |
 | Auth/RegisterScreen | flow | register.yaml (form checks, invite), household-members.yaml |
 | Auth/ForcePasswordChangeScreen | skip | force-password-change.yaml: needs AUTH_URL from the runner |
-| Settings/SettingsScreen: Account, Household, Voice, Appearance, Chat, Privacy, Connection, Smart Home, Config Service URL | flow | settings.yaml |
+| Settings/SettingsScreen: You (Account, Voice, Appearance, Chat, Privacy, Connection, Config Service URL), Households, Smart home | flow | settings.yaml |
+| Household/HouseholdHomeScreen: switcher, tiles, This home rows | flow | settings.yaml, household-edit.yaml, household-members.yaml, signal-automations.yaml, nodes.yaml |
 | Settings/SettingsScreen: Security (biometric login) | not tested | biometrics stay manual (user, 2026-10-17); biometric-login.yaml is skipped |
 | Settings/SettingsScreen: Log Out (and staying logged out after a relaunch) | flow | auth-logout.yaml |
 | Settings/SettingsScreen: each seeded role's household and role | flow | auth-roles.yaml |
 | Settings/SettingsScreen: Delete Account | flow | subflows/delete-account.yaml (throwaway accounts only) |
-| Settings/HouseholdEditScreen: name, admin sections | flow | household-edit.yaml |
+| Settings/HouseholdEditScreen (one section per Household tile/row): name, admin sections | flow | household-edit.yaml |
 | Settings/HouseholdEditScreen: members, role change, invite codes | flow | household-members.yaml, household-member-view.yaml |
 | Settings/HouseholdEditScreen: watches and errand-autonomy switches | flow | household-watches-errands.yaml (admin toggles), household-member-view.yaml (read only) |
 | Settings/HouseholdEditScreen: pantry toggle | not tested | packages (user, 2026-10-17) |
@@ -28,8 +29,9 @@ reason is in its `properties.skip_reason`).
 | Settings/VoiceProfileScreen (no recording) | flow | voice-profile.yaml; recording is the voice lane's |
 | Settings/IntegrationAuthScreen | later | not in piece 6 |
 | Nodes/NodeListScreen | flow | nodes.yaml |
-| Nodes/NodeDetailScreen: Overview, Activity | flow | nodes.yaml |
-| Nodes/NodeDetailScreen: Packages tab | not tested | packages (user, 2026-10-17) |
+| Nodes/NodeDetailScreen: status, cards, key banner | flow | nodes.yaml |
+| Nodes/NodeSubScreens: NodeHardware (Hardware & upkeep) | flow | nodes.yaml |
+| Nodes/NodeSubScreens: NodePackages | not tested | packages (user, 2026-10-17) |
 | Nodes/NodeDetailScreen: rename | not tested | the app has no node rename |
 | Nodes/HardwareTab | flow | nodes.yaml (when the node is not a docker install) |
 | Nodes/NodeSettingsScreen | flow | nodes.yaml (the "key required" state; loaded settings need a live node) |
@@ -37,11 +39,8 @@ reason is in its `properties.skip_reason`).
 | Memories/MemoriesListScreen, MemoriesEditScreen | flow | memories.yaml |
 | Phonebook/PhonebookListScreen, PhonebookEditScreen | flow | phonebook.yaml |
 | CallContext/CallContextListScreen, CallContextEditScreen | flow | call-context.yaml |
-| RecentCommands/RecentCommandsListScreen | flow | settings.yaml (opens and closes) |
-| RecentCommands/RecentCommandDetailScreen | later | not in piece 6 |
 | Store/StoreBrowseScreen | not tested | packages (user, 2026-10-17) |
 | Store/StoreDetailScreen | not tested | packages (user, 2026-10-17) |
-| Store/NodePickerSheet | not tested | packages (user, 2026-10-17) |
 | Store/InstallProgressScreen | not tested | packages (user, 2026-10-17) |
 | Store/TestInstallScreen | not tested | packages (user, 2026-10-17) |
 | Home/HomeScreen: quick-open deep links (deepLinks.ts) | flow | deep-links.yaml (com.jarvis.app://chat, open, stt) |
@@ -53,7 +52,8 @@ reason is in its `properties.skip_reason`).
 | Devices/DevicesScreen: add a device, discovery | flow | devices.yaml (the scan ends: results, an error with Retry, or "No node is online"; importing needs a device to discover, no item filed yet) |
 | Devices/DeviceEditScreen: name and details, save and delete buttons | flow | devices.yaml (opens a seeded device and goes back; nothing saved) |
 | Devices/DeviceEditScreen: light on/off (LightControl) | skip | devices-light-toggle.yaml: needs the fake Home Assistant (#154) |
-| Devices/RoomManagementScreen: add, rename, delete a room | flow | devices.yaml |
+| Devices/RoomManagementScreen: floors, Arrange (add, rename, remove a room) | flow | devices.yaml |
+| Devices/RoomDetailScreen | not tested | needs live device state for All on / off; jest covers it |
 | Devices/ExternalDeviceDetailScreen | later | needs the fake Home Assistant (#154) |
 | Routines/RoutineEditScreen: create, add a trigger phrase, delete | flow | routines.yaml, simple-routines.yaml (Simple instructions, mode switching and inactive-content persistence; free-text step: the command catalog needs the node's key) |
 | Routines/RoutineEditScreen: command catalog, schedule | later | needs a node with its key (piece 7) |

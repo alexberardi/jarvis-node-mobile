@@ -1,6 +1,6 @@
 appId: com.jarvis.nodemobile
 name: logout
-# Shared subflow: from the main tabs, Home → Settings → Log Out, ending on
+# Shared subflow: from the main tabs, Chat → You (the avatar) → Log Out, ending on
 # Landing. Log Out is in the first (Account) card, so no scroll is needed.
 ---
 - tapOn:

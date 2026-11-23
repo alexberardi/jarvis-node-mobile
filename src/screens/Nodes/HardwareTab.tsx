@@ -39,7 +39,7 @@ import { NodeMaintenanceSettings } from '../../components/NodeMaintenanceSetting
 import { SpeakerHATCard } from '../../components/SpeakerHATCard';
 import { useAuth } from '../../auth/AuthContext';
 import { helpCopy } from '../../copy/help';
-import { RootStackParamList } from '../../navigation/types';
+import { NodeHardwarePart, RootStackParamList } from '../../navigation/types';
 import { isDesktopAgent } from '../../utils/nodeKind';
 
 type RootNav = NativeStackNavigationProp<RootStackParamList>;
@@ -47,9 +47,12 @@ type RootNav = NativeStackNavigationProp<RootStackParamList>;
 interface Props {
   nodeId: string;
   node: NodeInfo;
+  /** One part only (a node card's screen); left out = everything. */
+  part?: NodeHardwarePart;
 }
 
-export const HardwareTab = ({ nodeId, node }: Props) => {
+export const HardwareTab = ({ nodeId, node, part }: Props) => {
+  const show = (p: NodeHardwarePart) => !part || part === p;
   const theme = useTheme();
   const navigation = useNavigation<RootNav>();
   const { state: authState } = useAuth();
@@ -81,12 +84,15 @@ export const HardwareTab = ({ nodeId, node }: Props) => {
 
   return (
     <ScrollView testID="hardware-tab" contentContainerStyle={styles.scroll}>
-      <InfoHelperText text={desktop ? helpCopy.hardware.desktopTabIntro : helpCopy.hardware.tabIntro} />
+      {!part && <InfoHelperText text={desktop ? helpCopy.hardware.desktopTabIntro : helpCopy.hardware.tabIntro} />}
 
       {/* Bluetooth (Pi only) */}
-      {!desktop && <BluetoothSection nodeId={nodeId} />}
+      {!desktop && show('speaker') && <BluetoothSection nodeId={nodeId} />}
 
-      {/* Voice Recognition */}
+      {show('hardware') && (
+      <>
+      {/* Voice Recognition: a Pi's is a node card of its own; a computer's identity note stays here */}
+      {(!part || desktop) && (
       <Card style={styles.card}>
         <Card.Title
           title="Voice Recognition"
@@ -119,6 +125,7 @@ export const HardwareTab = ({ nodeId, node }: Props) => {
           )}
         </Card.Content>
       </Card>
+      )}
 
       {/* Device Info */}
       <Card style={styles.card}>
@@ -173,21 +180,27 @@ export const HardwareTab = ({ nodeId, node }: Props) => {
           />
         </Card.Content>
       </Card>
+      </>
+      )}
 
       {!desktop && (
         <>
           {/* Voice Settings (sliders + ambient calibration) */}
-          <View style={styles.voiceSettingsWrapper}>
-            <NodeVoiceSettings nodeId={nodeId} />
-          </View>
+          {show('voice') && (
+            <View style={styles.voiceSettingsWrapper}>
+              <NodeVoiceSettings nodeId={nodeId} />
+            </View>
+          )}
 
           {/* Speaker HAT (only renders when node reports hat_detected). */}
-          <SpeakerHATCard nodeId={nodeId} />
+          {show('speaker') && <SpeakerHATCard nodeId={nodeId} />}
 
           {/* Maintenance: daily restart + RSS ceiling */}
-          <View style={styles.voiceSettingsWrapper}>
-            <NodeMaintenanceSettings nodeId={nodeId} />
-          </View>
+          {show('hardware') && (
+            <View style={styles.voiceSettingsWrapper}>
+              <NodeMaintenanceSettings nodeId={nodeId} />
+            </View>
+          )}
         </>
       )}
     </ScrollView>

@@ -36,7 +36,9 @@ const mockNavigate = jest.fn();
 const mockGoBack = jest.fn();
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: mockNavigate, goBack: mockGoBack }),
+  useRoute: () => ({ params: mockRouteParams }),
 }));
+let mockRouteParams: { view?: 'you' | 'households' | 'smart_home' } | undefined;
 
 const mockLogout = jest.fn();
 const mockDeleteAccount = jest.fn();
@@ -148,6 +150,7 @@ const renderScreen = () => render(<SettingsScreen />, { wrapper });
 describe('Settings — flow integration (households, delete-account, smart-home toggles)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockRouteParams = undefined;
     mockAuthState = {
       user: { id: 1, email: 'alex@example.com', username: 'alex' },
       accessToken: 'mock-token',
@@ -186,6 +189,7 @@ describe('Settings — flow integration (households, delete-account, smart-home 
   });
 
   it('invite code blur → validate via authApi.get with bearer; valid code enables Join', async () => {
+    mockRouteParams = { view: 'households' };
     get.mockResolvedValueOnce({ data: { valid: true, household_name: 'Beach House' } });
     const utils = renderScreen();
 
@@ -209,6 +213,7 @@ describe('Settings — flow integration (households, delete-account, smart-home 
   });
 
   it('invalid invite code (404) shows the error helper and keeps Join disabled', async () => {
+    mockRouteParams = { view: 'households' };
     get.mockRejectedValueOnce({ response: { status: 404 } });
     const utils = renderScreen();
 
@@ -223,6 +228,7 @@ describe('Settings — flow integration (households, delete-account, smart-home 
   });
 
   it('Join button → POST /households/join + fetchHouseholds + "Joined!" Alert', async () => {
+    mockRouteParams = { view: 'households' };
     const alertSpy = jest.spyOn(Alert, 'alert');
     get.mockResolvedValueOnce({ data: { valid: true, household_name: 'Beach House' } });
     post.mockResolvedValueOnce({ data: {} });
@@ -250,6 +256,7 @@ describe('Settings — flow integration (households, delete-account, smart-home 
   });
 
   it('create household → POST /households + fetchHouseholds + "Created!" Alert', async () => {
+    mockRouteParams = { view: 'households' };
     const alertSpy = jest.spyOn(Alert, 'alert');
     post.mockResolvedValueOnce({ data: {} });
     const utils = renderScreen();
@@ -270,6 +277,7 @@ describe('Settings — flow integration (households, delete-account, smart-home 
   });
 
   it('create household failure surfaces the server detail via Alert', async () => {
+    mockRouteParams = { view: 'households' };
     const alertSpy = jest.spyOn(Alert, 'alert');
     post.mockRejectedValueOnce({ response: { data: { detail: 'Name already taken' } } });
     const utils = renderScreen();
@@ -332,6 +340,7 @@ describe('Settings — flow integration (households, delete-account, smart-home 
   });
 
   it('external-devices Switch → updateSmartHomeConfig(hh, {use_external_devices}); reverts + Alerts on failure', async () => {
+    mockRouteParams = { view: 'smart_home' };
     const alertSpy = jest.spyOn(Alert, 'alert');
     updateSH.mockRejectedValueOnce(new Error('network'));
     const utils = renderScreen();
@@ -351,6 +360,7 @@ describe('Settings — flow integration (households, delete-account, smart-home 
   });
 
   it('primary-node radio → updateSmartHomeConfig(hh, {primary_node_id}) for the tapped node', async () => {
+    mockRouteParams = { view: 'smart_home' };
     updateSH.mockResolvedValueOnce({ ...SMART_HOME, primary_node_id: 'node-2' });
     const utils = renderScreen();
 
@@ -365,6 +375,7 @@ describe('Settings — flow integration (households, delete-account, smart-home 
   });
 
   it('Primary Node rows show the Raspberry Pi for a Pi and the robot for a computer', async () => {
+    mockRouteParams = { view: 'smart_home' };
     const utils = renderScreen();
     await waitFor(() => expect(mockListNodes).toHaveBeenCalledWith('hh-1'));
     await waitFor(() =>
@@ -374,6 +385,7 @@ describe('Settings — flow integration (households, delete-account, smart-home 
   });
 
   it('Primary Node lists Pis before computers and notes what a computer cannot do (server sends node_kind)', async () => {
+    mockRouteParams = { view: 'smart_home' };
     getSH.mockResolvedValue({
       ...SMART_HOME,
       nodes: [
@@ -394,6 +406,7 @@ describe('Settings — flow integration (households, delete-account, smart-home 
   });
 
   it('Primary Node keeps the server order and shows no note when nothing reports a kind (older server)', async () => {
+    mockRouteParams = { view: 'smart_home' };
     getSH.mockResolvedValue({
       ...SMART_HOME,
       nodes: [
@@ -411,6 +424,7 @@ describe('Settings — flow integration (households, delete-account, smart-home 
   });
 
   it('Primary Node marks a node the server reports offline', async () => {
+    mockRouteParams = { view: 'smart_home' };
     getSH.mockResolvedValue({
       ...SMART_HOME,
       nodes: [
@@ -427,6 +441,7 @@ describe('Settings — flow integration (households, delete-account, smart-home 
   });
 
   it('Primary Node names computers by their name and keeps the room for a Pi', async () => {
+    mockRouteParams = { view: 'smart_home' };
     getSH.mockResolvedValue({
       ...SMART_HOME,
       nodes: [

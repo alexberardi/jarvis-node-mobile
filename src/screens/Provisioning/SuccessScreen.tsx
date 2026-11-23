@@ -39,14 +39,14 @@ const SuccessScreen = ({ navigation }: Props) => {
     reset();
     // navigation.reset() here only resets the inner ProvisioningNavigator
     // (would send the user back to ScanForNodes inside AddNode), not
-    // OUT of the provisioning flow. Reset the parent NodesStack back to
-    // NodeList so the provisioning flow isn't left on-screen behind us.
+    // OUT of the provisioning flow. Reset the parent Household stack back to
+    // its node list so the provisioning flow isn't left on-screen behind us.
     const parent = navigation.getParent();
     if (parent) {
       parent.dispatch(
         CommonActions.reset({
-          index: 0,
-          routes: [{ name: 'NodeList' }],
+          index: 1,
+          routes: [{ name: 'HouseholdHome' }, { name: 'NodeList' }],
         }),
       );
     } else {

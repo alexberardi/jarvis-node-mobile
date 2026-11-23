@@ -35,6 +35,15 @@ jest.mock('../../src/api/routineApi', () => ({
   runRoutineNow: jest.fn(),
 }));
 jest.mock('../../src/api/smartHomeApi', () => ({ getSmartHomeConfig: jest.fn() }));
+// The Scheduled and Triggers segments are their own screens (tested on their own); stub them here.
+jest.mock('../../src/screens/Schedules/ScheduleListScreen', () => {
+  const { Text } = require('react-native');
+  return { __esModule: true, default: () => <Text>scheduled errands</Text> };
+});
+jest.mock('../../src/screens/Settings/SignalAutomationsScreen', () => {
+  const { Text } = require('react-native');
+  return { __esModule: true, default: (p: { householdId: string }) => <Text>{`triggers for ${p.householdId}`}</Text> };
+});
 // Kinds for the run-on-node menu's icons (smart-home config carries none).
 const mockListNodes = jest.fn().mockResolvedValue([]);
 jest.mock('../../src/api/nodeApi', () => ({
@@ -89,9 +98,9 @@ describe('Routines list — flow integration (load, run, delete, create)', () =>
   it('loads routines and renders the card (name, trigger, steps, schedule)', async () => {
     const { findByText, getByText } = renderScreen();
     await findByText('Movie night');
-    expect(getByText('movie time')).toBeTruthy();
-    expect(getByText('2 steps')).toBeTruthy();
-    expect(getByText('Every 1h')).toBeTruthy();
+    // One compact row: quoted phrases, then steps and schedule on one line.
+    expect(getByText('\u201cmovie time\u201d')).toBeTruthy();
+    expect(getByText('2 steps \u00b7 Every 1h')).toBeTruthy();
     expect(listRoutines).toHaveBeenCalledWith('hh-1');
   });
 
@@ -104,8 +113,8 @@ describe('Routines list — flow integration (load, run, delete, create)', () =>
     ]);
     const alertSpy = jest.spyOn(Alert, 'alert');
     const screen = renderScreen();
-    await screen.findByText('Dim the lights');
-    expect(screen.getByText('Simple')).toBeTruthy();
+    // A Simple routine shows its instruction where an Advanced one shows its step count.
+    await screen.findByText(/^Dim the lights/);
     await waitFor(() => expect(screen.getByTestId('routine-run-r1')).toBeEnabled());
     fireEvent.press(screen.getByTestId('routine-run-r1'));
     await waitFor(() => expect(runRoutineNow).toHaveBeenCalledWith('hh-1', 'r1', 'new'));
@@ -118,7 +127,7 @@ describe('Routines list — flow integration (load, run, delete, create)', () =>
     mockListNodes.mockResolvedValue([{ node_id: 'old', capabilities: {} }]);
     const alertSpy = jest.spyOn(Alert, 'alert');
     const screen = renderScreen();
-    await screen.findByText('Play music');
+    await screen.findByText(/^Play music/);
     await waitFor(() => expect(screen.getByTestId('routine-run-r1')).toBeEnabled());
     fireEvent.press(screen.getByTestId('routine-run-r1'));
     expect(runRoutineNow).not.toHaveBeenCalled();
@@ -253,3 +262,22 @@ describe('Routines list — run-on-node menu kinds', () => {
   });
 });
 
+describe('Routines tab segments', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (listRoutines as jest.Mock).mockResolvedValue([ROUTINE]);
+    (getSmartHomeConfig as jest.Mock).mockResolvedValue({ nodes: [], primary_node_id: null });
+  });
+
+  it('switches between routines, scheduled errands and triggers', async () => {
+    const screen = renderScreen();
+    await screen.findByText('Movie night');
+    fireEvent.press(screen.getByTestId('open-schedules'));
+    expect(await screen.findByText('scheduled errands')).toBeTruthy();
+    expect(screen.queryByTestId('routine-add-fab')).toBeNull();
+    fireEvent.press(screen.getByTestId('routines-tab-triggers'));
+    expect(await screen.findByText('triggers for hh-1')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('routines-tab-routines'));
+    expect(await screen.findByText('Movie night')).toBeTruthy();
+  });
+});

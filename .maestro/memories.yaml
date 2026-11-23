@@ -1,6 +1,6 @@
 appId: com.jarvis.nodemobile
 name: Memories, add, edit, delete
-# Memories (src/screens/Memories/) from Settings → Voice → Memories, as the seeded
+# Memories (src/screens/Memories/) from Household › Knowledge › Memories, as the seeded
 # superuser: the seeded memories are listed; a new one is added, edited and deleted again
 # (only the one this flow made: its text is unique per run).
 # State: if the flow dies before the delete, one "E2E memory <time>" stays in the list.
@@ -14,13 +14,17 @@ env:
 - launchApp:
     clearState: true
 - runFlow: subflows/login.yaml
-- runFlow: subflows/open-settings.yaml
+- runFlow:
+    file: subflows/open-household-section.yaml
+    env:
+      ENTRY: "household-tile-knowledge"
+      WAIT_ID: "household-memory-toggle"
 - scrollUntilVisible:
     element:
-      id: "settings-memories-row"
+      id: "household-memories-row"
     direction: DOWN
 - tapOn:
-    id: "settings-memories-row"
+    id: "household-memories-row"
 - extendedWaitUntil:
     visible:
       id: "memory-card-.*"

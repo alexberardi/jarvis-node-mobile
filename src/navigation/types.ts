@@ -15,12 +15,26 @@ export type AuthStackParamList = {
   Register: undefined;
 };
 
+/** One section of the household editor, opened from the Household tab. */
+export type HouseholdSection = 'home' | 'jarvis' | 'knowledge' | 'presence' | 'calls' | 'members';
+
+/** A node settings tab; set when a node card opens one tab on its own. */
+export type NodeSettingsTab = 'commands' | 'agents' | 'integrations' | 'stored_data';
+/** Which part of a node's hardware screen a node card opens. */
+export type NodeHardwarePart = 'voice' | 'speaker' | 'hardware';
+
 export type NodesStackParamList = {
+  HouseholdHome: undefined;
   NodeList: undefined;
   AddNode: undefined;
   AddComputer: undefined;
-  NodeDetail: { nodeId: string; initialTab?: 'overview' | 'hardware' | 'packages' | 'activity' };
-  NodeSettings: { nodeId: string; room: string | null };
+  NodeDetail: { nodeId: string };
+  NodeSettings: { nodeId: string; room: string | null; tab?: NodeSettingsTab };
+  NodeHardware: { nodeId: string; part: NodeHardwarePart };
+  NodePackages: { nodeId: string };
+  /** Every credential across the household's nodes, or one node's. */
+  Credentials: { nodeId?: string } | undefined;
+  CredentialDetail: { id: string; nodeId?: string };
   NodeForgeTest: { nodeId: string };
   ImportKey: undefined;
   IntegrationAuth: {
@@ -43,6 +57,7 @@ export type DevicesStackParamList = {
   DeviceEdit: { deviceId: string; householdId: string };
   ExternalDeviceDetail: { device: string; householdId: string };
   RoomManagement: undefined;
+  RoomDetail: { roomId: string };
   DeviceDiscovery: { nodeId: string };
   CameraView: { deviceId: string; householdId: string; deviceName: string };
 };
@@ -60,21 +75,9 @@ export type SmartHomeSetupParamList = {
     haToken?: string;
   };
   DeviceDiscovery: { nodeId: string };
-  DeviceList: { householdId: string };
-  IntegrationAuth: {
-    authConfig: string;     // JSON-serialized AuthenticationConfig
-    nodeId: string;
-    accessToken: string;
-    providerBaseUrl?: string;
-  };
 };
 
 export type CommandDataStackParamList = {
-  /** Top-level data browser. Shows node picker when >1 node, then commands.
-   *  When `nodeId` is passed, the picker is skipped and the screen shows
-   *  the commands for that node directly — used when entering from a
-   *  node-scoped surface (e.g. NodeSettings options menu). */
-  DataBrowserHome: { nodeId?: string } | undefined;
   /** Records list for one command on one node. */
   DataBrowserRecords: { nodeId: string; commandName: string };
   /** Read-only detail for one record. */
@@ -94,7 +97,6 @@ export type CommandDataStackParamList = {
 export type RoutinesStackParamList = {
   RoutineList: undefined;
   RoutineEdit: { routineId?: string };
-  ScheduleList: undefined;
 };
 
 export type InboxStackParamList = {
@@ -136,11 +138,6 @@ export type InboxStackParamList = {
   };
 };
 
-export type RecentCommandsStackParamList = {
-  RecentCommandsList: undefined;
-  RecentCommandDetail: { transcriptId: number };
-};
-
 export type MemoriesStackParamList = {
   MemoriesList: undefined;
   MemoryEdit: { memoryId?: number };
@@ -171,17 +168,6 @@ export type StoreStackParamList = {
   StoreBrowse: undefined;
   StoreDetail: { commandName: string };
   TestInstall: undefined;
-  NodePickerSheet: {
-    nodes: string;           // JSON-serialized NodeInfo[]
-    commandName: string;
-    githubRepoUrl: string;
-    gitTag: string;
-    latestVersion: string;
-    packageName: string;
-    installedNodeIds: string; // JSON-serialized string[] of node IDs that already have this command
-    installedVersions: string; // JSON-serialized Record<nodeId, installedVersion | "unknown">
-    storeLocks?: string; // JSON-serialized Record<nodeId, reason>: can't install from the picked store
-  };
   InstallProgress: {
     installs: string;        // JSON-serialized InstallEntry[]
     packageName: string;
@@ -189,6 +175,8 @@ export type StoreStackParamList = {
     githubRepoUrl: string;
     gitTag: string | null;
     mode?: 'store' | 'test' | 'cc-provider'; // 'cc-provider' polls CC directly
+    /** The package declares settings or a sign-in: offer Credentials once it's in. */
+    needsSetup?: boolean;
   };
 };
 
@@ -197,17 +185,16 @@ export type MainTabParamList = {
   DevicesTab: NavigatorScreenParams<DevicesStackParamList> | undefined;
   StoreTab: NavigatorScreenParams<StoreStackParamList> | undefined;
   RoutinesTab: NavigatorScreenParams<RoutinesStackParamList> | undefined;
-  NodesTab: NavigatorScreenParams<NodesStackParamList> | undefined;
+  HouseholdTab: NavigatorScreenParams<NodesStackParamList> | undefined;
 };
 
 export type RootStackParamList = {
   Auth: NavigatorScreenParams<AuthStackParamList>;
   Main: NavigatorScreenParams<MainTabParamList>;
   Inbox: NavigatorScreenParams<InboxStackParamList>;
-  RecentCommands: NavigatorScreenParams<RecentCommandsStackParamList> | undefined;
-  Settings: undefined;
-  HouseholdEdit: { householdId: string; householdName: string };
-  SignalAutomations: { householdId: string };
+  /** You (default), the household list with join/create, or Household › Smart home. */
+  Settings: { view?: 'you' | 'households' | 'smart_home' } | undefined;
+  HouseholdEdit: { householdId: string; householdName: string; section?: HouseholdSection };
   SmartHomeSetup: NavigatorScreenParams<SmartHomeSetupParamList>;
   VoiceProfile: undefined;
   CommandData: NavigatorScreenParams<CommandDataStackParamList>;

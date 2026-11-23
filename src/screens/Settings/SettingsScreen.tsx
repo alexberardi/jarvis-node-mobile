@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useNavigation } from '@react-navigation/native';
+import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useQueryClient } from '@tanstack/react-query';
 import React, { useCallback, useEffect, useState } from 'react';
@@ -76,8 +76,23 @@ const primaryNodeKind = (
   ...(node.node_kind !== undefined ? { node_kind: node.node_kind } : {}),
 });
 
+/** One screen, three entries: You (the avatar), the household switcher's join/create, and
+ *  Household › Smart home. Each shows only its own cards. */
+type SettingsView = NonNullable<RootStackParamList['Settings']>['view'];
+const VIEW_TITLES: Record<NonNullable<SettingsView>, string> = {
+  you: 'You',
+  households: 'Households',
+  smart_home: 'Smart home',
+};
+
 const SettingsScreen = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const view = useRoute<RouteProp<RootStackParamList, 'Settings'>>().params?.view ?? 'you';
+  const isYou = view === 'you';
+  // You is split in two: account and server settings, and how the app behaves on this phone.
+  const [youTab, setYouTab] = useState<'settings' | 'preferences'>('settings');
+  const isSettings = isYou && youTab === 'settings';
+  const isPrefs = isYou && youTab === 'preferences';
   const theme = useTheme();
   // Android shows this modal full-screen under a transparent (edge-to-edge)
   // status bar, so keep the scroll area below it — otherwise content scrolls
@@ -349,14 +364,27 @@ const SettingsScreen = () => {
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={[styles.header, { marginTop: HEADER_TOP_MARGIN - topInset }]}>
         <Text variant="headlineMedium" style={styles.title}>
-          Settings
+          {VIEW_TITLES[view]}
         </Text>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.closeButton} testID="settings-close">
           <Icon source="close" size={24} color={theme.colors.onSurface} />
         </TouchableOpacity>
       </View>
 
+      {isYou && (
+        <SegmentedButtons
+          value={youTab}
+          onValueChange={(v) => setYouTab(v as 'settings' | 'preferences')}
+          style={styles.card}
+          buttons={[
+            { value: 'settings', label: 'Settings', icon: 'account-cog-outline', testID: 'you-tab-settings' },
+            { value: 'preferences', label: 'Preferences', icon: 'tune-variant', testID: 'you-tab-preferences' },
+          ]}
+        />
+      )}
+
       {/* Account */}
+      {isSettings && (
       <Card style={styles.card} testID="settings-section-account">
         <Card.Content>
           <Text variant="titleMedium" style={styles.sectionTitle}>
@@ -393,8 +421,10 @@ const SettingsScreen = () => {
           </View>
         </Card.Content>
       </Card>
+      )}
 
       {/* Household */}
+      {view === 'households' && (
       <Card style={styles.card} testID="settings-section-household">
         <Card.Content>
           <Text variant="titleMedium" style={styles.sectionTitle}>
@@ -428,15 +458,6 @@ const SettingsScreen = () => {
                         </View>
                       </View>
                     </TouchableRipple>
-                    {(h.role === 'admin' || h.role === 'power_user') && (
-                      <IconButton
-                        icon="pencil"
-                        size={18}
-                        onPress={() => navigation.navigate('HouseholdEdit', { householdId: h.id, householdName: h.name })}
-                        testID={`household-edit-${h.id}`}
-                        accessibilityLabel="Edit household"
-                      />
-                    )}
                   </View>
                 );
               })}
@@ -508,13 +529,13 @@ const SettingsScreen = () => {
           </View>
         </Card.Content>
       </Card>
+      )}
 
-      {/* Chat channels: my own link. Here, not on the household's edit screen, which only
-          admins and power users can open: every member links their own account. */}
-      {householdId && <ChannelsCard householdId={householdId} />}
+      {/* Chat channels: my own link, so it lives with me, not with the household. */}
+      {isSettings && householdId && <ChannelsCard householdId={householdId} />}
 
       {/* Voice */}
-      {householdId && (
+      {isSettings && householdId && (
         <Card style={styles.card} testID="settings-section-voice">
           <Card.Content>
             <Text variant="titleMedium" style={styles.sectionTitle}>
@@ -530,45 +551,6 @@ const SettingsScreen = () => {
                       : hasVoiceProfile
                         ? 'Enrolled — Jarvis recognizes your voice'
                         : 'Not set up — tap to enroll'}
-                  </Text>
-                </View>
-                <Icon source="chevron-right" size={24} />
-              </View>
-            </TouchableRipple>
-            <Divider style={{ marginVertical: 4 }} />
-            <TouchableRipple testID="settings-command-feedback-row" onPress={() => navigation.navigate('RecentCommands')}>
-              <View style={styles.switchRow}>
-                <View style={{ flex: 1 }}>
-                  <Text variant="bodyMedium">Command Feedback</Text>
-                  <Text variant="bodySmall" style={styles.hint}>
-                    Rate recent voice commands — helps Jarvis learn your patterns
-                  </Text>
-                </View>
-                <Icon source="chevron-right" size={24} />
-              </View>
-            </TouchableRipple>
-            <Divider style={{ marginVertical: 4 }} />
-            <TouchableRipple testID="settings-memories-row" onPress={() => navigation.navigate('Memories')}>
-              <View style={styles.switchRow}>
-                <View style={{ flex: 1 }}>
-                  <Text variant="bodyMedium">Memories</Text>
-                  <Text variant="bodySmall" style={styles.hint}>
-                    What Jarvis remembers about you — review, edit, or forget
-                  </Text>
-                </View>
-                <Icon source="chevron-right" size={24} />
-              </View>
-            </TouchableRipple>
-            <Divider style={{ marginVertical: 4 }} />
-            <TouchableRipple
-              testID="settings-phonebook-row"
-              onPress={() => navigation.navigate('Phonebook')}
-            >
-              <View style={styles.switchRow}>
-                <View style={{ flex: 1 }}>
-                  <Text variant="bodyMedium">Phonebook</Text>
-                  <Text variant="bodySmall" style={styles.hint}>
-                    Businesses Jarvis can call — numbers, notes, and do-not-call
                   </Text>
                 </View>
                 <Icon source="chevron-right" size={24} />
@@ -594,7 +576,10 @@ const SettingsScreen = () => {
         </Card>
       )}
 
+      {isYou && (
+      <>
       {/* Appearance */}
+      {isPrefs && (
       <Card style={styles.card} testID="settings-section-appearance">
         <Card.Content>
           <Text variant="titleMedium" style={styles.sectionTitle}>
@@ -608,7 +593,10 @@ const SettingsScreen = () => {
         </Card.Content>
       </Card>
 
+      )}
+
       {/* Chat */}
+      {isPrefs && (
       <Card style={styles.card} testID="settings-section-chat">
         <Card.Content>
           <Text variant="titleMedium" style={styles.sectionTitle}>
@@ -630,8 +618,10 @@ const SettingsScreen = () => {
         </Card.Content>
       </Card>
 
+      )}
+
       {/* Security — biometric login (only on capable devices) */}
-      {biometricAvailable && (
+      {isSettings && biometricAvailable && (
         <Card style={styles.card} testID="settings-section-security">
           <Card.Content>
             <Text variant="titleMedium" style={styles.sectionTitle}>
@@ -656,6 +646,7 @@ const SettingsScreen = () => {
       )}
 
       {/* Privacy */}
+      {isPrefs && (
       <Card style={styles.card} testID="settings-section-privacy">
         <Card.Content>
           <Text variant="titleMedium" style={styles.sectionTitle}>
@@ -675,55 +666,13 @@ const SettingsScreen = () => {
           </View>
         </Card.Content>
       </Card>
+      )}
 
-      {/* Connection Status */}
-      <Card style={styles.card} testID="settings-section-connection">
-        <Card.Content>
-          <Text variant="titleMedium" style={styles.sectionTitle}>
-            Connection
-          </Text>
-          <View style={styles.statusRow}>
-            <Text variant="bodyMedium">Status:</Text>
-            <Chip
-              compact
-              icon={isUsingCloud ? 'cloud-outline' : 'lan'}
-              style={styles.statusChip}
-            >
-              {isUsingCloud ? 'Cloud' : 'Local'}
-            </Chip>
-            <HelpIcon text={helpCopy.settings.statusChip} size={16} />
-          </View>
-          {config.configServiceUrl && (
-            <Text variant="bodySmall" style={styles.urlText}>
-              Config: {config.configServiceUrl}
-            </Text>
-          )}
-          {config.authBaseUrl && (
-            <Text variant="bodySmall" style={styles.urlText}>
-              Auth: {config.authBaseUrl}
-            </Text>
-          )}
-          {config.commandCenterUrl && (
-            <Text variant="bodySmall" style={styles.urlText}>
-              Command Center: {config.commandCenterUrl}
-            </Text>
-          )}
-          <View style={styles.rediscoverRow}>
-            <Button
-              testID="settings-recheck-connection"
-              mode="outlined"
-              onPress={recheck}
-              icon="refresh"
-            >
-              Re-check Connection
-            </Button>
-            <HelpIcon text={helpCopy.settings.recheckConnection} size={16} />
-          </View>
-        </Card.Content>
-      </Card>
+      </>
+      )}
 
       {/* Smart Home */}
-      {householdId && (
+      {view === 'smart_home' && householdId && (
         <Card style={styles.card} testID="settings-section-smart-home">
           <Card.Content>
             <Text variant="titleMedium" style={styles.sectionTitle}>
@@ -826,16 +775,28 @@ const SettingsScreen = () => {
                 Could not load smart home settings
               </Text>
             )}
+            <Button
+              mode="outlined"
+              icon="home-assistant"
+              style={{ marginTop: 12, alignSelf: 'flex-start' }}
+              onPress={() => navigation.navigate('SmartHomeSetup', { screen: 'SmartHomeSetup' })}
+              testID="smart-home-connect-ha"
+            >
+              Connect Home Assistant
+            </Button>
           </Card.Content>
         </Card>
       )}
 
-      {/* Manual Config URL */}
+      {isYou && (
+      <>
+      {/* Server: its address, and whether the app reaches it */}
+      {isSettings && (
       <Card style={styles.card} testID="settings-section-config-url">
         <Card.Content>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <Text variant="titleMedium" style={styles.sectionTitle}>
-              Config Service URL
+              Server
             </Text>
             <HelpIcon text={helpCopy.settings.configServiceUrl} size={16} />
           </View>
@@ -846,7 +807,7 @@ const SettingsScreen = () => {
           </Text>
           <TextInput
             mode="outlined"
-            label="Config Service URL"
+            label="Server URL"
             placeholder="http://192.168.1.100:7700"
             value={urlInput}
             onChangeText={setUrlInput}
@@ -875,13 +836,54 @@ const SettingsScreen = () => {
               </Button>
             )}
           </View>
+          <Divider style={{ marginVertical: 12 }} />
+          <View style={styles.statusRow}>
+            <Text variant="bodyMedium">Status:</Text>
+            <Chip
+              compact
+              icon={isUsingCloud ? 'cloud-outline' : 'lan'}
+              style={styles.statusChip}
+            >
+              {isUsingCloud ? 'Cloud' : 'Local'}
+            </Chip>
+            <HelpIcon text={helpCopy.settings.statusChip} size={16} />
+          </View>
+          {config.configServiceUrl && (
+            <Text variant="bodySmall" style={styles.urlText}>
+              Config: {config.configServiceUrl}
+            </Text>
+          )}
+          {config.authBaseUrl && (
+            <Text variant="bodySmall" style={styles.urlText}>
+              Auth: {config.authBaseUrl}
+            </Text>
+          )}
+          {config.commandCenterUrl && (
+            <Text variant="bodySmall" style={styles.urlText}>
+              Command Center: {config.commandCenterUrl}
+            </Text>
+          )}
+          <View style={styles.rediscoverRow}>
+            <Button
+              testID="settings-recheck-connection"
+              mode="outlined"
+              onPress={recheck}
+              icon="refresh"
+            >
+              Re-check connection
+            </Button>
+            <HelpIcon text={helpCopy.settings.recheckConnection} size={16} />
+          </View>
         </Card.Content>
       </Card>
+      )}
 
       <Divider style={styles.divider} />
       <Text variant="bodySmall" style={styles.version}>
         Jarvis Mobile v{require('../../../app.json').expo.version}
       </Text>
+      </>
+      )}
 
     </ScrollView>
     </KeyboardSafeView>

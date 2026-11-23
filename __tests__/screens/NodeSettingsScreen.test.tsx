@@ -566,6 +566,35 @@ describe('NodeSettingsScreen — "user" value_type secrets', () => {
       );
     });
   });
+
+  it('keeps the page (and its scroll position) after a save, reloading in the background', async () => {
+    mockListHouseholdMembers.mockResolvedValue(members);
+    mockEncryptAndPushConfig.mockResolvedValue(undefined);
+    const view = await renderLoaded(emailSnapshot(userSecret) as any);
+    await act(async () => {
+      fireEvent.press(view.getByText('Services'));
+    });
+    await waitFor(() => expect(mockListHouseholdMembers).toHaveBeenCalled());
+    await act(async () => {
+      fireEvent.press(view.getByText('Runs As'));
+    });
+    await act(async () => {
+      fireEvent.press(view.getByText('Select a person'));
+    });
+    await act(async () => {
+      fireEvent.press(view.getByText('sam'));
+    });
+    // The node takes its time with the reload.
+    mockPollSettingsResult.mockResolvedValue({ status: 'pending' });
+    await act(async () => {
+      fireEvent.press(view.getByText('Save'));
+    });
+
+    await waitFor(() => expect(view.getByTestId('node-settings-bg-status')).toBeTruthy());
+    // The list stays mounted: no full-page spinner, the edited row is still there.
+    expect(view.queryByTestId('node-settings-loading')).toBeNull();
+    expect(view.getByText('Runs As')).toBeTruthy();
+  });
 });
 
 describe('NodeSettingsScreen — package health badges', () => {

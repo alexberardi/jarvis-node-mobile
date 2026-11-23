@@ -1,6 +1,6 @@
 appId: com.jarvis.nodemobile
 name: open-settings
-# From any of the main tabs: Home tab, then the cog in its header.
+# From any of the main tabs: the Chat tab, then the avatar (You) in its header.
 ---
 - tapOn:
     id: "tab-home"

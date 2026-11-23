@@ -13,8 +13,10 @@ import {
   Chip,
   Icon,
   IconButton,
+  Menu,
   Searchbar,
   Text,
+  TouchableRipple,
   useTheme,
 } from 'react-native-paper';
 
@@ -29,6 +31,9 @@ import { helpCopy } from '../../copy/help';
 import { useFirstRun } from '../../hooks/useFirstRun';
 import { usePantryStores } from '../../services/pantryStores';
 import type { PackageCategory, PackageSummary } from '../../types/Package';
+import StatusTag from '../../components/StatusTag';
+import { categoryIcon, categoryLabel } from '../../utils/labels';
+import { anyUpdate } from '../../utils/packageNodes';
 import { StoreStackParamList } from '../../navigation/types';
 
 type Nav = NativeStackNavigationProp<StoreStackParamList>;
@@ -52,6 +57,8 @@ const DANGER_COLORS: Record<number, string> = {
 interface NodeToolInfo {
   node_id: string;
   toolNames: string[];
+  /** Installed package versions on the node, by package name. */
+  versions: Record<string, string>;
 }
 
 const StoreBrowseScreen = () => {
@@ -71,6 +78,9 @@ const StoreBrowseScreen = () => {
   const [error, setError] = useState<string | null>(null);
   const [nodeTools, setNodeTools] = useState<NodeToolInfo[]>([]);
   const [nodeCount, setNodeCount] = useState(0);
+  const [updatesOnly, setUpdatesOnly] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [sortOpen, setSortOpen] = useState(false);
 
   const firstRun = useFirstRun('pantry');
   // The store picked: browsing talks to it directly, so a new pick reloads the list.
@@ -132,9 +142,10 @@ const StoreBrowseScreen = () => {
             const names = tools.client_tools
               .map((t: Record<string, unknown>) => (t.function as Record<string, unknown>)?.name as string)
               .filter(Boolean);
-            return { node_id: node.node_id, toolNames: names as string[] };
+            const versions = Object.fromEntries((tools.installed_packages ?? []).map((p) => [p.name, p.version]));
+            return { node_id: node.node_id, toolNames: names as string[], versions };
           } catch {
-            return { node_id: node.node_id, toolNames: [] as string[] };
+            return { node_id: node.node_id, toolNames: [] as string[], versions: {} };
           }
         }),
       );
@@ -144,9 +155,14 @@ const StoreBrowseScreen = () => {
     }
   }, [authState.activeHouseholdId]);
 
-  const getInstalledCount = useCallback(
-    (commandName: string): number => {
-      return nodeTools.filter((n) => n.toolNames.includes(commandName)).length;
+  /** Where a package stands in this home: on how many nodes, and whether any is behind. */
+  const standing = useCallback(
+    (item: PackageSummary) => {
+      const on = nodeTools.filter((n) => item.command_name in n.versions || n.toolNames.includes(item.command_name));
+      return {
+        installed: on.length,
+        update: anyUpdate(on.map((n) => n.versions[item.command_name]), item.latest_version),
+      };
     },
     [nodeTools],
   );
@@ -163,6 +179,10 @@ const StoreBrowseScreen = () => {
     loadPackages(1);
   }, [loadPackages]);
 
+  // shortcut: counts updates among the packages loaded so far (first page), not the whole store;
+  // upgrade with a server call for installed-package updates if a home has many packages.
+  const updateCount = packages.filter((p) => standing(p).update).length;
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await Promise.all([loadPackages(1), loadCategories()]);
@@ -175,82 +195,47 @@ const StoreBrowseScreen = () => {
   }, [loading, packages.length, total, page, loadPackages]);
 
   const renderItem = ({ item }: { item: PackageSummary }) => {
-    const installed = getInstalledCount(item.command_name);
+    const { installed, update } = standing(item);
+    const category = item.categories[0];
     return (
-    <Card
-      style={styles.card}
-      onPress={() => navigation.navigate('StoreDetail', { commandName: item.command_name })}
-      testID={`package-card-${item.command_name}`}
-    >
-      <Card.Content>
-        <View style={styles.cardHeader}>
-          <View style={{ flex: 1 }}>
-            <Text variant="titleMedium" numberOfLines={1}>
-              {item.display_name || item.command_name}
-            </Text>
-            {item.author && (
-              <Text
-                variant="labelSmall"
-                style={{ color: theme.colors.onSurfaceVariant }}
-              >
-                by {item.author}
-              </Text>
-            )}
+      <Card
+        style={styles.card}
+        mode="outlined"
+        onPress={() => navigation.navigate('StoreDetail', { commandName: item.command_name })}
+        testID={`package-card-${item.command_name}`}
+      >
+        <View style={styles.row}>
+          <View style={[styles.icon, { backgroundColor: theme.colors.secondaryContainer }]}>
+            <Icon source={categoryIcon(category)} size={22} color={theme.colors.primary} />
           </View>
-          <View style={styles.badges}>
-            {installed > 0 && nodeCount > 0 && (
-              <Chip
-                compact
-                icon="check-circle"
-                textStyle={{ fontSize: 10, color: '#4CAF50' }}
-                style={{ backgroundColor: 'transparent' }}
-              >
-                {installed}/{nodeCount}
-              </Chip>
-            )}
-            {item.verified && (
-              <Icon source="check-decagram" size={18} color={theme.colors.primary} />
+          <View style={{ flex: 1 }}>
+            <View style={styles.nameLine}>
+              <Text variant="titleMedium" numberOfLines={1} style={{ flexShrink: 1 }}>
+                {item.display_name || item.command_name}
+              </Text>
+              {item.verified && <Icon source="check-decagram" size={16} color={theme.colors.primary} />}
+            </View>
+            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }} numberOfLines={2}>
+              {item.description}
+            </Text>
+            <Text variant="labelSmall" style={[styles.meta, { color: theme.colors.onSurfaceVariant }]}>
+              {[category ? categoryLabel(category) : null, `${item.install_count} installs`].filter(Boolean).join(' \u00b7 ')}
+            </Text>
+          </View>
+          <View style={styles.status}>
+            {update ? (
+              <StatusTag label="Update" tone="need" />
+            ) : installed > 0 ? (
+              <StatusTag label={nodeCount > 1 ? `On ${installed} of ${nodeCount}` : 'Installed'} tone="ok" />
+            ) : (
+              <StatusTag label="Get" tone="off" />
             )}
             {item.danger_rating >= 4 && (
-              <Chip
-                compact
-                textStyle={{ fontSize: 10, color: '#fff' }}
-                style={{ backgroundColor: DANGER_COLORS[item.danger_rating] }}
-              >
-                Risk {item.danger_rating}
-              </Chip>
-            )}
-            {item.package_type === 'bundle' && (
-              <Chip
-                compact
-                textStyle={{ fontSize: 10 }}
-                style={{ backgroundColor: theme.colors.secondaryContainer }}
-              >
-                Bundle
-              </Chip>
+              <Text style={[styles.risk, { color: DANGER_COLORS[item.danger_rating] }]}>Risk {item.danger_rating}</Text>
             )}
           </View>
         </View>
-        <Text
-          variant="bodySmall"
-          style={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}
-          numberOfLines={2}
-        >
-          {item.description}
-        </Text>
-        <View style={styles.cardFooter}>
-          <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>
-            v{item.latest_version}
-          </Text>
-          <View style={styles.installs}>
-            <Icon source="download" size={14} color={theme.colors.onSurfaceVariant} />
-            <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>
-              {item.install_count}
-            </Text>
-          </View>
-        </View>
-      </Card.Content>
-    </Card>
+      </Card>
     );
   };
 
@@ -274,26 +259,32 @@ const StoreBrowseScreen = () => {
     <View style={styles.container}>
       {/* Fixed header — stays outside FlatList so empty-state styles don't stretch it */}
       <View style={styles.header}>
-        <Text
-          variant="headlineMedium"
-          style={[styles.title, { color: theme.colors.onBackground }]}
-        >
+        <Text variant="headlineMedium" style={[styles.title, { color: theme.colors.onBackground }]}>
           Pantry
         </Text>
-        <IconButton
-          icon="help-circle-outline"
-          size={20}
-          onPress={firstRun.showAgain}
-          accessibilityLabel="What is the Pantry?"
-        />
-        <Button
-          icon="flask-outline"
-          mode="text"
-          compact
-          onPress={() => navigation.navigate('TestInstall')}
+        <Menu
+          visible={menuOpen}
+          onDismiss={() => setMenuOpen(false)}
+          anchor={<IconButton icon="dots-vertical" testID="pantry-menu" accessibilityLabel="More" onPress={() => setMenuOpen(true)} />}
         >
-          Test
-        </Button>
+          <Menu.Item
+            leadingIcon="flask-outline"
+            title="Test a share code"
+            testID="pantry-test"
+            onPress={() => {
+              setMenuOpen(false);
+              navigation.navigate('TestInstall');
+            }}
+          />
+          <Menu.Item
+            leadingIcon="help-circle-outline"
+            title="What is the Pantry?"
+            onPress={() => {
+              setMenuOpen(false);
+              firstRun.showAgain();
+            }}
+          />
+        </Menu>
       </View>
 
       <FirstRunCard
@@ -303,24 +294,35 @@ const StoreBrowseScreen = () => {
         body={helpCopy.pantry.firstRun}
       />
 
-      {/* The store scopes the search, so it comes first. */}
+      {/* The store scopes the search, so it comes first (only shown with several stores). */}
       <PantryStorePicker style={styles.storePicker} />
 
       <Searchbar
-        placeholder="Search packages..."
+        placeholder="Search packages"
         value={query}
         onChangeText={setQuery}
         style={styles.searchbar}
         testID="searchbar-input"
       />
 
-      {categories.length > 0 && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.categoryRow}
-          contentContainerStyle={styles.chipRowContent}
+      {updateCount > 0 && (
+        <TouchableRipple
+          testID="pantry-updates"
+          onPress={() => setUpdatesOnly((u) => !u)}
+          style={[styles.banner, { backgroundColor: theme.dark ? '#7c2d12' : '#ffedd5' }]}
         >
+          <View style={styles.bannerRow}>
+            <Icon source="arrow-up-circle-outline" size={20} color={theme.dark ? '#fed7aa' : '#9a3412'} />
+            <Text style={[styles.bannerText, { color: theme.dark ? '#fed7aa' : '#9a3412' }]}>
+              {updateCount} update{updateCount === 1 ? '' : 's'} ready
+            </Text>
+            <Text style={[styles.bannerText, { color: theme.dark ? '#fed7aa' : '#9a3412' }]}>{updatesOnly ? 'Show all' : 'Review'}</Text>
+          </View>
+        </TouchableRipple>
+      )}
+
+      <View style={styles.chipBar}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRowContent} style={{ flex: 1 }}>
           <Chip
             selected={!selectedCategory}
             showSelectedCheck={false}
@@ -335,43 +337,41 @@ const StoreBrowseScreen = () => {
               key={cat.name}
               selected={selectedCategory === cat.name}
               showSelectedCheck={false}
-              onPress={() =>
-                setSelectedCategory(selectedCategory === cat.name ? null : cat.name)
-              }
+              onPress={() => setSelectedCategory(selectedCategory === cat.name ? null : cat.name)}
               compact
               testID={`category-chip-${cat.name}`}
             >
-              {cat.name} ({cat.count})
+              {categoryLabel(cat.name)}
             </Chip>
           ))}
         </ScrollView>
-      )}
-
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.sortRow}
-        contentContainerStyle={styles.chipRowContent}
-      >
-        {SORT_OPTIONS.map((opt) => (
-          <Chip
-            key={opt.value}
-            selected={sort === opt.value}
-            showSelectedCheck={false}
-            showSelectedOverlay={false}
-            mode="outlined"
-            onPress={() => setSort(opt.value)}
-            compact
-            testID={`sort-chip-${opt.value}`}
-          >
-            {opt.label}
-          </Chip>
-        ))}
-      </ScrollView>
+        <Menu
+          visible={sortOpen}
+          onDismiss={() => setSortOpen(false)}
+          anchor={
+            <Chip mode="outlined" compact icon="sort" onPress={() => setSortOpen(true)} testID="sort-chip" style={{ marginRight: 16 }}>
+              {SORT_OPTIONS.find((o) => o.value === sort)?.label}
+            </Chip>
+          }
+        >
+          {SORT_OPTIONS.map((opt) => (
+            <Menu.Item
+              key={opt.value}
+              testID={`sort-chip-${opt.value}`}
+              title={opt.label}
+              leadingIcon={sort === opt.value ? 'check' : undefined}
+              onPress={() => {
+                setSortOpen(false);
+                setSort(opt.value);
+              }}
+            />
+          ))}
+        </Menu>
+      </View>
 
       {/* Package list */}
       <FlatList
-        data={packages}
+        data={updatesOnly ? packages.filter((p) => standing(p).update) : packages}
         keyExtractor={(item) => item.command_name}
         renderItem={renderItem}
         ListEmptyComponent={emptyComponent}
@@ -397,26 +397,21 @@ const styles = StyleSheet.create({
   title: { fontWeight: 'bold', flex: 1 },
   storePicker: { marginHorizontal: 16, marginBottom: 8, alignSelf: 'flex-start' },
   searchbar: { marginHorizontal: 16, marginBottom: 8 },
-  categoryRow: { marginBottom: 6, flexGrow: 0, flexShrink: 0 },
-  sortRow: { marginBottom: 8, flexGrow: 0, flexShrink: 0 },
+  banner: { marginHorizontal: 16, marginBottom: 8, borderRadius: 12 },
+  bannerRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 10 },
+  bannerText: { fontWeight: '600', fontSize: 13 },
+  chipBar: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
   chipRowContent: { gap: 6, paddingHorizontal: 16, paddingVertical: 4 },
-  list: { padding: 16, gap: 12, paddingBottom: 32 },
+  list: { padding: 16, paddingTop: 4, gap: 10, paddingBottom: 32 },
   emptyList: { flexGrow: 1, justifyContent: 'center', alignItems: 'center' },
   emptyContent: { alignItems: 'center', paddingTop: 48 },
   card: {},
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  badges: { flexDirection: 'row', gap: 6, alignItems: 'center' },
-  cardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  installs: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  row: { flexDirection: 'row', gap: 12, alignItems: 'center', padding: 12 },
+  icon: { width: 42, height: 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  nameLine: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  meta: { marginTop: 3, opacity: 0.8 },
+  status: { alignItems: 'flex-end', gap: 4 },
+  risk: { fontSize: 11, fontWeight: '600' },
 });
 
 export default StoreBrowseScreen;

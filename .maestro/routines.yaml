@@ -40,7 +40,7 @@ env:
     id: "routine-add-fab"
 - extendedWaitUntil:
     visible:
-      text: "New Routine"
+      text: "New routine"
     timeout: 10000
 - assertNotVisible:
     id: "routine-delete-button"
@@ -70,6 +70,8 @@ env:
     id: "routine-step-command-0"
 - inputText: "get_weather"
 - hideKeyboard
+- tapOn:
+    id: "routine-step-done"
 - scrollUntilVisible:
     element:
       id: "routine-save-button"
@@ -90,7 +92,7 @@ env:
     text: ${output.routine}
 - extendedWaitUntil:
     visible:
-      text: "Edit Routine"
+      id: "routine-summary"
     timeout: 10000
 - extendedWaitUntil:
     visible:
@@ -125,7 +127,7 @@ env:
     text: ${output.routine}
 - extendedWaitUntil:
     visible:
-      text: "Edit Routine"
+      id: "routine-summary"
     timeout: 10000
 - extendedWaitUntil:
     visible:

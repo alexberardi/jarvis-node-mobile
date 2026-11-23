@@ -10,6 +10,7 @@ import {
   Divider,
   List,
   Menu,
+  Modal,
   Portal,
   Text,
   TextInput,
@@ -40,6 +41,7 @@ const DeviceEditScreen = ({ navigation, route }: Props) => {
   const [name, setName] = useState('');
   const [roomId, setRoomId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const [roomMenuVisible, setRoomMenuVisible] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [lastAction, setLastAction] = useState<string | null>(null);
@@ -79,7 +81,8 @@ const DeviceEditScreen = ({ navigation, route }: Props) => {
         room_id: roomId,
       });
       queryClient.invalidateQueries({ queryKey: ['devices', householdId] });
-      navigation.goBack();
+      // Saved from the Name & room sheet: close it and stay on the device.
+      setEditOpen(false);
     } catch (e) {
       // Surface the server's reason (e.g. duplicate-name 409) instead of the
       // generic axios "Request failed with status code 409".
@@ -88,7 +91,7 @@ const DeviceEditScreen = ({ navigation, route }: Props) => {
     } finally {
       setSaving(false);
     }
-  }, [householdId, deviceId, name, roomId, navigation, queryClient]);
+  }, [householdId, deviceId, name, roomId, queryClient]);
 
   const handleDelete = useCallback(() => {
     Alert.alert(
@@ -190,61 +193,12 @@ const DeviceEditScreen = ({ navigation, route }: Props) => {
     <KeyboardSafeView style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <Appbar.Header>
         <Appbar.BackAction onPress={() => navigation.goBack()} />
-        <Appbar.Content title="Edit Device" />
+        <Appbar.Content title={device.name} />
       </Appbar.Header>
 
       <ScrollView contentContainerStyle={styles.content}>
-        <TextInput
-          label="Device Name"
-          testID="device-name-input"
-          value={name}
-          onChangeText={setName}
-          mode="outlined"
-          style={styles.input}
-        />
-
-        <Text variant="labelLarge" style={styles.label}>
-          Room
-        </Text>
-        <Menu
-          visible={roomMenuVisible}
-          onDismiss={() => setRoomMenuVisible(false)}
-          anchor={
-            <Button
-              mode="outlined"
-              onPress={() => setRoomMenuVisible(true)}
-              style={styles.roomButton}
-            >
-              {selectedRoom?.name ?? 'Unassigned'}
-            </Button>
-          }
-        >
-          <Menu.Item
-            title="Unassigned"
-            onPress={() => {
-              setRoomId(null);
-              setRoomMenuVisible(false);
-            }}
-          />
-          <Divider />
-          {rooms?.map((r) => (
-            <Menu.Item
-              key={r.id}
-              title={r.name}
-              onPress={() => {
-                setRoomId(r.id);
-                setRoomMenuVisible(false);
-              }}
-            />
-          ))}
-        </Menu>
-
         {device.is_controllable && (
           <>
-            <Divider style={styles.divider} />
-            <Text variant="labelLarge" style={styles.label}>
-              Controls
-            </Text>
             <DeviceControlPanel
               householdId={householdId}
               deviceId={deviceId}
@@ -268,55 +222,130 @@ const DeviceEditScreen = ({ navigation, route }: Props) => {
           </>
         )}
 
-        <Divider style={styles.divider} />
-
-        <Text variant="labelLarge" style={styles.label}>
-          Details
-        </Text>
-        <List.Item title="Entity ID" description={device.entity_id} />
-        {device.protocol && (
-          <List.Item title="Protocol" description={device.protocol} />
-        )}
-        {device.local_ip && (
-          <List.Item title="Local IP" description={device.local_ip} />
-        )}
-        {device.mac_address && (
-          <List.Item title="MAC Address" description={device.mac_address} />
-        )}
-        {device.cloud_id && (
-          <List.Item title="Cloud ID" description={device.cloud_id} />
-        )}
-        {device.manufacturer && (
-          <List.Item title="Manufacturer" description={device.manufacturer} />
-        )}
-        {device.model && (
-          <List.Item title="Model" description={device.model} />
-        )}
-        <List.Item title="Source" description={device.source} />
-
-        <Divider style={styles.divider} />
-
-        <Button
-          mode="contained"
-          onPress={handleSave}
-          testID="device-save-button"
-          loading={saving}
-          disabled={saving || !name.trim()}
-          style={styles.saveButton}
-        >
-          Save
-        </Button>
-
-        <Button
-          mode="outlined"
-          onPress={handleDelete}
-          testID="device-delete-button"
-          textColor={theme.colors.error}
-          style={styles.deleteButton}
-        >
-          Delete Device
-        </Button>
+        <View style={[styles.group, { borderColor: theme.colors.outlineVariant }]}>
+          <List.Item
+            testID="device-name-room-row"
+            title="Name & room"
+            description={`${device.name} \u00b7 ${selectedRoom?.name ?? 'Unassigned'}`}
+            left={(props) => <List.Icon {...props} icon="pencil-outline" />}
+            right={(props) => <List.Icon {...props} icon="chevron-right" />}
+            onPress={() => setEditOpen(true)}
+          />
+          <Divider />
+          <List.Accordion
+            testID="device-details"
+            title="Technical details"
+            description={[device.protocol, device.entity_id].filter(Boolean).join(' \u00b7 ')}
+            left={(props) => <List.Icon {...props} icon="information-outline" />}
+          >
+            <List.Item title="Entity ID" description={device.entity_id} />
+            {device.protocol && (
+              <List.Item title="Protocol" description={device.protocol} />
+            )}
+            {device.local_ip && (
+              <List.Item title="Local IP" description={device.local_ip} />
+            )}
+            {device.mac_address && (
+              <List.Item title="MAC Address" description={device.mac_address} />
+            )}
+            {device.cloud_id && (
+              <List.Item title="Cloud ID" description={device.cloud_id} />
+            )}
+            {device.manufacturer && (
+              <List.Item title="Manufacturer" description={device.manufacturer} />
+            )}
+            {device.model && (
+              <List.Item title="Model" description={device.model} />
+            )}
+            <List.Item title="Source" description={device.source} />
+          </List.Accordion>
+        </View>
       </ScrollView>
+
+      {/* Name & room, and Remove, in one sheet away from the controls */}
+      <Portal>
+        <Modal
+          visible={editOpen}
+          onDismiss={() => setEditOpen(false)}
+          contentContainerStyle={[styles.sheet, { backgroundColor: theme.colors.surface }]}
+        >
+          <Text variant="titleMedium" style={{ fontWeight: '600', marginBottom: 12 }}>Name & room</Text>
+          <TextInput
+            label="Device Name"
+            testID="device-name-input"
+            value={name}
+            onChangeText={setName}
+            mode="outlined"
+            style={styles.input}
+          />
+
+          <Text variant="labelLarge" style={styles.label}>
+            Room
+          </Text>
+          <Menu
+            visible={roomMenuVisible}
+            onDismiss={() => setRoomMenuVisible(false)}
+            anchor={
+              <Button
+                mode="outlined"
+                onPress={() => setRoomMenuVisible(true)}
+                style={styles.roomButton}
+              >
+                {selectedRoom?.name ?? 'Unassigned'}
+              </Button>
+            }
+          >
+            <Menu.Item
+              title="Unassigned"
+              onPress={() => {
+                setRoomId(null);
+                setRoomMenuVisible(false);
+              }}
+            />
+            <Divider />
+            {rooms?.map((r) => (
+              <Menu.Item
+                key={r.id}
+                title={r.name}
+                onPress={() => {
+                  setRoomId(r.id);
+                  setRoomMenuVisible(false);
+                }}
+              />
+            ))}
+          </Menu>
+
+          <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 8 }}>
+            Jarvis uses the name when you ask for this device by voice.
+          </Text>
+          <View style={styles.sheetActions}>
+            <Button mode="outlined" onPress={() => setEditOpen(false)} style={{ flex: 1 }}>Cancel</Button>
+            <Button
+              mode="contained"
+              onPress={handleSave}
+              testID="device-save-button"
+              loading={saving}
+              disabled={saving || !name.trim()}
+              style={{ flex: 1 }}
+            >
+              Save
+            </Button>
+          </View>
+          <Divider style={{ marginVertical: 12 }} />
+          <Button
+            mode="text"
+            onPress={() => {
+              setEditOpen(false);
+              handleDelete();
+            }}
+            testID="device-delete-button"
+            textColor={theme.colors.error}
+            style={{ alignSelf: 'flex-start' }}
+          >
+            Remove from household
+          </Button>
+        </Modal>
+      </Portal>
 
       {/* Input dialog for device pairing (PIN entry, etc.) */}
       <Portal>
@@ -346,6 +375,9 @@ const DeviceEditScreen = ({ navigation, route }: Props) => {
 };
 
 const styles = StyleSheet.create({
+  group: { marginTop: 16, borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, overflow: 'hidden' },
+  sheet: { marginTop: 'auto', padding: 16, paddingBottom: 28, borderTopLeftRadius: 22, borderTopRightRadius: 22 },
+  sheetActions: { flexDirection: 'row', gap: 8, marginTop: 16 },
   container: { flex: 1 },
   centered: {
     flex: 1,

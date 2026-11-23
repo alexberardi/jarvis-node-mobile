@@ -581,3 +581,72 @@ describe('Household edit — flow integration (rename, roles, members, invites, 
     });
   });
 });
+
+// The Household tab opens the editor one section at a time (route param `section`).
+describe('Household edit — one section per Household tab entry', () => {
+  const renderSection = (section: string) => {
+    get.mockImplementation((url: string) => {
+      if (url.includes('/members')) return Promise.resolve({ data: [ME, BOB] });
+      if (url.includes('/invites')) return Promise.resolve({ data: [INVITE] });
+      return Promise.resolve({ data: [] });
+    });
+    const nav = makeNav();
+    const utils = render(
+      <PaperProvider theme={lightTheme}>
+        <HouseholdEditScreen
+          navigation={nav}
+          route={{ params: { householdId: 'hh-1', householdName: 'Home', section }, key: 'k', name: 'HouseholdEdit' } as any}
+        />
+      </PaperProvider>,
+    );
+    return { ...utils, nav };
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockAuthState = { accessToken: 'tok', user: { id: 1, email: 'me@test.com' }, households: [{ id: 'hh-1' }, { id: 'hh-2' }] };
+  });
+
+  it('members: members, invites and leave, titled Members, nothing else', async () => {
+    const utils = renderSection('members');
+    await utils.findByText('bob@test.com');
+    // The Appbar title and the Members card's own heading.
+    expect(utils.getAllByText('Members')).toHaveLength(2);
+    expect(utils.getByText('ABC123')).toBeTruthy();
+    expect(utils.getByTestId('household-leave')).toBeTruthy();
+    expect(utils.queryByTestId('household-name-input')).toBeNull();
+    expect(utils.queryByTestId('household-persona-input')).toBeNull();
+    expect(utils.queryByTestId('open-signal-automations')).toBeNull();
+  });
+
+  it('jarvis: personality and capabilities, not members or name', async () => {
+    const utils = renderSection('jarvis');
+    await utils.findByTestId('household-persona-input');
+    expect(utils.getByText('Personality')).toBeTruthy();
+    expect(utils.getByTestId('household-web-search-toggle')).toBeTruthy();
+    expect(utils.queryByText('bob@test.com')).toBeNull();
+    expect(utils.queryByTestId('household-name-input')).toBeNull();
+  });
+
+  it('knowledge: memory switches and the way into Memories', async () => {
+    const utils = renderSection('knowledge');
+    fireEvent.press(await utils.findByTestId('household-memories-row'));
+    expect(utils.nav.navigate).toHaveBeenCalledWith('Memories');
+    expect(utils.getByTestId('household-memory-toggle')).toBeTruthy();
+    expect(utils.queryByTestId('household-persona-input')).toBeNull();
+  });
+
+  it('calls: the Twilio card and the way into Phonebook', async () => {
+    const utils = renderSection('calls');
+    fireEvent.press(await utils.findByTestId('household-phonebook-row'));
+    expect(utils.nav.navigate).toHaveBeenCalledWith('Phonebook');
+    expect(utils.queryByTestId('household-memory-toggle')).toBeNull();
+  });
+
+  it('home: name and location, not presence', async () => {
+    const utils = renderSection('home');
+    await utils.findByTestId('household-name-input');
+    expect(utils.getByTestId('household-location-input')).toBeTruthy();
+    expect(utils.queryByTestId('presence-enabled-toggle')).toBeNull();
+  });
+});

@@ -18,6 +18,7 @@ import {
 } from 'react-native';
 import { Badge, Button, Divider, IconButton, Modal, Portal, Snackbar, Text, TextInput, TouchableRipple, useTheme } from 'react-native-paper';
 
+import YouAvatar from '../../components/YouAvatar';
 import { Audio } from 'expo-av';
 import * as Notifications from 'expo-notifications';
 
@@ -569,6 +570,7 @@ const HomeScreen = () => {
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: theme.colors.outlineVariant }]}>
         <View style={styles.titleRow}>
+          <YouAvatar />
           <Text variant="headlineSmall" style={styles.title}>
             Jarvis
           </Text>
@@ -587,13 +589,6 @@ const HomeScreen = () => {
             size={22}
             onPress={clearConversation}
             iconColor={theme.colors.onSurface}
-          />
-          <IconButton
-            icon="cog-outline"
-            size={22}
-            onPress={() => navigation.navigate('Settings')}
-            iconColor={theme.colors.onSurface}
-            testID="settings-button"
           />
           <View>
             <IconButton
@@ -695,7 +690,7 @@ const HomeScreen = () => {
                   icon="plus"
                   onPress={() =>
                     navigation.navigate('Main', {
-                      screen: 'NodesTab',
+                      screen: 'HouseholdTab',
                       params: { screen: 'AddNode' },
                     })
                   }

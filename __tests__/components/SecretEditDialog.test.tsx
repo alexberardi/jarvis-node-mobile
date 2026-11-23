@@ -101,7 +101,7 @@ describe('SecretEditDialog', () => {
       <SecretEditDialog {...baseProps} isSet={true} />,
       { wrapper },
     );
-    expect(getByText('Delete')).toBeTruthy();
+    expect(getByText('Clear')).toBeTruthy();
   });
 
   it('hides Delete button when isSet is false', () => {
@@ -109,7 +109,7 @@ describe('SecretEditDialog', () => {
       <SecretEditDialog {...baseProps} isSet={false} />,
       { wrapper },
     );
-    expect(queryByText('Delete')).toBeNull();
+    expect(queryByText('Clear')).toBeNull();
   });
 
   it('calls encryptAndPushConfig on save', async () => {

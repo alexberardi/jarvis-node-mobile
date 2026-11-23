@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import {
   Button,
-  Dialog,
+  Modal,
   HelperText,
   Icon,
   Menu,
@@ -34,6 +34,12 @@ export interface SecretEditDialogProps {
   enumValues?: string[];
   presets?: Record<string, Record<string, string>>;
   onPresetsAvailable?: (presetValues: Record<string, string>) => void;
+  /** Every node the value goes to (Credentials: the ticked nodes); default [nodeId]. */
+  nodeIds?: string[];
+  /** The field's name for people (friendly_name); default the raw key. */
+  title?: string;
+  /** Where the value will be saved, said under the input (e.g. "Saves to Kitchen and Office."). */
+  savesTo?: string;
   /** Household members for "user"-type secrets. null/undefined means the
    * list couldn't be loaded — the picker degrades to a plain id input. */
   householdMembers?: HouseholdMember[] | null;
@@ -55,7 +61,29 @@ const SecretEditDialog: React.FC<SecretEditDialogProps> = ({
   presets,
   onPresetsAvailable,
   householdMembers,
+  nodeIds,
+  title,
+  savesTo,
 }) => {
+  const targets = nodeIds && nodeIds.length > 0 ? nodeIds : [nodeId];
+  const [revealed, setRevealed] = useState(false);
+  // Push one config to every target; a node that fails is named, the rest still get it.
+  const pushToTargets = async (data: Record<string, string>) => {
+    if (targets.length === 1) {
+      await encryptAndPushConfig(targets[0], 'settings:secrets', data);
+      return;
+    }
+    const failed: string[] = [];
+    for (const id of targets) {
+      try {
+        await encryptAndPushConfig(id, 'settings:secrets', data);
+      } catch {
+        failed.push(id);
+      }
+    }
+    if (failed.length === targets.length) throw new Error('None of the nodes answered, so nothing was saved.');
+    if (failed.length > 0) throw new Error(`Saved, except on ${failed.length} node${failed.length > 1 ? 's' : ''} that didn't answer.`);
+  };
   const theme = useTheme();
   const { state: authState } = useAuth();
   const [value, setValue] = useState(currentValue ?? '');
@@ -87,11 +115,7 @@ const SecretEditDialog: React.FC<SecretEditDialogProps> = ({
       if (scope === 'user' && authState.user?.id) {
         configData.__user_id__ = String(authState.user.id);
       }
-      await encryptAndPushConfig(
-        nodeId,
-        'settings:secrets',
-        configData,
-      );
+      await pushToTargets(configData);
       onSaved();
 
       if (presets && presets[finalValue] && onPresetsAvailable) {
@@ -109,11 +133,7 @@ const SecretEditDialog: React.FC<SecretEditDialogProps> = ({
     setError(null);
 
     try {
-      await encryptAndPushConfig(
-        nodeId,
-        'settings:secrets',
-        { [secretKey]: '' },
-      );
+      await pushToTargets({ [secretKey]: '' });
       onSaved();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete');
@@ -230,11 +250,19 @@ const SecretEditDialog: React.FC<SecretEditDialogProps> = ({
         value={value}
         onChangeText={setValue}
         mode="outlined"
-        secureTextEntry={isSecureField}
+        secureTextEntry={isSecureField && !revealed}
+        right={isSecureField ? (
+          <TextInput.Icon
+            icon={revealed ? 'eye-off-outline' : 'eye-outline'}
+            onPress={() => setRevealed((r) => !r)}
+            accessibilityLabel={revealed ? 'Hide value' : 'Show value'}
+          />
+        ) : undefined}
         autoCapitalize="none"
         autoCorrect={false}
         keyboardType={valueType === 'int' ? 'numeric' : 'default'}
         style={styles.input}
+        testID="secret-value-input"
         autoFocus
       />
     );
@@ -242,45 +270,55 @@ const SecretEditDialog: React.FC<SecretEditDialogProps> = ({
 
   return (
     <Portal>
-      <Dialog visible={visible} onDismiss={onDismiss}>
-        <Dialog.Title>{secretKey}</Dialog.Title>
-        <Dialog.Content>
+      <Modal
+        visible={visible}
+        onDismiss={onDismiss}
+        contentContainerStyle={[styles.sheet, { backgroundColor: theme.colors.surface }]}
+      >
+        <View style={[styles.grabber, { backgroundColor: theme.colors.outlineVariant }]} />
+        <Text variant="titleMedium" style={styles.title}>{title ?? secretKey}</Text>
+        {!!description && (
           <Text variant="bodySmall" style={styles.description}>
             {description}
           </Text>
+        )}
 
-          {renderInput()}
+        {renderInput()}
 
-          {error && (
-            <HelperText type="error" visible>
-              {error}
-            </HelperText>
-          )}
-        </Dialog.Content>
-        <Dialog.Actions>
+        {!!savesTo && (
+          <Text variant="bodySmall" style={styles.description} testID="secret-saves-to">
+            {savesTo}
+          </Text>
+        )}
+        {error && (
+          <HelperText type="error" visible>
+            {error}
+          </HelperText>
+        )}
+        <View style={styles.actions}>
           {isSet && (
-            <Button
-              onPress={handleDelete}
-              disabled={saving}
-              textColor="#ef4444"
-            >
-              Delete
+            <Button onPress={handleDelete} disabled={saving} textColor={theme.colors.error}>
+              Clear
             </Button>
           )}
           <View style={styles.spacer} />
           <Button onPress={onDismiss} disabled={saving}>
             Cancel
           </Button>
-          <Button onPress={handleSave} disabled={saving} loading={saving}>
+          <Button mode="contained" onPress={handleSave} disabled={saving} loading={saving}>
             Save
           </Button>
-        </Dialog.Actions>
-      </Dialog>
+        </View>
+      </Modal>
     </Portal>
   );
 };
 
 const styles = StyleSheet.create({
+  sheet: { marginTop: 'auto', padding: 16, paddingBottom: 28, borderTopLeftRadius: 22, borderTopRightRadius: 22 },
+  grabber: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 12 },
+  title: { fontWeight: '600', marginBottom: 4 },
+  actions: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 },
   description: {
     opacity: 0.7,
     marginBottom: 16,

@@ -28,7 +28,7 @@ describe('MainTabNavigator', () => {
       </NavigationContainer>,
     );
 
-    for (const id of ['tab-home', 'tab-devices', 'tab-pantry', 'tab-routines', 'tab-nodes']) {
+    for (const id of ['tab-home', 'tab-devices', 'tab-pantry', 'tab-routines', 'tab-household']) {
       expect(getByTestId(id)).toBeTruthy();
     }
   });

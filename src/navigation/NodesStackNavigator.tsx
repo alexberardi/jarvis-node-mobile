@@ -5,11 +5,15 @@ import React, { useCallback } from 'react';
 
 import AddComputerScreen from '../screens/Nodes/AddComputerScreen';
 import FastPathInspectScreen from '../screens/Nodes/FastPathInspectScreen';
+import CredentialDetailScreen from '../screens/Household/CredentialDetailScreen';
+import CredentialsScreen from '../screens/Household/CredentialsScreen';
+import HouseholdHomeScreen from '../screens/Household/HouseholdHomeScreen';
 import ImportKeyScreen from '../screens/ImportKey/ImportKeyScreen';
 import NodeDetailScreen from '../screens/Nodes/NodeDetailScreen';
 import NodeForgeTestScreen from '../screens/Nodes/NodeForgeTestScreen';
 import NodeListScreen from '../screens/Nodes/NodeListScreen';
 import NodeSettingsScreen from '../screens/Nodes/NodeSettingsScreen';
+import { NodeHardwareScreen, NodePackagesScreen } from '../screens/Nodes/NodeSubScreens';
 import IntegrationAuthScreen from '../screens/Settings/IntegrationAuthScreen';
 import ProvisioningNavigator from './ProvisioningNavigator';
 import { NodesStackParamList } from './types';
@@ -26,11 +30,16 @@ const ImportKeyWrapper = () => {
 const NodesStackNavigator = () => {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="HouseholdHome" component={HouseholdHomeScreen} />
       <Stack.Screen name="NodeList" component={NodeListScreen} />
+      <Stack.Screen name="Credentials" component={CredentialsScreen} />
+      <Stack.Screen name="CredentialDetail" component={CredentialDetailScreen} />
       <Stack.Screen name="AddNode" component={ProvisioningNavigator} />
       <Stack.Screen name="AddComputer" component={AddComputerScreen} />
       <Stack.Screen name="NodeDetail" component={NodeDetailScreen} />
       <Stack.Screen name="NodeSettings" component={NodeSettingsScreen} />
+      <Stack.Screen name="NodeHardware" component={NodeHardwareScreen} />
+      <Stack.Screen name="NodePackages" component={NodePackagesScreen} />
       <Stack.Screen name="NodeForgeTest" component={NodeForgeTestScreen} />
       <Stack.Screen name="ImportKey" component={ImportKeyWrapper} />
       <Stack.Screen name="IntegrationAuth" component={IntegrationAuthScreen} />
