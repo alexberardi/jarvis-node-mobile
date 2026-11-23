@@ -38,7 +38,7 @@ jest.mock('../../src/api/smartHomeApi', () => ({ getSmartHomeConfig: jest.fn() }
 // The Scheduled and Triggers segments are their own screens (tested on their own); stub them here.
 jest.mock('../../src/screens/Schedules/ScheduleListScreen', () => {
   const { Text } = require('react-native');
-  return { __esModule: true, default: (p: { embedded?: boolean }) => <Text>{`schedules embedded=${p.embedded}`}</Text> };
+  return { __esModule: true, default: () => <Text>scheduled errands</Text> };
 });
 jest.mock('../../src/screens/Settings/SignalAutomationsScreen', () => {
   const { Text } = require('react-native');
@@ -273,7 +273,7 @@ describe('Routines tab segments', () => {
     const screen = renderScreen();
     await screen.findByText('Movie night');
     fireEvent.press(screen.getByTestId('open-schedules'));
-    expect(await screen.findByText('schedules embedded=true')).toBeTruthy();
+    expect(await screen.findByText('scheduled errands')).toBeTruthy();
     expect(screen.queryByTestId('routine-add-fab')).toBeNull();
     fireEvent.press(screen.getByTestId('routines-tab-triggers'));
     expect(await screen.findByText('triggers for hh-1')).toBeTruthy();

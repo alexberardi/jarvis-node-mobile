@@ -1367,29 +1367,6 @@ const HouseholdEditScreen = ({ navigation, route }: Props) => {
         </>
         )}
 
-        {!section && (
-        <>
-        {/* Signal automations — free-text "when X happens, do Y" rules */}
-        <Card style={styles.card}>
-          <Card.Content>
-            <Text variant="titleMedium" style={styles.sectionTitle}>Triggers</Text>
-            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 8 }}>
-              Tell Jarvis what to do when something happens — like locking the door
-              when you leave.
-            </Text>
-            <Button
-              testID="open-signal-automations"
-              mode="outlined"
-              icon="flash-outline"
-              onPress={() => navigation.navigate('SignalAutomations', { householdId })}
-            >
-              Manage automations
-            </Button>
-          </Card.Content>
-        </Card>
-        </>
-        )}
-
         {show('members') && (
         <>
         {/* Members */}

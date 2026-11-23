@@ -9,12 +9,10 @@
  *
  * Reached from Household Settings. Storage + auth live in signalAutomationsApi.
  */
-import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import {
   ActivityIndicator,
-  Appbar,
   Button,
   Card,
   Chip,
@@ -31,13 +29,10 @@ import {
   type DeliveryMode,
   type SignalAutomation,
 } from '../../api/signalAutomationsApi';
-import type { RootStackParamList } from '../../navigation/types';
 import KeyboardSafeView from '../../components/KeyboardSafeView';
 
-type Props =
-  | (NativeStackScreenProps<RootStackParamList, 'SignalAutomations'> & { embedded?: false; householdId?: undefined })
-  /** Inside the Routines tab's Triggers segment: no Appbar of its own. */
-  | { embedded: true; householdId: string; navigation?: undefined; route?: undefined };
+/** Shown inside the Routines tab's Triggers segment, under its header. */
+type Props = { householdId: string };
 
 interface Draft {
   instruction: string;
@@ -45,8 +40,7 @@ interface Draft {
   delivery: DeliveryMode;
 }
 
-const SignalAutomationsScreen = (props: Props) => {
-  const householdId = props.embedded ? props.householdId : props.route.params.householdId;
+const SignalAutomationsScreen = ({ householdId }: Props) => {
   const theme = useTheme();
 
   // `items` is the server baseline; `drafts` is the editable copy. A card is
@@ -271,12 +265,6 @@ const SignalAutomationsScreen = (props: Props) => {
 
   return (
     <KeyboardSafeView style={[styles.screen, { backgroundColor: theme.colors.background }]}>
-      {!props.embedded && (
-        <Appbar.Header>
-          <Appbar.BackAction onPress={() => props.navigation.goBack()} />
-          <Appbar.Content title="Triggers" />
-        </Appbar.Header>
-      )}
       {renderBody()}
     </KeyboardSafeView>
   );

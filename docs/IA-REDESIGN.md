@@ -156,7 +156,7 @@ This screen gathers the current H Members, H Invite Codes and H Danger Zone sect
     - ⋮ menu: Uninstall, Inspect fast-paths (→ `FastPathInspect`), Setup help, Open in Pantry (→ StoreDetail, which offers Update/Revert)
   - **Credentials** → the Credentials hub, filtered to this node. The card status reads like "Gmail needs sign-in".
   - **Background tasks** → today's NS Tasks list: always running / interval, needs-setup, auto-disabled reason, switch, and the agent's secrets with "Configured in {service}" for inherited ones.
-  - **Stored data** → `DataBrowserHome {nodeId}`, which is reachable again (see Removed). It keeps its error, read-only and empty states.
+  - **Stored data** → NodeSettings `stored_data` (one tab), which lists the node's commands and opens `DataBrowserRecords`. It keeps the encryption-key gate.
 - **Device** (2×2 cards, Pi only unless noted):
   - **Wake word & mic** → `NodeVoiceSettings` unchanged.
   - **Speaker & Bluetooth** → `BluetoothSection` + `SpeakerHATCard` (the HAT card only when one is detected).
@@ -305,7 +305,7 @@ Every row in this table was found on `origin/main` (b7e409e). A row marked "drop
 
 - `SmartHome/DeviceListScreen`: unreachable on main, and its power button is a "not yet wired" stub. Delete it.
 - `SmartHomeSetup`'s `IntegrationAuth` route is never targeted (the Nodes stack copy is the one used). Keep a single route in the Household stack.
-- `DataBrowserHome`: unreachable today. It becomes the Stored data target, pinned to the node.
+- `DataBrowserHome`: unreachable today, and NodeSettings' Stored data tab already lists the commands. Delete it.
 - `RecentCommandsList`/`Detail` and `ScheduleList` have no back control. Add an Appbar back when they move.
 - `SignalAutomations` says "admin" in its comment but has no role gate. Keep it ungated, since anyone in the household can write routines today; confirm separately.
 - Provisioning "Developer options" is always visible. This is out of scope; note it only.
@@ -400,8 +400,8 @@ This lists every file under `src/screens` on main (b7e409e). "Same" means the st
 | Nodes/FastPathInspectScreen | Household stack | Node › Packages ⋮ |
 | Nodes/NodeForgeTestScreen | Household stack | Node ⋮ |
 | Provisioning/ScanForNodes, NodeInfo, SelectNetwork, EnterPassword, ProvisioningProgress, Success | AddNode in Household stack | Nodes list › Add node; Chat empty state "Add Your First Node". Success "Done" returns to Chat (same); "Set Up Smart Home" (same) |
-| CommandData/DataBrowserHomeScreen | root push | Node › Stored data (pinned `nodeId`); unreachable today |
-| CommandData/RecordsListScreen, RecordDetailScreen, RecordEditScreen | root push (same) | from DataBrowserHome |
+| CommandData/DataBrowserHomeScreen | **deleted** (unreachable; Node › Stored data lists the commands) | — |
+| CommandData/RecordsListScreen, RecordDetailScreen, RecordEditScreen | root push (`CommandData`) | Node › Stored data |
 | Store/StoreBrowseScreen, StoreDetailScreen, NodePickerSheet, InstallProgressScreen, TestInstallScreen (+ SendToForgeCard) | Pantry tab (same) | tab; node Packages ⋮ "Open in Pantry"; the updates banner |
 | Devices/DevicesScreen, DeviceEditScreen, ExternalDeviceDetailScreen, CameraViewScreen, RoomManagementScreen | Devices tab (same) | same |
 | SmartHome/DeviceDiscoveryScreen | Devices stack + SmartHomeSetup (same) | Devices +; Node ⋮ Scan for devices; Forge test |

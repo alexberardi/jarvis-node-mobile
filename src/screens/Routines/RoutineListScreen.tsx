@@ -300,13 +300,13 @@ const RoutineListScreen = () => {
   );
 
   if (section === 'scheduled') {
-    return <View style={styles.container}>{header}<ScheduleListScreen embedded /></View>;
+    return <View style={styles.container}>{header}<ScheduleListScreen /></View>;
   }
   if (section === 'triggers') {
     return (
       <View style={styles.container}>
         {header}
-        {householdId ? <SignalAutomationsScreen embedded householdId={householdId} /> : null}
+        {householdId ? <SignalAutomationsScreen householdId={householdId} /> : null}
       </View>
     );
   }

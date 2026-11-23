@@ -17,14 +17,9 @@ const wrapper = ({ children }: { children: React.ReactNode }) => (
   <PaperProvider theme={lightTheme}>{children}</PaperProvider>
 );
 
-const navigation = { goBack: jest.fn(), navigate: jest.fn() } as any;
-
 const renderScreen = () =>
   render(
-    <SignalAutomationsScreen
-      navigation={navigation}
-      route={{ params: { householdId: 'hh-1' } } as any}
-    />,
+    <SignalAutomationsScreen householdId="hh-1" />,
     { wrapper },
   );
 

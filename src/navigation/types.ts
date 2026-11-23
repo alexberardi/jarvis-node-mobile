@@ -75,21 +75,9 @@ export type SmartHomeSetupParamList = {
     haToken?: string;
   };
   DeviceDiscovery: { nodeId: string };
-  DeviceList: { householdId: string };
-  IntegrationAuth: {
-    authConfig: string;     // JSON-serialized AuthenticationConfig
-    nodeId: string;
-    accessToken: string;
-    providerBaseUrl?: string;
-  };
 };
 
 export type CommandDataStackParamList = {
-  /** Top-level data browser. Shows node picker when >1 node, then commands.
-   *  When `nodeId` is passed, the picker is skipped and the screen shows
-   *  the commands for that node directly — used when entering from a
-   *  node-scoped surface (e.g. NodeSettings options menu). */
-  DataBrowserHome: { nodeId?: string } | undefined;
   /** Records list for one command on one node. */
   DataBrowserRecords: { nodeId: string; commandName: string };
   /** Read-only detail for one record. */
@@ -109,7 +97,6 @@ export type CommandDataStackParamList = {
 export type RoutinesStackParamList = {
   RoutineList: undefined;
   RoutineEdit: { routineId?: string };
-  ScheduleList: undefined;
 };
 
 export type InboxStackParamList = {
@@ -208,7 +195,6 @@ export type RootStackParamList = {
   /** You (default), the household list with join/create, or Household › Smart home. */
   Settings: { view?: 'you' | 'households' | 'smart_home' } | undefined;
   HouseholdEdit: { householdId: string; householdName: string; section?: HouseholdSection };
-  SignalAutomations: { householdId: string };
   SmartHomeSetup: NavigatorScreenParams<SmartHomeSetupParamList>;
   VoiceProfile: undefined;
   CommandData: NavigatorScreenParams<CommandDataStackParamList>;

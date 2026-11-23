@@ -14,7 +14,6 @@ import PhonebookStackNavigator from './PhonebookStackNavigator';
 import SmartHomeSetupNavigator from './SmartHomeSetupNavigator';
 import NowPlayingScreen from '../screens/NowPlaying/NowPlayingScreen';
 import HouseholdEditScreen from '../screens/Settings/HouseholdEditScreen';
-import SignalAutomationsScreen from '../screens/Settings/SignalAutomationsScreen';
 import SettingsScreen from '../screens/Settings/SettingsScreen';
 import VoiceProfileScreen from '../screens/Settings/VoiceProfileScreen';
 import { RootStackParamList } from './types';
@@ -59,7 +58,6 @@ const RootNavigator = () => {
         options={{ presentation: 'modal' }}
       />
       <Stack.Screen name="HouseholdEdit" component={HouseholdEditScreen} />
-      <Stack.Screen name="SignalAutomations" component={SignalAutomationsScreen} />
       <Stack.Screen name="VoiceProfile" component={VoiceProfileScreen} />
       <Stack.Screen
         name="SmartHomeSetup"
