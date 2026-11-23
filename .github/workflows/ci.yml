@@ -112,6 +112,8 @@ jobs:
       - name: Build iOS locally
         run: eas build --platform ios --profile production --local --non-interactive --output ${{ github.workspace }}/build.ipa
         env:
+          EAS_LOCAL_BUILD_WORKINGDIR: ${{ runner.temp }}/eas-build
+          EAS_LOCAL_BUILD_SKIP_CLEANUP: "1"
           EXPO_ASC_API_KEY_PATH: ${{ github.workspace }}/apple-api-key.p8
           EXPO_ASC_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           EXPO_ASC_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
@@ -119,7 +121,7 @@ jobs:
       # eas --local hides xcodebuild output; keep its full log when the build fails.
       - name: Collect Xcode build logs
         if: failure()
-        run: mkdir -p xcode-logs && cp -R "$TMPDIR"/eas-build-local-nodejs/*/logs/. xcode-logs/ || true
+        run: mkdir -p xcode-logs && cp -R "$RUNNER_TEMP"/eas-build/logs/. xcode-logs/ || ls -R "$RUNNER_TEMP"/eas-build | head -50
 
       - uses: actions/upload-artifact@v7
         if: failure()
