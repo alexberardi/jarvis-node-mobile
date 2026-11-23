@@ -6,7 +6,6 @@ import {
   ActivityIndicator,
   Button,
   Chip,
-  Icon,
   IconButton,
   Surface,
   Text,
@@ -22,47 +21,28 @@ import {
   listPairings,
   pairingErrorMessage,
   type PairingHousehold,
-  type PendingPairing,
 } from '../../api/pairingApi';
 import { useAuth } from '../../auth/AuthContext';
 import KeyboardSafeView from '../../components/KeyboardSafeView';
 
 /**
- * "Add a computer" (install plan item 3.4): how to get the Jarvis Automation agent, and the
- * computers waiting to be approved. The agent on a computer shows a short code; the same code
- * shows up here, and any household member approves it into one of their own households and a
- * room, or denies it. cc only accepts the approver's own households, and the list it returns
- * names exactly those, so the picker never offers another.
+ * "Add a computer": how to get the Jarvis Automation agent, and approving it. The agent on a
+ * computer shows a short code. The server never lists the codes (only someone who can see the
+ * computer may approve it), so the member types it here, picks one of their own households and a
+ * room, and approves or denies. The server only accepts the approver's own households, and the
+ * list it returns names exactly those, so the picker never offers another.
  */
 
-/** How often the waiting list refreshes while this screen is open. Codes last 10 minutes. */
+/** How often the waiting count refreshes while this screen is open. Codes last 10 minutes. */
 export const PAIRING_POLL_MS = 5000;
 
 type Notice = { kind: 'ok' | 'error'; text: string } | null;
 
-const minutesLeft = (seconds: number): number => Math.max(1, Math.ceil(seconds / 60));
-
-const platformName = (p?: string | null): string | null => {
-  switch ((p ?? '').toLowerCase()) {
-    case 'darwin':
-    case 'macos':
-      return 'macOS';
-    case 'windows':
-      return 'Windows';
-    case 'linux':
-      return 'Linux';
-    default:
-      return p || null;
-  }
-};
-
-const PairingCard = ({
-  pairing,
+const ApproveForm = ({
   households,
   defaultHouseholdId,
   onDone,
 }: {
-  pairing: PendingPairing;
   households: PairingHousehold[];
   defaultHouseholdId: string | null;
   onDone: (notice: Notice) => void;
@@ -70,6 +50,7 @@ const PairingCard = ({
   const theme = useTheme();
   const initial =
     households.find((h) => h.id === defaultHouseholdId)?.id ?? households[0]?.id ?? '';
+  const [code, setCode] = useState('');
   const [householdId, setHouseholdId] = useState(initial);
   const [room, setRoom] = useState(DEFAULT_PAIRING_ROOM);
   const [busy, setBusy] = useState(false);
@@ -81,16 +62,20 @@ const PairingCard = ({
 
   // A household the list no longer names (membership changed) falls back to a listed one.
   useEffect(() => {
-    if (householdId && !households.some((h) => h.id === householdId)) {
+    if (!households.some((h) => h.id === householdId)) {
       setHouseholdId(households[0]?.id ?? '');
     }
   }, [households, householdId]);
+
+  const typed = code.trim();
+  const householdName = households.find((h) => h.id === householdId)?.name ?? '';
 
   const run = async (action: () => Promise<unknown>, ok: string, fallback: string) => {
     setBusy(true);
     setError(null);
     try {
       await action();
+      if (mounted.current) setCode('');
       onDone({ kind: 'ok', text: ok });
     } catch (err) {
       if (mounted.current) setError(pairingErrorMessage(err, fallback));
@@ -99,29 +84,21 @@ const PairingCard = ({
     }
   };
 
-  const meta = [platformName(pairing.platform), pairing.requested_from].filter(Boolean).join(' · ');
-
   return (
     <Surface style={[styles.card, { backgroundColor: theme.colors.surface }]} elevation={1}>
-      <View style={styles.cardHead}>
-        <Icon source="laptop" size={22} color={theme.colors.onSurfaceVariant} />
-        <View style={{ flex: 1 }}>
-          <Text variant="titleMedium" numberOfLines={1}>{pairing.name}</Text>
-          {!!meta && (
-            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>{meta}</Text>
-          )}
-        </View>
-      </View>
-      <Text
-        accessibilityLabel={`Pairing code ${pairing.code}`}
-        variant="headlineMedium"
-        style={[styles.code, { backgroundColor: theme.colors.surfaceVariant, color: theme.colors.onSurface }]}
-      >
-        {pairing.code}
-      </Text>
-      <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 12 }}>
-        Approve only if the computer shows this same code. It expires in {minutesLeft(pairing.expires_in)} min.
-      </Text>
+      <TextInput
+        testID="pairing-code-input"
+        mode="outlined"
+        label="Code shown on the computer"
+        placeholder="ABCD-EFGH"
+        value={code}
+        onChangeText={(t) => setCode(t.toUpperCase())}
+        disabled={busy}
+        autoCapitalize="characters"
+        autoCorrect={false}
+        autoComplete="off"
+        style={[styles.codeInput, { marginBottom: 12 }]}
+      />
 
       {households.length > 1 && (
         <>
@@ -130,7 +107,7 @@ const PairingCard = ({
             {households.map((h) => (
               <Chip
                 key={h.id}
-                testID={`pairing-household-${pairing.code}-${h.id}`}
+                testID={`pairing-household-${h.id}`}
                 selected={h.id === householdId}
                 showSelectedCheck
                 disabled={busy}
@@ -145,7 +122,7 @@ const PairingCard = ({
       )}
       {households.length === 1 && (
         <Text
-          testID={`pairing-household-${pairing.code}-${households[0].id}`}
+          testID={`pairing-household-${households[0].id}`}
           accessibilityState={{ selected: true }}
           variant="bodyMedium"
           style={{ marginBottom: 8 }}
@@ -155,7 +132,7 @@ const PairingCard = ({
       )}
 
       <TextInput
-        testID={`pairing-room-${pairing.code}`}
+        testID="pairing-room"
         mode="outlined"
         dense
         label="Room"
@@ -172,26 +149,24 @@ const PairingCard = ({
 
       <View style={styles.actions}>
         <Button
-          testID={`pairing-deny-${pairing.code}`}
+          testID="pairing-deny"
           mode="outlined"
           icon="close"
-          disabled={busy}
-          onPress={() =>
-            run(() => denyPairing(pairing.code), `${pairing.name} denied.`, 'Could not deny the computer')
-          }
+          disabled={busy || !typed}
+          onPress={() => run(() => denyPairing(typed), 'Pairing denied.', 'Could not deny the computer')}
         >
           Deny
         </Button>
         <Button
-          testID={`pairing-approve-${pairing.code}`}
+          testID="pairing-approve"
           mode="contained"
           icon="check"
-          disabled={busy || !householdId}
+          disabled={busy || !typed || !householdId}
           loading={busy}
           onPress={() =>
             run(
-              () => approvePairing({ code: pairing.code, householdId, room }),
-              `${pairing.name} approved. It finishes pairing in a few seconds, then shows up in your nodes.`,
+              () => approvePairing({ code: typed, householdId, room }),
+              `Approved. The computer asks to confirm ${householdName} before it joins, then shows up in your nodes.`,
               'Could not approve the computer',
             )
           }
@@ -207,7 +182,7 @@ const AddComputerScreen = () => {
   const navigation = useNavigation();
   const theme = useTheme();
   const { state: authState } = useAuth();
-  const [pairings, setPairings] = useState<PendingPairing[]>([]);
+  const [waiting, setWaiting] = useState(0);
   const [households, setHouseholds] = useState<PairingHousehold[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -225,18 +200,18 @@ const AddComputerScreen = () => {
     try {
       const res = await listPairings();
       if (!mounted.current) return;
-      setPairings(res.pairings);
+      setWaiting(res.waiting);
       setHouseholds(res.households);
       setLoadError(null);
     } catch (err) {
-      if (mounted.current) setLoadError(pairingErrorMessage(err, 'Could not load waiting computers'));
+      if (mounted.current) setLoadError(pairingErrorMessage(err, 'Could not load your households'));
     } finally {
       inFlight.current = false;
       if (mounted.current) setLoaded(true);
     }
   }, []);
 
-  // Poll while the screen is focused: a computer's code shows up within a few seconds.
+  // Poll while the screen is focused, so the waiting count follows the computer.
   useFocusEffect(
     useCallback(() => {
       void load();
@@ -328,35 +303,28 @@ const AddComputerScreen = () => {
 
         {!loaded ? (
           <ActivityIndicator style={{ marginTop: 16 }} />
-        ) : loadError && pairings.length === 0 ? (
+        ) : loadError && households.length === 0 ? (
           <View style={{ alignItems: 'flex-start' }}>
             <Text variant="bodyMedium" style={{ color: theme.colors.error }}>{loadError}</Text>
             <Button mode="text" onPress={() => void load()}>Retry</Button>
           </View>
-        ) : pairings.length === 0 ? (
-          <Surface
-            testID="pairings-empty"
-            style={[styles.empty, { borderColor: theme.colors.outlineVariant }]}
-            elevation={0}
-          >
-            <ActivityIndicator size="small" />
-            <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant, flex: 1 }}>
-              No computers waiting. Open the Jarvis Automation agent on the computer and choose
-              {' "Show a pairing code"'}; its code appears here.
-            </Text>
-          </Surface>
         ) : (
-          <View style={{ gap: 12 }}>
-            {pairings.map((p) => (
-              <PairingCard
-                key={p.code}
-                pairing={p}
-                households={households}
-                defaultHouseholdId={authState.activeHouseholdId}
-                onDone={onDone}
-              />
-            ))}
-          </View>
+          <>
+            <Text
+              testID="pairings-waiting"
+              variant="bodyMedium"
+              style={{ color: theme.colors.onSurfaceVariant, marginBottom: 12 }}
+            >
+              {waiting === 0
+                ? 'No computers waiting yet. On the computer, open the Jarvis Automation agent and choose "Show a pairing code", then type the code below.'
+                : `${waiting === 1 ? '1 computer is' : `${waiting} computers are`} waiting. Type the code shown on the computer.`}
+            </Text>
+            <ApproveForm
+              households={households}
+              defaultHouseholdId={authState.activeHouseholdId}
+              onDone={onDone}
+            />
+          </>
         )}
       </ScrollView>
     </KeyboardSafeView>
@@ -376,15 +344,7 @@ const styles = StyleSheet.create({
   linkBox: { borderRadius: 8, padding: 12 },
   linkActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8, marginBottom: 16 },
   card: { borderRadius: 12, padding: 16 },
-  cardHead: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
-  code: {
-    fontFamily: 'monospace',
-    letterSpacing: 4,
-    textAlign: 'center',
-    borderRadius: 8,
-    paddingVertical: 8,
-    marginBottom: 8,
-  },
+  codeInput: { fontFamily: 'monospace', letterSpacing: 3 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
   actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8 },
   notice: {
@@ -393,15 +353,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingLeft: 12,
     marginBottom: 12,
-  },
-  empty: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    padding: 16,
   },
 });
 
