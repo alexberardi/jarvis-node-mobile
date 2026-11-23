@@ -4,24 +4,11 @@ import { getCommandCenterUrl } from '../config/serviceConfig';
 import apiClient from './apiClient';
 
 /**
- * Device-code pairing, the member's side (jarvis-server internal/modules/cc/pairing.go,
- * install plan item 3.4). The Jarvis Automation agent on a computer starts a pairing and
- * shows a short code; any household member sees the same code here and approves it into one
- * of their own households and a room, or denies it. cc refuses a household the approver isn't
- * in, so the household picker only offers the ones this response lists.
+ * Device-code pairing, the member's side (jarvis-server internal/modules/cc/pairing.go).
+ * The Jarvis Automation agent on a computer starts a pairing and shows a short code. The
+ * server never lists the codes, so only someone who can see that computer can approve it: the
+ * member types the code here, into one of their own households and a room, or denies it.
  */
-
-export interface PendingPairing {
-  /** Display form, e.g. "ABCD-EFGH". The agent shows the same code. */
-  code: string;
-  /** The computer's name as the agent reported it. */
-  name: string;
-  platform?: string | null;
-  requested_from?: string | null;
-  created_at?: string | null;
-  /** Seconds left before the pairing expires (10 minutes from the start). */
-  expires_in: number;
-}
 
 export interface PairingHousehold {
   id: string;
@@ -30,7 +17,8 @@ export interface PairingHousehold {
 }
 
 export interface PairingList {
-  pairings: PendingPairing[];
+  /** How many computers are waiting for approval (any household; the codes stay hidden). */
+  waiting: number;
   /** The caller's own households: the only ones an approval may target. */
   households: PairingHousehold[];
 }
@@ -51,7 +39,7 @@ const base = () => `${getCommandCenterUrl()}/api/v0/nodes/pairings`;
 export const listPairings = async (): Promise<PairingList> => {
   const res = await apiClient.get<Partial<PairingList>>(base(), { timeout: 10000 });
   return {
-    pairings: Array.isArray(res.data?.pairings) ? res.data.pairings : [],
+    waiting: typeof res.data?.waiting === 'number' ? res.data.waiting : 0,
     households: Array.isArray(res.data?.households) ? res.data.households : [],
   };
 };
