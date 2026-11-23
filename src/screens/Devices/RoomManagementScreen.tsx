@@ -1,8 +1,8 @@
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
-import React, { useState } from 'react';
-import { Alert, RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import React, { useRef, useState } from 'react';
+import { Alert, Animated, RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import {
   ActivityIndicator,
   Appbar,
@@ -30,9 +30,10 @@ import {
 } from '../../api/smartHomeApi';
 import { useAuth } from '../../auth/AuthContext';
 import { describeState } from '../../components/DeviceRow';
+import Draggable, { type DragHandlers } from '../../components/Draggable';
 import type { DevicesStackParamList } from '../../navigation/types';
 import type { DeviceListItem, Room } from '../../types/SmartHome';
-import { FLOOR_ICON, layoutRooms, placesFor } from '../../utils/roomLayout';
+import { FLOOR_ICON, hitTest, layoutRooms, placesFor, type Rect } from '../../utils/roomLayout';
 
 type Nav = NativeStackNavigationProp<DevicesStackParamList>;
 
@@ -52,8 +53,9 @@ type NameDialog = { kind: 'floor' } | { kind: 'room'; parentId: string | null } 
 
 /**
  * Rooms as floors: each floor drawn as a loose plan of its rooms, lit when something in them
- * is on, with All off per floor. Arrange turns the same plan into an editor: tap a device, then
- * a room, to move it; add, rename, move and remove rooms and floors in place.
+ * is on, with All off per floor. Arrange turns the same plan into an editor: drag a device onto a
+ * room (or tap it, then the room), drag a room by its handle onto a floor, and add, rename, move
+ * and remove rooms and floors in place.
  */
 const RoomManagementScreen = () => {
   const navigation = useNavigation<Nav>();
@@ -69,6 +71,18 @@ const RoomManagementScreen = () => {
   const [nameInput, setNameInput] = useState('');
   const [snackbar, setSnackbar] = useState('');
   const [busy, setBusy] = useState(false);
+  // Drag and drop: what is held, which target it is over, and the targets' window rects.
+  const [drag, setDrag] = useState<{ kind: 'device' | 'room'; name: string; icon: string } | null>(null);
+  const [hover, setHover] = useState<string | null>(null);
+  const targets = useRef<Record<string, View | null>>({});
+  const rects = useRef<Record<string, Rect>>({});
+  const origin = useRef({ x: 0, y: 0 });
+  const container = useRef<View>(null);
+  const ghost = useRef(new Animated.ValueXY()).current;
+  const droppedAt = useRef(0);
+  const held = useRef<DeviceListItem | Room | null>(null);
+  const deviceDrag = useRef<DragHandlers<DeviceListItem>>(null!);
+  const roomDrag = useRef<DragHandlers<Room>>(null!);
 
   const roomsQuery = useQuery({
     queryKey: ['rooms', householdId],
@@ -140,6 +154,62 @@ const RoomManagementScreen = () => {
   const moveDevice = (device: DeviceListItem, room: Room | null) =>
     run(() => updateDevice(device.household_id, device.id, { room_id: room?.id ?? null }), `${device.name} moved to ${room?.name ?? 'Not in a room'}`);
 
+  // Measured when a drag starts: nothing scrolls while a finger holds the drag.
+  const beginDrag = (kind: 'device' | 'room', name: string, icon: string, x: number, y: number) => {
+    setPicked(null);
+    setDrag({ kind, name, icon });
+    rects.current = {};
+    const prefix = kind === 'device' ? /^(room:|tray$)/ : /^floor:/;
+    container.current?.measureInWindow((cx, cy) => {
+      origin.current = { x: cx, y: cy };
+      ghost.setValue({ x: x - cx, y: y - cy });
+    });
+    for (const [key, view] of Object.entries(targets.current)) {
+      if (view && prefix.test(key)) view.measureInWindow((rx, ry, width, height) => { rects.current[key] = { x: rx, y: ry, width, height }; });
+    }
+  };
+  const moveDrag = (x: number, y: number) => {
+    ghost.setValue({ x: x - origin.current.x, y: y - origin.current.y });
+    const k = hitTest(rects.current, x, y);
+    setHover((h) => (h === k ? h : k));
+  };
+  const endDrag = (at: { x: number; y: number } | null) => {
+    droppedAt.current = Date.now();
+    setDrag(null);
+    setHover(null);
+    return at ? hitTest(rects.current, at.x, at.y) : null;
+  };
+  deviceDrag.current = {
+    start: (d, x, y) => {
+      held.current = d;
+      beginDrag('device', d.name, DOMAIN_ICONS[d.domain] ?? 'devices', x, y);
+    },
+    move: moveDrag,
+    end: (at) => {
+      const d = held.current as DeviceListItem | null;
+      const k = endDrag(at);
+      if (!d || !k) return;
+      const target = k === 'tray' ? null : rooms.find((r) => `room:${r.id}` === k) ?? null;
+      if ((target?.id ?? null) !== (unassigned.includes(d) ? null : d.room_id)) moveDevice(d, target);
+    },
+  };
+  roomDrag.current = {
+    start: (r, x, y) => {
+      held.current = r;
+      beginDrag('room', r.name, 'drag', x, y);
+    },
+    move: moveDrag,
+    end: (at) => {
+      const r = held.current as Room | null;
+      const k = endDrag(at);
+      if (!r || !k) return;
+      const floorId = k === 'floor:none' ? null : k.slice('floor:'.length);
+      if (floorId === (r.parent_room_id ?? null) || floorId === r.id) return;
+      const floor = rooms.find((f) => f.id === floorId);
+      run(() => updateRoom(householdId, r.id, { parent_room_id: floorId }), `${r.name} moved${floor ? ` to ${floor.name}` : ''}`);
+    },
+  };
+
   const onRoomPress = (room: Room) => {
     if (!arranging) return navigation.navigate('RoomDetail', { roomId: room.id });
     if (picked) {
@@ -178,17 +248,27 @@ const RoomManagementScreen = () => {
     const cell = (
       <TouchableOpacity
         key={room.id}
+        ref={(v) => { targets.current[`room:${room.id}`] = v; }}
         testID={`room-item-${room.id}`}
         onPress={() => onRoomPress(room)}
-        onLongPress={() => arranging && setRoomMenu(room.id)}
         style={[
           styles.cell,
           { borderColor: theme.colors.outlineVariant, backgroundColor: theme.colors.surface },
           lit && { backgroundColor: theme.dark ? '#422006' : '#fef9c3', borderColor: theme.dark ? '#a16207' : '#fde68a' },
-          arranging && picked && { borderColor: theme.colors.primary, borderStyle: 'dashed', borderWidth: 2 },
+          arranging && (picked || drag?.kind === 'device') && { borderColor: theme.colors.primary, borderStyle: 'dashed', borderWidth: 2 },
+          hover === `room:${room.id}` && { backgroundColor: theme.colors.primaryContainer, borderStyle: 'solid' },
         ]}
       >
-        <Text variant="titleSmall" numberOfLines={1}>{room.name}</Text>
+        <View style={styles.cellHead}>
+          <Text variant="titleSmall" numberOfLines={1} style={{ flex: 1 }}>{room.name}</Text>
+          {arranging && (
+            <Draggable payload={room} handlers={roomDrag}>
+              <View style={styles.handle} accessibilityLabel={`Hold and drag ${room.name} to another floor`} testID={`room-handle-${room.id}`}>
+                <Icon source="drag" size={18} color={theme.colors.onSurfaceVariant} />
+              </View>
+            </Draggable>
+          )}
+        </View>
         {arranging ? (
           <View style={styles.chips}>
             {ds.length === 0 && <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>No devices</Text>}
@@ -224,10 +304,14 @@ const RoomManagementScreen = () => {
   const deviceChip = (d: DeviceListItem) => {
     const isPicked = picked?.id === d.id;
     return (
+      <Draggable key={d.id} payload={d} handlers={deviceDrag}>
       <TouchableOpacity
-        key={d.id}
         testID={`room-device-${d.id}`}
-        onPress={() => setPicked(isPicked ? null : d)}
+        onPress={() => {
+          // The finger that just dropped a drag can also lift here: that isn't a tap.
+          if (Date.now() - droppedAt.current < 300) return;
+          setPicked(isPicked ? null : d);
+        }}
         style={[
           styles.chip,
           { borderColor: isPicked ? theme.colors.primary : theme.colors.outlineVariant, backgroundColor: isPicked ? theme.colors.primaryContainer : theme.colors.background },
@@ -236,12 +320,13 @@ const RoomManagementScreen = () => {
         <Icon source={DOMAIN_ICONS[d.domain] ?? 'devices'} size={13} color={theme.colors.onSurfaceVariant} />
         <Text style={styles.chipText} numberOfLines={1}>{d.name}</Text>
       </TouchableOpacity>
+      </Draggable>
     );
   };
 
   return (
     <Portal.Host>
-      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <View ref={container} style={[styles.container, { backgroundColor: theme.colors.background }]}>
         <Appbar.Header>
           {arranging ? (
             <Appbar.Action icon="check" accessibilityLabel="Done" testID="rooms-done" onPress={() => { setArranging(false); setPicked(null); }} />
@@ -264,7 +349,7 @@ const RoomManagementScreen = () => {
           <Text variant="bodySmall" style={[styles.hint, { color: theme.colors.onSurfaceVariant }]}>
             {picked
               ? `Tap a room to move ${picked.name} there, or tap it again to put it down.`
-              : 'Tap a device, then a room, to move it. Tap a room to rename, move or remove it.'}
+              : 'Hold and drag a device onto a room, or tap it, then the room. Drag a room by its handle onto a floor; tap it to rename or remove it.'}
           </Text>
         )}
 
@@ -279,7 +364,12 @@ const RoomManagementScreen = () => {
             </Text>
           )}
           {groups.map((g) => (
-            <Card key={g.floor?.id ?? 'loose'} mode="outlined" testID={`floor-${g.floor?.id ?? 'none'}`}>
+            <View key={g.floor?.id ?? 'loose'} ref={(v) => { targets.current[`floor:${g.floor?.id ?? 'none'}`] = v; }} collapsable={false}>
+            <Card
+              mode="outlined"
+              testID={`floor-${g.floor?.id ?? 'none'}`}
+              style={drag?.kind === 'room' ? { borderColor: theme.colors.primary, borderWidth: hover === `floor:${g.floor?.id ?? 'none'}` ? 3 : 1.5, borderStyle: 'dashed' } : { borderStyle: 'solid' }}
+            >
               <View style={styles.floor}>
               <View style={styles.floorHead}>
                 <TouchableOpacity
@@ -315,6 +405,7 @@ const RoomManagementScreen = () => {
               </View>
               </View>
             </Card>
+            </View>
           ))}
           {!arranging && unassigned.length > 0 && (
             <Card mode="outlined" onPress={() => setArranging(true)} testID="rooms-unassigned-nudge">
@@ -328,7 +419,13 @@ const RoomManagementScreen = () => {
         </ScrollView>
 
         {arranging && (
-          <View style={[styles.tray, { borderTopColor: theme.colors.outlineVariant, backgroundColor: theme.colors.surface }]}>
+          <View
+            ref={(v) => { targets.current.tray = v; }}
+            style={[
+              styles.tray,
+              { borderTopColor: theme.colors.outlineVariant, backgroundColor: hover === 'tray' ? theme.colors.primaryContainer : theme.colors.surface },
+            ]}
+          >
             <TouchableOpacity
               disabled={!picked}
               onPress={() => {
@@ -337,7 +434,7 @@ const RoomManagementScreen = () => {
               }}
             >
               <Text variant="labelLarge" style={{ color: theme.colors.onSurfaceVariant, letterSpacing: 0.6 }}>
-                NOT IN A ROOM{picked ? '  (tap to put it here)' : ''}
+                NOT IN A ROOM{picked ? '  (tap to put it here)' : drag?.kind === 'device' ? '  (drop here)' : ''}
               </Text>
             </TouchableOpacity>
             <View style={styles.chips}>
@@ -348,6 +445,19 @@ const RoomManagementScreen = () => {
               )}
             </View>
           </View>
+        )}
+
+        {drag && (
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.ghost,
+              { backgroundColor: theme.colors.primaryContainer, borderColor: theme.colors.primary, transform: ghost.getTranslateTransform() },
+            ]}
+          >
+            <Icon source={drag.icon} size={15} color={theme.colors.onPrimaryContainer} />
+            <Text style={{ color: theme.colors.onPrimaryContainer }} numberOfLines={1}>{drag.name}</Text>
+          </Animated.View>
         )}
 
         <Portal>
@@ -395,11 +505,19 @@ const styles = StyleSheet.create({
   floor: { padding: 10 },
   floorHead: { flexDirection: 'row', alignItems: 'center', minHeight: 36, marginBottom: 6, paddingHorizontal: 4 },
   plan: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  cell: { flexBasis: '47%', flexGrow: 1, minHeight: 64, borderWidth: 1, borderRadius: 12, padding: 10, gap: 4 },
+  // borderStyle is always set: Android keeps a dashed border after the style that set it goes.
+  cell: { flexBasis: '47%', flexGrow: 1, minWidth: '47%', minHeight: 64, borderWidth: 1, borderStyle: 'solid', borderRadius: 12, padding: 10, gap: 4 },
   addCell: { borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 2 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderRadius: 10, paddingHorizontal: 7, paddingVertical: 4, maxWidth: 150 },
   chipText: { fontSize: 11.5 },
+  cellHead: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  handle: { padding: 4, margin: -4 },
+  // Centred a little above the finger so the finger doesn't hide it.
+  ghost: {
+    position: 'absolute', left: -60, top: -44, width: 120, flexDirection: 'row', alignItems: 'center', gap: 4,
+    borderWidth: 1, borderRadius: 12, paddingHorizontal: 8, paddingVertical: 6, elevation: 6,
+  },
   tray: { borderTopWidth: StyleSheet.hairlineWidth, padding: 12, gap: 8 },
 });
 

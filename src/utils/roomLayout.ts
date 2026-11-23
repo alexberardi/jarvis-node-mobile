@@ -50,3 +50,13 @@ export function placesFor(room: Room, rooms: Room[]): Room[] {
   }
   return rooms.filter((r) => !banned.has(r.id));
 }
+
+export type Rect = { x: number; y: number; width: number; height: number };
+
+/** The key of the drop target under a point (window coordinates), or null. */
+export function hitTest(rects: Record<string, Rect>, x: number, y: number): string | null {
+  for (const [key, r] of Object.entries(rects)) {
+    if (x >= r.x && x <= r.x + r.width && y >= r.y && y <= r.y + r.height) return key;
+  }
+  return null;
+}
