@@ -221,9 +221,18 @@ const RoomManagementScreen = () => {
   };
 
   const removeRoom = (room: Room) =>
-    Alert.alert('Remove room', `Remove "${room.name}"? Its devices go to "Not in a room", and rooms inside it move up a level.`, [
+    Alert.alert('Remove room', `Remove "${room.name}"? Its devices go to "Not in a room"; any rooms on it stay, without a floor.`, [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: () => run(() => deleteRoom(householdId, room.id), `${room.name} removed`) },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: () =>
+          run(async () => {
+            // jarvisd deletes every room beneath the one removed, so lift them out first.
+            await Promise.all(rooms.filter((r) => r.parent_room_id === room.id).map((r) => updateRoom(householdId, r.id, { parent_room_id: null })));
+            await deleteRoom(householdId, room.id);
+          }, `${room.name} removed`),
+      },
     ]);
 
   const submitDialog = () => {

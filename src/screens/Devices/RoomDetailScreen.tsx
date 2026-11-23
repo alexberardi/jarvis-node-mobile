@@ -110,12 +110,14 @@ const RoomDetailScreen = () => {
   };
 
   const remove = () =>
-    Alert.alert('Remove room', `Remove "${room.name}"? Its devices go to "Not in a room".`, [
+    Alert.alert('Remove room', `Remove "${room.name}"? Its devices go to "Not in a room"; any rooms inside it stay.`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Remove',
         style: 'destructive',
         onPress: async () => {
+          // jarvisd deletes every room beneath the one removed, so lift them out first.
+          await Promise.all(rooms.filter((r) => r.parent_room_id === room.id).map((r) => updateRoom(householdId, r.id, { parent_room_id: null })));
           await deleteRoom(householdId, room.id);
           refresh();
           navigation.goBack();

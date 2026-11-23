@@ -153,6 +153,23 @@ describe('Rooms: floors', () => {
     alert.mockRestore();
   });
 
+  it('removing a floor keeps its rooms: they leave the floor before it goes', async () => {
+    // jarvisd deletes every room beneath a deleted one.
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation((_t, _m, buttons) => {
+      (buttons as { text: string; onPress?: () => void }[])?.find((b) => b.text === 'Remove')?.onPress?.();
+    });
+    const utils = renderWith(<RoomManagementScreen />);
+    fireEvent.press(await utils.findByTestId('rooms-arrange'));
+    await act(async () => {
+      fireEvent.press(utils.getByText('Remove'));
+    });
+    await waitFor(() => expect(deleteRoom).toHaveBeenCalledWith(HH, 'up'));
+    expect(updateRoom).toHaveBeenCalledWith(HH, 'bed', { parent_room_id: null });
+    expect((updateRoom as jest.Mock).mock.invocationCallOrder[0]).toBeLessThan((deleteRoom as jest.Mock).mock.invocationCallOrder[0]);
+    expect(alert.mock.calls[0][1]).toMatch(/stay, without a floor/);
+    alert.mockRestore();
+  });
+
   it('gates on a household', () => {
     mockAuthState = { activeHouseholdId: null, households: [] };
     const utils = renderWith(<RoomManagementScreen />);
